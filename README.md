@@ -24,6 +24,8 @@
 
 原生 JavaScript（ES6+）· Canvas 2D · localStorage · DeepSeek API（可选）· GitHub Pages
 
+**AI 协作开发工具链**：Trae CN（AI IDE 执行端：Agent 模式直接生成/修改文件、运行验证、内置 git）+ 豆包（对话端：方案规划、修复方案、代码审查）。分工与衔接见 PLAN.md §8。
+
 ## AI 亮点说明
 
 | 模块 | 说明 |
