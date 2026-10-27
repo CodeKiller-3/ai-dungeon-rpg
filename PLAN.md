@@ -219,6 +219,66 @@ ai-dungeon-rpg/
 └── .gitignore
 ```
 
+### 4.4 模块接口契约（全局命名空间）
+
+所有模块挂 `window.Game` 命名空间，普通 `<script>` 顺序加载，模块间只经接口与事件总线交互。**Trae CN 生成任何模块时必须实现对应接口**：
+
+```js
+window.Game = {
+  Core:    { Main, Render, Input, EventBus },
+  Systems: { Map, Battle, Inventory, Shop, Quest, Dialogue, Save, Audio },
+  Ai:      { AStar, StateMachine, NpcChat },
+  Data:    { ITEMS, MONSTERS, NPCS, QUESTS, MAPS, Player }
+};
+```
+
+| 模块 | 全局对象 | 关键接口（必须实现） |
+|---|---|---|
+| main.js | Game.Core.Main | init() / start() / switchScene(name) / loop(ts) |
+| render.js | Game.Core.Render | drawMap(map, cam) / drawPlayer() / drawHUD() |
+| input.js | Game.Core.Input | bind() / getState() / clear() |
+| eventBus.js | Game.Core.EventBus | on(channel, fn) / off(channel, fn) / emit(channel, payload) |
+| map.js | Game.Systems.Map | generate(seed) / isWalkable(x, y) / tileAt(x, y) / changeFloor(dir) |
+| battle.js | Game.Systems.Battle | start(monsterId) / playerAction(cmd) / tick() |
+| inventory.js | Game.Systems.Inventory | add(itemId, n) / remove(itemId, n) / use(itemId) / equip(itemId) / unequip(slot) / list() |
+| shop.js | Game.Systems.Shop | refresh() / buy(itemId) / sell(itemId) / combine(idA, idB) |
+| quest.js | Game.Systems.Quest | accept(id) / progress(eventName, payload) / isDone(id) / reward(id) |
+| dialogue.js | Game.Systems.Dialogue | open(npcId, nodeId) / choose(optionId) / close() |
+| save.js | Game.Systems.Save | write(slot) / read(slot) / slots() |
+| audio.js | Game.Systems.Audio | preload() / play(name) |
+| astar.js | Game.Ai.AStar | findPath(grid, start, goal) → { path, visited, steps:[{g,h,f}] } |
+| stateMachine.js | Game.Ai.StateMachine | create(cfg) / setState(name) / update(dt) / getState() |
+| npcChat.js | Game.Ai.NpcChat | ask(npcId, userMsg) → Promise\<string\> |
+
+### 4.5 事件总线频道清单（模块间唯一通信方式）
+
+| 频道 | Payload | 发布者 | 订阅者 |
+|---|---|---|---|
+| inventory:itemAdded | { itemId, count } | Inventory | HUD、Quest |
+| inventory:itemRemoved | { itemId, count } | Inventory | HUD |
+| inventory:equipChanged | { slot, itemId\|null } | Inventory | HUD、Battle（属性重算） |
+| player:statsChanged | { stat, old, now } | Player / Inventory | HUD、StateMachine |
+| battle:start | { monsterId } | Map（遇敌） | Battle UI |
+| battle:end | { result, exp, gold, drops } | Battle | Quest、Inventory、HUD |
+| quest:complete | { questId } | Quest | Dialogue、Save |
+| map:floorChanged | { floor } | Map | Render、AStar、Save |
+| dialogue:open / dialogue:close | { npcId } / {} | Dialogue | Input（锁定移动）、Save |
+| save:write | { slot } | Save | HUD |
+| npc:chatReply | { npcId, text } | NpcChat | Dialogue UI |
+| game:sceneChanged | { scene } | Main | 全部 UI |
+
+### 4.6 脚本加载顺序（零构建关键）
+
+`index.html` 的 `<script>` 严格按以下顺序，**Trae CN 生成时不得乱序**：
+
+1. `js/core/eventBus.js` → `js/core/input.js` → `js/core/render.js`
+2. `js/data/items.js` → `monsters.js` → `npcs.js` → `quests.js` → `maps.js`
+3. `js/systems/map.js` → `inventory.js` → `battle.js` → `shop.js` → `quest.js` → `dialogue.js` → `save.js` → `audio.js`
+4. `js/ai/astar.js` → `stateMachine.js` → `npcChat.js`
+5. `js/core/main.js`（**最后加载，启动入口**）
+
+规则：core 先于 data，data 先于 systems/ai，main.js 最后；每个模块用 IIFE 挂 `window.Game`，不污染全局。
+
 ---
 
 ## 5. 组件拼装清单
@@ -231,18 +291,18 @@ ai-dungeon-rpg/
 4. **零构建红线**：任何组件不引入需要打包的 npm 依赖；浏览器可直接运行。
 5. **来源必声明**：README 与文件头逐一声明借鉴来源及 LICENSE。
 
-### 5.2 拼装来源
+### 5.2 拼装来源（2026-10-27 前置可达性验证后修订）
 
-| 系统 | 来源 | 协议 | 拼装方式 | 风险 |
+| 系统 | 来源 | 协议 | 拼装方式 | 可达性验证 |
 |---|---|---|---|---|
-| 游戏骨架/战斗/商店 | freeCodeCamp《Building a Role Playing Game》（Dragon Repeller） | 开源教程 | 参考结构重构 | 低 |
-| 背包/装备/物品 | `@reldens/items-system`（npm） | MIT | 读源码摘核心逻辑自写 | 中（逻辑较重） |
-| 背包 UI 交互 | Template Foundry《HTML5 RPG Inventory System》 | 免费框架 | 借鉴交互与布局 | 低 |
-| A\* 寻路 | PathFinding.js（qiao） | MIT | 引入单文件版并二次开发 | 低 |
-| 地图生成 | 自写（DFS 回溯） | — | 自写 | 低 |
-| 存档 | localStorage 自写 | — | 自写 | 低 |
-| AI 对话 | DeepSeek API | 服务条款 | API 集成 + 离线兜底 | 中（依赖 Key） |
-| 音效/UI | 自写 + 免费 CC0 素材 | CC0 | 素材引入需记录来源 | 低 |
+| 游戏骨架/战斗/商店 | freeCodeCamp《Learn Basic JavaScript by Building a Role Playing Game》（Dragon Repeller） | 开源教程 | 参考结构重构 | ✅ 已验证可达（200），教程 URL 已修正 |
+| 背包/装备/物品 | freeCodeCamp RPG 教程重构 + 自写扩展 | 开源教程 | 读教程武器/装备逻辑，自写堆叠/装备位/属性加成 | ✅（原 `@reldens/items-system` 于 2026-10-27 验证 npm 403 / registry 超时 / GitHub 404，**来源弃用**） |
+| 背包 UI 交互 | 自写（原参考 Template Foundry《HTML5 RPG Inventory System》） | — | 自写像素风 UI | ⚠️ Template Foundry 当前网络不可达（超时），降级为自写；若后续可达可参考交互布局 |
+| A\* 寻路 | PathFinding.js（qiao） | MIT | 引入单文件版并二次开发（g/h/f 统计） | ✅ 已验证仓库存在（gh api） |
+| 地图生成 | 自写（DFS 回溯） | — | 自写 | ✅ |
+| 存档 | localStorage 自写 | — | 自写 | ✅ |
+| AI 对话 | DeepSeek API | 服务条款 | API 集成 + 离线兜底 | ✅ 已验证 API 端点可达（401=未授权属预期，接入 Key 即可用） |
+| 音效/UI | 自写 + 免费 CC0 素材 | CC0 | 素材引入需记录来源 | ✅ |
 
 ### 5.3 风险等级说明
 
@@ -342,6 +402,43 @@ const MONSTERS = {
 ```
 
 装备位校验示例：`weapon` 仅可穿戴于武器槽，属性加成在装备/卸下时经事件总线广播重算。
+
+### 7.1 Schema 契约（数据字段唯一标准，Trae CN 生成 data/ 必须匹配）
+
+**ITEMS**（`data/items.js`，`const ITEMS = {...}`，键为 itemId）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 唯一标识，与键一致 |
+| name | string | 显示名 |
+| type | weapon\|armor\|consumable\|material | 类型 |
+| price | number | 商店基准价 |
+| stackable | boolean | 可否堆叠 |
+| maxStack | number | 堆叠上限（stackable=true 时） |
+| atk / def / heal / mp | number(可选) | 属性效果（按 type 使用） |
+| slot | weapon\|armor(可选) | 装备位（weapon/armor 时必填） |
+| icon | string | 图标相对路径 assets/img/ |
+
+**MONSTERS**（`data/monsters.js`）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id / name | string | 标识与显示名 |
+| hp / atk / def | number | 基础三围 |
+| exp | number | 经验 |
+| gold | [min, max] | 金币区间 |
+| drops | [{ itemId, rate }] | 掉落表 |
+| ai | { vision, chaseRange, escapeHp, moveSpeed } | 状态机参数（见 §6.2） |
+
+**NPCS**（`data/npcs.js`）：`id`、`name`、`dialogRoot`（对话树根节点 id）、`chatPrompt`（大模型系统提示词，可选）、`x/y/floor`（站位）。
+
+**QUESTS**（`data/quests.js`）：`id`、`name`、`desc`、`type`（kill\|collect\|talk）、`target`（{monsterId/num} 或 {itemId/num} 或 {npcId}）、`reward`（{exp, gold, items[]}）、`prev`（前置任务 id\|null）、`acceptNpc`（接取 NPC）。
+
+**MAPS**（`data/maps.js`）：`size`（w, h）、`roomMin/roomMax`（房间参数）、`floors`（楼层数）、`enemyTable`（每层怪物 id 概率表）、`stairUp/stairDown`（楼梯，换层入口）。
+
+**Player**（运行时对象，`Game.Data.Player`）：`hp/maxHp/atk/def/gold/exp/level/floor/x/y`、`inventory`（{itemId: count}）、`equipment`（{weapon: itemId\|null, armor: itemId\|null}）、`quests`（{id: status}）。
+
+**SAVE**（`data/save.js` 读写，localStorage 键 `aiDungeonSave_<slot>`）：整体序列化 `Game.Data.Player` + 楼层种子 + 已完成任务状态；写入前 JSON.stringify，读取后字段缺失按默认值补齐（防存档损坏）。
 
 ---
 
@@ -460,6 +557,18 @@ const MONSTERS = {
 - 检索轮次另计：组件来源（freeCodeCamp / PathFinding.js 等）约 2–3 轮，可在对话间隙用联网搜索完成。
 - **判定原则**：每一轮结束前必须达到该轮指定的效果标准；未达标则继续追加轮次，直到「得到结果」。
 
+### 9.3 子任务拆解（按文件粒度，Trae CN 执行顺序）
+
+| 里程碑 | 子任务 | 产出文件 | 依赖 |
+|---|---|---|---|
+| M0 | ① 入口页与样式 ② 核心层 4 文件 ③ 空场景跑通 | index.html、css/style.css、js/core/{main,render,input,eventBus}.js | — |
+| M1 | ① 地图数据与生成 ② 瓦片渲染 ③ 移动碰撞 ④ 楼层切换 | js/systems/map.js、data/maps.js、render.js、input.js | M0 |
+| M2 | ① 怪物数据 ② 回合流程 ③ 伤害公式 ④ 掉落成长 | data/monsters.js、js/systems/battle.js | M1 |
+| M3 | ① 物品数据 ② 背包逻辑 ③ 背包 UI ④ 商店 ⑤ 合成 | data/items.js、js/systems/{inventory,shop}.js | M2 |
+| M4 | ① 任务数据与逻辑 ② 对话树 ③ 存档 | data/{quests,npcs}.js、js/systems/{quest,dialogue,save}.js | M2、M3 |
+| M5 | ① A\* ② 状态机 ③ NPC 对话（API+兜底） | js/ai/{astar,stateMachine,npcChat}.js | M1（地图数据） |
+| M6 | ① README/来源声明 ② Pages 部署 ③ 演示脚本/讲稿 | README.md、录屏、讲稿 | 全部 |
+
 ---
 
 ## 10. GitHub 工程实践
@@ -527,6 +636,36 @@ const MONSTERS = {
 | 组件拼装风格不一致 | 代码混乱 | 事件总线解耦 + 统一命名规范 + 每模块单一职责 |
 | 轮次超支 / 其他课程占用精力 | 交付延期 | 严格按里程碑效果标准推进，P2 功能按裁剪线降级，不影响主线闭环 |
 | file:// 下功能异常 | 双击不可玩 | 全程不用 ES Module/fetch，验收前必测双击打开 |
+
+---
+
+## 13. 实施前置流程测试（Pre-flight，M0 动工前已完成）
+
+> 目的：动工前验证环境、工具链、来源与核心技术基线全部就绪，避免 M0 首轮即返工。执行日期：2026-10-27。冒烟产物存于 `preflight/`。
+
+### 13.1 检查结果
+
+| # | 检查项 | 方法 | 标准 | 结果 |
+|---|---|---|---|---|
+| P-01 | 本地 git | `git --version` | 可用 | ✅ 2.56.0 |
+| P-02 | gh CLI 登录 | `gh auth status` | 登录 CodeKiller-3 | ✅ 已登录（keyring，token 含 repo） |
+| P-03 | 仓库 remote | `git remote -v` | origin 指向 ai-dungeon-rpg | ✅ 正确 |
+| P-04 | 工作区 | `git status --porcelain` | 干净 | ✅ 无未提交变更 |
+| P-05 | GitHub 可达 | `gh api repos/...` | 仓库可访问 | ✅ gh/git 通道正常（注：curl 直连 GitHub 在本网络不通，属通道差异，不影响开发） |
+| P-06 | Trae CN 已安装 | 注册表 + 目录检索 | 可执行文件存在 | ✅ `D:\A-tools\Trae CN\` v3.4.3 |
+| P-07 | Dev-sidecar | `Get-Process` | 运行中 | ✅ 运行中（5 进程） |
+| P-08 | Python | `python --version` | 可起静态服务器 | ✅ 3.13.16 |
+| P-09 | 浏览器 | 路径检索 | Edge/Chrome 存在 | ✅ Edge 可用 |
+| P-10 | 组件来源可达 | HTTP 状态 / gh api | 见 §5.2 | ✅ freeCodeCamp(200)、PathFinding.js(仓库存在)、DeepSeek(401 属预期)；⚠️ reldens/Template Foundry 不可达 → 已替换/降级 |
+| P-11 | file:// 技术基线 | Edge headless 冒烟页 | 无报错、渲染循环运行 | ✅ `PREFLIGHT-OK`，Canvas 渲染截图确认 |
+| P-12 | Pages 域名 | `https://CodeKiller-3.github.io/` | 可达（404 属未部署预期） | ✅ 域名归属有效，待部署 |
+
+### 13.2 前置验证结论与决策
+
+1. **工具链就绪**：Trae CN（执行端）+ 豆包（对话端）+ gh/git + Dev-sidecar + Edge + Python 全部可用，可进入 M0。
+2. **技术基线通过**：`file://` 协议下普通 `<script>` + Canvas 渲染 + rAF 循环实测零报错——「双击即玩」路线成立（冒烟页：`preflight/index.html`，双开即见画面与 FPS 计数）。
+3. **来源调整已落实**：`@reldens/items-system` 与 Template Foundry 因当前网络不可达弃用/降级，替代方案已写入 §5.2，不影响主线。
+4. **网络通道注意项**：本网络 curl 直连 GitHub 不通，统一使用 gh/git 凭据通道（推送、拉取均正常）；素材/参考网页访问如遇超时，改用豆包联网搜索或 gh 通道获取。
 
 ---
 

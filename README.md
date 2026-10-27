@@ -57,6 +57,7 @@ ai-dungeon-rpg/
 ├── js/ai/        # A*寻路/状态机/AI对话
 ├── js/data/      # 物品/怪物/NPC/任务/地图数据
 ├── assets/       # 图片与音效素材
+├── preflight/    # 实施前置冒烟测试（file:// 技术基线验证，见 PLAN.md §13）
 ├── README.md
 ├── PLAN.md       # 开发规划书
 ├── LICENSE
