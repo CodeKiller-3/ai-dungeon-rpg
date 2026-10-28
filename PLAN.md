@@ -1018,3 +1018,20 @@ const MONSTERS = {
 - M5 `js/systems/npc.js`（T 键对话、在线+离线降级）保留为 **L3 + 对话入口**。
 - 新增 `js/data/reactions.js` + L2 检索器 + 事件挂钩（在各系统触发点 emit，复用现有 EventBus）。
 - 不改动既有接口；reactions.js 数据文件独立，可随时扩充。
+
+### 20.7 叙事内容后置策略（用户提案，已证成立）
+
+**提案**：剧情/故事内容规划放到项目最后期；当前无剧情，先只做基础对话库（不依赖剧情的通用文本）。
+**结论：成立**，这是业界默认开发顺序，有方法论级支持：
+
+- **MDA 框架**（Hunicke/LeBlanc/Zubek, 2004, AAAI Workshop on Challenges in Game AI）：设计链为机制(Mechanics)→动态(Dynamics)→美学(Aesthetics)；**叙事(Narrative)属于美学层，设计者自底向上、最后构建**。
+- **占位内容原则（Greybox / Placeholder content）**：游戏开发宪法 GDC-L1-PROTO-0003「Greybox before you make it pretty——先用占位内容验证设计，再投入正式资产」；业界原话"为仍在变化的循环制作的正式资产就是返工，占位内容正是吸收该风险的存在"（egmatic.com, 2026）。剧情文本在本项目语境下即"占位文本→后期正式装配"。
+- **玩法优先 / 先证核心（Gameplay-First, Prove the Core First）**：Game Designers Hub 三层设计——Phase 1 核心循环 → Phase 2 系统 → **Phase 3 才用 art/sound/story "dress the experience"**；叙事文本属于最后叠加的内容层。
+- **垂直切片（Vertical Slice）**：Tono Game Consultants 等——切片内叙事只给 light narrative context（最小叙事上下文），主玩法验证后再全量生产叙事内容。
+- **中文业界对照**：GDC 2026《超英派遣中心》、触乐《黑暗世界》等"叙事为核心"工作室是刻意的叙事驱动选择，**默认开发顺序仍是玩法→内容**；说明"叙事后置"是标准路径而非偷懒。
+- **开发者专有名词**：本计划 = **Gameplay-First（玩法优先）+ Placeholder/Greybox Content（占位内容）→ 后期 Content Integration / Asset Pass（内容装配）**；剧情文本属于 **Narrative Assets（叙事资产）**，在 **Content Pipeline（内容管线）**末端装配。
+
+**落地**：
+1. 当前（S3 阶段）L1 只生成基础事件文本——生成话术见 `docs/prompts/dialogue-pool-basic.md`（守门人/商人两版模板，84 条/角色，全通用表达）。
+2. 剧情向内容（任务彩蛋对话、角色专属故事、结局文本、世界观台词）在 M10-3 完成后新增"**剧情定稿 → 批量生成 → 装配**"三步：剧情大纲先由用户/豆包定稿 → DeepSeek/豆包批量生成 → 并入 reactions.js 对应 tag。
+3. quest_done / 剧情相关 tag 先留空或放通用占位，装配时替换。
