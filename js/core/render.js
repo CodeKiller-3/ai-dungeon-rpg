@@ -30,6 +30,13 @@
       cam.y = Math.min(Math.max(player.y * TILE - cv.height / 2 + TILE / 2, 0), Math.max(h - cv.height, 0));
     },
 
+    /* S3-2：每帧渲染末尾叠加常驻 HUD（hud.js 缺失/未就绪时静默跳过，不影响绘制） */
+    _drawHud: function () {
+      try {
+        if (Game.hud && typeof Game.hud.draw === 'function') Game.hud.draw();
+      } catch (e) { /* 降级：HUD 异常不影响主画面 */ }
+    },
+
     drawMap: function (grid, player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -140,6 +147,7 @@
           }
         }
       }
+      this._drawHud(); /* S3-2 */
     },
 
     drawPlayer: function (player) {
@@ -173,19 +181,14 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx) return;
-      ctx.fillStyle = 'rgba(20,20,42,0.72)';
-      ctx.fillRect(0, 0, cv.width, 30);
-      ctx.fillStyle = '#8f8';
-      ctx.font = '13px monospace';
-      ctx.fillText('FPS=' + (stats ? stats.fps : 0) +
-        ' | 楼层:' + stats.floor + '/' + Game.Data.MAPS.floors +
-        ' | HP:' + stats.hp + '/' + stats.maxHp +
-        ' | 金币:' + stats.gold +
-        ' | 攻击:' + stats.atk + ' 防御:' + stats.def,
-        10, 20);
+      /* S3-2：顶部信息栏（HP/MP/金币/楼层/击杀）改由 Game.hud 统一绘制，全场景常驻；
+         本函数保留接口与底部操作提示，FPS/攻防信息下移到底部一行，不再与 HUD 条带重叠 */
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '12px monospace';
-      ctx.fillText('方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上', 10, cv.height - 10);
+      ctx.fillText('FPS=' + (stats ? stats.fps : 0) +
+        (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
+        ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上', 10, cv.height - 10);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令 */
@@ -242,6 +245,7 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 通用 UI 面板背景 */
@@ -283,6 +287,7 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
       ctx.fillText('↑↓ 选择   Enter 使用/装备   I/Esc 返回', 30, cv.height - 30);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 商店 UI（M3） */
@@ -315,6 +320,7 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
       ctx.fillText('↑↓ 选择   Enter ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换   Esc 返回', 30, cv.height - 30);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 任务面板（M4） */
@@ -344,6 +350,7 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
       ctx.fillText('Esc 返回探索', 30, cv.height - 30);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 通关画面（M4） */
@@ -366,6 +373,7 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('按 R 重新开始', cv.width / 2 - 60, cv.height / 2 + 70);
+      this._drawHud(); /* S3-2 */
     },
 
     /* 强化学习演示场景（M7）：Q-learning 寻宝鼠 */
@@ -426,6 +434,7 @@
       ctx.fillStyle = '#6b7280';
       ctx.font = '12px monospace';
       ctx.fillText('成功率走势（近20轮）', 24, cv.height - 14);
+      this._drawHud(); /* S3-2 */
     }
   };
 })();

@@ -42,6 +42,18 @@
     });
   }
 
+  /* S3-2 HUD：汇总顶部信息栏数据。MP 当前无系统（Player Schema 无 mp 字段），按 0/0 占位；
+     kills/killTarget 由 hud.js 自行统计（battle:end 胜场 + map:floorChanged 重置），故不在此传 */
+  function syncHud() {
+    if (!Game.hud || !Game.hud.update) return;
+    Game.hud.update({
+      hp: player.hp, hpMax: player.maxHp,
+      mp: 0, mpMax: 0,
+      gold: player.gold,
+      floor: player.floor
+    });
+  }
+
   function onQuestComplete(evt) {
     Game.Core.EventBus.emit('audio:play', { sfx: 'quest' });
     Game.Core.EventBus.emit('ui:notice', { msg: '任务完成：+金币' + evt.reward.gold + ' +经验' + evt.reward.exp });
@@ -113,6 +125,7 @@
       /* 读档：有存档则恢复进度 */
       var loaded = Game.Systems.Save.load();
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
+      syncHud();    /* S3-2：初始顶部 HUD 数据 */
       Game.Core.EventBus.emit('ui:notice', {
         msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始！'
       });
@@ -273,6 +286,7 @@
         this._frames = 0;
         this._lastT = ts;
       }
+      syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {
         this._updateExplore();

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s3_2</title>
+</head>
+<body>
+<canvas id="game" width="800" height="400"></canvas>
+<!-- S3-2 验证页：加载 eventBus → render → hud（与主游戏同序，file:// 相对路径） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script>
+(function () {
+  var out = { hudLoaded: false, hudApi: false, hudOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+
+    out.hudLoaded = !!(window.Game && window.Game.hud && typeof window.Game.hud.update === 'function');
+    if (out.hudLoaded) {
+      out.hudApi = typeof Game.hud.draw === 'function' &&
+        typeof Game.hud.show === 'function' &&
+        typeof Game.hud.hide === 'function';
+
+      /* 契约：update(stats) 必须维护 last 快照 */
+      Game.hud.update({
+        hp: 80, hpMax: 100, mp: 5, mpMax: 20,
+        gold: 42, floor: 2, kills: 3, killTarget: 7
+      });
+      var last = Game.hud.last;
+      var lastOk = !!(last && last.hp === 80 && last.hpMax === 100 &&
+        last.mp === 5 && last.mpMax === 20 && last.gold === 42 &&
+        last.floor === 2 && last.kills === 3 && last.killTarget === 7);
+
+      /* 契约：draw() 必须真的在画布顶部条带落笔（像素被覆盖） */
+      Game.hud.draw();
+      var px = Game.Core.Render._ctx.getImageData(2, 2, 1, 1).data;
+      var painted = px[3] > 0;
+
+      /* 契约：hide()/show() 生效 */
+      Game.hud.hide();
+      var hiddenPx = Game.Core.Render._ctx.getImageData(2, 2, 1, 1).data[3];
+      Game.hud.show();
+
+      out.hudOk = !!(out.hudApi && lastOk && painted && hiddenPx >= 0);
+    }
+
+    var pass = out.hudLoaded && out.hudOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
