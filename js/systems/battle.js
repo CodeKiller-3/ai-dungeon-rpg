@@ -8,7 +8,9 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
-  var state = null; /* { monster, log, turn, defending } */
+  var state = null; /* { monster, log, turn, defending, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
+
+  var DYING_MS = 700; /* 死亡消散动画时长 ms（渐隐+上浮+缩小） */
 
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
@@ -37,21 +39,40 @@
     return { x: cx - 45, y: top, w: 90, h: 90, cx: cx, cy: top + 45 };
   }
 
-  /* S3-4：仅在统一伤害入口触发反馈，不修改任何数值与 emit */
+  /* S3-4：仅在统一伤害入口触发反馈，不修改任何数值与 emit
+   * M9-3：命中处同时生成 spark 粒子 */
   function spawnHitMonster(dmg) {
-    if (!Game.Feedback || typeof Game.Feedback.spawn !== 'function') return;
     var m = monsterPos();
-    Game.Feedback.spawn({ x: m.cx, y: m.cy, text: '-' + dmg, color: '#ffffff' });
-    Game.Feedback.spawn({ x: m.x, y: m.y, kind: 'hit', w: m.w, h: m.h });
+    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      Game.Feedback.spawn({ x: m.cx, y: m.cy, text: '-' + dmg, color: '#ffffff' });
+      Game.Feedback.spawn({ x: m.x, y: m.y, kind: 'hit', w: m.w, h: m.h });
+    }
+    if (Game.Particles && typeof Game.Particles.spawn === 'function') {
+      Game.Particles.spawn('spark', m.cx, m.cy, { count: 6 });
+    }
   }
   function spawnHurtPlayer(dmg) {
-    if (!Game.Feedback || typeof Game.Feedback.spawn !== 'function') return;
     var p = playerPos();
-    Game.Feedback.spawn({ x: p.cx, y: p.cy, text: '-' + dmg, color: '#ff5555' });
-    Game.Feedback.spawn({ x: p.x, y: p.y, kind: 'hurt', w: p.w, h: p.h });
+    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      Game.Feedback.spawn({ x: p.cx, y: p.cy, text: '-' + dmg, color: '#ff5555' });
+      Game.Feedback.spawn({ x: p.x, y: p.y, kind: 'hurt', w: p.w, h: p.h });
+    }
+    if (Game.Particles && typeof Game.Particles.spawn === 'function') {
+      Game.Particles.spawn('spark', p.cx, p.cy, { count: 5, color: '#ff8888' });
+    }
   }
 
-  /* 怪物死亡结算：经验/金币/掉落 + 任务推进 */
+  /* M9-3：怪物死亡——生成 soul（灵魂上浮）+ shard（碎片飞溅）粒子 */
+  function spawnDeathParticles() {
+    if (!Game.Particles || typeof Game.Particles.spawn !== 'function') return;
+    var m = monsterPos();
+    Game.Particles.spawn('soul', m.cx, m.cy, { count: 4 });
+    Game.Particles.spawn('shard', m.cx, m.cy, { count: 8, color: state.monster.color });
+  }
+
+  /* 怪物死亡结算（逻辑部分）：经验/金币/掉落 + 任务推进
+   * M9-3：结算立即执行，但 battle:end 延迟到消散动画结束后由 tick 发出 */
+  var pendingWin = null; /* 暂存胜利结算结果，消散动画结束后 emit */
   function settleWin() {
     var p = Game.Data.Player;
     var m = state.monster;
@@ -70,13 +91,20 @@
     logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold + (drops.length ? ' 获得:' + drops.join(',') : ''));
     if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
     Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
-    Game.Core.EventBus.emit('battle:end', { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops });
+    /* M9-3：标记死亡消散状态，暂存胜利结果 */
+    state.dying = true;
+    state.dyingAt = performance.now();
+    state.dyingMs = DYING_MS;
+    spawnDeathParticles();
+    pendingWin = { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops };
   }
 
-  /* 怪物行动：反击（玩家未逃跑且怪物存活） */
+  /* 怪物行动：反击（玩家未逃跑且怪物存活）
+   * M9-3：怪物攻击设置动作帧时间戳（纯视觉） */
   function monsterTurn() {
     var p = Game.Data.Player;
     var m = state.monster;
+    state.monsterActionAt = performance.now(); /* M9-3：怪物攻击前摇帧 */
     var dmg = state.defending ? Math.max(Math.floor(damage(m.atk, p.def) / 2), 1) : damage(m.atk, p.def);
     p.hp = Math.max(p.hp - dmg, 0);
     spawnHurtPlayer(dmg); /* S3-4：玩家受击反馈（仅展示，不改数值） */
@@ -105,7 +133,9 @@
 
     playerAction: function (cmd) {
       if (!state) return null;
+      if (state.dying) return state; /* M9-3：消散期间不接受任何操作 */
       if (cmd === 'attack') {
+        state.playerActionAt = performance.now(); /* M9-3：玩家攻击前摇帧（纯视觉） */
         Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
         var dmg = damage(Game.Data.Player.atk, state.monster.def);
         state.monster.hp -= dmg;
@@ -138,7 +168,16 @@
 
     getState: function () { return state; },
 
-    /* 供主循环 tick 的空实现（M2 战斗为回合制，无需实时 tick） */
-    tick: function () { }
+    /* M9-3：推进死亡消散计时；消散结束后发出 battle:end（此前结算已执行） */
+    tick: function () {
+      if (!state || !state.dying) return;
+      var elapsed = performance.now() - state.dyingAt;
+      if (elapsed >= (state.dyingMs || DYING_MS)) {
+        var result = pendingWin;
+        pendingWin = null;
+        state = null;
+        if (result) Game.Core.EventBus.emit('battle:end', result);
+      }
+    }
   };
 })();

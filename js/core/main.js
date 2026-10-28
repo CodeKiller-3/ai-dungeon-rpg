@@ -28,6 +28,9 @@
     player.x = s.x;
     player.y = s.y;
     player.floor = Game.Systems.Map.getFloor();
+    /* M9-3：换层/重置时清空移动插值与粒子，避免旧层残留 */
+    if (Game.Motion && typeof Game.Motion.clear === 'function') Game.Motion.clear();
+    if (Game.Particles && typeof Game.Particles.clear === 'function') Game.Particles.clear();
   }
 
   function onFloorChanged() {
@@ -161,8 +164,13 @@
         var nx = player.x + d.dx;
         var ny = player.y + d.dy;
         if (Game.Systems.Map.isWalkable(nx, ny)) {
+          var fromX = player.x, fromY = player.y;
           player.x = nx;
           player.y = ny;
+          /* M9-3：登记移动插值（逻辑坐标已更新，渲染层取视觉位置） */
+          if (Game.Motion && typeof Game.Motion.setStep === 'function') {
+            Game.Motion.setStep('player', fromX, fromY, nx, ny, 140);
+          }
           Game.Core.EventBus.emit('audio:play', { sfx: 'move' });
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
@@ -296,6 +304,10 @@
       var dt = this._lastFrame ? (ts - this._lastFrame) : 0;
       this._lastFrame = ts;
       if (Game.Feedback && typeof Game.Feedback.update === 'function') Game.Feedback.update(dt);
+      /* M9-3：推进移动插值、粒子生命、战斗死亡消散计时 */
+      if (Game.Motion && typeof Game.Motion.update === 'function') Game.Motion.update(dt);
+      if (Game.Particles && typeof Game.Particles.update === 'function') Game.Particles.update(dt);
+      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.tick === 'function') Game.Systems.Battle.tick();
       syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {

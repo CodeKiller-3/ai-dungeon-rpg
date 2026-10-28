@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m9_3</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- M9-3 验证页：加载 eventBus → maps → monsters → render → motion → particles → battle（与主游戏同序） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script>
+(function () {
+  var out = { motionLoaded: false, motionApi: false, motionOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+    var ok = true;
+    var sub = {};
+
+    /* 1. 模块加载与接口齐备 */
+    out.motionLoaded = !!(window.Game && Game.Motion && Game.Particles && Game.Systems && Game.Systems.Battle);
+    if (out.motionLoaded) {
+      var M = Game.Motion, P = Game.Particles, B = Game.Systems.Battle;
+      out.motionApi = (typeof M.setStep === 'function') &&
+        (typeof M.getRenderPos === 'function') &&
+        (typeof M.update === 'function') &&
+        (typeof M.clear === 'function') &&
+        (typeof P.spawn === 'function') &&
+        (typeof P.update === 'function') &&
+        (typeof P.draw === 'function') &&
+        (typeof P.count === 'function') &&
+        (typeof B.start === 'function') &&
+        (typeof B.tick === 'function');
+    }
+
+    if (out.motionLoaded && out.motionApi) {
+      var M = Game.Motion, P = Game.Particles, B = Game.Systems.Battle;
+
+      /* 2. Motion：setStep 后 t≈0 位置=起点 */
+      M.clear();
+      M.setStep('e1', 0, 0, 10, 10, 200);
+      var r0 = M.getRenderPos('e1');
+      var t2_startOk = (r0 !== null) && (Math.abs(r0.x - 0) < 0.01) && (Math.abs(r0.y - 0) < 0.01);
+      sub.t2_motionStart = t2_startOk;
+      ok = ok && t2_startOk;
+
+      /* 3. Motion：中途位置在两点之间且 easeOutQuad 单调递增 */
+      M.update(100);
+      var r1 = M.getRenderPos('e1');
+      /* easeOutQuad(0.5) = 1 - 0.25 = 0.75 → x = 7.5 */
+      var t3_midOk = (r1 !== null) && (r1.x > 0) && (r1.x < 10) && (Math.abs(r1.x - 7.5) < 0.01);
+      sub.t3_motionMid = t3_midOk;
+      ok = ok && t3_midOk;
+
+      /* 4. Motion：update 足量后 t=1 位置=终点 */
+      M.update(100);
+      var r2 = M.getRenderPos('e1');
+      var t4_endOk = (r2 !== null) && (Math.abs(r2.x - 10) < 0.01) && (Math.abs(r2.y - 10) < 0.01) && (r2.t >= 1);
+      sub.t4_motionEnd = t4_endOk;
+      ok = ok && t4_endOk;
+
+      /* 5. Motion：未登记实体 getRenderPos 返回 null（调用方降级用逻辑坐标） */
+      var rNone = M.getRenderPos('no_such_entity');
+      var t5_nullOk = (rNone === null);
+      sub.t5_motionNull = t5_nullOk;
+      ok = ok && t5_nullOk;
+
+      /* 6. Particles：spawn 后 count 增加 */
+      P.clear();
+      P.enabled = true;
+      P.spawn('spark', 100, 100, { count: 5 });
+      var t6_spawnOk = (P.count() === 5);
+      sub.t6_particleSpawn = t6_spawnOk;
+      ok = ok && t6_spawnOk;
+
+      /* 7. Particles：update 推进后到期自动回收（count 归零） */
+      P.update(5000); /* 远超 maxLife，全部到期 */
+      var t7_expireOk = (P.count() === 0);
+      sub.t7_particleExpire = t7_expireOk;
+      ok = ok && t7_expireOk;
+
+      /* 8. Particles：上限 60 不超 */
+      P.clear();
+      for (var i = 0; i < 10; i++) P.spawn('spark', 0, 0, { count: 10 }); /* 100 粒，应钳制到 60 */
+      var t8_limitOk = (P.count() <= 60);
+      sub.t8_particleLimit = t8_limitOk;
+      ok = ok && t8_limitOk;
+
+      /* 9. Particles：enabled=false 时静默 */
+      P.enabled = false;
+      var before = P.count();
+      P.spawn('spark', 0, 0, { count: 5 });
+      P.update(16);
+      var t9_disabledOk = (P.count() === before);
+      P.enabled = true; /* 恢复 */
+      sub.t9_particleDisabled = t9_disabledOk;
+      ok = ok && t9_disabledOk;
+
+      /* 10. 死亡消散：击杀怪物后进入 dying 状态 */
+      if (!Game.Data.Player) Game.Data.Player = { hp: 100, maxHp: 100, atk: 10, def: 5, gold: 0, exp: 0, level: 1, inventory: {}, equipment: {} };
+      var mid = Object.keys(Game.Data.MONSTERS)[0];
+      B.start(mid);
+      /* 直接把怪物血量打到 0，触发 settleWin（设 dying） */
+      var st = B.getState();
+      st.monster.hp = 0;
+      B.playerAction('attack'); /* 击杀 → settleWin → dying */
+      var st2 = B.getState();
+      var t10_dyingOk = (st2 !== null) && (st2.dying === true) && (typeof st2.dyingAt === 'number');
+      sub.t10_deathDying = t10_dyingOk;
+      ok = ok && t10_dyingOk;
+
+      /* 11. 死亡消散：消散计时完成后 tick 从列表移除（state 置 null） */
+      /* 手动把 dyingAt 设为过去，模拟时间流逝 */
+      st2.dyingAt = performance.now() - (st2.dyingMs || 700) - 10;
+      B.tick();
+      var st3 = B.getState();
+      var t11_goneOk = (st3 === null);
+      sub.t11_deathGone = t11_goneOk;
+      ok = ok && t11_goneOk;
+
+      /* 12. 攻击帧：玩家攻击后 playerActionAt 被设置 */
+      B.start(mid);
+      B.playerAction('attack');
+      var st4 = B.getState();
+      var t12_attackOk = (st4 !== null) && (typeof st4.playerActionAt === 'number');
+      sub.t12_attackFrame = t12_attackOk;
+      ok = ok && t12_attackOk;
+
+      /* 13. 重复 update/draw 不抛错（性能稳定） */
+      var repeatOk = true;
+      try {
+        M.clear();
+        P.clear();
+        M.setStep('e2', 0, 0, 5, 5, 100);
+        P.spawn('puff', 50, 50, { count: 3 });
+        for (var ri = 0; ri < 30; ri++) {
+          M.update(16);
+          P.update(16);
+          P.draw();
+          B.tick();
+        }
+      } catch (e) { repeatOk = false; }
+      sub.t13_repeat = repeatOk;
+      ok = ok && repeatOk;
+
+      out.sub = sub;
+      out.motionOk = ok;
+    }
+
+    var pass = out.motionLoaded && out.motionApi && out.motionOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

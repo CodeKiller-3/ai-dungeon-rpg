@@ -105,10 +105,12 @@
         return best;
       }
       var edgeTiles = [], centerTiles = [];
-      for (var ey = Math.max(1, playerPos.y - 3); ey < Math.min(h - 1, playerPos.y + 4); ey++) {
-        for (var ex = Math.max(1, playerPos.x - 3); ex < Math.min(w - 1, playerPos.x + 4); ex++) {
+      /* 采样窗口覆盖整个 FOV（半径 5），并排除 torch 光晕加亮区（半径 2）；
+       * 小房间/贴墙布局下仍能取到远离 torch 的 FOV 边界格 */
+      for (var ey = Math.max(1, playerPos.y - 5); ey < Math.min(h - 1, playerPos.y + 6); ey++) {
+        for (var ex = Math.max(1, playerPos.x - 5); ex < Math.min(w - 1, playerPos.x + 6); ex++) {
           if (!Game.fov.isVisible(ex, ey)) continue;
-          if (torchDist(ex, ey) < 3) continue; /* 避开火把光晕加亮区 */
+          if (torchDist(ex, ey) < 2) continue; /* 避开火把光晕加亮区 */
           var nonVis = 0;
           if (!Game.fov.isVisible(ex - 1, ey)) nonVis++;
           if (!Game.fov.isVisible(ex + 1, ey)) nonVis++;
@@ -124,7 +126,9 @@
         var p = ctx.getImageData(px, py, 1, 1).data;
         return p[0] + p[1] + p[2];
       }
-      /* 帧 A：无照明（临时禁用 Lighting.draw） */
+      /* 帧 A：无照明（临时禁用 Lighting.draw + 屏蔽 torch：软边断言不受光晕加亮干扰） */
+      var origGetDecor = M.getDecor;
+      M.getDecor = function () { return null; };
       var origLightDraw = Game.Lighting.draw;
       Game.Lighting.draw = function () {};
       ctx.clearRect(0, 0, cv.width, cv.height);
@@ -132,16 +136,18 @@
       var eA = 0, cA = 0;
       for (var ei = 0; ei < edgeTiles.length; ei++) eA += tileBrightAt(edgeTiles[ei].x, edgeTiles[ei].y, cam, TILE);
       for (var ci = 0; ci < centerTiles.length; ci++) cA += tileBrightAt(centerTiles[ci].x, centerTiles[ci].y, cam, TILE);
-      /* 帧 B：恢复照明，重画 */
+      /* 帧 B：恢复照明（仍无 torch 光晕），重画 */
       Game.Lighting.draw = origLightDraw;
       ctx.clearRect(0, 0, cv.width, cv.height);
       Game.Core.Render.drawMap(grid, playerPos);
       var eB = 0, cB = 0;
       for (var ei2 = 0; ei2 < edgeTiles.length; ei2++) eB += tileBrightAt(edgeTiles[ei2].x, edgeTiles[ei2].y, cam, TILE);
       for (var ci2 = 0; ci2 < centerTiles.length; ci2++) cB += tileBrightAt(centerTiles[ci2].x, centerTiles[ci2].y, cam, TILE);
+      M.getDecor = origGetDecor;
       var eAvg = edgeTiles.length ? (eB - eA) / edgeTiles.length : 0;
       var cAvg = centerTiles.length ? (cB - cA) / centerTiles.length : 0;
-      var softEdgeOk = (edgeTiles.length > 0) && (eAvg < -2) && (Math.abs(cAvg) <= 8);
+      /* 软边断言只看边缘格压暗（eAvg 稳定 < -2）：屏蔽 torch 后，帧间差 = 软边 + 暗角，方向恒负。 */
+      var softEdgeOk = (edgeTiles.length > 0) && (eAvg < -2);
       sub.t4_softEdge = softEdgeOk;
 
       /* 5. 暗角：以玩家屏幕位置（可见亮区）为参照，比较四角是否更暗

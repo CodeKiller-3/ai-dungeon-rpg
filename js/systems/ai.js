@@ -92,8 +92,13 @@
             if (next) {
               var grid = Game.Systems.Map.getGrid();
               if (grid[next.y][next.x] !== 0) {
+                var pfx = e.x, pfy = e.y;
                 e.x = next.x;
                 e.y = next.y;
+                /* M9-3：登记巡逻怪移动插值（渲染层用 patrol_<index> 取视觉位置） */
+                if (Game.Motion && typeof Game.Motion.setStep === 'function') {
+                  Game.Motion.setStep('patrol_' + i, pfx, pfy, next.x, next.y, 160);
+                }
               }
             }
           }

@@ -215,8 +215,12 @@
       var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
       for (var j = 0; j < ps.length; j++) {
         if (fovOn && !Game.fov.isVisible(ps[j].x, ps[j].y)) continue; /* S3-1：迷雾外不透视 */
-        var ppx = ps[j].x * TILE - cam.x + 2;
-        var ppy = ps[j].y * TILE - cam.y + 2;
+        /* M9-3：巡逻怪取插值渲染位置 */
+        var prp = (Game.Motion && Game.Motion.getRenderPos) ? Game.Motion.getRenderPos('patrol_' + j) : null;
+        var prx = prp ? prp.x : ps[j].x;
+        var pry = prp ? prp.y : ps[j].y;
+        var ppx = prx * TILE - cam.x + 2;
+        var ppy = pry * TILE - cam.y + 2;
         if (ppx > -20 && ppy > -20 && ppx < cv.width + 20 && ppy < cv.height + 20) {
           var chasing = ps[j].state === 'chase';
           var pimg = (Game.Core.Sprites && Game.Core.Sprites.isReady())
@@ -246,14 +250,20 @@
       }
       /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
       try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
+      /* M9-3：粒子特效层（探索场景命中/死亡粒子），叠在光影之上、HUD 之下 */
+      try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
       this._drawHud(); /* S3-2 */
     },
 
     drawPlayer: function (player) {
       var ctx = this._ctx;
       if (!ctx) return;
-      var px = player.x * TILE - cam.x;
-      var py = player.y * TILE - cam.y;
+      /* M9-3：取插值渲染位置；未登记移动时降级用逻辑坐标 */
+      var rp = (Game.Motion && Game.Motion.getRenderPos) ? Game.Motion.getRenderPos('player') : null;
+      var rx = rp ? rp.x : player.x;
+      var ry = rp ? rp.y : player.y;
+      var px = rx * TILE - cam.x;
+      var py = ry * TILE - cam.y;
       /* M7.5：素材就绪时使用 kni-dungeon 骑士精灵，否则回退像素小人色块 */
       var sp = Game.Core.Sprites && Game.Core.Sprites.isReady() ? Game.Core.Sprites.get('player') : null;
       if (sp) {
@@ -291,7 +301,20 @@
       this._drawModal(); /* S3-3：弹窗叠在最上层（仅探索场景路径，弹窗仅从此打开） */
     },
 
-    /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令 */
+    /* M9-3：计算攻击动作帧偏移（前摇后拉→出手前冲→恢复），纯视觉不阻塞结算
+     * actionAt: 动作起始时间戳；duration: 总时长 ms；forward: 出手方向 (+1/-1) */
+    _attackOffset: function (actionAt, duration, forward) {
+      if (!actionAt) return 0;
+      var elapsed = performance.now() - actionAt;
+      var t = Math.min(elapsed / duration, 1);
+      if (t >= 1) return 0;
+      if (t < 0.3) return -forward * 8 * (t / 0.3);           /* 前摇：后拉 */
+      if (t < 0.5) return forward * 14 * ((t - 0.3) / 0.2);   /* 出手：前冲 */
+      return forward * 14 * (1 - (t - 0.5) / 0.5);            /* 恢复：回位 */
+    },
+
+    /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令
+     * M9-3：怪物死亡消散（渐隐+上浮+缩小）、攻击前摇帧、粒子特效 */
     drawBattle: function (state) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -299,28 +322,57 @@
       ctx.fillStyle = '#0f0f1f';
       ctx.fillRect(0, 0, cv.width, cv.height);
 
+      var now = performance.now();
+      var dying = !!state.dying;
+      var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
+
       /* 敌人：素材就绪时用真实精灵（Boss 用大恶魔，其余用小怪） */
       var ex = cv.width / 2 - 45;
       var ey = 90;
+      /* M9-3：怪物攻击前摇帧偏移（向前=向下） */
+      var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
+      ey += mAtkOff;
       var boss = state.monster.id === 'dragon';
       var sp2 = (Game.Core.Sprites && Game.Core.Sprites.isReady())
         ? Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort')
         : null;
-      if (sp2) {
-        ctx.drawImage(sp2, ex, ey, 90, 90);
+      ctx.save();
+      if (dying) {
+        /* M9-3：死亡消散——渐隐 + 上浮 + 缩小 */
+        ctx.globalAlpha = 1 - dieProg;
+        var mScale = 1 - dieProg * 0.5;
+        var mSize = 90 * mScale;
+        var mDrawX = ex + (90 - mSize) / 2;
+        var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
+        if (sp2) {
+          ctx.drawImage(sp2, mDrawX, mDrawY, mSize, mSize);
+        } else {
+          ctx.fillStyle = state.monster.color;
+          ctx.fillRect(mDrawX, mDrawY, mSize, mSize);
+        }
       } else {
-        ctx.fillStyle = state.monster.color;
-        ctx.fillRect(ex, ey, 90, 90);
+        if (sp2) {
+          ctx.drawImage(sp2, ex, ey, 90, 90);
+        } else {
+          ctx.fillStyle = state.monster.color;
+          ctx.fillRect(ex, ey, 90, 90);
+        }
       }
-      ctx.fillStyle = '#fff';
-      ctx.font = '15px monospace';
-      ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
-        cv.width / 2 - 140, ey + 120);
+      ctx.restore();
+      if (!dying) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '15px monospace';
+        ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
+          cv.width / 2 - 140, ey + 120);
+      }
 
       /* 玩家：素材就绪时用骑士精灵 */
       var p = Game.Data.Player;
       var px = cv.width / 2 - 45;
       var py = cv.height - 190;
+      /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
+      var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1);
+      py += pAtkOff;
       var psp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('player') : null;
       if (psp) {
         ctx.drawImage(psp, px, py, 90, 90);
@@ -341,12 +393,16 @@
         ctx.fillText(state.log[start + i], 30, cv.height - 130 + i * 18);
       }
 
-      /* 指令提示 */
-      ctx.fillStyle = '#9bbbf4';
-      ctx.font = '14px monospace';
-      ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+      /* 指令提示（消散期间隐藏） */
+      if (!dying) {
+        ctx.fillStyle = '#9bbbf4';
+        ctx.font = '14px monospace';
+        ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+      }
       /* S3-4：战斗视觉反馈（伤害飘字/受击闪白红闪），绘制于战斗内容之上、HUD 之下 */
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
+      /* M9-3：粒子特效（命中火花/死亡灵魂碎片），叠在反馈层之上 */
+      try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
       this._drawHud(); /* S3-2 */
     },
 
