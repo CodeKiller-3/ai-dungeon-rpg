@@ -777,7 +777,7 @@ const MONSTERS = {
 | M9-3 性能优化轮 | 事件清理/渲染裁剪/对象池审计 | 2-3 轮 | 目标设备 60fps，内存无增长（对齐 E-05） |
 | M9-4 设置面板 | 音量/操作说明/画质档 | 2-4 轮 | 设置生效、不破坏存档 |
 | M10-1 AI 动态难度 | 正式玩法引入 Q-learning 难度引擎：Boss 战按玩家胜率自动调强度（Q 表在线更新） | 4-6 轮 | 玩家连败→AI 降强度，连胜→升强度，胜率趋近 50%；主菜单可视化显示难度档 | 
-| M10-2 LLM 内容生成 | NPC 对话扩展为动态内容：LLM 生成任务文案/商店描述/随机事件，无 Key/断网离线降级为模板 | 4-6 轮 | 接入 DeepSeek 后任务描述与商店文案随对话变化；无 Key 时全部降级可用 |
+| M10-2 三级 NPC 反应机制（§20） | NPC 对话升级为事件驱动智能：L1 离线反应库（LLM 预生成 100+ 条按事件触发）+ L2 关键词检索 + L3 实时 API 可选 | 4-6 轮 | L1/L2 无 Key 全可用（默认态）；L3 有 Key 时追问有生成式回复；同 tag 不短时重复 |
 | M10-3 AI 内容审计 | 全仓开源许可证逐文件核对 + 素材来源声明更新 | 2 轮 | LICENSE 清单与引用文件一一对应（对齐 E-10） |
 
 ### 15.5 软件工具清单（全程免费，按用途分组）
@@ -857,7 +857,7 @@ const MONSTERS = {
 | WebDungeon（macbury.itch.io，MIT，PhaserJS+16x16 Dawnhack tileset） | 结构参照 | 16x16 瓦片比例、点击移动交互 | 瓦片尺寸与交互规格 |
 | Rogule（rogule.com，GitHub chr15m/rogule.com，rot.js+Twemoji） | 技术参照 | rot.js 用于 FOV/地图生成；每日地牢+社交分享玩法 | rot.js 引入依据 |
 | The Binding of Isaac（以撒的结合） | 远期可选 B | 房间+门结构、道具堆叠成长 | 记录为 M10 后远期方向，本次不实施 |
-| AI Dungeon | 远期可选 C | AI 叙事输入框交互 | 与 M10-2（LLM 内容生成）衔接，本次不实施 |
+| AI Dungeon | 远期可选 C | AI 叙事输入框交互 | 与 M10-2（三级 NPC 反应机制，§20）衔接，本次不实施 |
 
 ### 17.2 界面规格定稿（S3 阶段，对照 SPD 执行）
 
@@ -956,3 +956,65 @@ const MONSTERS = {
 4. **传递机制**：只走文件（docs/tasks/ 任务卡、代码注释契约、preflight/ 验证页）；你（黄文博）是唯一口头通道，豆包↔Trae 不直接对话。
 5. **话术**：A 开工 / B 卡住 / C 带回疑问 / D 试玩反馈 / E 提交 / F 加需求，六种场景现成话术在手册 §6，到我上场时按场景复制。
 6. **首个任务卡**：`docs/tasks/S3-1-rotjs-fov.md`（手册 §7 内嵌完整样例），S3 定稿开工时第一步执行。
+
+## 20. 三级 NPC 反应机制（"事件驱动智能对话"，用户提案，已证成立）
+
+### 20.1 用户提案与佐证结论
+
+**提案**：让 LLM 生成大量文本信息，按角色活动/游戏事件触发不同反应（"伪装智能"），替代或补充运行时实时调用。
+**结论：提案成立**，学界与业界均有明确支持，该方案学名为 **offline pre-generated dialogue pool + runtime lookup（离线预生成对话池 + 运行时查表）/ canned-line fallback（罐头台词回退）**：
+
+- **学术佐证**：
+  - ACM FDG 2026《Quest of Aivengarde：Comparative Study of Player Experience Across LLM Dialogue Systems》——64 名被试比较固定树/LLM 改写/混合/全开放四版：全开放 LLM 对话带来更长对话与沉浸，但同时产生不可控副作用，混合架构是工程平衡点。
+  - ACM《Beyond Pre-Defined Scripts: Player Perceptions on Generative NPC Dialogues》——62 人调查：LLM 对话有输入灵活、更自然的优势，但产生难预料的副作用；引用 Värtinen 等研究：GPT 生成的 5 条任务描述仅 1 条被人类批评者接受——**支持"预生成+人工筛选"**。
+  - arXiv:2511.10277《Fixed-Persona SLMs with Modular Memory》——云 LLM 用于游戏受硬件、延迟、知识边界三重限制，业界转向本地/离线替代。
+  - ICAISD 2025《Generative AI-Driven Procedural Character and Dialogue System》——直接应用通用 LLM 面临角色一致性/叙事连贯/情境适应性挑战，必须加结构约束（记忆+情感+上下文控制）。
+- **业界佐证**：
+  - SpotdogGames《Diálogos generados con LLM en pipeline (no runtime)》——**LLM 移到构建期（pipeline），运行时零调用只查表**：零成本、零延迟、内容可审；模板+slots 批量生成变体，bag 机制防重复。
+  - Patsnap Eureka 专利《Offline Hybrid Dialog Trees for Low-Latency Game Character AI》——离线阶段 AI 生成对话树存储、在线阶段检索调用，消除延迟与资源消耗。
+  - Summer Engine《AI Dialogue Generator for Games: What Actually Works in 2026》——"**静态预写对话是更安全的默认选择**：生成一次、通读每行、编辑语气、交付完全可控；实时 LLM NPC 增加成本/延迟/出戏风险。许多已发售游戏用 AI 写静态对话、保持运行时确定性"。
+  - GamineAI《LLM-Driven NPC Dialogue System with a Hard Fallback Net》——双路架构：网络健康走实时 LLM、否则走确定性本地罐头台词树；2026 平台评审已正式要求必须有确定性 fallback；每节点 3-6 条罐头台词是甜点位。
+  - AiToolTutorials《Using LLMs to Generate Dynamic NPC Dialogue Trees》——三档方案（改写/分支引导/全开放）+ 混合流水线（Tartu 2025 论文）：LLM 只碰流水线最后阶段。
+- **结论**：以"LLM 离线批量生成 → 筛选入库 → 运行时按事件条件触发"为默认路径；实时 API 是可选第三层增强。这与 §15 E-07（LLM 内容与确定性规则耦合、可离线降级）完全一致并强化。
+
+### 20.2 三层架构
+
+| 层 | 机制 | 依赖 | 定位 |
+|---|---|---|---|
+| **L1 离线反应库** | `js/data/reactions.js`：事件 tag → 文本池；事件触发随机抽取（bag 去重防短时重复） | 无（零 API、零延迟、file:// 可用） | **默认主路径** |
+| **L2 关键词检索** | 玩家自由输入 → 关键词/意图映射到最近 tag；未命中给"没听懂"兜底话术 | 无 | 让"伪智能"接得住自由输入 |
+| **L3 实时 API** | 有 Key 且在线且 L1/L2 未命中或玩家追问 → 调 DeepSeek 生成；失败自动落回 L1/L2 | DeepSeek Key（可选） | 可选增强，默认关闭 |
+
+### 20.3 触发事件清单与内容规格（总量 100+ 条）
+
+| 事件 tag | 触发点 | 文本量 | 事件 tag | 触发点 | 文本量 |
+|---|---|---|---|---|---|
+| enter_floor | 进入新层 | 8 | quest_done | 任务完成 | 8 |
+| kill | 击杀怪物 | 8 | death | 死亡 | 10 |
+| kill_boss | 击杀 Boss | 10 | victory | 通关 | 12 |
+| hurt | 受击 | 8 | greeting | 打招呼 | 8 |
+| low_hp | 残血 | 8 | idle | 闲聊 | 8 |
+| gold | 拾金币 | 6 | shop | 进商店 | 6 |
+| pickup_item | 拾道具 | 6 | — | — | — |
+
+每条 1-3 句、贴合角色人设（守门人/商人/向导），含任务/剧情彩蛋呼应。
+
+### 20.4 生成流程（开发期，无需运行时 API）
+
+1. 我给"批量生成模板 prompt"（角色人设 + 事件场景 + 语气要求 + 输出格式）。
+2. 用豆包或 DeepSeek 批量生成（每 tag 10-15 条原始变体）。
+3. AI 筛选去重、过滤出戏内容 → 写入 `js/data/reactions.js`（结构化 JSON/JS 对象）。
+4. 集成：新增 `js/systems/npc.js` 事件挂钩（在 main.js/battle.js/quest.js 既有触发点 emit）→ L2 检索器（简单包含匹配）→ L3 复用现有 DeepSeek 调用。
+5. 无 DeepSeek Key 也能完整完成（豆包直接生成文本）。
+
+### 20.5 里程碑归属与验收判据
+
+- **归属**：并入 M10-2（§15.4 已更新为三级机制）；L1+L2 必做，L3 可选。
+- **验收**：L1：各事件触发有反应、同 tag 不短时重复（bag）；L2：输入"你是谁/金币/商店"命中对应池、乱输入有兜底；L3：无 Key 全部降级正常（默认态）、有 Key 追问有生成式回复且失败自动回落。
+- **答辩亮点**：展示"内容生成（LLM 离线产内容）→ 确定性触发 → 检索 → 实时增强"四层工程权衡，比单纯实时调用更能体现 AI 工程能力。
+
+### 20.6 与现有代码衔接
+
+- M5 `js/systems/npc.js`（T 键对话、在线+离线降级）保留为 **L3 + 对话入口**。
+- 新增 `js/data/reactions.js` + L2 检索器 + 事件挂钩（在各系统触发点 emit，复用现有 EventBus）。
+- 不改动既有接口；reactions.js 数据文件独立，可随时扩充。
