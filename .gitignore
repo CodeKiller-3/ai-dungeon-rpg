@@ -16,3 +16,6 @@ desktop.ini
 # API keys / secrets
 .env
 *.key
+
+# Trae CN 本地共享产物
+.trae-html-share-packages/
