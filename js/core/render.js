@@ -13,6 +13,7 @@
   Game.Core.Render = {
     _canvas: null,
     _ctx: null,
+    TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
 
     init: function (canvas) {
       this._canvas = canvas;
@@ -20,6 +21,9 @@
       canvas.height = window.innerHeight;
       this._ctx = canvas.getContext('2d');
     },
+
+    /* M9-2：返回当前相机偏移（供 Lighting 等模块计算屏幕坐标） */
+    _getCam: function () { return cam; },
 
     /* 计算镜头：地图比屏幕小则居中，否则跟随玩家 */
     _updateCam: function (grid, player) {
@@ -240,6 +244,8 @@
           }
         }
       }
+      /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
+      try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
       this._drawHud(); /* S3-2 */
     },
 

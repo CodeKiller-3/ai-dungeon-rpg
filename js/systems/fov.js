@@ -20,6 +20,7 @@
   var RADIUS = 5;        /* 默认视野半径（任务卡：玩家周围 5 格可见） */
   var visible = {};      /* 当前可见格集合 "x,y" -> true */
   var explored = {};     /* 本层已点亮（记忆）集合 */
+  var playerPos = { x: 0, y: 0 };  /* M9-2：最近一次 update 的玩家坐标（只读辅助，不改可见性语义） */
 
   function key(x, y) { return x + ',' + y; }
 
@@ -58,6 +59,7 @@
     /* 重算可见区并累积记忆；探索点亮新格子时广播 map:fovChanged */
     update: function (x, y, radius, isBlocked) {
       radius = radius || RADIUS;
+      playerPos.x = x; playerPos.y = y;  /* M9-2：记录玩家坐标供 distanceToPlayer 使用 */
       var list = this.compute(x, y, radius, isBlocked);
       visible = {};
       var newly = 0;
@@ -75,6 +77,8 @@
     isVisible: function (x, y) { return !!visible[key(x, y)]; },
     isExplored: function (x, y) { return !!explored[key(x, y)]; },
     reset: function () { visible = {}; explored = {}; },
+    /* M9-2：返回该格到玩家的切比雪夫距离（max(|dx|,|dy|)），纯只读辅助，不改 compute 语义 */
+    distanceToPlayer: function (x, y) { return Math.max(Math.abs(x - playerPos.x), Math.abs(y - playerPos.y)); },
     RADIUS: RADIUS
   };
 

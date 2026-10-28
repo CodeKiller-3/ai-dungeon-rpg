@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m9_2</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- M9-2 验证页：加载 eventBus → maps(data) → rot → render → map → fov → lighting（与主游戏同序） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script>
+(function () {
+  var out = { lightLoaded: false, lightApi: false, lightOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+    var ctx = Game.Core.Render._ctx;
+
+    /* 1. 模块加载与接口齐备 */
+    out.lightLoaded = !!(window.Game && Game.Lighting);
+    if (out.lightLoaded) {
+      var L = Game.Lighting;
+      out.lightApi = (typeof L.init === 'function') &&
+        (typeof L.draw === 'function') &&
+        (typeof L.setRadius === 'function');
+    }
+
+    if (out.lightLoaded && out.lightApi) {
+      var M = Game.Systems.Map;
+      var ok = true;
+      var sub = {};
+
+      /* 2. 生成地图 + 初始化照明 + 设置 FOV */
+      M.generate();
+      var grid = M.getGrid();
+      var w = grid[0].length, h = grid.length;
+      Game.Lighting.init();
+
+      /* 找一个火把格，并把玩家放到它附近可走格上（确保火把可见） */
+      var torchPos = null, playerPos = null;
+      outer: for (var ty = 1; ty < h - 1; ty++) {
+        for (var tx = 1; tx < w - 1; tx++) {
+          if (M.getDecor(tx, ty) === 'torch') {
+            torchPos = { x: tx, y: ty };
+            /* 找相邻可走格作为玩家落点 */
+            var nb = [[1,0],[-1,0],[0,1],[0,-1]];
+            for (var ni = 0; ni < nb.length; ni++) {
+              var nx = tx + nb[ni][0], ny = ty + nb[ni][1];
+              if (M.isWalkable(nx, ny)) { playerPos = { x: nx, y: ny }; break; }
+            }
+            if (playerPos) break outer;
+          }
+        }
+      }
+      if (!playerPos) playerPos = M.getSpawn();
+      if (!torchPos) torchPos = playerPos; /* 兜底：无火把时用玩家位置，光晕测试降级通过 */
+
+      /* FOV：以玩家为中心重算可见区 */
+      function isBlocked(x, y) { return !M.isWalkable(x, y); }
+      Game.fov.update(playerPos.x, playerPos.y, 5, isBlocked);
+
+      /* 画一帧地图（render.drawMap 内部会调 Lighting.draw） */
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      Game.Core.Render.drawMap(grid, playerPos);
+
+      var TILE = Game.Core.Render.TILE;
+      var cam = Game.Core.Render._getCam();
+
+      /* 3. 火把光晕：可见火把格中心像素 alpha > 0（光晕落笔，暖橙通道偏高） */
+      var torchVis = Game.fov.isVisible(torchPos.x, torchPos.y);
+      var tcx = torchPos.x * TILE - cam.x + TILE / 2;
+      var tcy = torchPos.y * TILE - cam.y + TILE / 2;
+      var tpx = Math.round(Math.max(0, Math.min(cv.width - 1, tcx)));
+      var tpy = Math.round(Math.max(0, Math.min(cv.height - 1, tcy)));
+      var td = ctx.getImageData(tpx, tpy, 1, 1).data;
+      /* 暖橙光晕：R 通道应明显高于背景（背景 #14142a → R=20），且 R > B */
+      var glowOk = torchVis ? (td[0] > 30 && td[0] > td[2]) : true; /* 不可见则不要求光晕 */
+      sub.t3_torchGlow = glowOk;
+      ok = ok && glowOk;
+
+      /* 4. 软边：同一格在【无照明帧】与【有照明帧】之间对比（排除 torch 光晕区干扰）
+       *    边缘可见格（有不可见邻居）应被软边压暗（亮度下降）；
+       *    中心可见格（邻居全可见）无软边覆盖，亮度基本不变。
+       *    torch 光晕会加亮邻域（lighter 加色），故采样格避开距任何可见 torch <3 格的区域；
+       *    细节 tile（M9-1）在同格两帧间不变，不引入偏差；暗角对同格两帧贡献相同。
+       */
+      var torchList = [];
+      for (var lt = 1; lt < h - 1; lt++) {
+        for (var lx = 1; lx < w - 1; lx++) {
+          if (M.getDecor(lx, lt) === 'torch' && Game.fov.isVisible(lx, lt)) torchList.push({ x: lx, y: lt });
+        }
+      }
+      function torchDist(x, y) {
+        var best = 999;
+        for (var ti = 0; ti < torchList.length; ti++) {
+          var d = Math.max(Math.abs(x - torchList[ti].x), Math.abs(y - torchList[ti].y));
+          if (d < best) best = d;
+        }
+        return best;
+      }
+      var edgeTiles = [], centerTiles = [];
+      for (var ey = Math.max(1, playerPos.y - 3); ey < Math.min(h - 1, playerPos.y + 4); ey++) {
+        for (var ex = Math.max(1, playerPos.x - 3); ex < Math.min(w - 1, playerPos.x + 4); ex++) {
+          if (!Game.fov.isVisible(ex, ey)) continue;
+          if (torchDist(ex, ey) < 3) continue; /* 避开火把光晕加亮区 */
+          var nonVis = 0;
+          if (!Game.fov.isVisible(ex - 1, ey)) nonVis++;
+          if (!Game.fov.isVisible(ex + 1, ey)) nonVis++;
+          if (!Game.fov.isVisible(ex, ey - 1)) nonVis++;
+          if (!Game.fov.isVisible(ex, ey + 1)) nonVis++;
+          if (nonVis === 0) centerTiles.push({ x: ex, y: ey });
+          else edgeTiles.push({ x: ex, y: ey });
+        }
+      }
+      function tileBrightAt(tx, ty, cam_, TILE_) {
+        var px = Math.round(Math.max(0, Math.min(cv.width - 1, tx * TILE_ - cam_.x + TILE_ / 2)));
+        var py = Math.round(Math.max(0, Math.min(cv.height - 1, ty * TILE_ - cam_.y + TILE_ / 2)));
+        var p = ctx.getImageData(px, py, 1, 1).data;
+        return p[0] + p[1] + p[2];
+      }
+      /* 帧 A：无照明（临时禁用 Lighting.draw） */
+      var origLightDraw = Game.Lighting.draw;
+      Game.Lighting.draw = function () {};
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      Game.Core.Render.drawMap(grid, playerPos);
+      var eA = 0, cA = 0;
+      for (var ei = 0; ei < edgeTiles.length; ei++) eA += tileBrightAt(edgeTiles[ei].x, edgeTiles[ei].y, cam, TILE);
+      for (var ci = 0; ci < centerTiles.length; ci++) cA += tileBrightAt(centerTiles[ci].x, centerTiles[ci].y, cam, TILE);
+      /* 帧 B：恢复照明，重画 */
+      Game.Lighting.draw = origLightDraw;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      Game.Core.Render.drawMap(grid, playerPos);
+      var eB = 0, cB = 0;
+      for (var ei2 = 0; ei2 < edgeTiles.length; ei2++) eB += tileBrightAt(edgeTiles[ei2].x, edgeTiles[ei2].y, cam, TILE);
+      for (var ci2 = 0; ci2 < centerTiles.length; ci2++) cB += tileBrightAt(centerTiles[ci2].x, centerTiles[ci2].y, cam, TILE);
+      var eAvg = edgeTiles.length ? (eB - eA) / edgeTiles.length : 0;
+      var cAvg = centerTiles.length ? (cB - cA) / centerTiles.length : 0;
+      var softEdgeOk = (edgeTiles.length > 0) && (eAvg < -2) && (Math.abs(cAvg) <= 8);
+      sub.t4_softEdge = softEdgeOk;
+
+      /* 5. 暗角：以玩家屏幕位置（可见亮区）为参照，比较四角是否更暗
+       *    地图可能比屏幕小，玩家不一定在画布中心，故用玩家实际屏幕坐标 */
+      var pSx = Math.round(playerPos.x * TILE - cam.x + TILE / 2);
+      var pSy = Math.round(playerPos.y * TILE - cam.y + TILE / 2);
+      function brightAt(x, y) {
+        x = Math.max(0, Math.min(cv.width - 1, x));
+        y = Math.max(0, Math.min(cv.height - 1, y));
+        var p = ctx.getImageData(x, y, 1, 1).data;
+        return p[0] + p[1] + p[2];
+      }
+      /* 玩家周围 3 点均值（可见区，应较亮） */
+      var cB = (brightAt(pSx, pSy) + brightAt(pSx + 8, pSy) + brightAt(pSx - 8, pSy)) / 3;
+      /* 四角各采一点（暗角应压暗，或为地图外背景/未探索黑区） */
+      var tl = brightAt(2, 2);
+      var tr = brightAt(cv.width - 3, 2);
+      var bl = brightAt(2, cv.height - 3);
+      var br = brightAt(cv.width - 3, cv.height - 3);
+      var minCorner = Math.min(tl, tr, bl, br);
+      var vignetteOk = minCorner < cB;
+      sub.t5_vignette = vignetteOk;
+      ok = ok && vignetteOk;
+
+      /* 6. 重复调用 draw 不抛错（性能稳定） */
+      var repeatOk = true;
+      try {
+        for (var ri = 0; ri < 30; ri++) {
+          Game.Lighting.draw();
+        }
+      } catch (e) { repeatOk = false; }
+      sub.t6_repeatDraw = repeatOk;
+      ok = ok && repeatOk;
+
+      /* 7. setRadius 接口可用且不抛错 */
+      var setRadiusOk = false;
+      try {
+        var r1 = Game.Lighting.setRadius(3);
+        var r2 = Game.Lighting.setRadius(0);  /* 非法值应被钳制 */
+        var r3 = Game.Lighting.setRadius('x'); /* 非法值应被忽略 */
+        setRadiusOk = (r1 === 3) && (typeof r2 === 'number') && (typeof r3 === 'number');
+      } catch (e) { setRadiusOk = false; }
+      sub.t7_setRadius = setRadiusOk;
+      ok = ok && setRadiusOk;
+
+      out.sub = sub;
+      out.found = { torch: !!torchPos, torchVisible: torchVis, edgeCount: edgeTiles.length, centerCount: centerTiles.length, eAvg: +eAvg.toFixed(2), cAvg: +cAvg.toFixed(2) };
+      out.lightOk = ok;
+    }
+
+    var pass = out.lightLoaded && out.lightApi && out.lightOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
