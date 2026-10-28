@@ -37,6 +37,7 @@
     }
     logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold + (drops.length ? ' 获得:' + drops.join(',') : ''));
     if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
+    Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
     Game.Core.EventBus.emit('battle:end', { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops });
   }
 
@@ -48,8 +49,10 @@
     p.hp = Math.max(p.hp - dmg, 0);
     state.defending = false;
     logPush(m.name + ' 攻击了你，造成 ' + dmg + ' 伤害');
+    Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
     if (p.hp <= 0) {
       logPush('你被击败了…');
+      Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
       Game.Core.EventBus.emit('battle:end', { result: 'lose' });
     }
   }
@@ -70,6 +73,7 @@
     playerAction: function (cmd) {
       if (!state) return null;
       if (cmd === 'attack') {
+        Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
         var dmg = damage(Game.Data.Player.atk, state.monster.def);
         state.monster.hp -= dmg;
         logPush('你对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
@@ -77,13 +81,16 @@
           settleWin();
           return state;
         }
+        Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
         monsterTurn();
       } else if (cmd === 'defend') {
         state.defending = true;
+        Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
         logPush('你进入防御姿态，本回合减伤 50%');
         monsterTurn();
       } else if (cmd === 'run') {
         if (Math.random() < 0.5) {
+          Game.Core.EventBus.emit('audio:play', { sfx: 'run' });
           logPush('你成功逃离了战斗');
           Game.Core.EventBus.emit('battle:end', { result: 'run' });
         } else {

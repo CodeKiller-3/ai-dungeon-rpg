@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M7 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    /* 1. howler 引擎加载 */
+    r.howlerLoaded = typeof window.Howler === 'object' && !!window.Howler;
+
+    /* 2. 音频模块 */
+    var A = Game.Systems.Audio;
+    r.audioFn = typeof A.play === 'function';
+
+    /* 3. Q-learning 训练（模拟 3000 步 ≈ 数十轮，成功率应显著 > 随机） */
+    var L = Game.Systems.Learner;
+    var g = Game.Systems.Map.getGrid();
+    L.init(g);
+    for (var i = 0; i < 3000; i++) L.tick(1);
+    var st = L.getStats();
+    r.episode = st.episode;
+    r.successRate = st.successRate;
+    r.rateAbove30 = st.successRate > 30;
+    r.agentValid = g[st.agent.y] && g[st.agent.y][st.agent.x] === 1;
+    L.stop();
+
+    /* 4. 音效事件管道 */
+    var played = false;
+    var listener = function () { played = true; };
+    Game.Core.EventBus.on('audio:play', listener);
+    Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
+    Game.Core.EventBus.off('audio:play', listener);
+    r.sfxEventOk = played;
+
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

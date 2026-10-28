@@ -43,37 +43,86 @@
           var px = x * TILE - cam.x;
           var py = y * TILE - cam.y;
           if (px + TILE < 0 || py + TILE < 0 || px > cv.width || py > cv.height) continue;
-          if (t === 0) ctx.fillStyle = '#3a2e5c';
-          else if (t === 1) ctx.fillStyle = '#2b2b4a';
-          else if (t === 2) ctx.fillStyle = '#b06ce0';
-          else ctx.fillStyle = '#52c41a';
-          ctx.fillRect(px, py, TILE - 1, TILE - 1);
+          if (t === 0) {
+            /* 墙：砖纹 */
+            ctx.fillStyle = '#3a2e5c';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillStyle = 'rgba(0,0,0,0.28)';
+            ctx.fillRect(px, py + TILE / 2 - 1, TILE - 1, 2);
+            ctx.fillRect(px + (x % 2) * 8, py, 1, TILE - 1);
+          } else if (t === 1) {
+            /* 地板：稳定噪点 */
+            ctx.fillStyle = '#2b2b4a';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillStyle = 'rgba(255,255,255,0.07)';
+            var seed = (x * 7 + y * 13) % 4;
+            if (seed === 0) ctx.fillRect(px + 6, py + 6, 2, 2);
+            else if (seed === 1) ctx.fillRect(px + 14, py + 3, 2, 2);
+            else if (seed === 2) ctx.fillRect(px + 4, py + 12, 2, 2);
+          } else if (t === 2) {
+            /* 楼梯下：紫台 */
+            ctx.fillStyle = '#b06ce0';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
+            ctx.fillRect(px, py + TILE - 12, TILE - 1, 2);
+          } else {
+            /* 楼梯上：绿台 */
+            ctx.fillStyle = '#52c41a';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
+          }
         }
       }
-      /* 敌人标记（M2）：在敌人格上画红点 */
+      /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
       var es = Game.Systems.Map.getEnemies();
       for (var i = 0; i < es.length; i++) {
-        var epx = es[i].x * TILE - cam.x + TILE / 2 - 3;
-        var epy = es[i].y * TILE - cam.y + TILE / 2 - 3;
-        if (epx > -10 && epy > -10 && epx < cv.width + 10 && epy < cv.height + 10) {
-          ctx.fillStyle = '#ea6668';
-          ctx.beginPath();
-          ctx.arc(epx, epy, 4, 0, Math.PI * 2);
-          ctx.fill();
+        var epx = es[i].x * TILE - cam.x + 2;
+        var epy = es[i].y * TILE - cam.y + 2;
+        if (epx > -20 && epy > -20 && epx < cv.width + 20 && epy < cv.height + 20) {
+          var eimg = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('monster_chort') : null;
+          if (eimg) {
+            ctx.fillStyle = 'rgba(234,102,104,0.22)';
+            ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
+            ctx.drawImage(eimg, epx, epy, TILE - 4, TILE - 4);
+          } else {
+            ctx.fillStyle = '#ea6668';
+            ctx.beginPath();
+            ctx.arc(epx + TILE / 2 - 3, epy + TILE / 2 - 3, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
-      /* 巡逻怪（M5）：状态机可视化——灰=待机 红=追击 */
+      /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
       var ps = Game.Systems.AI.getPatrols();
       for (var j = 0; j < ps.length; j++) {
         var ppx = ps[j].x * TILE - cam.x + 2;
         var ppy = ps[j].y * TILE - cam.y + 2;
         if (ppx > -20 && ppy > -20 && ppx < cv.width + 20 && ppy < cv.height + 20) {
-          ctx.fillStyle = ps[j].state === 'chase' ? '#ea6668' : '#9e9e9e';
-          ctx.fillRect(ppx, ppy, TILE - 4, TILE - 4);
-          if (ps[j].state === 'chase') {
-            ctx.fillStyle = '#fff';
-            ctx.font = '9px monospace';
-            ctx.fillText('!', ppx + TILE / 2 - 4, ppy + 12);
+          var chasing = ps[j].state === 'chase';
+          var pimg = (Game.Core.Sprites && Game.Core.Sprites.isReady())
+            ? Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort')
+            : null;
+          if (pimg) {
+            if (chasing) {
+              ctx.fillStyle = 'rgba(234,102,104,0.25)';
+              ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
+            }
+            ctx.drawImage(pimg, ppx, ppy, TILE - 4, TILE - 4);
+            if (chasing) {
+              ctx.fillStyle = '#fff';
+              ctx.font = '9px monospace';
+              ctx.fillText('!', ppx + TILE / 2 - 4, ppy - 3);
+            }
+          } else {
+            ctx.fillStyle = chasing ? '#ea6668' : '#9e9e9e';
+            ctx.fillRect(ppx, ppy, TILE - 4, TILE - 4);
+            if (chasing) {
+              ctx.fillStyle = '#fff';
+              ctx.font = '9px monospace';
+              ctx.fillText('!', ppx + TILE / 2 - 4, ppy + 12);
+            }
           }
         }
       }
@@ -84,10 +133,26 @@
       if (!ctx) return;
       var px = player.x * TILE - cam.x;
       var py = player.y * TILE - cam.y;
+      /* M7.5：素材就绪时使用 kni-dungeon 骑士精灵，否则回退像素小人色块 */
+      var sp = Game.Core.Sprites && Game.Core.Sprites.isReady() ? Game.Core.Sprites.get('player') : null;
+      if (sp) {
+        ctx.drawImage(sp, px + 2, py + 2, TILE - 4, TILE - 4);
+        return;
+      }
+      /* 像素小勇者：头 + 身体 + 眼睛 + 剑 */
+      ctx.fillStyle = '#e8c39e';
+      ctx.fillRect(px + 7, py + 3, TILE - 14, 7);
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(px + 9, py + 5, 2, 2);
+      ctx.fillRect(px + 13, py + 5, 2, 2);
       ctx.fillStyle = '#ffcf6e';
-      ctx.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(px + 6, py + 6, 4, 4);
+      ctx.fillRect(px + 5, py + 10, TILE - 10, TILE - 13);
+      ctx.fillStyle = '#9bbbf4';
+      ctx.fillRect(px + 8, py + 13, TILE - 16, 3);
+      ctx.fillStyle = '#cfcfcf';
+      ctx.fillRect(px + 15, py + 8, 2, TILE - 8);
+      ctx.fillStyle = '#e1b98f';
+      ctx.fillRect(px + 14, py + 8, 2, 2);
     },
 
     drawHUD: function (stats) {
@@ -117,22 +182,35 @@
       ctx.fillStyle = '#0f0f1f';
       ctx.fillRect(0, 0, cv.width, cv.height);
 
-      /* 敌人方块 */
+      /* 敌人：素材就绪时用真实精灵（Boss 用大恶魔，其余用小怪） */
       var ex = cv.width / 2 - 45;
       var ey = 90;
-      ctx.fillStyle = state.monster.color;
-      ctx.fillRect(ex, ey, 90, 90);
+      var boss = state.monster.id === 'dragon';
+      var sp2 = (Game.Core.Sprites && Game.Core.Sprites.isReady())
+        ? Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort')
+        : null;
+      if (sp2) {
+        ctx.drawImage(sp2, ex, ey, 90, 90);
+      } else {
+        ctx.fillStyle = state.monster.color;
+        ctx.fillRect(ex, ey, 90, 90);
+      }
       ctx.fillStyle = '#fff';
       ctx.font = '15px monospace';
       ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
         cv.width / 2 - 140, ey + 120);
 
-      /* 玩家方块 */
+      /* 玩家：素材就绪时用骑士精灵 */
       var p = Game.Data.Player;
       var px = cv.width / 2 - 45;
       var py = cv.height - 190;
-      ctx.fillStyle = '#ffcf6e';
-      ctx.fillRect(px, py, 90, 90);
+      var psp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('player') : null;
+      if (psp) {
+        ctx.drawImage(psp, px, py, 90, 90);
+      } else {
+        ctx.fillStyle = '#ffcf6e';
+        ctx.fillRect(px, py, 90, 90);
+      }
       ctx.fillStyle = '#fff';
       ctx.font = '14px monospace';
       ctx.fillText('勇者  HP:' + p.hp + '/' + p.maxHp + '  ATK:' + p.atk + '  DEF:' + p.def,
@@ -274,6 +352,66 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('按 R 重新开始', cv.width / 2 - 60, cv.height / 2 + 70);
+    },
+
+    /* 强化学习演示场景（M7）：Q-learning 寻宝鼠 */
+    drawLearner: function (stats, grid) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx || !grid || !stats) return;
+      ctx.fillStyle = '#0f0f1f';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      var T = 24;
+      var ox = Math.max((cv.width - grid[0].length * T) / 2, 10);
+      var oy = 64;
+      for (var y = 0; y < grid.length; y++) {
+        for (var x = 0; x < grid[0].length; x++) {
+          var px = ox + x * T;
+          var py = oy + y * T;
+          if (grid[y][x] === 0) {
+            ctx.fillStyle = '#3a2e5c';
+            ctx.fillRect(px, py, T - 1, T - 1);
+            ctx.fillStyle = 'rgba(0,0,0,0.28)';
+            ctx.fillRect(px, py + T / 2 - 1, T - 1, 2);
+          } else {
+            ctx.fillStyle = '#2b2b4a';
+            ctx.fillRect(px, py, T - 1, T - 1);
+          }
+        }
+      }
+      /* 金币（目标） */
+      ctx.fillStyle = '#ffcf6e';
+      ctx.fillRect(ox + stats.target.x * T + 6, oy + stats.target.y * T + 6, T - 12, T - 12);
+      /* 寻宝鼠（智能体） */
+      ctx.fillStyle = '#ff8c42';
+      ctx.fillRect(ox + stats.agent.x * T + 4, oy + stats.agent.y * T + 4, T - 8, T - 8);
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(ox + stats.agent.x * T + 8, oy + stats.agent.y * T + 8, 2, 2);
+      ctx.fillRect(ox + stats.agent.x * T + 14, oy + stats.agent.y * T + 8, 2, 2);
+      /* HUD */
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText('强化学习演示 · Q-learning 寻宝鼠', 24, 34);
+      ctx.fillStyle = '#8f8';
+      ctx.font = '15px monospace';
+      ctx.fillText('训练轮次: ' + stats.episode +
+        '   成功率: ' + stats.successRate + '%   (成功 ' + stats.successes + ')',
+        24, 56);
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '13px monospace';
+      ctx.fillText('ε-贪心 ε=' + stats.epsilon + '（探索/利用权衡）| 橙色=鼠 黄色=金币 目标=学会自己走到金币',
+        24, cv.height - 46);
+      /* 历史成功率条（最近 20 轮） */
+      var bars = stats.history.slice(-20);
+      var bw = Math.min(14, (cv.width - 60) / 20 - 2);
+      for (var i = 0; i < bars.length; i++) {
+        var hgt = Math.max(2, Math.round(bars[i].rate * 0.5));
+        ctx.fillStyle = '#52c41a';
+        ctx.fillRect(24 + i * (bw + 2), cv.height - 32 - hgt, bw, hgt);
+      }
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '12px monospace';
+      ctx.fillText('成功率走势（近20轮）', 24, cv.height - 14);
     }
   };
 })();

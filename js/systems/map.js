@@ -131,6 +131,7 @@
       if (floorIndex < 0) floorIndex = 0;
       if (floorIndex >= cfg.floors) floorIndex = cfg.floors - 1;
       var g = this.generate();
+      Game.Core.EventBus.emit('audio:play', { sfx: 'stair' });
       return { grid: g, floor: floorIndex + 1 };
     },
 

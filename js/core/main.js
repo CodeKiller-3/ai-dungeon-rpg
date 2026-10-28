@@ -35,6 +35,7 @@
   }
 
   function onQuestComplete(evt) {
+    Game.Core.EventBus.emit('audio:play', { sfx: 'quest' });
     Game.Core.EventBus.emit('ui:notice', { msg: '任务完成：+金币' + evt.reward.gold + ' +经验' + evt.reward.exp });
   }
 
@@ -42,6 +43,7 @@
     if (evt.result === 'win') {
       Game.Systems.Quest.progress('kill', evt.monsterId);
       if (Game.Systems.Quest.isDone('main_clear_dragon')) {
+        Game.Core.EventBus.emit('audio:play', { sfx: 'victory' });
         Game.Core.Main.switchScene('victory');
         return;
       }
@@ -91,6 +93,9 @@
       Game.Core.EventBus.on('quest:complete', onQuestComplete);
       Game.Core.EventBus.on('ai:encounter', onAiEncounter);
       Game.Systems.NPC.bind();
+      Game.Systems.Audio.init();
+      Game.Systems.Audio.bind();
+      if (Game.Core.Sprites) Game.Core.Sprites.load();
       this._lastT = performance.now();
       this._scene = 'explore';
       Game.Systems.Map.generate();
@@ -123,6 +128,7 @@
       if (k['KeyS']) { delete k['KeyS']; this._scene = 'shop'; ui.shopMode = 'buy'; buildShopList(); return; }
       if (k['KeyM']) { delete k['KeyM']; this._scene = 'quests'; return; }
       if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
+      if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
       /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */
       Game.Systems.AI.tick(player);
       var d = Game.Core.Input.direction(k);
@@ -132,6 +138,7 @@
         if (Game.Systems.Map.isWalkable(nx, ny)) {
           player.x = nx;
           player.y = ny;
+          Game.Core.EventBus.emit('audio:play', { sfx: 'move' });
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
             Game.Systems.Map.changeFloor(1);
@@ -217,6 +224,17 @@
       }
     },
 
+    /* 强化学习演示场景（M7）：Esc 返回，每帧训练 8 步 */
+    _updateLearner: function () {
+      var k = Game.Core.Input.getState();
+      if (k['Escape']) {
+        delete k['Escape'];
+        Game.Systems.Learner.stop();
+        this._scene = 'explore';
+      }
+      Game.Systems.Learner.tick(8);
+    },
+
     /* 通关画面 */
     _updateVictory: function () {
       var k = Game.Core.Input.getState();
@@ -272,6 +290,9 @@
         Game.Core.Render.drawMap(ngrid, player);
         Game.Core.Render.drawPlayer(player);
         this._updateNpc();
+      } else if (scene === 'learner') {
+        this._updateLearner();
+        Game.Core.Render.drawLearner(Game.Systems.Learner.getStats(), Game.Systems.Map.getGrid());
       } else if (scene === 'victory') {
         this._updateVictory();
         Game.Core.Render.drawVictory(player);

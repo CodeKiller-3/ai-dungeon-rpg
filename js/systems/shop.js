@@ -25,6 +25,7 @@
       if (p.gold < item.price) return { ok: false, msg: '金币不足' };
       p.gold -= item.price;
       Game.Systems.Inventory.add(id, 1);
+      Game.Core.EventBus.emit('audio:play', { sfx: 'buy' });
       Game.Core.EventBus.emit('shop:changed', { action: 'buy', id: id });
       return { ok: true, msg: '购买 ' + item.name + '，花费 ' + item.price + ' 金币' };
     },
