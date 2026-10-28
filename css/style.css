@@ -1,0 +1,15 @@
+/* AI勇者闯地牢 - 基础样式（M0 骨架） */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #1a1a2e;
+  overflow: hidden;
+  font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+}
+canvas#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+}
