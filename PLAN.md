@@ -944,3 +944,15 @@ const MONSTERS = {
 | X-08 | 内容先少而稳，再逐年扩展 | M8（内容）→M9（表现）→M10（AI 原生）顺序不变，每版只做一组新内容+平衡 | M8-M10 |
 
 **来源**：Evan 年度博客（Steam 公告页/itch devlog，2019-2026）；HandWiki《Software:Pixel Dungeon》；enthub《Pixel Dungeon 开源史》；mccormick.cx 博客（Rogule 走红复盘/Asterogue 发布）；dev.to《Gamify JS: rot.js 入门》；Gamasutra《Binding of Isaac Postmortem》；RogueBasin《Rogule》。（详见 docs/参考资料.md 引用格式）
+
+## 19. AI 协作作战手册（总索引）
+
+**完整操作手册**：`docs/AI-协作作战手册.md`（豆包×Trae CN×黄文博三方协作的唯一权威文件）。
+
+核心纪律（摘要，详见手册）：
+1. **分工**：豆包=总指挥（任务卡/审查/验证/裁定 PASS）；Trae CN=执行工程师（只按任务卡写代码）；黄文博=传令+试玩+验收；GitHub=唯一交接黑板；WorkBuddy 不进入开发链路。
+2. **模块顺序**：S3-1 rot.js+FOV → S3-2 HUD → S3-3 弹窗系统 → S3-4 战斗反馈 → M8（内容）→ M9（表现）→ M10（AI 原生）→ 收尾。
+3. **打磨遍数**：标准 3 遍（初稿→修正→终验），简单 2 遍、复杂 4-5 遍；判据是 PASS 不是遍数。
+4. **传递机制**：只走文件（docs/tasks/ 任务卡、代码注释契约、preflight/ 验证页）；你（黄文博）是唯一口头通道，豆包↔Trae 不直接对话。
+5. **话术**：A 开工 / B 卡住 / C 带回疑问 / D 试玩反馈 / E 提交 / F 加需求，六种场景现成话术在手册 §6，到我上场时按场景复制。
+6. **首个任务卡**：`docs/tasks/S3-1-rotjs-fov.md`（手册 §7 内嵌完整样例），S3 定稿开工时第一步执行。
