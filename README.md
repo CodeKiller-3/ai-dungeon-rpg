@@ -80,6 +80,7 @@ ai-dungeon-rpg/
 |---|---|---|---|
 | 战斗 / 背包逻辑 | freeCodeCamp《Building a Role Playing Game》 | 开源教程 | 参考结构与数值设计，自写重构 |
 | A\* 寻路算法 | bgrins/javascript-astar（1391★） | MIT | **直接引入** `js/vendor/astar.js`（原始文件，未修改） |
+| FOV 视野迷雾 | ondras/rot.js | BSD-3 | **直接引入** `js/vendor/rot.min.js`（原始文件，未修改），`js/systems/fov.js` 封装 PreciseShadowcasting 实现视野/记忆迷雾 |
 | 音频引擎 | goldfire/howler.js（MIT） | MIT | **直接引入** `js/vendor/howler.min.js`（原始文件，未修改） |
 | Q-learning 算法 | 开源教学实现（Grid-World-RL 等） | 教学性质 | 参考算法，在真实游戏网格上自写落地 |
 | 大模型 NPC 对话 | DeepSeek API | 官方 API | fetch 在线对话 + 离线规则兜底 |

@@ -34,6 +34,14 @@
     Game.Systems.Save.save();
   }
 
+  /* S3-1 FOV：以玩家为中心重算视野（墙阻挡视线），点亮新格由 fov.js 广播 map:fovChanged */
+  function refreshFov() {
+    if (!Game.fov || !Game.fov.update) return;
+    Game.fov.update(player.x, player.y, Game.fov.RADIUS || 5, function (x, y) {
+      return Game.Systems.Map.tileAt(x, y) === 0;
+    });
+  }
+
   function onQuestComplete(evt) {
     Game.Core.EventBus.emit('audio:play', { sfx: 'quest' });
     Game.Core.EventBus.emit('ui:notice', { msg: '任务完成：+金币' + evt.reward.gold + ' +经验' + evt.reward.exp });
@@ -53,6 +61,7 @@
       player.x = s.x;
       player.y = s.y;
       player.floor = Game.Systems.Map.getFloor();
+      refreshFov(); /* S3-1：战败回出生点后刷新视野 */
     }
     Game.Systems.Save.save();
     Game.Core.Main.switchScene('explore');
@@ -103,6 +112,7 @@
       resetPlayer();
       /* 读档：有存档则恢复进度 */
       var loaded = Game.Systems.Save.load();
+      refreshFov(); /* S3-1：初始视野（含读档后落点） */
       Game.Core.EventBus.emit('ui:notice', {
         msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始！'
       });
@@ -155,6 +165,7 @@
               this._scene = 'battle';
             }
           }
+          refreshFov(); /* S3-1：移动/换层后刷新视野 */
         }
       }
     },
@@ -250,6 +261,7 @@
         Game.Systems.Quest.init();
         Game.Systems.Map.setFloor(1);
         resetPlayer();
+        refreshFov(); /* S3-1：重新开始后刷新视野 */
         this._scene = 'explore';
       }
     },

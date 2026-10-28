@@ -37,12 +37,19 @@
       this._updateCam(grid, player);
       ctx.fillStyle = '#14142a';
       ctx.fillRect(0, 0, cv.width, cv.height);
+      /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
+      var fovOn = !!(Game.fov && Game.fov.isVisible);
       for (var y = 0; y < grid.length; y++) {
         for (var x = 0; x < grid[0].length; x++) {
           var t = grid[y][x];
           var px = x * TILE - cam.x;
           var py = y * TILE - cam.y;
           if (px + TILE < 0 || py + TILE < 0 || px > cv.width || py > cv.height) continue;
+          if (fovOn && !Game.fov.isExplored(x, y) && !Game.fov.isVisible(x, y)) {
+            ctx.fillStyle = '#07070f';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            continue;
+          }
           if (t === 0) {
             /* 墙：砖纹 */
             ctx.fillStyle = '#3a2e5c';
@@ -73,11 +80,17 @@
             ctx.fillStyle = 'rgba(255,255,255,0.3)';
             ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
           }
+          /* S3-1 FOV：已点亮但当前不可见 → 较暗覆盖（记忆效果） */
+          if (fovOn && !Game.fov.isVisible(x, y)) {
+            ctx.fillStyle = 'rgba(4,4,12,0.55)';
+            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+          }
         }
       }
       /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
       var es = Game.Systems.Map.getEnemies();
       for (var i = 0; i < es.length; i++) {
+        if (fovOn && !Game.fov.isVisible(es[i].x, es[i].y)) continue; /* S3-1：迷雾外不透视 */
         var epx = es[i].x * TILE - cam.x + 2;
         var epy = es[i].y * TILE - cam.y + 2;
         if (epx > -20 && epy > -20 && epx < cv.width + 20 && epy < cv.height + 20) {
@@ -97,6 +110,7 @@
       /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
       var ps = Game.Systems.AI.getPatrols();
       for (var j = 0; j < ps.length; j++) {
+        if (fovOn && !Game.fov.isVisible(ps[j].x, ps[j].y)) continue; /* S3-1：迷雾外不透视 */
         var ppx = ps[j].x * TILE - cam.x + 2;
         var ppy = ps[j].y * TILE - cam.y + 2;
         if (ppx > -20 && ppy > -20 && ppx < cv.width + 20 && ppy < cv.height + 20) {
