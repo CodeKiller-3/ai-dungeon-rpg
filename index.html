@@ -7,10 +7,12 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<!-- 加载顺序严格按 PLAN.md §4.6：core 先加载，main.js 最后（启动入口） -->
+<!-- 加载顺序严格按 PLAN.md §4.6：core → data → systems → main（最后） -->
 <script src="js/core/eventBus.js"></script>
 <script src="js/core/input.js"></script>
 <script src="js/core/render.js"></script>
+<script src="js/data/maps.js"></script>
+<script src="js/systems/map.js"></script>
 <script src="js/core/main.js"></script>
 </body>
 </html>

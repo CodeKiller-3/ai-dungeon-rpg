@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M1 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    r.mapsData = !!(Game.Data && Game.Data.MAPS);
+    r.initRan = !!Game.Core.Main._scene && Game.Core.Main._scene === 'explore';
+    var g = Game.Systems.Map.getGrid();
+    r.gridSize = g ? (g[0].length + 'x' + g.length) : null;
+    r.walkable = 0;
+    if (g) {
+      for (var y = 0; y < g.length; y++) {
+        for (var x = 0; x < g[0].length; x++) {
+          if (g[y][x] !== 0) r.walkable++;
+        }
+      }
+    }
+    r.spawnWalkable = Game.Systems.Map.isWalkable(1, 1);
+    r.tileTypes = {};
+    if (g) {
+      for (var yy = 0; yy < g.length; yy++) {
+        for (var xx = 0; xx < g[0].length; xx++) {
+          var t = g[yy][xx];
+          r.tileTypes[t] = (r.tileTypes[t] || 0) + 1;
+        }
+      }
+    }
+    r.player = Game.Data.Player ? (Game.Data.Player.x + ',' + Game.Data.Player.y) : null;
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-/* js/core/input.js — 键盘/触屏输入
- * 接口：bind / getState / clear（见 PLAN.md §4.4）
+/* js/core/input.js — 键盘输入
+ * 接口：bind / getState / clear / direction（见 PLAN.md §4.4）
  * 来源：自写 */
 (function () {
   'use strict';
@@ -21,6 +21,15 @@
     },
     clear: function () {
       keys = {};
+    },
+    /* 方向映射：方向键 / WASD → {dx, dy} */
+    direction: function (k) {
+      var dx = 0, dy = 0;
+      if (k['ArrowLeft'] || k['KeyA']) dx = -1;
+      if (k['ArrowRight'] || k['KeyD']) dx = 1;
+      if (k['ArrowUp'] || k['KeyW']) dy = -1;
+      if (k['ArrowDown'] || k['KeyS']) dy = 1;
+      return { dx: dx, dy: dy };
     }
   };
 })();
