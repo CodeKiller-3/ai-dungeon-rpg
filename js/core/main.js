@@ -288,6 +288,10 @@
         this._frames = 0;
         this._lastT = ts;
       }
+      /* S3-4：帧间 dt（ms），供反馈层推进生命周期；首帧 dt 记 0 */
+      var dt = this._lastFrame ? (ts - this._lastFrame) : 0;
+      this._lastFrame = ts;
+      if (Game.Feedback && typeof Game.Feedback.update === 'function') Game.Feedback.update(dt);
       syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s3_4</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- S3-4 验证页：加载 eventBus → render → feedback（与主游戏同序，file:// 相对路径） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script>
+(function () {
+  var out = { fbLoaded: false, fbApi: false, fbOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+
+    /* 1. 模块加载且接口齐备 */
+    out.fbLoaded = !!(window.Game && window.Game.Feedback);
+    if (out.fbLoaded) {
+      var F = window.Game.Feedback;
+      out.fbApi = typeof F.spawn === 'function' &&
+        typeof F.update === 'function' &&
+        typeof F.draw === 'function';
+    }
+
+    if (out.fbLoaded && out.fbApi) {
+      var F = window.Game.Feedback;
+      var ctx = Game.Core.Render._ctx;
+      var ok = true;
+      var sub = {};
+
+      /* 2. spawn 后反馈数组非空（飘字） */
+      F._clear();
+      F.spawn({ x: 100, y: 100, text: '-12', color: '#ffffff' });
+      var afterSpawn = F._count();
+      sub.t2 = (afterSpawn === 1);
+      ok = ok && sub.t2;
+
+      /* 3. spawn 受击 hit/hurt 两种类型 */
+      F.spawn({ x: 50, y: 50, kind: 'hit', w: 90, h: 90 });
+      F.spawn({ x: 50, y: 200, kind: 'hurt', w: 90, h: 90 });
+      sub.t3 = (F._count() === 3);
+      ok = ok && sub.t3;
+
+      /* 4. update 推进生命周期（life 减少） */
+      var before = F._count();
+      F.update(300);
+      var afterUpdate = F._count();
+      sub.t4 = (afterUpdate < before) && (afterUpdate >= 1);
+      ok = ok && sub.t4;
+
+      /* 5. draw 真实落笔（先清屏再 draw，检查像素 alpha > 0） */
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      F._clear();
+      F.spawn({ x: 400, y: 240, text: '-99', color: '#ff5555' });
+      F.spawn({ x: 355, y: 195, kind: 'hit', w: 90, h: 90 });
+      F.draw();
+      var pxFlash = ctx.getImageData(360, 200, 1, 1).data;
+      sub.t5 = (pxFlash[0] > 0 && pxFlash[3] > 0);
+      ok = ok && sub.t5;
+
+      /* 6. 到期条目被清理（update 超过最大 life 后数组清空） */
+      F._clear();
+      F.spawn({ x: 1, y: 1, text: 'x', color: '#fff', life: 50 });
+      F.spawn({ x: 1, y: 1, kind: 'hit', life: 50 });
+      F.update(200);
+      sub.t6 = (F._count() === 0);
+      ok = ok && sub.t6;
+
+      /* 7. 同屏上限 20 条：spawn 25 条后只剩 20 条 */
+      F._clear();
+      for (var i = 0; i < 25; i++) F.spawn({ x: i, y: i, text: 'a', color: '#fff' });
+      sub.t7 = (F._count() === 20);
+      ok = ok && sub.t7;
+
+      /* 8. update 对非法 dt 容错（不抛错） */
+      F._clear();
+      F.spawn({ x: 1, y: 1, text: 'a', color: '#fff' });
+      F.update(null);
+      F.update(-5);
+      sub.t8 = (F._count() === 1);
+      ok = ok && sub.t8;
+
+      out.sub = sub;
+      out.fbOk = ok;
+    }
+
+    var pass = out.fbLoaded && out.fbApi && out.fbOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

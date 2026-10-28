@@ -255,6 +255,8 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+      /* S3-4：战斗视觉反馈（伤害飘字/受击闪白红闪），绘制于战斗内容之上、HUD 之下 */
+      try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
       this._drawHud(); /* S3-2 */
     },
 
