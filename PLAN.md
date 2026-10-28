@@ -885,3 +885,62 @@ const MONSTERS = {
 - 打开游戏：顶部 HUD 常驻、地牢有迷雾探索感、进入背包为游戏内弹窗（非页面跳转）、战斗有飘字与受击反馈。
 - 与参考对照项：HUD 信息完整度 ≥ SPD 截图基础项；可玩性上"不打开背包也能看懂当前状态"。
 - 每项完成过 `preflight/verify_template.html` 验证 + 人工试玩轮（R-04），全绿后进入下一项。
+
+## 18. 参考游戏制作流程与作者分享（可借鉴经验库）
+
+> 用户要求：把参考游戏的制作流程和经过写进计划，作者如有公开分享一并收录。本节记录主基准（Shattered Pixel Dungeon）、原版（Pixel Dungeon）、技术参照（Rogule/Chris McCormick）、远期方向（The Binding of Isaac）四款的开发历程与作者原话要点，并在 18.5 转化为本项目的落地动作。
+
+### 18.1 Shattered Pixel Dungeon（主基准）——Evan Debenham（00-Evan）
+
+**制作流程与经过（时间线）**：
+1. **2014**：Pixel Dungeon 开源后不久，加拿大新手开发者 Evan 出于"花几个月平衡道具"的动机 fork 项目，仅 Android 平台。
+2. **2014–2021（7 年迭代）**：从平衡调整逐步扩大到重做游戏每个方面——6 个英雄职业（Warrior/Mage/Rogue/Huntress/Duelist/Cleric）、250+ 物品、26 层地牢、5 大区域、Boss、挑战模式、原创配乐。**v1.0 于 2021-08-17 发布**（与 iOS 版同步），此时已成为其全职项目与主要收入来源。
+3. **2021–2026（v2.0→v4.0）**：每年 1–2 个大版本，每版 = 一组新内容（新任务/新物品/新机制）+ 大量平衡与打磨；v4.0.0（2026-09-09）为其"史上最大更新"（新任务、新像素美术、6 新附魔）。
+
+**作者公开分享要点**：
+- **年度规划博客**：Evan 自 2019 年起每年初写"XX 年回顾与计划"，公开列出当年内容优先级、如实说明延期原因（"比预期大得多"是常态、个人事务影响排期、合作画师离职导致像素美术进度放缓）。→ 公开可见的迭代证据链。
+- **分阶段发布**：每版走 alpha → beta（Steam 测试分支/itch devlog 公告）→ 正式发布，社区反馈进下一版。
+- **美术是长期迭代**：作者长期与外包画师协作；2024–2025 年因画师无法投入，美术进展明显放缓——印证 §16"美术 S2–S4 持续替换、不阻塞开发"的判断。
+- **核心 loop 不变**：12 年开发中"地牢探索→战斗→资源管理→随机重生"从未动摇，所有更新都是加深而非更换 loop。
+
+### 18.2 Pixel Dungeon 原版——Oleg "Watabou" Dolya
+
+**制作流程与经过**：
+1. **2012**：受 Brogue（2009）启发制作，年末发布 Android beta（Java）。内容：25 层随机地牢、4 职业（2 子职业）、80+ 物品、25 敌人、5 Boss，目标"拿 Yendor 护符"。
+2. **2014-07**：Google Play 破 100 万下载，同日开源（GPLv3）。
+3. **2015**：v1.9.2 后 Watabou 宣布"游戏已完整"停更；此后转向地图生成器（One Page Dungeon 等，2026 仍在更新）。
+4. **开源结果**：基于其代码衍生 100+ mod，最著名即 Shattered Pixel Dungeon；游戏以"可维护的开源项目"形态长存。
+
+**可借鉴**：①核心 loop 简洁克制（非关键功能不贪多）；②开源让作品被社区续命（本项目 MIT + GitHub Pages 同理）；③开发者转向熟悉领域（程序化地图生成）是合理路径。
+
+### 18.3 Rogule / Asterogue——Chris McCormick（技术参照）
+
+**制作流程与经过**：
+1. **2022-03**：7DRL（7 天 roguelike 挑战赛）诞生 Rogule 原型——ClojureScript + rot.js + Twemoji emoji 图形。
+2. **玩法**：每日同图地牢、仅一次通关机会、社交分享（Wordle 模式）；约 1–5 分钟/局。
+3. **2023-02 开源后走红**：r/webgames 发帖 → Hacker News → GitHub 官方转发 → 日本媒体报道，从每天几个玩家到每天数千玩家。**作者原话要点："软件没有任何改动就 viral 了。大教训：有时不需要加代码或功能，只需把作品放到对的人面前——也就是营销。"** 2023 GitNation 演讲《Rogule: Tales From the Dungeon of a Web Based Roguelike》。
+4. **配套产物**：Roguelike Browser Boilerplate（**MIT**，rot.js 基础）——提供 splash/开始/制作名单/说明/设置/菜单/像素 UI/胜负画面/音效/动画等模板，含怪物、背包、关卡生成示例。
+5. **Asterogue**：约 1.5 个月完成"juicy"图形 roguelike——纯 JS + 仅 rot.js 一个库、约 2000 行代码、用 CSS 动画做游戏手感（game juice）。作者原话："浏览器是杀手级游戏引擎。"
+
+### 18.4 The Binding of Isaac（远期方向）——Edmund McMillen
+
+**制作流程与经过**：
+1. 一周 game jam 项目起步（与程序员 Florian Himsl 合作），灵感混合《塞尔达》随机地牢。
+2. 约 3 个月兼职开发完成；发布后 Steam 日均 100–200 份，累计销量 200 万+。
+3. 2014 年弃 Flash、用 C++ 自研引擎全量重制（Rebirth），全新 16-bit 像素美术（仍参考塞尔达）。
+4. 作者经典分享：Gamasutra Postmortem《Postmortem: McMillen and Himsl's The Binding of Isaac》（2012）——**"I was positive Isaac would not do well… I was banking on it not doing well"**（作者对作品前景判断常是错的，小步发布让市场回答）。
+
+### 18.5 可借鉴清单（落地为本项目动作）
+
+| # | 借鉴点 | 落地动作 | 对应里程碑 |
+|---|---|---|---|
+| X-01 | 核心 loop 优先、加深而非更换 | 保留地牢探索→战斗→资源管理主线；界面改向只增强 loop 可见性，不改 loop | S3 定稿 |
+| X-02 | 小步迭代 + 公开验证链 | 延续 M0-M10 里程碑 + headless 验证 + README/PLAN 记录每轮结果（等价于"年度博客"的课程版） | 全程 |
+| X-03 | rot.js 单库方案（McCormick 实证：2000 行可成 game） | S3 引入 rot.js 做 FOV/地图；HUD 自写不引引擎 | S3 + M8 |
+| X-04 | 像素 UI 模板复用（Boilerplate，MIT） | S3 参照其菜单/设置/像素 UI 模式，自写实现并保留来源声明 | S3 + M9-4 |
+| X-05 | CSS/Canvas 动画做 game juice | M9-1 粒子、飘字、受击闪白沿用"小成本高手感"路线 | M9 |
+| X-06 | 美术长期迭代不阻塞 | §16 S2 素材管线持续替换；画师缺口 = AI 生成补齐（本项目无外包依赖） | S2-S4 |
+| X-07 | 开源即曝光（Rogule 走红） | GitHub Pages 在线可玩 + README 组件来源声明（已被"看见"） | 已上线 |
+| X-08 | 内容先少而稳，再逐年扩展 | M8（内容）→M9（表现）→M10（AI 原生）顺序不变，每版只做一组新内容+平衡 | M8-M10 |
+
+**来源**：Evan 年度博客（Steam 公告页/itch devlog，2019-2026）；HandWiki《Software:Pixel Dungeon》；enthub《Pixel Dungeon 开源史》；mccormick.cx 博客（Rogule 走红复盘/Asterogue 发布）；dev.to《Gamify JS: rot.js 入门》；Gamasutra《Binding of Isaac Postmortem》；RogueBasin《Rogule》。（详见 docs/参考资料.md 引用格式）
