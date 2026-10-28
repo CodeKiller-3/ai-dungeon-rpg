@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M5 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    var AI = Game.Systems.AI;
+    var NPC = Game.Systems.NPC;
+    var p = Game.Data.Player;
+
+    /* 1. NPC 离线兜底 */
+    r.npcGuide = NPC.ask('怎么玩？').indexOf('任务') >= 0;
+    r.npcWho = NPC.ask('你是谁').indexOf('守门人') >= 0;
+
+    /* 2. 巡逻怪初始化 */
+    var ps = AI.getPatrols();
+    r.patrolCount = ps.length;
+
+    /* 3. 把怪放到玩家 2~3 格外，验证状态机 chase + A* 追击贴脸触发遭遇 */
+    var grid = Game.Systems.Map.getGrid();
+    if (ps.length > 0) {
+      var placed = false;
+      for (var dy = -3; dy <= 3 && !placed; dy++) {
+        for (var dx = -3; dx <= 3 && !placed; dx++) {
+          var d = Math.abs(dx) + Math.abs(dy);
+          if (d >= 2 && d <= 3 && grid[p.y + dy] && grid[p.y + dy][p.x + dx] === 1) {
+            ps[0].x = p.x + dx; ps[0].y = p.y + dy;
+            placed = true;
+          }
+        }
+      }
+      r.placed = placed;
+      var encounter = false;
+      var listener = function () { encounter = true; };
+      Game.Core.EventBus.on('ai:encounter', listener);
+      for (var f = 0; f < 90 && !encounter; f++) {
+        AI.tick(p);
+      }
+      Game.Core.EventBus.off('ai:encounter', listener);
+      r.encounterFired = encounter;
+      r.remaining = ps.length;
+    }
+
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

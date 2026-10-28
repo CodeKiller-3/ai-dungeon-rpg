@@ -13,3 +13,52 @@ canvas#game {
   height: 100vh;
   image-rendering: pixelated;
 }
+
+/* NPC 对话面板（M5） */
+#npc {
+  display: none;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, 92vw);
+  height: 360px;
+  background: rgba(15, 15, 31, 0.96);
+  border: 1px solid #9eacea;
+  border-radius: 12px;
+  z-index: 10;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  flex-direction: column;
+}
+#npc[style*="display: block"] {
+  display: flex !important;
+}
+#npc-title {
+  color: #ffcf6e;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+#npc-log {
+  flex: 1;
+  overflow-y: auto;
+  color: #cfcfcf;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.npc-user { color: #9bbbf4; }
+.npc-assistant { color: #8f8; }
+#npc-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid #3a3a5c;
+  border-radius: 8px;
+  background: #14142a;
+  color: #fff;
+  outline: none;
+}
+#npc-input:focus { border-color: #9eacea; }

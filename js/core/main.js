@@ -56,6 +56,12 @@
     Game.Core.Main.switchScene('explore');
   }
 
+  /* M5：巡逻怪贴脸 → 触发战斗 */
+  function onAiEncounter(evt) {
+    Game.Systems.Battle.start(evt.monsterId);
+    Game.Core.Main.switchScene('battle');
+  }
+
   function buildInventoryList() {
     ui.list = Game.Systems.Inventory.list();
     ui.sel = 0;
@@ -83,6 +89,8 @@
       Game.Core.EventBus.on('battle:end', onBattleEnd);
       Game.Core.EventBus.on('map:floorChanged', onFloorChanged);
       Game.Core.EventBus.on('quest:complete', onQuestComplete);
+      Game.Core.EventBus.on('ai:encounter', onAiEncounter);
+      Game.Systems.NPC.bind();
       this._lastT = performance.now();
       this._scene = 'explore';
       Game.Systems.Map.generate();
@@ -114,6 +122,9 @@
       if (k['KeyB']) { delete k['KeyB']; this._scene = 'inventory'; buildInventoryList(); return; }
       if (k['KeyS']) { delete k['KeyS']; this._scene = 'shop'; ui.shopMode = 'buy'; buildShopList(); return; }
       if (k['KeyM']) { delete k['KeyM']; this._scene = 'quests'; return; }
+      if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
+      /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */
+      Game.Systems.AI.tick(player);
       var d = Game.Core.Input.direction(k);
       if (d.dx !== 0 || d.dy !== 0) {
         var nx = player.x + d.dx;
@@ -196,6 +207,16 @@
       if (k['KeyM'] || k['Escape']) { delete k['KeyM']; delete k['Escape']; this._scene = 'explore'; return; }
     },
 
+    /* NPC 对话场景（M5）：Esc 离开 */
+    _updateNpc: function () {
+      var k = Game.Core.Input.getState();
+      if (k['KeyT'] || k['Escape']) {
+        delete k['KeyT']; delete k['Escape'];
+        Game.Systems.NPC.close();
+        this._scene = 'explore';
+      }
+    },
+
     /* 通关画面 */
     _updateVictory: function () {
       var k = Game.Core.Input.getState();
@@ -245,6 +266,12 @@
       } else if (scene === 'quests') {
         this._updateQuests();
         Game.Core.Render.drawQuests(Game.Systems.Quest.getActive(), player);
+      } else if (scene === 'npc') {
+        /* NPC 对话：画面静止（怪不追击、玩家不动），DOM 面板交互 */
+        var ngrid = Game.Systems.Map.getGrid();
+        Game.Core.Render.drawMap(ngrid, player);
+        Game.Core.Render.drawPlayer(player);
+        this._updateNpc();
       } else if (scene === 'victory') {
         this._updateVictory();
         Game.Core.Render.drawVictory(player);

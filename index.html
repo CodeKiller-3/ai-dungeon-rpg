@@ -7,7 +7,13 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<!-- 加载顺序严格按 PLAN.md §4.6：core → data → systems → main（最后） -->
+<!-- NPC 对话面板（M5，默认隐藏，按 T 打开） -->
+<div id="npc">
+  <div id="npc-title">地牢守门人 · 按 Esc 离开</div>
+  <div id="npc-log"></div>
+  <input id="npc-input" maxlength="100" placeholder="输入想说的话，回车发送…">
+</div>
+<!-- 加载顺序严格按 PLAN.md §4.6：core → data → vendor → systems → main（最后） -->
 <script src="js/core/eventBus.js"></script>
 <script src="js/core/input.js"></script>
 <script src="js/core/render.js"></script>
@@ -15,12 +21,17 @@
 <script src="js/data/monsters.js"></script>
 <script src="js/data/items.js"></script>
 <script src="js/data/quests.js"></script>
+<script src="js/data/dialogue.js"></script>
+<script src="js/data/config.js"></script>
+<script src="js/vendor/astar.js"></script>
 <script src="js/systems/map.js"></script>
 <script src="js/systems/quest.js"></script>
 <script src="js/systems/battle.js"></script>
 <script src="js/systems/inventory.js"></script>
 <script src="js/systems/shop.js"></script>
 <script src="js/systems/save.js"></script>
+<script src="js/systems/ai.js"></script>
+<script src="js/systems/npc.js"></script>
 <script src="js/core/main.js"></script>
 </body>
 </html>

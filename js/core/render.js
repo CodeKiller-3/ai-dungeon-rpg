@@ -62,6 +62,21 @@
           ctx.fill();
         }
       }
+      /* 巡逻怪（M5）：状态机可视化——灰=待机 红=追击 */
+      var ps = Game.Systems.AI.getPatrols();
+      for (var j = 0; j < ps.length; j++) {
+        var ppx = ps[j].x * TILE - cam.x + 2;
+        var ppy = ps[j].y * TILE - cam.y + 2;
+        if (ppx > -20 && ppy > -20 && ppx < cv.width + 20 && ppy < cv.height + 20) {
+          ctx.fillStyle = ps[j].state === 'chase' ? '#ea6668' : '#9e9e9e';
+          ctx.fillRect(ppx, ppy, TILE - 4, TILE - 4);
+          if (ps[j].state === 'chase') {
+            ctx.fillStyle = '#fff';
+            ctx.font = '9px monospace';
+            ctx.fillText('!', ppx + TILE / 2 - 4, ppy + 12);
+          }
+        }
+      }
     },
 
     drawPlayer: function (player) {

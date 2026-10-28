@@ -108,6 +108,7 @@
       openRooms();
       placeStairs();
       spawnEnemies();
+      if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
       spawn = { x: 1, y: 1 };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       return grid;
