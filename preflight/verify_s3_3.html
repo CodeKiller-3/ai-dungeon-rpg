@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s3_3</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- S3-3 验证页：加载 eventBus → render → modal（与主游戏同序，file:// 相对路径） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  var out = { modalLoaded: false, modalApi: false, modalOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+
+    /* 1. 模块加载且接口齐备 */
+    out.modalLoaded = !!(window.Game && window.Game.Modal);
+    if (out.modalLoaded) {
+      var M = window.Game.Modal;
+      out.modalApi = typeof M.open === 'function' && typeof M.close === 'function' &&
+        typeof M.isOpen === 'function' && typeof M.current === 'function' &&
+        typeof M.draw === 'function';
+    }
+
+    if (out.modalLoaded && out.modalApi) {
+      /* 2. open / isOpen / current / close 状态机正确 */
+      Game.Modal.open('quests');
+      var openOk = Game.Modal.isOpen() === true && Game.Modal.current() === 'quests';
+
+      /* 3. draw() 真实落笔（遮罩 alpha > 0） */
+      Game.Modal.draw();
+      var px = Game.Core.Render._ctx.getImageData(2, 2, 1, 1).data;
+      var painted = px[3] > 0;
+
+      /* 4. close 后 isOpen()===false */
+      Game.Modal.close();
+      var closeOk = Game.Modal.isOpen() === false && Game.Modal.current() === null;
+
+      /* 5. 非法 kind 不打开 */
+      Game.Modal.open('invalid');
+      var invalidOk = Game.Modal.isOpen() === false;
+
+      out.modalOk = !!(openOk && painted && closeOk && invalidOk);
+    }
+
+    var pass = out.modalLoaded && out.modalApi && out.modalOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

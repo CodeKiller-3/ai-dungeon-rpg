@@ -146,10 +146,12 @@
 
     /* 探索场景 */
     _updateExplore: function () {
+      /* S3-3：弹窗打开时暂停地图移动输入（弹窗自行处理 Esc/↑↓/Enter/点击） */
+      if (Game.Modal && Game.Modal.isOpen()) return;
       var k = Game.Core.Input.getState();
-      if (k['KeyB']) { delete k['KeyB']; this._scene = 'inventory'; buildInventoryList(); return; }
-      if (k['KeyS']) { delete k['KeyS']; this._scene = 'shop'; ui.shopMode = 'buy'; buildShopList(); return; }
-      if (k['KeyM']) { delete k['KeyM']; this._scene = 'quests'; return; }
+      if (k['KeyB']) { delete k['KeyB']; Game.Modal.open('inventory'); return; }
+      if (k['KeyS']) { delete k['KeyS']; Game.Modal.open('shop'); return; }
+      if (k['KeyM']) { delete k['KeyM']; Game.Modal.open('quests'); return; }
       if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
       if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
       /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */

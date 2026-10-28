@@ -37,6 +37,15 @@
       } catch (e) { /* 降级：HUD 异常不影响主画面 */ }
     },
 
+    /* S3-3：每帧末尾绘制游戏内弹窗（遮罩 + 居中面板）；modal 未打开时为 no-op */
+    _drawModal: function () {
+      try {
+        if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen() && typeof Game.Modal.draw === 'function') {
+          Game.Modal.draw();
+        }
+      } catch (e) { /* 降级：弹窗异常不影响主画面 */ }
+    },
+
     drawMap: function (grid, player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -189,6 +198,7 @@
         (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
         ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上', 10, cv.height - 10);
       this._drawHud(); /* S3-2 */
+      this._drawModal(); /* S3-3：弹窗叠在最上层（仅探索场景路径，弹窗仅从此打开） */
     },
 
     /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令 */
