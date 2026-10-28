@@ -1,6 +1,6 @@
 /* js/core/render.js — Canvas 渲染
- * 接口：init / drawMap / drawPlayer / drawHUD（见 PLAN.md §4.4）
- * M1：瓦片绘制 + 跟随镜头 + 角色方块 + FPS HUD
+ * 接口：init / drawMap / drawPlayer / drawHUD / drawBattle（见 PLAN.md §4.4）
+ * M2：新增战斗画面渲染
  * 来源：自写 */
 (function () {
   'use strict';
@@ -50,6 +50,18 @@
           ctx.fillRect(px, py, TILE - 1, TILE - 1);
         }
       }
+      /* 敌人标记（M2）：在敌人格上画红点 */
+      var es = Game.Systems.Map.getEnemies();
+      for (var i = 0; i < es.length; i++) {
+        var epx = es[i].x * TILE - cam.x + TILE / 2 - 3;
+        var epy = es[i].y * TILE - cam.y + TILE / 2 - 3;
+        if (epx > -10 && epy > -10 && epx < cv.width + 10 && epy < cv.height + 10) {
+          ctx.fillStyle = '#ea6668';
+          ctx.beginPath();
+          ctx.arc(epx, epy, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     },
 
     drawPlayer: function (player) {
@@ -60,7 +72,7 @@
       ctx.fillStyle = '#ffcf6e';
       ctx.fillRect(px + 3, py + 3, TILE - 6, TILE - 6);
       ctx.fillStyle = '#fff';
-      ctx.fillRect(px + 6, py + 6, 4, 4); /* 眼睛，增加辨识度 */
+      ctx.fillRect(px + 6, py + 6, 4, 4);
     },
 
     drawHUD: function (stats) {
@@ -79,7 +91,50 @@
         10, 20);
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '12px monospace';
-      ctx.fillText('方向键/WASD 移动 | 走到紫色楼梯下走下一层，绿色楼梯回上一层', 10, cv.height - 10);
+      ctx.fillText('方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上', 10, cv.height - 10);
+    },
+
+    /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令 */
+    drawBattle: function (state) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx || !state) return;
+      ctx.fillStyle = '#0f0f1f';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+
+      /* 敌人方块 */
+      var ex = cv.width / 2 - 45;
+      var ey = 90;
+      ctx.fillStyle = state.monster.color;
+      ctx.fillRect(ex, ey, 90, 90);
+      ctx.fillStyle = '#fff';
+      ctx.font = '15px monospace';
+      ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
+        cv.width / 2 - 140, ey + 120);
+
+      /* 玩家方块 */
+      var p = Game.Data.Player;
+      var px = cv.width / 2 - 45;
+      var py = cv.height - 190;
+      ctx.fillStyle = '#ffcf6e';
+      ctx.fillRect(px, py, 90, 90);
+      ctx.fillStyle = '#fff';
+      ctx.font = '14px monospace';
+      ctx.fillText('勇者  HP:' + p.hp + '/' + p.maxHp + '  ATK:' + p.atk + '  DEF:' + p.def,
+        cv.width / 2 - 150, py + 120);
+
+      /* 战斗日志（最近 4 行） */
+      ctx.fillStyle = '#8f8';
+      ctx.font = '13px monospace';
+      var start = Math.max(state.log.length - 4, 0);
+      for (var i = 0; i < state.log.length - start; i++) {
+        ctx.fillText(state.log[start + i], 30, cv.height - 130 + i * 18);
+      }
+
+      /* 指令提示 */
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '14px monospace';
+      ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
     }
   };
 })();

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M2 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    var b = Game.Systems.Battle;
+
+    /* 1. 战斗开始 */
+    var st = b.start('slime');
+    r.start = st && st.monster && st.monster.name === '史莱姆';
+
+    /* 2. 连续攻击直到胜利 */
+    var win = false;
+    for (var i = 0; i < 20; i++) {
+      var s = b.playerAction('attack');
+      if (s && s.monster && s.monster.hp <= 0) { win = true; break; }
+    }
+    r.win = win;
+    r.exp = Game.Data.Player.exp;
+    r.gold = Game.Data.Player.gold;
+    r.inv = JSON.stringify(Game.Data.Player.inventory);
+
+    /* 3. 防御减伤 */
+    var p = Game.Data.Player;
+    var oldHp = p.hp;
+    b.start('bat');
+    b.playerAction('defend');
+    r.defendTook = oldHp - p.hp;
+    r.defendHp = p.hp;
+
+    /* 4. 逃跑成功率 */
+    var ran = false;
+    for (var j = 0; j < 30; j++) {
+      b.start('bat');
+      b.playerAction('run');
+      if (Game.Core.Main._scene !== 'battle') { ran = true; break; }
+    }
+    r.ran = ran;
+
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

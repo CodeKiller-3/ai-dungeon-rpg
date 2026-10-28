@@ -1,6 +1,6 @@
 /* js/core/main.js — 游戏主循环与场景调度（启动入口，必须最后加载）
  * 接口：init / start / switchScene / loop（见 PLAN.md §4.4）
- * M1：探索场景 —— 生成迷宫、键盘移动、碰撞、楼层切换
+ * M2：探索遇敌 → 战斗场景（回合制：1攻击 2防御 3逃跑）→ 结算回探索
  * 来源：自写 */
 (function () {
   'use strict';
@@ -17,6 +17,26 @@
   };
   Game.Data.Player = player;
 
+  function resetPlayer() {
+    player.hp = player.maxHp;
+    var s = Game.Systems.Map.getSpawn();
+    player.x = s.x;
+    player.y = s.y;
+    player.floor = Game.Systems.Map.getFloor();
+  }
+
+  function onBattleEnd(evt) {
+    if (evt.result === 'lose') {
+      /* 失败：半血复活在入口 */
+      player.hp = Math.max(Math.floor(player.maxHp / 2), 1);
+      var s = Game.Systems.Map.getSpawn();
+      player.x = s.x;
+      player.y = s.y;
+      player.floor = Game.Systems.Map.getFloor();
+    }
+    Game.Core.Main.switchScene('explore');
+  }
+
   Game.Core.Main = {
     _scene: 'boot',
     _fps: 0,
@@ -27,13 +47,11 @@
       var canvas = document.getElementById('game');
       Game.Core.Render.init(canvas);
       Game.Core.Input.bind();
+      Game.Core.EventBus.on('battle:end', onBattleEnd);
       this._lastT = performance.now();
       this._scene = 'explore';
       Game.Systems.Map.generate();
-      var s = Game.Systems.Map.getSpawn();
-      player.x = s.x;
-      player.y = s.y;
-      player.floor = Game.Systems.Map.getFloor();
+      resetPlayer();
     },
 
     start: function () {
@@ -49,7 +67,7 @@
       Game.Core.EventBus.emit('game:sceneChanged', { scene: name });
     },
 
-    /* 探索场景：读输入 → 移动 → 碰撞 → 楼梯换层 */
+    /* 探索场景：读输入 → 移动 → 碰撞 → 楼梯换层 → 遇敌触发战斗 */
     _updateExplore: function () {
       var k = Game.Core.Input.getState();
       var d = Game.Core.Input.direction(k);
@@ -59,21 +77,33 @@
         if (Game.Systems.Map.isWalkable(nx, ny)) {
           player.x = nx;
           player.y = ny;
-          /* 楼梯判定：2=下 3=上 */
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
             Game.Systems.Map.changeFloor(1);
             player.floor = Game.Systems.Map.getFloor();
-            var s = Game.Systems.Map.getSpawn();
-            player.x = s.x; player.y = s.y;
+            resetPlayer();
           } else if (t === 3) {
             Game.Systems.Map.changeFloor(-1);
             player.floor = Game.Systems.Map.getFloor();
-            var s2 = Game.Systems.Map.getSpawn();
-            player.x = s2.x; player.y = s2.y;
+            resetPlayer();
+          } else {
+            /* 踩到敌人 → 进入战斗 */
+            var e = Game.Systems.Map.enemyAt(nx, ny);
+            if (e) {
+              Game.Systems.Battle.start(e.monsterId);
+              this.switchScene('battle');
+            }
           }
         }
       }
+    },
+
+    /* 战斗场景：键盘 1/2/3 指令 */
+    _updateBattle: function () {
+      var k = Game.Core.Input.getState();
+      if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; Game.Systems.Battle.playerAction('attack'); }
+      else if (k['Digit2'] || k['Numpad2']) { delete k['Digit2']; delete k['Numpad2']; Game.Systems.Battle.playerAction('defend'); }
+      else if (k['Digit3'] || k['Numpad3']) { delete k['Digit3']; delete k['Numpad3']; Game.Systems.Battle.playerAction('run'); }
     },
 
     loop: function (ts) {
@@ -93,6 +123,9 @@
           hp: player.hp, maxHp: player.maxHp,
           gold: player.gold, atk: player.atk, def: player.def
         });
+      } else if (this._scene === 'battle') {
+        this._updateBattle();
+        Game.Core.Render.drawBattle(Game.Systems.Battle.getState());
       }
     }
   };

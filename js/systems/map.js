@@ -12,6 +12,7 @@
   var grid = null;
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
+  var enemies = []; /* [{x, y, monsterId}] */
 
   function initGrid(w, h) {
     var g = [];
@@ -71,6 +72,33 @@
     grid[down.y][down.x] = 2; /* 楼梯下（去下一层） */
   }
 
+  /* 按楼层怪物概率表生成敌人（M2 战斗触发点） */
+  function spawnEnemies() {
+    enemies = [];
+    var table = cfg.enemyTable[floorIndex % cfg.enemyTable.length];
+    var count = 5 + floorIndex * 2;
+    var placed = 0;
+    var tries = 0;
+    while (placed < count && tries < 500) {
+      tries++;
+      var w = grid[0].length;
+      var h = grid.length;
+      var x = 1 + Math.floor(Math.random() * (w - 2));
+      var y = 1 + Math.floor(Math.random() * (h - 2));
+      if (grid[y][x] === 1 && dist(x, y, spawn.x, spawn.y) > 6) {
+        var roll = Math.random();
+        var acc = 0;
+        var pick = table[0].id;
+        for (var i = 0; i < table.length; i++) {
+          acc += table[i].rate;
+          if (roll <= acc) { pick = table[i].id; break; }
+        }
+        enemies.push({ x: x, y: y, monsterId: pick });
+        placed++;
+      }
+    }
+  }
+
   Game.Systems.Map = {
     generate: function () {
       cfg = Game.Data.MAPS;
@@ -79,6 +107,7 @@
       carve(1, 1);
       openRooms();
       placeStairs();
+      spawnEnemies();
       spawn = { x: 1, y: 1 };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       return grid;
@@ -106,6 +135,19 @@
 
     getFloor: function () { return floorIndex + 1; },
     getGrid: function () { return grid; },
-    getSpawn: function () { return { x: spawn.x, y: spawn.y }; }
+    getSpawn: function () { return { x: spawn.x, y: spawn.y }; },
+
+    /* 取该格敌人：命中则移除（一次遭遇） */
+    enemyAt: function (x, y) {
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].x === x && enemies[i].y === y) {
+          var e = enemies[i];
+          enemies.splice(i, 1);
+          return e;
+        }
+      }
+      return null;
+    },
+    getEnemies: function () { return enemies; }
   };
 })();
