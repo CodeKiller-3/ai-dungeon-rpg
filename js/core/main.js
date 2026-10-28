@@ -121,7 +121,7 @@
       Game.Systems.Audio.bind();
       if (Game.Core.Sprites) Game.Core.Sprites.load();
       this._lastT = performance.now();
-      this._scene = 'explore';
+      this.switchScene('explore');  /* M9-4：启动探索 BGM */
       Game.Systems.Map.generate();
       Game.Systems.Quest.init();
       resetPlayer();
@@ -145,6 +145,15 @@
     switchScene: function (name) {
       this._scene = name;
       Game.Core.EventBus.emit('game:sceneChanged', { scene: name });
+      /* M9-4：场景切换时自动切换 BGM（弹窗/子场景不切，且同场景不重启避免断音） */
+      var A = Game.Systems && Game.Systems.Audio;
+      if (A) {
+        var cur = A.getBgmScene();
+        if (name === 'explore' && cur !== 'explore') A.bgmPlay('explore');
+        else if (name === 'battle' && cur !== 'battle') A.bgmPlay('battle');
+        else if (name === 'victory' && cur !== 'victory') A.bgmPlay('victory');
+        /* 其他场景（inventory/shop/quests/npc/learner）保持当前 BGM 不变 */
+      }
     },
 
     /* 探索场景 */
@@ -157,6 +166,9 @@
       if (k['KeyM']) { delete k['KeyM']; Game.Modal.open('quests'); return; }
       if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
       if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
+      /* M9-4：Q 打开设置弹窗；K 一键静音（不 return，允许同时移动） */
+      if (k['KeyQ']) { delete k['KeyQ']; Game.Modal.open('settings'); return; }
+      if (k['KeyK']) { delete k['KeyK']; Game.Systems.Audio.setMuted(!Game.Systems.Audio.isMuted()); }
       /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */
       Game.Systems.AI.tick(player);
       var d = Game.Core.Input.direction(k);
@@ -185,7 +197,7 @@
             var e = Game.Systems.Map.enemyAt(nx, ny);
             if (e) {
               Game.Systems.Battle.start(e.monsterId);
-              this._scene = 'battle';
+              this.switchScene('battle');
             } else {
               /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空） */
               var dec = Game.Systems.Map.getDecor(nx, ny);
@@ -258,7 +270,7 @@
       if (k['KeyT'] || k['Escape']) {
         delete k['KeyT']; delete k['Escape'];
         Game.Systems.NPC.close();
-        this._scene = 'explore';
+        this.switchScene('explore');
       }
     },
 
@@ -268,7 +280,7 @@
       if (k['Escape']) {
         delete k['Escape'];
         Game.Systems.Learner.stop();
-        this._scene = 'explore';
+        this.switchScene('explore');
       }
       Game.Systems.Learner.tick(8);
     },
@@ -289,7 +301,7 @@
         Game.Systems.Map.setFloor(1);
         resetPlayer();
         refreshFov(); /* S3-1：重新开始后刷新视野 */
-        this._scene = 'explore';
+        this.switchScene('explore');
       }
     },
 

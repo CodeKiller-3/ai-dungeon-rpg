@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m9_4</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- M9-4 验证页：加载 eventBus → config → audio → modal（与主游戏同序） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  var out = { audioLoaded: false, audioApi: false, audioOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+
+    /* 1. 模块加载与接口齐备 */
+    out.audioLoaded = !!(window.Game && Game.Systems && Game.Systems.Audio && Game.Modal);
+    if (out.audioLoaded) {
+      var A = Game.Systems.Audio;
+      out.audioApi = (typeof A.bgmPlay === 'function') &&
+        (typeof A.bgmStop === 'function') &&
+        (typeof A.getBgmScene === 'function') &&
+        (typeof A.setMuted === 'function') &&
+        (typeof A.isMuted === 'function') &&
+        (typeof A.setVolume === 'function') &&
+        (typeof A.getVolume === 'function') &&
+        (typeof A.play === 'function') &&
+        (typeof Game.Modal.open === 'function') &&
+        (typeof Game.Modal.close === 'function') &&
+        (typeof Game.Modal.isOpen === 'function') &&
+        (typeof Game.Modal.current === 'function') &&
+        (typeof Game.Modal.draw === 'function');
+    }
+
+    if (out.audioLoaded && out.audioApi) {
+      var A = Game.Systems.Audio;
+
+      /* 2. BGM 场景状态机 */
+      A.bgmStop(); /* 先清空 */
+      A.bgmPlay('explore');
+      var t2_explore = (A.getBgmScene() === 'explore');
+      sub.t2_bgmExplore = t2_explore;
+      ok = ok && t2_explore;
+
+      A.bgmPlay('battle');
+      var t2_battle = (A.getBgmScene() === 'battle');
+      sub.t2_bgmBattle = t2_battle;
+      ok = ok && t2_battle;
+
+      A.bgmPlay('victory');
+      var t2_victory = (A.getBgmScene() === 'victory');
+      sub.t2_bgmVictory = t2_victory;
+      ok = ok && t2_victory;
+
+      A.bgmStop();
+      var t2_stop = (A.getBgmScene() === null);
+      sub.t2_bgmStop = t2_stop;
+      ok = ok && t2_stop;
+
+      /* 非法 scene 忽略（不抛错、不改变状态） */
+      A.bgmPlay('explore');
+      var beforeInvalid = A.getBgmScene();
+      A.bgmPlay('invalid_scene');
+      var t2_invalid = (A.getBgmScene() === beforeInvalid);
+      sub.t2_bgmInvalid = t2_invalid;
+      ok = ok && t2_invalid;
+      A.bgmStop();
+
+      /* 3. 静音：setMuted(true) 后 isMuted()===true 且不抛错；再 setMuted(false) 恢复 */
+      A.setMuted(true);
+      var t3_muted = (A.isMuted() === true);
+      sub.t3_muteOn = t3_muted;
+      ok = ok && t3_muted;
+
+      A.setMuted(false);
+      var t3_unmuted = (A.isMuted() === false);
+      sub.t3_muteOff = t3_unmuted;
+      ok = ok && t3_unmuted;
+
+      /* 4. 音量：钳制 + localStorage 持久化 */
+      A.setVolume(0.3);
+      var t4_03 = (A.getVolume() === 0.3);
+      sub.t4_vol03 = t4_03;
+      ok = ok && t4_03;
+
+      A.setVolume(2);
+      var t4_clampHi = (A.getVolume() === 1);
+      sub.t4_clampHi = t4_clampHi;
+      ok = ok && t4_clampHi;
+
+      A.setVolume(-1);
+      var t4_clampLo = (A.getVolume() === 0);
+      sub.t4_clampLo = t4_clampLo;
+      ok = ok && t4_clampLo;
+
+      /* localStorage 键已写入 */
+      var lsVal = null;
+      try { lsVal = localStorage.getItem('aiDungeon_volume'); } catch (e) {}
+      var t4_ls = (lsVal === '0'); /* 最后一次 setVolume(-1) 钳到 0 */
+      sub.t4_localStorage = t4_ls;
+      ok = ok && t4_ls;
+
+      /* 恢复默认音量避免影响后续 */
+      A.setVolume(0.7);
+
+      /* 5. Modal settings：open('settings') 后 isOpen/current 正确，关闭后复位 */
+      Game.Modal.open('settings');
+      var t5_open = Game.Modal.isOpen() && (Game.Modal.current() === 'settings');
+      sub.t5_modalOpen = t5_open;
+      ok = ok && t5_open;
+
+      Game.Modal.close();
+      var t5_close = (!Game.Modal.isOpen()) && (Game.Modal.current() === null);
+      sub.t5_modalClose = t5_close;
+      ok = ok && t5_close;
+
+      /* 6. 重复切换不抛错（AudioContext 无真实输出时用逻辑层验证） */
+      var repeatOk = true;
+      try {
+        for (var ri = 0; ri < 10; ri++) {
+          A.bgmPlay('explore');
+          A.bgmPlay('battle');
+          A.bgmPlay('victory');
+          A.bgmStop();
+          A.setMuted(true);
+          A.setMuted(false);
+          A.setVolume(0.5);
+          A.setVolume(1.5);
+          A.setVolume(-0.5);
+        }
+        Game.Modal.open('settings');
+        Game.Modal.open('settings'); /* 重复 open 不抛错 */
+        Game.Modal.close();
+        Game.Modal.close(); /* 重复 close 不抛错 */
+      } catch (e) { repeatOk = false; }
+      sub.t6_repeat = repeatOk;
+      ok = ok && repeatOk;
+
+      out.sub = sub;
+      out.audioOk = ok;
+    }
+
+    var pass = out.audioLoaded && out.audioApi && out.audioOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
