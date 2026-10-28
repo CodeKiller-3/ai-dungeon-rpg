@@ -135,6 +135,79 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+    },
+
+    /* 通用 UI 面板背景 */
+    _drawPanel: function (title, gold) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      ctx.fillStyle = '#0f0f1f';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(title, 30, 44);
+      ctx.fillStyle = '#8f8';
+      ctx.font = '14px monospace';
+      ctx.fillText('金币: ' + gold, cv.width - 180, 44);
+    },
+
+    /* 背包 UI（M3） */
+    drawInventory: function (list, sel, player) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx) return;
+      this._drawPanel('背包 (B)', player.gold);
+      if (!list || list.length === 0) {
+        ctx.fillStyle = '#9bbbf4';
+        ctx.font = '15px monospace';
+        ctx.fillText('（空）', 30, 100);
+      } else {
+        for (var i = 0; i < list.length; i++) {
+          var e = list[i];
+          var item = Game.Data.ITEMS[e.id];
+          var y = 90 + i * 30;
+          ctx.fillStyle = (i === sel) ? '#ffcf6e' : '#cfcfcf';
+          ctx.font = '14px monospace';
+          var desc = item.type === 'consumable' ? '恢复HP+' + item.effect.hp
+            : (item.type === 'weapon' ? '攻击+' + item.effect.atk : '防御+' + item.effect.def);
+          ctx.fillText((i === sel ? '> ' : '  ') + item.name + ' x' + e.count + '   ' + desc, 30, y);
+        }
+      }
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '13px monospace';
+      ctx.fillText('↑↓ 选择   Enter 使用/装备   I/Esc 返回', 30, cv.height - 30);
+    },
+
+    /* 商店 UI（M3） */
+    drawShop: function (list, sel, mode, player) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx) return;
+      this._drawPanel('商店 (S)', player.gold);
+      ctx.fillStyle = mode === 'buy' ? '#52c41a' : '#f4b393';
+      ctx.font = '14px monospace';
+      ctx.fillText('模式: ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换', 30, 72);
+      if (!list || list.length === 0) {
+        ctx.fillStyle = '#9bbbf4';
+        ctx.font = '15px monospace';
+        ctx.fillText('（无可' + (mode === 'buy' ? '购买' : '出售') + '物品）', 30, 110);
+      } else {
+        for (var i = 0; i < list.length; i++) {
+          var e = list[i];
+          var item = Game.Data.ITEMS[e.id];
+          var y = 100 + i * 30;
+          ctx.fillStyle = (i === sel) ? '#ffcf6e' : '#cfcfcf';
+          ctx.font = '14px monospace';
+          var price = mode === 'buy' ? item.price + ' 金币' : item.sell + ' 金币';
+          var desc = item.type === 'consumable' ? '恢复HP+' + item.effect.hp
+            : (item.type === 'weapon' ? '攻击+' + item.effect.atk : '防御+' + item.effect.def);
+          ctx.fillText((i === sel ? '> ' : '  ') + item.name + '   ' + desc + '   ' + price,
+            30, y);
+        }
+      }
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '13px monospace';
+      ctx.fillText('↑↓ 选择   Enter ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换   Esc 返回', 30, cv.height - 30);
     }
   };
 })();

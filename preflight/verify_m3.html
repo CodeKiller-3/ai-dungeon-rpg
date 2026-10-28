@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M3 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    var inv = Game.Systems.Inventory;
+    var shop = Game.Systems.Shop;
+    var p = Game.Data.Player;
+
+    p.gold = 500;
+    var buy = shop.buy('potion_small');
+    r.buy = buy.ok;
+    r.goldAfterBuy = p.gold;
+
+    p.hp = 50;
+    var use = inv.use('potion_small');
+    r.use = use.ok;
+    r.hpAfterUse = p.hp;
+    r.invAfterUse = JSON.stringify(p.inventory);
+
+    inv.add('sword_bone', 1);
+    var eq = inv.equip('sword_bone');
+    r.equip = eq.ok;
+    r.atkAfter = p.atk;
+    r.equipped = p.equipment.weapon;
+
+    p.gold = 100;
+    var sellEquipped = shop.sell('sword_bone');
+    r.sellEquippedBlocked = !sellEquipped.ok;
+
+    /* 出售成功路径：买一瓶再卖 */
+    var buy2 = shop.buy('potion_small');
+    var sellOk = shop.sell('potion_small');
+    r.sellOk = sellOk.ok;
+    r.goldAfterSell = p.gold; /* 100 - 10 + 5 = 95 */
+
+    var stock = shop.getStock();
+    r.stockCount = stock.length;
+    r.stockNames = stock.map(function (e) { return e.id; }).join(',');
+
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>
