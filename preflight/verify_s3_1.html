@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s3_1</title>
+</head>
+<body>
+<canvas id="game" width="320" height="320"></canvas>
+<script>
+(function() {
+  var out = { rotLoaded: false, fovExists: false, fovOk: false, err: null };
+  try {
+    // 顺序加载：rot.min.js -> fov.js（file:// 相对路径）
+    var scripts = ['../js/vendor/rot.min.js', '../js/systems/fov.js'];
+    var i = 0;
+    function next() {
+      if (i >= scripts.length) { run(); return; }
+      var s = document.createElement('script');
+      s.src = scripts[i];
+      s.onload = function() { i++; next(); };
+      s.onerror = function() { i++; next(); };
+      document.body.appendChild(s);
+    }
+    function run() {
+      out.rotLoaded = (typeof ROT !== 'undefined');
+      if (window.Game && window.Game.fov && typeof window.Game.fov.compute === 'function') {
+        out.fovExists = true;
+        try {
+          var res = window.Game.fov.compute(5, 5, 3, function() { return false; });
+          if (res && res.length > 1) {
+            var hasSelf = false;
+            for (var k = 0; k < res.length; k++) {
+              if (res[k].x === 5 && res[k].y === 5) { hasSelf = true; break; }
+            }
+            out.fovOk = hasSelf;
+          }
+        } catch (e) { out.err = String(e); }
+      }
+      var pass = out.rotLoaded && out.fovExists && out.fovOk;
+      document.title = pass ? 'PASS ' + JSON.stringify(out) : 'FAIL ' + JSON.stringify(out);
+      document.body.appendChild(document.createTextNode(pass ? 'PASS ' + JSON.stringify(out) : 'FAIL ' + JSON.stringify(out)));
+    }
+    next();
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
