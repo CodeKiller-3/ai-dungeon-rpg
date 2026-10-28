@@ -1,5 +1,6 @@
 /* js/systems/map.js — 地图系统：随机迷宫生成 / 碰撞 / 楼层切换
  * 接口：generate / isWalkable / tileAt / changeFloor（PLAN.md §4.4）
+ * M9-1 扩展：getDetail / getDecor / takeDecor（地图细节层与装饰物层，纯视觉+宝箱拾取）
  * 算法：DFS 回溯迷宫 + 随机开洞（答辩可讲解：深度优先搜索生成完美迷宫）
  * tile：0=墙 1=地板 2=楼梯下(去下一层) 3=楼梯上(回上一层)
  * 来源：自写 */
@@ -10,6 +11,8 @@
 
   var cfg = null;
   var grid = null;
+  var details = null;   /* M9-1：2D 数组，每格细节类型 string|null（纯视觉） */
+  var decor = null;     /* M9-1：2D 数组，每格装饰物 id string|null（chest 可拾取） */
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
@@ -99,6 +102,82 @@
     }
   }
 
+  /* M9-1：生成细节层与装饰层（纯视觉 + 宝箱，不影响通行/碰撞/寻路/FOV） */
+  function genDetailsAndDecor(w, h) {
+    details = [];
+    decor = [];
+    for (var y = 0; y < h; y++) {
+      details[y] = [];
+      decor[y] = [];
+      for (var x = 0; x < w; x++) {
+        details[y][x] = null;
+        decor[y][x] = null;
+      }
+    }
+    /* 地板细节：约 25% 概率按权重抽取 */
+    var pool = (Game.Data.TILE_DETAILS && Game.Data.TILE_DETAILS.floor) || [];
+    var totalW = 0;
+    for (var i = 0; i < pool.length; i++) totalW += pool[i].weight;
+    if (totalW > 0) {
+      for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+          if (grid[y][x] !== 1) continue;
+          if (Math.random() >= 0.25) continue;
+          var r = Math.random() * totalW;
+          var acc = 0;
+          for (var j = 0; j < pool.length; j++) {
+            acc += pool[j].weight;
+            if (r <= acc) { details[y][x] = pool[j].type; break; }
+          }
+        }
+      }
+    }
+    /* 墙细节：苔藓（少量） */
+    var wallPool = (Game.Data.TILE_DETAILS && Game.Data.TILE_DETAILS.wall) || [];
+    var wallTotal = 0;
+    for (var wi = 0; wi < wallPool.length; wi++) wallTotal += wallPool[wi].weight;
+    if (wallTotal > 0) {
+      for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+          if (grid[y][x] !== 0) continue;
+          if (Math.random() >= 0.08) continue;
+          var wr = Math.random() * wallTotal;
+          var wacc = 0;
+          for (var wj = 0; wj < wallPool.length; wj++) {
+            wacc += wallPool[wj].weight;
+            if (wr <= wacc) { details[y][x] = wallPool[wj].type; break; }
+          }
+        }
+      }
+    }
+    /* 装饰物：按层数调整数量（越深火把越多、宝箱越少） */
+    var f = floorIndex + 1;
+    placeDecor('chest', Math.max(1, 3 - f), w, h);
+    placeDecor('barrel', 3 + f, w, h);
+    placeDecor('torch', 2 + f * 2, w, h);
+    placeDecor('vine', 2 + f, w, h);
+  }
+
+  function placeDecor(id, count, w, h) {
+    var placed = 0, tries = 0;
+    while (placed < count && tries < 400) {
+      tries++;
+      var x = 1 + Math.floor(Math.random() * (w - 2));
+      var y = 1 + Math.floor(Math.random() * (h - 2));
+      /* 只放地板格、不放楼梯/出生点/已有装饰/敌人格 */
+      if (grid[y][x] !== 1) continue;
+      if (x === spawn.x && y === spawn.y) continue;
+      if (decor[y][x]) continue;
+      var occupied = false;
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].x === x && enemies[i].y === y) { occupied = true; break; }
+      }
+      if (occupied) continue;
+      decor[y][x] = id;
+      placed++;
+    }
+  }
+
   Game.Systems.Map = {
     generate: function () {
       cfg = Game.Data.MAPS;
@@ -110,6 +189,7 @@
       spawnEnemies();
       if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
       spawn = { x: 1, y: 1 };
+      genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       return grid;
     },
@@ -156,6 +236,50 @@
       }
       return null;
     },
-    getEnemies: function () { return enemies; }
+    getEnemies: function () { return enemies; },
+
+    /* M9-1：取该格 tile 细节类型（纯视觉），越界返回 null */
+    getDetail: function (x, y) {
+      if (!details || !details[y]) return null;
+      if (x < 0 || y < 0 || x >= details[0].length || y >= details.length) return null;
+      return details[y][x] || null;
+    },
+
+    /* M9-1：取该格装饰物 id（chest/barrel/torch/vine），越界/无装饰返回 null */
+    getDecor: function (x, y) {
+      if (!decor || !decor[y]) return null;
+      if (x < 0 || y < 0 || x >= decor[0].length || y >= decor.length) return null;
+      return decor[y][x] || null;
+    },
+
+    /* M9-1：拾取宝箱——仅 chest 可拾取，成功后置空并 emit 'decor:taken'
+     * 金币走 Player.gold，道具走 Inventory.add，不新增数值系统 */
+    takeDecor: function (x, y) {
+      if (!decor || !decor[y]) return false;
+      if (x < 0 || y < 0 || x >= decor[0].length || y >= decor.length) return false;
+      var id = decor[y][x];
+      if (id !== 'chest') return false;
+      decor[y][x] = null;
+      var loot = 'gold';
+      var def = Game.Data.DECOR && Game.Data.DECOR.chest;
+      if (def && def.loot === 'random') loot = Math.random() < 0.5 ? 'gold' : 'item';
+      else if (def && def.loot) loot = def.loot;
+      if (loot === 'gold') {
+        var gold = (5 + Math.floor(Math.random() * 15)) * (floorIndex + 1);
+        Game.Data.Player.gold += gold;
+        Game.Core.EventBus.emit('ui:notice', { msg: '宝箱：获得 ' + gold + ' 金币' });
+      } else {
+        var items = ['potion_small', 'sword_bone', 'armor_leather'];
+        var itemId = items[Math.floor(Math.random() * items.length)];
+        if (Game.Systems.Inventory && Game.Systems.Inventory.add) {
+          Game.Systems.Inventory.add(itemId, 1);
+          var it = Game.Data.ITEMS && Game.Data.ITEMS[itemId];
+          Game.Core.EventBus.emit('ui:notice', { msg: '宝箱：获得 ' + (it ? it.name : itemId) });
+        }
+      }
+      Game.Core.EventBus.emit('decor:taken', { x: x, y: y, kind: 'chest' });
+      Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
+      return true;
+    }
   };
 })();

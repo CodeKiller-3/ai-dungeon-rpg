@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m9_1</title>
+</head>
+<body>
+<canvas id="game" width="800" height="480"></canvas>
+<!-- M9-1 验证页：加载 eventBus → maps(data) → render → map（与主游戏同序，file:// 相对路径） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/map.js"></script>
+<script>
+(function () {
+  var out = { mapDetailLoaded: false, detailApi: false, detailOk: false, err: null };
+  try {
+    var cv = document.getElementById('game');
+    Game.Core.Render.init(cv);
+
+    /* 1. 数据与模块加载 */
+    out.mapDetailLoaded = !!(window.Game && Game.Data && Game.Data.TILE_DETAILS &&
+      Game.Data.DECOR && Game.Systems && Game.Systems.Map);
+    if (out.mapDetailLoaded) {
+      var M = Game.Systems.Map;
+      out.detailApi = typeof M.generate === 'function' &&
+        typeof M.getDetail === 'function' &&
+        typeof M.getDecor === 'function' &&
+        typeof M.takeDecor === 'function' &&
+        typeof M.tileAt === 'function' &&
+        typeof M.isWalkable === 'function';
+    }
+
+    if (out.mapDetailLoaded && out.detailApi) {
+      var M = Game.Systems.Map;
+      var ok = true;
+      var sub = {};
+
+      /* 2. generate 后 details/decor 字段通过接口可取，且抽样有细节/装饰 */
+      M.generate();
+      var grid = M.getGrid();
+      var w = grid[0].length, h = grid.length;
+      var detailCount = 0, decorCount = 0;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          if (M.getDetail(x, y)) detailCount++;
+          if (M.getDecor(x, y)) decorCount++;
+        }
+      }
+      sub.t2 = (detailCount >= 1) && (decorCount >= 1);
+      ok = ok && sub.t2;
+
+      /* 3. getDetail/getDecor 返回类型正确（字符串或 null） */
+      var anyDetail = null, anyDecor = null;
+      outer: for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+          var d = M.getDetail(x, y);
+          if (d && !anyDetail) anyDetail = d;
+          var dc = M.getDecor(x, y);
+          if (dc && !anyDecor) anyDecor = dc;
+          if (anyDetail && anyDecor) break outer;
+        }
+      }
+      sub.t3 = (typeof anyDetail === 'string') && (typeof anyDecor === 'string');
+      ok = ok && sub.t3;
+
+      /* 4. 越界 getDetail/getDecor 返回 null */
+      sub.t4 = (M.getDetail(-1, 0) === null) && (M.getDetail(w, 0) === null) &&
+        (M.getDecor(0, -1) === null) && (M.getDecor(0, h) === null);
+      ok = ok && sub.t4;
+
+      /* 5. 细节/装饰格 getAt 通行语义不变：墙仍是墙(tile=0)、地板仍可走(tile=1) */
+      var walkOk = true;
+      for (y = 0; y < h && walkOk; y++) {
+        for (x = 0; x < w; x++) {
+          var t = M.tileAt(x, y);
+          var walk = M.isWalkable(x, y);
+          if (t === 0 && walk) { walkOk = false; break; }
+          if (t === 1 && !walk) { walkOk = false; break; }
+        }
+      }
+      sub.t5 = walkOk;
+      ok = ok && sub.t5;
+
+      /* 6. takeDecor：找到一个宝箱格，拾取成功；对非装饰格失败 */
+      var chestPos = null;
+      outer2: for (y = 0; y < h; y++) {
+        for (x = 0; x < w; x++) {
+          if (M.getDecor(x, y) === 'chest') { chestPos = { x: x, y: y }; break outer2; }
+        }
+      }
+      var takeOk = false;
+      if (chestPos) {
+        /* 拾取前确保 Player 存在（takeDecor 会加金币/道具） */
+        if (!Game.Data.Player) Game.Data.Player = { gold: 0, inventory: {} };
+        var r1 = M.takeDecor(chestPos.x, chestPos.y);
+        var r2 = M.takeDecor(chestPos.x, chestPos.y); /* 二次拾取应失败 */
+        var r3 = M.takeDecor(0, 0); /* 非宝箱格失败 */
+        takeOk = (r1 === true) && (r2 === false) && (r3 === false);
+      }
+      sub.t6 = takeOk;
+      ok = ok && sub.t6;
+
+      /* 7. render.drawMap 不抛错且绘制了细节/装饰（像素落笔检查） */
+      var ctx = Game.Core.Render._ctx;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      Game.Core.Render.drawMap(grid, { x: 1, y: 1 });
+      /* 画面中应有非背景色像素（细节/装饰/地板） */
+      var data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      var nonBg = 0;
+      for (var i = 0; i < data.length; i += 4 * 97) { /* 稀疏采样 */
+        if (data[i] !== 20 || data[i + 1] !== 20 || data[i + 2] !== 42) nonBg++;
+      }
+      sub.t7 = nonBg > 0;
+      ok = ok && sub.t7;
+
+      out.sub = sub;
+      out.found = { detailCount: detailCount, decorCount: decorCount, chest: !!chestPos };
+      out.detailOk = ok;
+    }
+
+    var pass = out.mapDetailLoaded && out.detailApi && out.detailOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

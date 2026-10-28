@@ -12,7 +12,9 @@
   var IMG = {};
   var READY = false;
   var COUNT = 0;
-  var NAMES = ['player', 'monster_chort', 'monster_chort_run', 'boss_demon', 'boss_demon_run'];
+  var NAMES = ['player', 'monster_chort', 'monster_chort_run', 'boss_demon', 'boss_demon_run',
+    /* M9-1：装饰物与 tile 细节素材（CC0，kenney/0x72；缺失则渲染层程序化兜底） */
+    'chest', 'barrel', 'torch', 'vine', 'grass', 'puddle', 'bones', 'moss'];
 
   Game.Core.Sprites = {
     load: function () {
@@ -20,10 +22,9 @@
       NAMES.forEach(function (n) {
         var img = new Image();
         COUNT++;
-        img.onload = function () { self._check(); };
-        img.onerror = function () { self._check(); };
+        img.onload = function () { IMG[n] = img; self._check(); };
+        img.onerror = function () { self._check(); };   /* 加载失败不入库，渲染层自动程序化兜底 */
         img.src = 'assets/sprites/' + n + '.png';
-        IMG[n] = img;
       });
     },
     _check: function () {

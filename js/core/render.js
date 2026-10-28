@@ -46,6 +46,83 @@
       } catch (e) { /* 降级：弹窗异常不影响主画面 */ }
     },
 
+    /* M9-1：tile 细节绘制——素材就绪用贴图，否则程序化色块兜底
+     * type: grass(草丛绿块) / puddle(水洼蓝块) / bones(碎骨白点) / moss(苔藓绿块) */
+    _drawDetail: function (ctx, type, px, py) {
+      var sp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get(type) : null;
+      if (sp) { ctx.drawImage(sp, px, py, TILE - 1, TILE - 1); return; }
+      if (type === 'grass') {
+        ctx.fillStyle = 'rgba(58,125,44,0.55)';
+        ctx.fillRect(px + 4, py + 14, 4, 6);
+        ctx.fillRect(px + 12, py + 10, 3, 5);
+        ctx.fillRect(px + 17, py + 16, 4, 5);
+      } else if (type === 'puddle') {
+        ctx.fillStyle = 'rgba(74,123,208,0.6)';
+        ctx.fillRect(px + 5, py + 12, TILE - 11, 6);
+        ctx.fillStyle = 'rgba(150,190,255,0.4)';
+        ctx.fillRect(px + 7, py + 13, 4, 2);
+      } else if (type === 'bones') {
+        ctx.fillStyle = 'rgba(207,210,214,0.85)';
+        ctx.fillRect(px + 8, py + 10, 2, 2);
+        ctx.fillRect(px + 14, py + 14, 2, 2);
+        ctx.fillRect(px + 10, py + 17, 6, 2);
+      } else if (type === 'moss') {
+        ctx.fillStyle = 'rgba(79,122,63,0.6)';
+        ctx.fillRect(px + 3, py + 3, 5, 4);
+        ctx.fillRect(px + 14, py + 16, 6, 4);
+      }
+    },
+
+    /* M9-1：装饰物绘制——素材就绪用贴图，否则程序化矩形+轮廓兜底
+     * id: chest(宝箱黄框) / barrel(木桶棕框) / torch(火把橙焰) / vine(藤蔓绿条) */
+    _drawDecor: function (ctx, id, px, py) {
+      var sp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get(id) : null;
+      if (sp) { ctx.drawImage(sp, px + 2, py + 2, TILE - 5, TILE - 5); return; }
+      if (id === 'chest') {
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(px + 4, py + 8, TILE - 9, TILE - 12);
+        ctx.strokeStyle = '#ffcf6e';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 4, py + 8, TILE - 9, TILE - 12);
+        ctx.fillStyle = '#ffcf6e';
+        ctx.fillRect(px + TILE / 2 - 2, py + TILE / 2, 3, 4);
+      } else if (id === 'barrel') {
+        ctx.fillStyle = '#7a4a28';
+        ctx.fillRect(px + 6, py + 6, TILE - 13, TILE - 10);
+        ctx.strokeStyle = '#4a2c18';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(px + 6, py + 6, TILE - 13, TILE - 10);
+        ctx.strokeStyle = '#9a6a3a';
+        ctx.beginPath();
+        ctx.moveTo(px + 6, py + TILE / 2);
+        ctx.lineTo(px + TILE - 7, py + TILE / 2);
+        ctx.stroke();
+      } else if (id === 'torch') {
+        ctx.fillStyle = '#5a3a1a';
+        ctx.fillRect(px + TILE / 2 - 1, py + 12, 3, TILE - 16);
+        /* 火苗三角 */
+        ctx.fillStyle = '#ff8c1a';
+        ctx.beginPath();
+        ctx.moveTo(px + TILE / 2 + 0.5, py + 4);
+        ctx.lineTo(px + TILE / 2 - 4, py + 13);
+        ctx.lineTo(px + TILE / 2 + 5, py + 13);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath();
+        ctx.moveTo(px + TILE / 2 + 0.5, py + 7);
+        ctx.lineTo(px + TILE / 2 - 2, py + 12);
+        ctx.lineTo(px + TILE / 2 + 3, py + 12);
+        ctx.closePath();
+        ctx.fill();
+      } else if (id === 'vine') {
+        ctx.fillStyle = 'rgba(79,122,63,0.85)';
+        ctx.fillRect(px + 4, py + 2, 3, TILE - 6);
+        ctx.fillRect(px + 14, py + 6, 3, TILE - 10);
+        ctx.fillRect(px + 9, py + 10, 3, TILE - 14);
+      }
+    },
+
     drawMap: function (grid, player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -96,6 +173,13 @@
             ctx.fillStyle = 'rgba(255,255,255,0.3)';
             ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
           }
+          /* M9-1：细节层与装饰层——仅当前可见格绘制（FOV 外不画，与怪物隐藏规则一致） */
+          if (!fovOn || Game.fov.isVisible(x, y)) {
+            var det = Game.Systems.Map.getDetail(x, y);
+            if (det) this._drawDetail(ctx, det, px, py);
+            var dec = Game.Systems.Map.getDecor(x, y);
+            if (dec) this._drawDecor(ctx, dec, px, py);
+          }
           /* S3-1 FOV：已点亮但当前不可见 → 较暗覆盖（记忆效果） */
           if (fovOn && !Game.fov.isVisible(x, y)) {
             ctx.fillStyle = 'rgba(4,4,12,0.55)';
@@ -124,7 +208,7 @@
         }
       }
       /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
-      var ps = Game.Systems.AI.getPatrols();
+      var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
       for (var j = 0; j < ps.length; j++) {
         if (fovOn && !Game.fov.isVisible(ps[j].x, ps[j].y)) continue; /* S3-1：迷雾外不透视 */
         var ppx = ps[j].x * TILE - cam.x + 2;
