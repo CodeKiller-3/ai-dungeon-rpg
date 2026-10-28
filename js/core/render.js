@@ -208,6 +208,57 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
       ctx.fillText('↑↓ 选择   Enter ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换   Esc 返回', 30, cv.height - 30);
+    },
+
+    /* 任务面板（M4） */
+    drawQuests: function (active, player) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx) return;
+      this._drawPanel('任务 (M)', player.gold);
+      if (!active || active.length === 0) {
+        ctx.fillStyle = '#52c41a';
+        ctx.font = '15px monospace';
+        ctx.fillText('全部任务已完成！', 30, 100);
+      } else {
+        for (var i = 0; i < active.length; i++) {
+          var a = active[i];
+          var q = a.q;
+          var y = 100 + i * 40;
+          ctx.fillStyle = '#cfcfcf';
+          ctx.font = '14px monospace';
+          ctx.fillText(q.desc, 30, y);
+          ctx.fillStyle = '#ffcf6e';
+          ctx.font = '13px monospace';
+          ctx.fillText('进度 ' + Math.min(a.progress, q.count) + ' / ' + q.count +
+            '   奖励: +' + q.reward.gold + '金币 +' + q.reward.exp + '经验', 30, y + 22);
+        }
+      }
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '13px monospace';
+      ctx.fillText('Esc 返回探索', 30, cv.height - 30);
+    },
+
+    /* 通关画面（M4） */
+    drawVictory: function (player) {
+      var ctx = this._ctx;
+      var cv = this._canvas;
+      if (!ctx) return;
+      ctx.fillStyle = '#0f0f1f';
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 34px monospace';
+      ctx.fillText('通 关 !', cv.width / 2 - 80, cv.height / 2 - 80);
+      ctx.fillStyle = '#cfcfcf';
+      ctx.font = '16px monospace';
+      ctx.fillText('勇者击败了地牢巨龙，冒险结束', cv.width / 2 - 160, cv.height / 2 - 30);
+      ctx.fillStyle = '#8f8';
+      ctx.font = '15px monospace';
+      ctx.fillText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
+        cv.width / 2 - 180, cv.height / 2 + 20);
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '14px monospace';
+      ctx.fillText('按 R 重新开始', cv.width / 2 - 60, cv.height / 2 + 70);
     }
   };
 })();

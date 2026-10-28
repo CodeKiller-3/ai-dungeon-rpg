@@ -19,7 +19,7 @@
     if (state.log.length > 6) state.log.shift();
   }
 
-  /* 怪物死亡结算：经验/金币/掉落 */
+  /* 怪物死亡结算：经验/金币/掉落 + 任务推进 */
   function settleWin() {
     var p = Game.Data.Player;
     var m = state.monster;
@@ -36,7 +36,8 @@
       }
     }
     logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold + (drops.length ? ' 获得:' + drops.join(',') : ''));
-    Game.Core.EventBus.emit('battle:end', { result: 'win', exp: m.exp, gold: gold, drops: drops });
+    if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
+    Game.Core.EventBus.emit('battle:end', { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops });
   }
 
   /* 怪物行动：反击（玩家未逃跑且怪物存活） */

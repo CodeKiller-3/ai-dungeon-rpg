@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>M4 验证</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var r = {};
+  try {
+    var Q = Game.Systems.Quest;
+    var Save = Game.Systems.Save;
+    var p = Game.Data.Player;
+
+    Q.init();
+    r.activeCount = Q.getActive().length;
+
+    for (var i = 0; i < 5; i++) Q.progress('kill', 'slime');
+    r.slimeDone = Q.isDone('kill_slimes');
+    r.goldAfterSlime = p.gold;
+
+    Q.progress('gold', 100);
+    r.goldQuestDone = Q.isDone('gold_rich');
+    r.goldAfterGoldQ = p.gold;
+
+    Q.progress('kill', 'dragon');
+    r.dragonDone = Q.isDone('main_clear_dragon');
+    r.goldAfterDragon = p.gold;
+
+    p.gold = 123;
+    Save.save();
+    p.gold = 0;
+    var loaded = Save.load();
+    r.loadOk = !!loaded;
+    r.goldRestored = p.gold;
+    r.floorRestored = Game.Systems.Map.getFloor();
+    p.hp = p.maxHp;
+
+    document.getElementById('result').textContent = 'PASS ' + JSON.stringify(r);
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+  }
+})();
+</script>
+</body>
+</html>

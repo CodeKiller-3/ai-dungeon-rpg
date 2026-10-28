@@ -137,6 +137,12 @@
     getGrid: function () { return grid; },
     getSpawn: function () { return { x: spawn.x, y: spawn.y }; },
 
+    /* 存档恢复：直接切到指定楼层并重新生成 */
+    setFloor: function (f) {
+      floorIndex = Math.min(Math.max(f - 1, 0), cfg.floors - 1);
+      return this.generate();
+    },
+
     /* 取该格敌人：命中则移除（一次遭遇） */
     enemyAt: function (x, y) {
       for (var i = 0; i < enemies.length; i++) {
