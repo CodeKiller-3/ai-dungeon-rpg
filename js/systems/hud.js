@@ -5,8 +5,8 @@
  *   Game.hud.draw()         画布顶部条带绘制（render.js 每帧渲染末尾调用）
  *   Game.hud.show() / hide() 显示/隐藏（默认显示）
  * 数据来源：
- *   - hp/gold/floor：main.js 每帧由 Game.Data.Player 汇总后经 update 传入
- *   - mp：当前项目尚无 MP 属性（Player Schema 无此字段），默认 0/0，显示 MP 0/0
+ *   - hp/mp/gold/floor：main.js 每帧由 Game.Data.Player 汇总后经 update 传入
+ *   - mp：M8-1 起传真实 mp/maxMp（Player Schema 已含 mp 字段，默认 50）
  *   - kills/killTarget：本模块自维护（订阅 battle:end 计胜场；map:floorChanged 重置并按本层怪物数取目标）
  * 事件：不新增频道（无消费方，避免频道膨胀）
  * 降级：stats 字段缺失显示 '--'；Game.Core.Render 未就绪时 draw 静默返回，不抛错

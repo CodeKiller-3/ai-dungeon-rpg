@@ -441,7 +441,7 @@
       if (!dying) {
         ctx.fillStyle = '#9bbbf4';
         ctx.font = '14px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑', W / 2 - 100, H - 30);
+        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾', W / 2 - 150, H - 30);
       }
       /* S3-4：战斗视觉反馈（伤害飘字/受击闪白红闪），绘制于战斗内容之上、HUD 之下 */
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
@@ -646,7 +646,7 @@
 
     /* M9-5：首次引导覆盖层——半透明遮罩 + 按键说明 + 目标 + 任意键开始。
      * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
-     * 战斗按键取现有实现（1 攻击 / 2 防御 / 3 逃跑），不杜撰。 */
+     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾），不杜撰。 */
     drawGuide: function () {
       var ctx = this._ctx;
       if (!ctx) return;
@@ -670,7 +670,7 @@
       /* 操作按键（与 M9-4 设置面板同源） */
       var lines = [
         '方向键 / WASD : 移动',
-        '1 / 2 / 3 : 攻击 / 防御 / 逃跑',
+        '1攻 2防 3逃 · 4火球 5冲刺 6护盾',
         'B 背包 · S 商店 · M 任务',
         'T 对话 · L 强化学习',
         'K 静音 · Q 设置',

@@ -15,7 +15,9 @@
         savedAt: new Date().toISOString(),
         floor: Game.Systems.Map.getFloor(),
         player: {
-          hp: p.hp, maxHp: p.maxHp, atk: p.atk, def: p.def,
+          hp: p.hp, maxHp: p.maxHp,
+          mp: p.mp, maxMp: p.maxMp, /* M8-1：MP 存档字段 */
+          atk: p.atk, def: p.def,
           gold: p.gold, exp: p.exp, level: p.level,
           inventory: p.inventory, equipment: p.equipment, quests: p.quests
         }
@@ -37,6 +39,9 @@
         var s = data.player || {};
         if (typeof s.hp === 'number') p.hp = s.hp;
         if (typeof s.maxHp === 'number') p.maxHp = s.maxHp;
+        /* M8-1：旧存档（无 mp/maxMp）补默认 50，不破坏旧档 */
+        if (typeof s.maxMp === 'number') p.maxMp = s.maxMp; else p.maxMp = 50;
+        if (typeof s.mp === 'number') p.mp = s.mp; else p.mp = p.maxMp;
         if (typeof s.atk === 'number') p.atk = s.atk;
         if (typeof s.def === 'number') p.def = s.def;
         if (typeof s.gold === 'number') p.gold = s.gold;

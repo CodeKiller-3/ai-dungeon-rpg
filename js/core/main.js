@@ -12,6 +12,7 @@
   var player = {
     x: 1, y: 1, floor: 1,
     hp: 100, maxHp: 100,
+    mp: 50, maxMp: 50, /* M8-1：技能 MP（旧存档缺失时由 save.js 补默认） */
     atk: 10, def: 5,
     gold: 0, exp: 0, level: 1,
     inventory: {}, equipment: { weapon: null, armor: null },
@@ -47,6 +48,7 @@
 
   function resetPlayer() {
     player.hp = player.maxHp;
+    player.mp = player.maxMp; /* M8-1：换层/重置回满 MP */
     var s = Game.Systems.Map.getSpawn();
     player.x = s.x;
     player.y = s.y;
@@ -68,13 +70,13 @@
     });
   }
 
-  /* S3-2 HUD：汇总顶部信息栏数据。MP 当前无系统（Player Schema 无 mp 字段），按 0/0 占位；
+  /* S3-2 HUD：汇总顶部信息栏数据。M8-1：MP 传真实 mp/maxMp（替换遗留 0/0 占位）；
      kills/killTarget 由 hud.js 自行统计（battle:end 胜场 + map:floorChanged 重置），故不在此传 */
   function syncHud() {
     if (!Game.hud || !Game.hud.update) return;
     Game.hud.update({
       hp: player.hp, hpMax: player.maxHp,
-      mp: 0, mpMax: 0,
+      mp: player.mp, mpMax: player.maxMp,
       gold: player.gold,
       floor: player.floor
     });
@@ -199,6 +201,7 @@
       runStart = performance.now();
       /* 重置玩家为新档 */
       player.hp = 100; player.maxHp = 100;
+      player.mp = 50; player.maxMp = 50; /* M8-1：新档 MP 满 */
       player.atk = 10; player.def = 5;
       player.gold = 0; player.exp = 0; player.level = 1;
       player.inventory = {}; player.equipment = { weapon: null, armor: null };
@@ -295,6 +298,10 @@
       if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; Game.Systems.Battle.playerAction('attack'); }
       else if (k['Digit2'] || k['Numpad2']) { delete k['Digit2']; delete k['Numpad2']; Game.Systems.Battle.playerAction('defend'); }
       else if (k['Digit3'] || k['Numpad3']) { delete k['Digit3']; delete k['Numpad3']; Game.Systems.Battle.playerAction('run'); }
+      /* M8-1：数字键 4/5/6 释放技能（探索场景无动作，不占用原有按键） */
+      else if (k['Digit4'] || k['Numpad4']) { delete k['Digit4']; delete k['Numpad4']; Game.Systems.Battle.playerAction('skill:fireball'); }
+      else if (k['Digit5'] || k['Numpad5']) { delete k['Digit5']; delete k['Numpad5']; Game.Systems.Battle.playerAction('skill:dash'); }
+      else if (k['Digit6'] || k['Numpad6']) { delete k['Digit6']; delete k['Numpad6']; Game.Systems.Battle.playerAction('skill:shield'); }
     },
 
     /* 背包场景 */

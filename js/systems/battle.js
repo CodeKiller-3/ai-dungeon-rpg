@@ -1,6 +1,9 @@
 /* js/systems/battle.js — 回合制战斗系统
  * 接口：start / playerAction / getState / tick（见 PLAN.md §4.4）
+ * M8-1：playerAction 纯新增 'skill:fireball' / 'skill:dash' / 'skill:shield'（attack/defend/run 语义不变）
  * 伤害公式：max(攻击方 atk - 防御方 def, 1)；防御指令本回合减伤 50%
+ * 技能伤害：max(round(atk × 技能倍率) - 敌方 def, 1)（倍率版既有公式）
+ * 护盾：battle state.shieldValue 本次战斗内抵挡等量伤害，扣完归零
  * 来源：参考 freeCodeCamp RPG 教程重构（自写实现）
  * 事件：battle:start / battle:end */
 (function () {
@@ -8,7 +11,7 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
-  var state = null; /* { monster, log, turn, defending, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
+  var state = null; /* { monster, log, turn, defending, shieldValue, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
 
   var DYING_MS = 700; /* 死亡消散动画时长 ms（渐隐+上浮+缩小） */
 
@@ -105,11 +108,23 @@
     var p = Game.Data.Player;
     var m = state.monster;
     state.monsterActionAt = performance.now(); /* M9-3：怪物攻击前摇帧 */
-    var dmg = state.defending ? Math.max(Math.floor(damage(m.atk, p.def) / 2), 1) : damage(m.atk, p.def);
-    p.hp = Math.max(p.hp - dmg, 0);
-    spawnHurtPlayer(dmg); /* S3-4：玩家受击反馈（仅展示，不改数值） */
+    var raw = state.defending ? Math.max(Math.floor(damage(m.atk, p.def) / 2), 1) : damage(m.atk, p.def);
     state.defending = false;
-    logPush(m.name + ' 攻击了你，造成 ' + dmg + ' 伤害');
+    /* M8-1：护盾先抵挡等量伤害（扣完归零），剩余伤害才进 HP */
+    var absorbed = 0;
+    if (state.shieldValue > 0) {
+      absorbed = Math.min(state.shieldValue, raw);
+      state.shieldValue -= absorbed;
+    }
+    var dmg = raw - absorbed;
+    if (dmg > 0) {
+      p.hp = Math.max(p.hp - dmg, 0);
+      spawnHurtPlayer(dmg); /* S3-4：玩家受击反馈（仅展示，不改数值） */
+    }
+    if (absorbed > 0) {
+      logPush('护盾抵挡了 ' + absorbed + ' 点伤害' + (state.shieldValue <= 0 ? '（护盾破碎）' : ''));
+    }
+    logPush(dmg > 0 ? m.name + ' 攻击了你，造成 ' + dmg + ' 伤害' : m.name + ' 的攻击被护盾完全抵挡');
     Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
     if (p.hp <= 0) {
       logPush('你被击败了…');
@@ -125,8 +140,11 @@
         monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color },
         log: ['遭遇 ' + def.name + '！战斗开始'],
         turn: 0,
-        defending: false
+        defending: false,
+        shieldValue: 0 /* M8-1：本次战斗临时护盾 */
       };
+      /* M8-1：新战斗冷却清零（战斗外残留冷却不带到本场） */
+      if (Game.Skills && typeof Game.Skills.resetCooldowns === 'function') Game.Skills.resetCooldowns();
       Game.Core.EventBus.emit('battle:start', { monsterId: monsterId });
       return state;
     },
@@ -134,6 +152,7 @@
     playerAction: function (cmd) {
       if (!state) return null;
       if (state.dying) return state; /* M9-3：消散期间不接受任何操作 */
+      var skillId = null; /* M8-1：本次行动释放的技能（冷却推进时跳过它自己） */
       if (cmd === 'attack') {
         state.playerActionAt = performance.now(); /* M9-3：玩家攻击前摇帧（纯视觉） */
         Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
@@ -143,9 +162,21 @@
         logPush('你对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
         if (state.monster.hp <= 0) {
           settleWin();
+          if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick();
           return state;
         }
         Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
+        monsterTurn();
+      } else if (cmd === 'skill:fireball' || cmd === 'skill:dash' || cmd === 'skill:shield') {
+        skillId = cmd.slice(6); /* 'skill:'.length === 6 */
+        state.playerActionAt = performance.now(); /* M9-3：动作帧复用玩家前摇 */
+        /* Skills.cast 负责校验 MP/冷却并触发效果；失败时不进入行动序列、不推进冷却 */
+        var castOk = Game.Skills && typeof Game.Skills.cast === 'function' && Game.Skills.cast(skillId);
+        if (!castOk) return state;
+        if (state.dying || state.monster.hp <= 0) { /* 技能击杀：消散中，怪物不反击 */
+          Game.Skills.tick(skillId);
+          return state;
+        }
         monsterTurn();
       } else if (cmd === 'defend') {
         state.defending = true;
@@ -163,10 +194,35 @@
         }
       }
       state.turn++;
+      /* M8-1：每行动 1 次，除本次刚释放技能外的冷却 -1（最小 0） */
+      if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick(skillId || undefined);
       return state;
     },
 
     getState: function () { return state; },
+
+    /* M8-1：技能伤害落地（由 Game.Skills.cast 调用）——倍率版既有伤害公式
+     * 伤害 = max(round(atk × 倍率) - 敌方 def, 1)；命中反馈/音效/胜利结算复用既有通道 */
+    applySkillDamage: function (id, def) {
+      if (!state || state.dying) return;
+      var p = Game.Data.Player;
+      var dmg = Math.max(def.dmg(p.atk) - state.monster.def, 1);
+      Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
+      state.monster.hp -= dmg;
+      spawnHitMonster(dmg);
+      logPush('你释放「' + def.name + '」，对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
+      if (state.monster.hp <= 0) settleWin();
+      else Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
+    },
+
+    /* M8-1：护盾落地（由 Game.Skills.cast 调用）——值为 maxHp 的 25%，存本次战斗 state */
+    applySkillShield: function (id, def) {
+      if (!state || state.dying) return;
+      var p = Game.Data.Player;
+      state.shieldValue = def.effect(p);
+      Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
+      logPush('你释放「' + def.name + '」，可抵挡 ' + state.shieldValue + ' 点伤害');
+    },
 
     /* M9-3：推进死亡消散计时；消散结束后发出 battle:end（此前结算已执行） */
     tick: function () {

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_1</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-1 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART 跳过自动启动 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/save.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { skillLoaded: false, skillApi: false, skillOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+
+    /* 1. 模块加载与接口齐备 */
+    out.skillLoaded = !!(G && G.Skills && G.Data && G.Data.SKILLS && G.Data.Player &&
+      G.Systems && G.Systems.Battle && G.Systems.Save);
+    if (out.skillLoaded) {
+      var S = G.Skills, D = G.Data.SKILLS;
+      out.skillApi = (typeof S.cast === 'function') &&
+        (typeof S.getCooldown === 'function') &&
+        (typeof S.resetCooldowns === 'function') &&
+        !!D.fireball && !!D.dash && !!D.shield &&
+        (D.fireball.key === 4) && (D.dash.key === 5) && (D.shield.key === 6) &&
+        (D.fireball.mpCost === 12) && (D.dash.mpCost === 8) && (D.shield.mpCost === 10) &&
+        (D.fireball.cd === 3) && (D.dash.cd === 2) && (D.shield.cd === 4) &&
+        (typeof D.fireball.dmg === 'function') && (typeof D.dash.dmg === 'function') &&
+        (typeof D.shield.effect === 'function');
+    }
+
+    if (out.skillLoaded && out.skillApi) {
+      var S = G.Skills, B = G.Systems.Battle, P = G.Data.Player, D = G.Data.SKILLS;
+
+      /* 存档兼容测试所需的最小 Map/Quest 桩（验证页不加载整张地图） */
+      G.Systems.Map = G.Systems.Map || {
+        getFloor: function () { return 1; },
+        changeFloor: function () { /* no-op */ },
+        getSpawn: function () { return { x: 1, y: 1 }; }
+      };
+      G.Systems.Quest = G.Systems.Quest || { init: function () {}, progress: function () {} };
+      if (typeof G.Systems.Quest.init !== 'function') G.Systems.Quest.init = function () {};
+      if (typeof G.Systems.Quest.progress !== 'function') G.Systems.Quest.progress = function () {};
+
+      var notices = [];
+      G.Core.EventBus.on('ui:notice', function (e) { if (e && e.msg) notices.push(String(e.msg)); });
+
+      /* 2. 数值公式可复算（不硬编码） */
+      var f_ok = (D.fireball.dmg(10) === 18) && (D.dash.dmg(10) === 12) &&
+        (D.shield.effect({ maxHp: 100 }) === 25);
+      sub.t2_formula = f_ok;
+      ok = ok && f_ok;
+
+      /* 3. MP 默认 50，重置后回满 */
+      var def_ok = (P.mp === 50) && (P.maxMp === 50);
+      G.Core.Main.restart();
+      var rst_ok = (P.mp === 50) && (P.maxMp === 50);
+      sub.t3_mp = def_ok && rst_ok;
+      ok = ok && sub.t3_mp;
+
+      /* 4. 旧存档兼容：无 mp/maxMp 字段 → load 后补默认 50，旧字段不丢 */
+      var oldOk = true;
+      try {
+        var oldSave = {
+          savedAt: '2026-01-01T00:00:00.000Z', floor: 1,
+          player: { hp: 80, maxHp: 100, atk: 10, def: 5, gold: 7, exp: 3, level: 1,
+            inventory: {}, equipment: { weapon: null, armor: null }, quests: {} }
+        };
+        localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify(oldSave));
+        G.Systems.Save.load();
+        oldOk = (P.hp === 80) && (P.maxMp === 50) && (P.mp === 50);
+        G.Systems.Save.clear();
+      } catch (e) { oldOk = false; }
+      sub.t4_oldsave = oldOk;
+      ok = ok && oldOk;
+
+      /* 5. cast('fireball')：返回 true、MP -12、冷却 3、伤害 = round(atk*1.8)（构造 def=0） */
+      P.atk = 10; P.def = 5; P.hp = 100; P.mp = 50; P.maxMp = 50;
+      S.resetCooldowns();
+      B.start('slime');
+      var st = B.getState();
+      st.monster.def = 0; /* 隔离防御值，断言纯倍数伤害 */
+      var hp0 = st.monster.hp;
+      var c1 = S.cast('fireball');
+      var castOk = (c1 === true) && (P.mp === 38) &&
+        (hp0 - st.monster.hp === 18) && (S.getCooldown('fireball') === 3);
+      sub.t5_cast = castOk;
+      ok = ok && castOk;
+
+      /* 6. MP 不足：cast 返回 false、MP 不变、不设冷却 */
+      P.mp = 0;
+      S.resetCooldowns();
+      var c2 = S.cast('fireball');
+      var mpLow = (c2 === false) && (P.mp === 0) && (S.getCooldown('fireball') === 0);
+      sub.t6_mp = mpLow;
+      ok = ok && mpLow;
+
+      /* 7. 冷却按回合递减：cast 后 3 → 行动一次 2 → 1 → 0，归 0 后可再放 */
+      B.start('dragon'); /* 高血量，避免测试期击杀打断 */
+      P.atk = 10; P.def = 5; P.hp = 100; P.mp = 50; P.maxMp = 50;
+      S.resetCooldowns();
+      var c3 = S.cast('fireball');
+      var cd0 = S.getCooldown('fireball');
+      B.playerAction('attack');
+      var cd1 = S.getCooldown('fireball');
+      B.playerAction('attack');
+      var cd2 = S.getCooldown('fireball');
+      B.playerAction('attack');
+      var cd3 = S.getCooldown('fireball');
+      var again = S.cast('fireball');
+      var cdOk = (c3 === true) && (cd0 === 3) && (cd1 === 2) && (cd2 === 1) && (cd3 === 0) && (again === true);
+      sub.t7_cooldown = cdOk;
+      ok = ok && cdOk;
+
+      /* 8. 护盾：cast('shield') 后 shieldValue = round(maxHp*0.25)，怪物命中先扣护盾 */
+      B.start('slime');
+      P.maxHp = 100; P.hp = 100; P.mp = 50;
+      S.resetCooldowns();
+      var sh = S.cast('shield');
+      var st2 = B.getState();
+      var sv0 = st2.shieldValue;
+      B.playerAction('attack'); /* 史莱姆 6 攻 - 5 防 = 1，全部由护盾抵挡 */
+      var sv1 = st2.shieldValue;
+      var shOk = (sh === true) && (sv0 === 25) && (P.hp === 100) && (sv1 === 24);
+      sub.t8_shield = shOk;
+      ok = ok && shOk;
+
+      /* 9. 战斗命令接入：playerAction('skill:fireball') 生效；冷却中再次释放不生效 */
+      B.start('slime');
+      var st3 = B.getState();
+      st3.monster.def = 0;
+      P.atk = 10; P.hp = 100; P.mp = 50; P.maxMp = 50;
+      S.resetCooldowns();
+      var hp1 = st3.monster.hp;
+      B.playerAction('skill:fireball');
+      var cmd1 = (hp1 - st3.monster.hp === 18) && (P.mp === 38) && (S.getCooldown('fireball') === 3);
+      var hp2 = st3.monster.hp, mp2 = P.mp;
+      B.playerAction('skill:fireball'); /* 冷却中：不进入行动序列 */
+      var cmd2 = (st3.monster.hp === hp2) && (P.mp === mp2);
+      sub.t9_command = cmd1 && cmd2;
+      ok = ok && cmd1 && cmd2;
+
+      /* 10. 失败原因经 ui:notice 提示（冷却中 / MP 不足） */
+      var all = notices.join('|');
+      var noticeOk = all.indexOf('冷却中') >= 0 && all.indexOf('MP 不足') >= 0;
+      sub.t10_notice = noticeOk;
+      ok = ok && noticeOk;
+
+      /* 11. 重复 cast / resetCooldowns 不抛错 */
+      var repOk = true;
+      try {
+        for (var i = 0; i < 20; i++) { S.cast('dash'); S.resetCooldowns(); }
+      } catch (e) { repOk = false; }
+      sub.t11_repeat = repOk;
+      ok = ok && repOk;
+
+      out.sub = sub;
+      out.skillOk = ok;
+    }
+
+    var pass = out.skillLoaded && out.skillApi && out.skillOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
