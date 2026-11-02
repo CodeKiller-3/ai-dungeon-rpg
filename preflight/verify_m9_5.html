@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m9_5</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M9-5 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART 跳过自动启动 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { finLoaded: false, finApi: false, finOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var cv = document.getElementById('game');
+
+    /* 1. 模块加载与接口齐备 */
+    out.finLoaded = !!(window.Game && Game.Core && Game.Core.Render && Game.Modal &&
+      Game.Systems && Game.Systems.Inventory && Game.Systems.Quest &&
+      Game.hud && Game.Core.Main && Game.Motion && Game.Particles);
+    if (out.finLoaded) {
+      var R = Game.Core.Render, M = Game.Modal, Main = Game.Core.Main;
+      out.finApi = (typeof R.resize === 'function') &&
+        (typeof R._applyDpr === 'function') &&
+        (typeof R._isNarrow === 'function') &&
+        (typeof R.drawMap === 'function') &&
+        (typeof R.drawGuide === 'function') &&
+        (typeof R.drawHUD === 'function') &&
+        (typeof M.open === 'function') &&
+        (typeof M.draw === 'function') &&
+        (typeof M._gameoverStats === 'function') &&
+        (typeof M._restart === 'function') &&
+        (typeof Game.Systems.Inventory.list === 'function') &&
+        (typeof Game.Systems.Quest.getActive === 'function') &&
+        (typeof Game.hud.getKills === 'function') &&
+        (typeof Main.needsGuide === 'function') &&
+        (typeof Main.markGuided === 'function') &&
+        (typeof Main.restart === 'function') &&
+        (typeof Main.openGameOver === 'function') &&
+        (typeof Main.getElapsedMs === 'function') &&
+        (typeof Game.Motion.clear === 'function') &&
+        (typeof Game.Particles.count === 'function');
+    }
+
+    if (out.finLoaded && out.finApi) {
+      var R = Game.Core.Render, M = Game.Modal, Main = Game.Core.Main;
+
+      /* 2. DPR：注入 dpr=2 → canvas.width = cssW*2 且 setTransform 生效 */
+      R.init(cv);
+      R.resize(2);
+      var cssW = R.cssW;
+      var dpr2_width = (cv.width === Math.round(cssW * 2));
+      var tr2 = cv.getContext('2d').getTransform ? cv.getContext('2d').getTransform() : null;
+      var dpr2_transform = tr2 && Math.abs(tr2.a - 2) < 0.001;
+      sub.t2_dpr2 = dpr2_width && dpr2_transform && (R.dpr === 2);
+      ok = ok && sub.t2_dpr2;
+
+      /* dpr=1 时无变化 */
+      R.resize(1);
+      var dpr1_width = (cv.width === cssW);
+      var tr1 = cv.getContext('2d').getTransform ? cv.getContext('2d').getTransform() : null;
+      var dpr1_transform = tr1 && Math.abs(tr1.a - 1) < 0.001;
+      sub.t2_dpr1 = dpr1_width && dpr1_transform && (R.dpr === 1);
+      ok = ok && sub.t2_dpr1;
+
+      /* 3. 窄窗口：模拟窄宽后关键绘制函数不抛错 */
+      var stubGrid = [];
+      for (var gy = 0; gy < 20; gy++) { stubGrid[gy] = []; for (var gx = 0; gx < 30; gx++) stubGrid[gy][gx] = 1; }
+      Game.Systems = Game.Systems || {};
+      Game.Systems.Map = {
+        getDetail: function () { return null; },
+        getDecor: function () { return null; },
+        getEnemies: function () { return []; },
+        getGrid: function () { return stubGrid; }
+      };
+      Game.Systems.AI = undefined;
+      Game.fov = undefined;
+      Game.Lighting = undefined;
+
+      var narrowOk = true;
+      try {
+        var savedW = R.cssW, savedH = R.cssH;
+        R.cssW = 400; R.cssH = 300;
+        if (!R._isNarrow()) narrowOk = false;
+        R.drawMap(stubGrid, { x: 1, y: 1 });
+        R.drawPlayer({ x: 1, y: 1 });
+        R.drawHUD({ fps: 60, atk: 10, def: 5 });
+        R.drawGuide();
+        R.cssW = savedW; R.cssH = savedH;
+      } catch (e) { narrowOk = false; }
+      sub.t3_narrow = narrowOk;
+      ok = ok && narrowOk;
+
+      /* 4. 性能：合成 100 帧 drawMap 平均耗时 < 20ms */
+      var t0 = performance.now();
+      for (var pi = 0; pi < 100; pi++) { R.drawMap(stubGrid, { x: 1, y: 1 }); }
+      var avgMs = (performance.now() - t0) / 100;
+      sub.t4_perf = (avgMs < 20);
+      sub.t4_avgMs = Number(avgMs.toFixed(2));
+      ok = ok && sub.t4_perf;
+
+      /* 4b. 粒子/运动条目无累积泄漏（clear 后归零） */
+      Game.Particles.enabled = true;
+      Game.Particles.clear();
+      Game.Particles.spawn('spark', 0, 0, { count: 30 });
+      Game.Particles.update(5000); /* 远超生命，全部到期 */
+      var leakParticles = (Game.Particles.count() === 0);
+      Game.Motion.clear();
+      Game.Motion.setStep('lk', 0, 0, 5, 5, 100);
+      Game.Motion.update(200);
+      Game.Motion.clear();
+      var leakMotion = (Game.Motion._size() === 0);
+      sub.t4_leak = leakParticles && leakMotion;
+      ok = ok && sub.t4_leak;
+
+      /* 5. 死亡结算：open('gameover') 后 current 正确、战绩来自 Player/HUD、重新开始重置状态 */
+      var P = Game.Data.Player;
+      P.floor = 3; P.gold = 42; P.hp = 0;
+      M.open('gameover');
+      var go_current = (M.current() === 'gameover');
+      var gs = M._gameoverStats();
+      var go_stats = (gs.floor === 3) && (gs.gold === 42) && (typeof gs.kills === 'number');
+      M._restart(); /* 触发 Main.restart（reset 逻辑） */
+      var go_reset = (Game.Data.Player.hp === 100) && (Game.Data.Player.gold === 0);
+      sub.t5_gameover = go_current && go_stats && go_reset;
+      ok = ok && sub.t5_gameover;
+
+      /* 6. 首次引导：无标记 needsGuide()===true，标记后 false */
+      try { localStorage.removeItem('aiDungeon_guided'); } catch (e) {}
+      var g1 = (Main.needsGuide() === true);
+      Main.markGuided();
+      var g2 = (Main.needsGuide() === false);
+      sub.t6_guide = g1 && g2;
+      ok = ok && sub.t6_guide;
+
+      /* 7. 空状态：背包/任务 0 项时弹窗绘制不抛错 */
+      var emptyOk = true;
+      try {
+        M.open('inventory');
+        M.draw();
+        M.close();
+        M.open('quests');
+        M.draw();
+        M.close();
+      } catch (e) { emptyOk = false; }
+      sub.t7_empty = emptyOk;
+      ok = ok && emptyOk;
+
+      out.sub = sub;
+      out.finOk = ok;
+    }
+
+    var pass = out.finLoaded && out.finApi && out.finOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

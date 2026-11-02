@@ -100,24 +100,32 @@
       var ctx = R && R._ctx;
       var cv = R && R._canvas;
       if (!ctx || !cv) return;
+      /* M9-5：使用 CSS 宽度（DPR 适配后 cv.width 为物理像素） */
+      var W = (R && typeof R.cssW === 'number') ? R.cssW : cv.clientWidth || cv.width;
+      var narrow = (R && typeof R._isNarrow === 'function') ? R._isNarrow() : false;
+      var barH = narrow ? 18 : BAR_H;
       var s = last || {};
 
       /* 底板 + 底边分隔线 */
       ctx.fillStyle = 'rgba(8,8,16,0.92)';
-      ctx.fillRect(0, 0, cv.width, BAR_H);
+      ctx.fillRect(0, 0, W, barH);
       ctx.fillStyle = 'rgba(255,255,255,0.10)';
-      ctx.fillRect(0, BAR_H - 1, cv.width, 1);
+      ctx.fillRect(0, barH - 1, W, 1);
 
       var x = 8;
-      x = drawBar(ctx, x, 'HP', s.hp, s.hpMax, '#4ade80', '#22131a', 74);
-      x = drawBar(ctx, x, 'MP', s.mp, s.mpMax, '#60a5fa', '#131d33', 56);
+      x = drawBar(ctx, x, 'HP', s.hp, s.hpMax, '#4ade80', '#22131a', narrow ? 60 : 74);
+      x = drawBar(ctx, x, 'MP', s.mp, s.mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
       x = drawText(ctx, x, '金币 ' + fmt(s.gold), '#ffcf6e');
       x = drawText(ctx, x, '第 ' + fmt(s.floor) + '/' + fmt(floorTotal()) + ' 层', '#cfcfcf');
       drawText(ctx, x, '击杀 ' + fmt(s.kills) + '/' + fmt(s.killTarget), '#f472b6');
     },
 
     show: function () { visible = true; },
-    hide: function () { visible = false; }
+    hide: function () { visible = false; },
+
+    /* M9-5：暴露击杀统计供死亡结算弹窗使用 */
+    getKills: function () { return kills; },
+    getKillTarget: function () { return killTarget; }
   };
 
   function floorTotal() {

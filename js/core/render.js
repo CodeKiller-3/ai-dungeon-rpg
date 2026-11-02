@@ -14,24 +14,58 @@
     _canvas: null,
     _ctx: null,
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
+    /* M9-5：DPR 高清适配——逻辑坐标统一用 CSS 像素，物理像素 = CSS * dpr */
+    dpr: 1,
+    cssW: 0,
+    cssH: 0,
 
     init: function (canvas) {
       this._canvas = canvas;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
       this._ctx = canvas.getContext('2d');
+      this.resize();
     },
+
+    /* M9-5：按 devicePixelRatio 缩放画布（上限 2），用 setTransform 统一缩放，不改绘制坐标语义
+     * dprOverride：验证页可注入固定 dpr 值断言，正常运行时留空读 window.devicePixelRatio */
+    resize: function (dprOverride) {
+      var cv = this._canvas;
+      if (!cv) return;
+      var raw = (typeof dprOverride === 'number' && dprOverride > 0) ? dprOverride : (window.devicePixelRatio || 1);
+      var dpr = Math.min(raw, 2);
+      var cssW = window.innerWidth;
+      var cssH = window.innerHeight;
+      this.dpr = dpr;
+      this.cssW = cssW;
+      this.cssH = cssH;
+      try {
+        cv.width = Math.round(cssW * dpr);
+        cv.height = Math.round(cssH * dpr);
+        cv.style.width = cssW + 'px';
+        cv.style.height = cssH + 'px';
+      } catch (e) { /* 降级：极端环境下保持默认 */ }
+      this._applyDpr();
+    },
+
+    /* M9-5：每帧绘制前重置变换矩阵为 DPR 缩放（CSS 像素坐标空间） */
+    _applyDpr: function () {
+      var ctx = this._ctx;
+      if (!ctx) return;
+      try { ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); } catch (e) { /* 降级 */ }
+    },
+
+    /* M9-5：是否窄窗口（<520px），HUD/底部提示用紧凑版 */
+    _isNarrow: function () { return this.cssW < 520; },
 
     /* M9-2：返回当前相机偏移（供 Lighting 等模块计算屏幕坐标） */
     _getCam: function () { return cam; },
 
     /* 计算镜头：地图比屏幕小则居中，否则跟随玩家 */
     _updateCam: function (grid, player) {
-      var cv = this._canvas;
+      var W = this.cssW, H = this.cssH;
       var w = grid[0].length * TILE;
       var h = grid.length * TILE;
-      cam.x = Math.min(Math.max(player.x * TILE - cv.width / 2 + TILE / 2, 0), Math.max(w - cv.width, 0));
-      cam.y = Math.min(Math.max(player.y * TILE - cv.height / 2 + TILE / 2, 0), Math.max(h - cv.height, 0));
+      cam.x = Math.min(Math.max(player.x * TILE - W / 2 + TILE / 2, 0), Math.max(w - W, 0));
+      cam.y = Math.min(Math.max(player.y * TILE - H / 2 + TILE / 2, 0), Math.max(h - H, 0));
     },
 
     /* S3-2：每帧渲染末尾叠加常驻 HUD（hud.js 缺失/未就绪时静默跳过，不影响绘制） */
@@ -131,9 +165,11 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx || !grid) return;
+      this._applyDpr(); /* M9-5：每帧重置 DPR 变换 */
+      var W = this.cssW, H = this.cssH;
       this._updateCam(grid, player);
       ctx.fillStyle = '#14142a';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillRect(0, 0, W, H);
       /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
       var fovOn = !!(Game.fov && Game.fov.isVisible);
       for (var y = 0; y < grid.length; y++) {
@@ -141,7 +177,7 @@
           var t = grid[y][x];
           var px = x * TILE - cam.x;
           var py = y * TILE - cam.y;
-          if (px + TILE < 0 || py + TILE < 0 || px > cv.width || py > cv.height) continue;
+          if (px + TILE < 0 || py + TILE < 0 || px > W || py > H) continue;
           if (fovOn && !Game.fov.isExplored(x, y) && !Game.fov.isVisible(x, y)) {
             ctx.fillStyle = '#07070f';
             ctx.fillRect(px, py, TILE - 1, TILE - 1);
@@ -197,7 +233,7 @@
         if (fovOn && !Game.fov.isVisible(es[i].x, es[i].y)) continue; /* S3-1：迷雾外不透视 */
         var epx = es[i].x * TILE - cam.x + 2;
         var epy = es[i].y * TILE - cam.y + 2;
-        if (epx > -20 && epy > -20 && epx < cv.width + 20 && epy < cv.height + 20) {
+        if (epx > -20 && epy > -20 && epx < W + 20 && epy < H + 20) {
           var eimg = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('monster_chort') : null;
           if (eimg) {
             ctx.fillStyle = 'rgba(234,102,104,0.22)';
@@ -221,7 +257,7 @@
         var pry = prp ? prp.y : ps[j].y;
         var ppx = prx * TILE - cam.x + 2;
         var ppy = pry * TILE - cam.y + 2;
-        if (ppx > -20 && ppy > -20 && ppx < cv.width + 20 && ppy < cv.height + 20) {
+        if (ppx > -20 && ppy > -20 && ppx < W + 20 && ppy < H + 20) {
           var chasing = ps[j].state === 'chase';
           var pimg = (Game.Core.Sprites && Game.Core.Sprites.isReady())
             ? Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort')
@@ -290,13 +326,19 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx) return;
+      this._applyDpr(); /* M9-5 */
+      var H = this.cssH;
+      var narrow = this._isNarrow();
       /* S3-2：顶部信息栏（HP/MP/金币/楼层/击杀）改由 Game.hud 统一绘制，全场景常驻；
          本函数保留接口与底部操作提示，FPS/攻防信息下移到底部一行，不再与 HUD 条带重叠 */
       ctx.fillStyle = '#9bbbf4';
-      ctx.font = '12px monospace';
-      ctx.fillText('FPS=' + (stats ? stats.fps : 0) +
-        (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
-        ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上', 10, cv.height - 10);
+      ctx.font = (narrow ? '10px' : '12px') + ' monospace';
+      var hint = narrow
+        ? ('FPS=' + (stats ? stats.fps : 0) + ' | 方向键移动 | 踩怪开战')
+        : ('FPS=' + (stats ? stats.fps : 0) +
+          (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
+          ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上');
+      ctx.fillText(hint, 10, H - 10);
       this._drawHud(); /* S3-2 */
       this._drawModal(); /* S3-3：弹窗叠在最上层（仅探索场景路径，弹窗仅从此打开） */
     },
@@ -319,15 +361,17 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx || !state) return;
+      this._applyDpr(); /* M9-5 */
+      var W = this.cssW, H = this.cssH;
       ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillRect(0, 0, W, H);
 
       var now = performance.now();
       var dying = !!state.dying;
       var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
 
       /* 敌人：素材就绪时用真实精灵（Boss 用大恶魔，其余用小怪） */
-      var ex = cv.width / 2 - 45;
+      var ex = W / 2 - 45;
       var ey = 90;
       /* M9-3：怪物攻击前摇帧偏移（向前=向下） */
       var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
@@ -363,13 +407,13 @@
         ctx.fillStyle = '#fff';
         ctx.font = '15px monospace';
         ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
-          cv.width / 2 - 140, ey + 120);
+          W / 2 - 140, ey + 120);
       }
 
       /* 玩家：素材就绪时用骑士精灵 */
       var p = Game.Data.Player;
-      var px = cv.width / 2 - 45;
-      var py = cv.height - 190;
+      var px = W / 2 - 45;
+      var py = H - 190;
       /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
       var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1);
       py += pAtkOff;
@@ -383,21 +427,21 @@
       ctx.fillStyle = '#fff';
       ctx.font = '14px monospace';
       ctx.fillText('勇者  HP:' + p.hp + '/' + p.maxHp + '  ATK:' + p.atk + '  DEF:' + p.def,
-        cv.width / 2 - 150, py + 120);
+        W / 2 - 150, py + 120);
 
       /* 战斗日志（最近 4 行） */
       ctx.fillStyle = '#8f8';
       ctx.font = '13px monospace';
       var start = Math.max(state.log.length - 4, 0);
       for (var i = 0; i < state.log.length - start; i++) {
-        ctx.fillText(state.log[start + i], 30, cv.height - 130 + i * 18);
+        ctx.fillText(state.log[start + i], 30, H - 130 + i * 18);
       }
 
       /* 指令提示（消散期间隐藏） */
       if (!dying) {
         ctx.fillStyle = '#9bbbf4';
         ctx.font = '14px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑', cv.width / 2 - 100, cv.height - 30);
+        ctx.fillText('1 攻击   2 防御   3 逃跑', W / 2 - 100, H - 30);
       }
       /* S3-4：战斗视觉反馈（伤害飘字/受击闪白红闪），绘制于战斗内容之上、HUD 之下 */
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
@@ -409,15 +453,16 @@
     /* 通用 UI 面板背景 */
     _drawPanel: function (title, gold) {
       var ctx = this._ctx;
-      var cv = this._canvas;
+      var W = this.cssW, H = this.cssH;
+      this._applyDpr(); /* M9-5 */
       ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 20px monospace';
       ctx.fillText(title, 30, 44);
       ctx.fillStyle = '#8f8';
       ctx.font = '14px monospace';
-      ctx.fillText('金币: ' + gold, cv.width - 180, 44);
+      ctx.fillText('金币: ' + gold, W - 180, 44);
     },
 
     /* 背包 UI（M3） */
@@ -444,7 +489,7 @@
       }
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
-      ctx.fillText('↑↓ 选择   Enter 使用/装备   I/Esc 返回', 30, cv.height - 30);
+      ctx.fillText('↑↓ 选择   Enter 使用/装备   I/Esc 返回', 30, this.cssH - 30);
       this._drawHud(); /* S3-2 */
     },
 
@@ -477,7 +522,7 @@
       }
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
-      ctx.fillText('↑↓ 选择   Enter ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换   Esc 返回', 30, cv.height - 30);
+      ctx.fillText('↑↓ 选择   Enter ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换   Esc 返回', 30, this.cssH - 30);
       this._drawHud(); /* S3-2 */
     },
 
@@ -507,7 +552,7 @@
       }
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
-      ctx.fillText('Esc 返回探索', 30, cv.height - 30);
+      ctx.fillText('Esc 返回探索', 30, this.cssH - 30);
       this._drawHud(); /* S3-2 */
     },
 
@@ -516,21 +561,23 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx) return;
+      this._applyDpr(); /* M9-5 */
+      var W = this.cssW, H = this.cssH;
       ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 34px monospace';
-      ctx.fillText('通 关 !', cv.width / 2 - 80, cv.height / 2 - 80);
+      ctx.fillText('通 关 !', W / 2 - 80, H / 2 - 80);
       ctx.fillStyle = '#cfcfcf';
       ctx.font = '16px monospace';
-      ctx.fillText('勇者击败了地牢巨龙，冒险结束', cv.width / 2 - 160, cv.height / 2 - 30);
+      ctx.fillText('勇者击败了地牢巨龙，冒险结束', W / 2 - 160, H / 2 - 30);
       ctx.fillStyle = '#8f8';
       ctx.font = '15px monospace';
       ctx.fillText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
-        cv.width / 2 - 180, cv.height / 2 + 20);
+        W / 2 - 180, H / 2 + 20);
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
-      ctx.fillText('按 R 重新开始', cv.width / 2 - 60, cv.height / 2 + 70);
+      ctx.fillText('按 R 重新开始', W / 2 - 60, H / 2 + 70);
       this._drawHud(); /* S3-2 */
     },
 
@@ -539,10 +586,12 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx || !grid || !stats) return;
+      this._applyDpr(); /* M9-5 */
+      var W = this.cssW, H = this.cssH;
       ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillRect(0, 0, W, H);
       var T = 24;
-      var ox = Math.max((cv.width - grid[0].length * T) / 2, 10);
+      var ox = Math.max((W - grid[0].length * T) / 2, 10);
       var oy = 64;
       for (var y = 0; y < grid.length; y++) {
         for (var x = 0; x < grid[0].length; x++) {
@@ -580,19 +629,65 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '13px monospace';
       ctx.fillText('ε-贪心 ε=' + stats.epsilon + '（探索/利用权衡）| 橙色=鼠 黄色=金币 目标=学会自己走到金币',
-        24, cv.height - 46);
+        24, H - 46);
       /* 历史成功率条（最近 20 轮） */
       var bars = stats.history.slice(-20);
-      var bw = Math.min(14, (cv.width - 60) / 20 - 2);
+      var bw = Math.min(14, (W - 60) / 20 - 2);
       for (var i = 0; i < bars.length; i++) {
         var hgt = Math.max(2, Math.round(bars[i].rate * 0.5));
         ctx.fillStyle = '#52c41a';
-        ctx.fillRect(24 + i * (bw + 2), cv.height - 32 - hgt, bw, hgt);
+        ctx.fillRect(24 + i * (bw + 2), H - 32 - hgt, bw, hgt);
       }
       ctx.fillStyle = '#6b7280';
       ctx.font = '12px monospace';
-      ctx.fillText('成功率走势（近20轮）', 24, cv.height - 14);
+      ctx.fillText('成功率走势（近20轮）', 24, H - 14);
       this._drawHud(); /* S3-2 */
+    },
+
+    /* M9-5：首次引导覆盖层——半透明遮罩 + 按键说明 + 目标 + 任意键开始。
+     * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
+     * 战斗按键取现有实现（1 攻击 / 2 防御 / 3 逃跑），不杜撰。 */
+    drawGuide: function () {
+      var ctx = this._ctx;
+      if (!ctx) return;
+      this._applyDpr();
+      var W = this.cssW, H = this.cssH;
+
+      ctx.fillStyle = 'rgba(8,8,16,0.92)';
+      ctx.fillRect(0, 0, W, H);
+
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 26px monospace';
+      ctx.fillText('AI 勇者闯地牢', cx, Math.max(90, H * 0.16));
+
+      ctx.fillStyle = '#cfcfcf';
+      ctx.font = '14px monospace';
+      ctx.fillText('目标：探索地牢 · 击杀怪物 · 层层深入', cx, Math.max(124, H * 0.16 + 34));
+
+      /* 操作按键（与 M9-4 设置面板同源） */
+      var lines = [
+        '方向键 / WASD : 移动',
+        '1 / 2 / 3 : 攻击 / 防御 / 逃跑',
+        'B 背包 · S 商店 · M 任务',
+        'T 对话 · L 强化学习',
+        'K 静音 · Q 设置',
+        'Esc : 关闭弹窗'
+      ];
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '15px monospace';
+      var ly = Math.max(170, H * 0.16 + 84);
+      for (var i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], cx, ly + i * 26);
+      }
+
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 16px monospace';
+      ctx.fillText('按任意键开始冒险', cx, ly + lines.length * 26 + 40);
+
+      ctx.textAlign = 'left';
     }
   };
 })();

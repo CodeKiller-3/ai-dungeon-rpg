@@ -62,3 +62,15 @@ canvas#game {
   outline: none;
 }
 #npc-input:focus { border-color: #9eacea; }
+
+/* M9-5：窄窗口（<520px）紧凑适配——NPC 面板收窄、输入框字号下调，避免横向溢出 */
+@media (max-width: 520px) {
+  #npc {
+    width: 94vw;
+    height: 60vh;
+    padding: 8px 10px;
+  }
+  #npc-title { font-size: 13px; }
+  #npc-log { font-size: 13px; }
+  #npc-input { font-size: 13px; padding: 6px 8px; }
+}

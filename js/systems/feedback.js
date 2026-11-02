@@ -31,6 +31,14 @@
   function cctx() {
     return Game.Core && Game.Core.Render && Game.Core.Render._ctx;
   }
+  /* M9-5：取 CSS 像素尺寸（DPR 适配后 cv.width 为物理像素，绘制坐标为 CSS 像素） */
+  function cssSize() {
+    var R = Game.Core && Game.Core.Render;
+    var cv = canvas();
+    var w = (R && typeof R.cssW === 'number') ? R.cssW : (cv && cv.clientWidth) || (cv && cv.width) || 0;
+    var h = (R && typeof R.cssH === 'number') ? R.cssH : (cv && cv.clientHeight) || (cv && cv.height) || 0;
+    return { w: w, h: h };
+  }
 
   /* 推进单条生命期，返回 true 表示仍存活 */
   function tick(item, dt) {
@@ -64,17 +72,17 @@
 
     /* 玩家受击额外：屏幕边缘低强度红晕（仅 hurt 类型） */
     if (item.type === 'hurt') {
-      var cv = canvas();
-      if (cv) {
+      var sz = cssSize();
+      if (sz.w > 0 && sz.h > 0) {
         var a = (0.18 * ratio).toFixed(3);
         var grd = ctx.createRadialGradient(
-          cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.3,
-          cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.75
+          sz.w / 2, sz.h / 2, Math.min(sz.w, sz.h) * 0.3,
+          sz.w / 2, sz.h / 2, Math.max(sz.w, sz.h) * 0.75
         );
         grd.addColorStop(0, 'rgba(255,0,0,0)');
         grd.addColorStop(1, 'rgba(255,0,0,' + a + ')');
         ctx.fillStyle = grd;
-        ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.fillRect(0, 0, sz.w, sz.h);
       }
     }
   }

@@ -22,6 +22,29 @@
   /* UI 状态（背包/商店/任务） */
   var ui = { list: [], sel: 0, shopMode: 'buy' };
 
+  /* M9-5：本局开始时间戳（死亡结算"用时"；重新开始时重置） */
+  var runStart = performance.now();
+
+  /* M9-5：首次引导覆盖层（localStorage 键 aiDungeon_guided） */
+  var GUIDE_KEY = 'aiDungeon_guided';
+  function needsGuide() {
+    try { return localStorage.getItem(GUIDE_KEY) === null; } catch (e) { return true; } /* 存储禁用→每局显示（降级） */
+  }
+  function markGuided() {
+    try { localStorage.setItem(GUIDE_KEY, '1'); } catch (e) { /* 存储禁用降级 */ }
+  }
+  function dismissGuide() {
+    var M = Game.Core.Main;
+    if (!M || !M._guideVisible) return;
+    M._guideVisible = false;
+    markGuided();
+    window.removeEventListener('keydown', dismissGuide);
+    window.removeEventListener('click', dismissGuide);
+    if (Game.Core && Game.Core.Input && typeof Game.Core.Input.clear === 'function') {
+      Game.Core.Input.clear();
+    }
+  }
+
   function resetPlayer() {
     player.hp = player.maxHp;
     var s = Game.Systems.Map.getSpawn();
@@ -71,12 +94,10 @@
         return;
       }
     } else if (evt.result === 'lose') {
-      player.hp = Math.max(Math.floor(player.maxHp / 2), 1);
-      var s = Game.Systems.Map.getSpawn();
-      player.x = s.x;
-      player.y = s.y;
-      player.floor = Game.Systems.Map.getFloor();
-      refreshFov(); /* S3-1：战败回出生点后刷新视野 */
+      /* M9-5：玩家死亡 → 结算弹窗（升级自原来的半血复活） */
+      Game.Systems.Save.clear(); /* 死亡清档，重新开始走新档 */
+      Game.Core.Main.openGameOver();
+      return;
     }
     Game.Systems.Save.save();
     Game.Core.Main.switchScene('explore');
@@ -107,6 +128,7 @@
     _fps: 0,
     _frames: 0,
     _lastT: 0,
+    _guideVisible: false,  /* M9-5：首次引导覆盖层是否显示 */
 
     init: function () {
       var canvas = document.getElementById('game');
@@ -121,6 +143,7 @@
       Game.Systems.Audio.bind();
       if (Game.Core.Sprites) Game.Core.Sprites.load();
       this._lastT = performance.now();
+      runStart = performance.now(); /* M9-5：计时起点 */
       this.switchScene('explore');  /* M9-4：启动探索 BGM */
       Game.Systems.Map.generate();
       Game.Systems.Quest.init();
@@ -132,6 +155,15 @@
       Game.Core.EventBus.emit('ui:notice', {
         msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始！'
       });
+      /* M9-5：首次引导 + resize 监听（静默降级） */
+      this._guideVisible = needsGuide();
+      if (this._guideVisible) {
+        window.addEventListener('keydown', dismissGuide);
+        window.addEventListener('click', dismissGuide);
+      }
+      window.addEventListener('resize', function () {
+        try { Game.Core.Render.resize(); } catch (e) { /* 降级 */ }
+      });
     },
 
     start: function () {
@@ -141,6 +173,52 @@
         requestAnimationFrame(loop);
       });
     },
+
+    /* M9-5：本局用时（ms），供死亡结算战绩 */
+    getElapsedMs: function () {
+      return performance.now() - runStart;
+    },
+
+    /* M9-5：死亡结算——打开 gameover 弹窗（战绩来自 Player/HUD） */
+    openGameOver: function () {
+      var stats = {
+        floor: player.floor,
+        gold: player.gold,
+        kills: (Game.hud && typeof Game.hud.getKills === 'function') ? Game.hud.getKills() : 0,
+        elapsedMs: this.getElapsedMs()
+      };
+      if (Game.Modal) {
+        Game.Modal.open('gameover', stats);
+      }
+      /* 切回探索场景（弹窗悬停其上，_updateExplore 因弹窗打开而暂停） */
+      this.switchScene('explore');
+    },
+
+    /* M9-5：重新开始（既有 reset 逻辑；通关 R 键与死亡结算按钮共用） */
+    restart: function () {
+      runStart = performance.now();
+      /* 重置玩家为新档 */
+      player.hp = 100; player.maxHp = 100;
+      player.atk = 10; player.def = 5;
+      player.gold = 0; player.exp = 0; player.level = 1;
+      player.inventory = {}; player.equipment = { weapon: null, armor: null };
+      player.quests = {};
+      if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
+      if (Game.Systems && Game.Systems.Save) Game.Systems.Save.clear();
+      try {
+        if (Game.Systems && Game.Systems.Map) {
+          Game.Systems.Map.setFloor(1);
+          resetPlayer();
+        }
+      } catch (e) { /* Map 缺失时仅重置 Player（验证页场景） */ }
+      refreshFov(); /* S3-1：重新开始后刷新视野 */
+      if (Game.Modal) Game.Modal.close();
+      this.switchScene('explore');
+    },
+
+    /* M9-5：首次引导（验证页断言用） */
+    needsGuide: needsGuide,
+    markGuided: markGuided,
 
     switchScene: function (name) {
       this._scene = name;
@@ -158,6 +236,8 @@
 
     /* 探索场景 */
     _updateExplore: function () {
+      /* M9-5：首次引导覆盖层显示时暂停游戏输入（dismissGuide 监听任意键关闭） */
+      if (this._guideVisible) return;
       /* S3-3：弹窗打开时暂停地图移动输入（弹窗自行处理 Esc/↑↓/Enter/点击） */
       if (Game.Modal && Game.Modal.isOpen()) return;
       var k = Game.Core.Input.getState();
@@ -290,18 +370,7 @@
       var k = Game.Core.Input.getState();
       if (k['KeyR']) {
         delete k['KeyR'];
-        Game.Systems.Save.clear();
-        /* 重新开始：重置玩家为新档 */
-        player.hp = 100; player.maxHp = 100;
-        player.atk = 10; player.def = 5;
-        player.gold = 0; player.exp = 0; player.level = 1;
-        player.inventory = {}; player.equipment = { weapon: null, armor: null };
-        player.quests = {};
-        Game.Systems.Quest.init();
-        Game.Systems.Map.setFloor(1);
-        resetPlayer();
-        refreshFov(); /* S3-1：重新开始后刷新视野 */
-        this.switchScene('explore');
+        this.restart(); /* M9-5：复用统一 reset 逻辑 */
       }
     },
 
@@ -357,10 +426,16 @@
         this._updateVictory();
         Game.Core.Render.drawVictory(player);
       }
+      /* M9-5：首次引导覆盖层（悬停最顶层，任意键/点击关闭） */
+      if (this._guideVisible) {
+        try { Game.Core.Render.drawGuide(); } catch (e) { /* 降级 */ }
+      }
     }
   };
 
-  /* script 位于 body 末尾，DOM 已就绪，直接启动 */
-  Game.Core.Main.init();
-  Game.Core.Main.start();
+  /* script 位于 body 末尾，DOM 已就绪，直接启动（测试页可设 __AI_DUNGEON_NO_AUTOSTART__ 跳过） */
+  if (!window.__AI_DUNGEON_NO_AUTOSTART__) {
+    Game.Core.Main.init();
+    Game.Core.Main.start();
+  }
 })();

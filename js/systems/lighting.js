@@ -48,6 +48,14 @@
   function getTile() {
     return (Game.Core && Game.Core.Render && Game.Core.Render.TILE) ? Game.Core.Render.TILE : 24;
   }
+  /* M9-5：取 CSS 像素尺寸（DPR 适配后 cv.width 为物理像素，绘制坐标为 CSS 像素） */
+  function getCssSize() {
+    var R = Game.Core && Game.Core.Render;
+    var cv = getCanvas();
+    var w = (R && typeof R.cssW === 'number') ? R.cssW : (cv && cv.clientWidth) || (cv && cv.width) || 0;
+    var h = (R && typeof R.cssH === 'number') ? R.cssH : (cv && cv.clientHeight) || (cv && cv.height) || 0;
+    return { w: w, h: h };
+  }
   function getGrid() {
     return (Game.Systems && Game.Systems.Map && Game.Systems.Map.getGrid)
       ? Game.Systems.Map.getGrid() : null;
@@ -76,20 +84,19 @@
     glowSprite = c;
   }
 
-  /* ---------- 预建：暗角径向渐变（画布尺寸变化时重建） ---------- */
-  function buildVignette(cv) {
-    var g = cv.getContext('2d');
-    var w = cv.width, h = cv.height;
-    var cx = w / 2, cy = h / 2;
+  /* ---------- 预建：暗角径向渐变（画布尺寸变化时重建） ----------
+   * M9-5：渐变坐标使用 CSS 像素（绘制上下文已 setTransform 到 DPR 缩放） */
+  function buildVignette(ctx, cssW, cssH) {
+    var cx = cssW / 2, cy = cssH / 2;
     var outer = Math.sqrt(cx * cx + cy * cy);   /* 对角线一半，确保四角全覆盖 */
     var inner = outer * 0.45;                   /* 中心 45% 不遮 */
-    var grad = g.createRadialGradient(cx, cy, inner, cx, cy, outer);
+    var grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
     grad.addColorStop(0.00, 'rgba(0,0,0,0.00)');
     grad.addColorStop(0.70, 'rgba(0,0,0,' + (VIGNETTE_ALPHA * 0.55).toFixed(3) + ')');
     grad.addColorStop(1.00, 'rgba(0,0,0,' + VIGNETTE_ALPHA.toFixed(3) + ')');
     vignetteGradient = grad;
-    lastCanvasSize.w = w;
-    lastCanvasSize.h = h;
+    lastCanvasSize.w = cssW;
+    lastCanvasSize.h = cssH;
   }
 
   /* ---------- FOV 软边：可见区边缘 alpha 渐降（纯视觉，不改 isVisible 语义） ----------
@@ -101,12 +108,12 @@
     if (!Game.fov || typeof Game.fov.isVisible !== 'function') return;
     var fovOn = true;
     var h = grid.length, w = grid[0].length;
-    var cv = ctx.canvas;
+    var sz = getCssSize();
     /* 只遍历屏幕可视区域内的格，减少绘制调用 */
     var x0 = Math.max(0, Math.floor(cam.x / TILE) - 1);
     var y0 = Math.max(0, Math.floor(cam.y / TILE) - 1);
-    var x1 = Math.min(w, Math.ceil((cam.x + cv.width) / TILE) + 1);
-    var y1 = Math.min(h, Math.ceil((cam.y + cv.height) / TILE) + 1);
+    var x1 = Math.min(w, Math.ceil((cam.x + sz.w) / TILE) + 1);
+    var y1 = Math.min(h, Math.ceil((cam.y + sz.h) / TILE) + 1);
 
     for (var y = y0; y < y1; y++) {
       for (var x = x0; x < x1; x++) {
@@ -133,7 +140,7 @@
     if (!glowSprite) return;
     if (!(Game.Systems && Game.Systems.Map && Game.Systems.Map.getDecor)) return;
     var h = grid.length, w = grid[0].length;
-    var cv = ctx.canvas;
+    var sz = getCssSize();
     var radius = TORCH_RADIUS * TILE;
     var spriteHalf = GLOW_SPRITE_SIZE / 2;
     var drawn = 0;
@@ -141,8 +148,8 @@
     /* 遍历屏幕可视区域内的格找火把（减少遍历量） */
     var x0 = Math.max(0, Math.floor(cam.x / TILE) - TORCH_RADIUS);
     var y0 = Math.max(0, Math.floor(cam.y / TILE) - TORCH_RADIUS);
-    var x1 = Math.min(w, Math.ceil((cam.x + cv.width) / TILE) + TORCH_RADIUS);
-    var y1 = Math.min(h, Math.ceil((cam.y + cv.height) / TILE) + TORCH_RADIUS);
+    var x1 = Math.min(w, Math.ceil((cam.x + sz.w) / TILE) + TORCH_RADIUS);
+    var y1 = Math.min(h, Math.ceil((cam.y + sz.h) / TILE) + TORCH_RADIUS);
 
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -160,13 +167,14 @@
   }
 
   /* ---------- 暗角 vignette ---------- */
-  function drawVignette(ctx, cv) {
-    if (!vignetteGradient || cv.width !== lastCanvasSize.w || cv.height !== lastCanvasSize.h) {
-      buildVignette(cv);
+  function drawVignette(ctx) {
+    var sz = getCssSize();
+    if (!vignetteGradient || sz.w !== lastCanvasSize.w || sz.h !== lastCanvasSize.h) {
+      buildVignette(ctx, sz.w, sz.h);
     }
     ctx.save();
     ctx.fillStyle = vignetteGradient;
-    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillRect(0, 0, sz.w, sz.h);
     ctx.restore();
   }
 
@@ -175,8 +183,9 @@
     init: function () {
       try {
         buildGlowSprite();
-        var cv = getCanvas();
-        if (cv) buildVignette(cv);
+        var ctx = getCtx();
+        var sz = getCssSize();
+        if (ctx && sz.w > 0) buildVignette(ctx, sz.w, sz.h);
       } catch (e) { /* 预建失败不阻断游戏，draw 时会降级 */ }
     },
 
@@ -199,7 +208,7 @@
       drawTorchGlow(ctx, grid, cam, TILE);
 
       /* 3. 暗角（最后叠，四角压暗） */
-      drawVignette(ctx, cv);
+      drawVignette(ctx);
     },
 
     setRadius: function (r) {
