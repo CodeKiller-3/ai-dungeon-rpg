@@ -24,14 +24,33 @@
       id: 'skeleton', name: '骷髅士兵',
       hp: 70, atk: 12, def: 5,
       exp: 25, gold: [10, 20],
-      drops: [{ itemId: 'sword_bone', rate: 0.15 }],
+      /* M8-3：装备掉落加可选 tiers——命中 rate 后按权重 60/30/10 选普通/优秀/稀有档 */
+      drops: [{
+        itemId: 'sword_bone', rate: 0.15,
+        tiers: [
+          { itemId: 'sword_bone', w: 60 },
+          { itemId: 'sword_bone_rare', w: 30 },
+          { itemId: 'sword_bone_epic', w: 10 }
+        ]
+      }],
       color: '#e1b98f'
     },
     dragon: {
       id: 'dragon', name: '地牢巨龙',
       hp: 150, atk: 18, def: 8,
       exp: 60, gold: [40, 80],
-      drops: [{ itemId: 'sword_dragon', rate: 0.25 }, { itemId: 'potion_large', rate: 0.5 }],
+      /* M8-3：装备掉落加可选 tiers（药水掉落保持原样，无 tiers 行为不变） */
+      drops: [
+        {
+          itemId: 'sword_dragon', rate: 0.25,
+          tiers: [
+            { itemId: 'sword_dragon', w: 60 },
+            { itemId: 'sword_dragon_rare', w: 30 },
+            { itemId: 'sword_dragon_epic', w: 10 }
+          ]
+        },
+        { itemId: 'potion_large', rate: 0.5 }
+      ],
       color: '#ea6668',
       /* M8-2：Boss 二阶段——血量 ≤50% 狂暴，攻防提升 + 30% 概率释放烈焰吐息；
        * 全部可复算公式，不硬编码最终数值 */

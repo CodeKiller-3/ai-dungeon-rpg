@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_3</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-3 验证页：加载顺序与主游戏一致（core → data → systems → main 最后）；main 设 NO_AUTOSTART -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { affixLoaded: false, affixApi: false, affixOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+
+    /* 1. 模块加载与条目齐备：3 原装备 + 6 变体 + 2 药水 = 11 条目，变体 id 命名正确 */
+    var I = G.Data && G.Data.ITEMS;
+    out.affixLoaded = !!(G && I && G.Data.MONSTERS && G.Systems.Battle &&
+      G.Systems.Inventory && G.Systems.Shop && G.Data.Player);
+    if (out.affixLoaded) {
+      var variantIds = ['sword_bone_rare', 'sword_bone_epic', 'sword_dragon_rare',
+        'sword_dragon_epic', 'armor_leather_rare', 'armor_leather_epic'];
+      var allOk = true;
+      for (var i = 0; i < variantIds.length; i++) {
+        var it = I[variantIds[i]];
+        if (!it || it.id !== variantIds[i]) allOk = false;
+      }
+      out.affixApi = allOk &&
+        !!I.sword_bone && !!I.sword_dragon && !!I.armor_leather && /* 原 3 条未删 */
+        I.sword_bone_rare.type === 'weapon' && I.armor_leather_epic.type === 'armor' &&
+        Array.isArray(G.Data.SHOP_STOCK) &&
+        Array.isArray(G.Data.MONSTERS.skeleton.drops[0].tiers) &&
+        Array.isArray(G.Data.MONSTERS.dragon.drops[0].tiers) &&
+        !G.Data.MONSTERS.slime.drops[0].tiers; /* 无 tiers 保持兼容 */
+    }
+
+    if (out.affixLoaded && out.affixApi) {
+      var I = G.Data.ITEMS, B = G.Systems.Battle, P = G.Data.Player;
+      var Inv = G.Systems.Inventory, Shop = G.Systems.Shop;
+      var orand = Math.random;
+      function mockRandom(seq) { var i = 0; Math.random = function () { return seq[Math.min(i++, seq.length - 1)]; }; }
+      function resetPlayer() {
+        P.inventory = {}; P.equipment = { weapon: null, armor: null };
+        P.hp = 100; P.atk = 10; P.def = 5; P.maxHp = 100;
+        Inv.recalcEquip();
+      }
+      /* 一击必杀 + 指定随机序列击杀怪物，返回背包快照 */
+      function killWith(monsterId, seq) {
+        resetPlayer();
+        P.atk = 1000;
+        B.start(monsterId);
+        mockRandom(seq);
+        B.playerAction('attack');
+        Math.random = orand;
+        return P.inventory;
+      }
+
+      /* 2. 公式复算：atk/def/maxHp/price/sell 全部按公式断言 */
+      var f_ok =
+        I.sword_bone_rare.effect.atk === Math.round(3 * 1.5) &&
+        I.sword_bone_epic.effect.atk === Math.round(3 * 2) &&
+        I.sword_bone_epic.effect.maxHp === 10 &&
+        I.sword_dragon_rare.effect.atk === Math.round(8 * 1.5) &&
+        I.sword_dragon_epic.effect.atk === Math.round(8 * 2) &&
+        I.sword_dragon_epic.effect.maxHp === 10 &&
+        I.armor_leather_rare.effect.def === Math.round(3 * 1.5) &&
+        I.armor_leather_epic.effect.def === Math.round(3 * 2) &&
+        I.armor_leather_epic.effect.maxHp === 10 &&
+        I.sword_bone_rare.price === 60 * 2 && I.sword_bone_epic.price === 60 * 4 &&
+        I.sword_dragon_rare.price === 150 * 2 && I.sword_dragon_epic.price === 150 * 4 &&
+        I.armor_leather_rare.price === 80 * 2 && I.armor_leather_epic.price === 80 * 4 &&
+        I.sword_bone_rare.sell === I.sword_bone_rare.price / 2 &&
+        I.sword_dragon_epic.sell === I.sword_dragon_epic.price / 2 &&
+        I.armor_leather_epic.sell === I.armor_leather_epic.price / 2;
+      sub.t2_formula = f_ok;
+      ok = ok && f_ok;
+
+      /* 3. 无 tiers 掉落行为不变：slime 命中 rate → potion_small 直入 */
+      var inv3 = killWith('slime', [0.5, 0.0]); /* gold roll + rate 命中（0 < 0.3） */
+      var noTiers_ok = inv3.potion_small === 1;
+      sub.t3_noTiers = noTiers_ok;
+      ok = ok && noTiers_ok;
+
+      /* 4. tiers 权重：0-59% 普通、60-89% 优秀、90-99% 稀有（边界 59/89 断言） */
+      var invA = killWith('skeleton', [0.5, 0.0, 0.59]);
+      var invB = killWith('skeleton', [0.5, 0.0, 0.60]);
+      var invC = killWith('skeleton', [0.5, 0.0, 0.89]);
+      var invD = killWith('skeleton', [0.5, 0.0, 0.90]);
+      var tiers_ok =
+        invA.sword_bone === 1 && !invA.sword_bone_rare && !invA.sword_bone_epic &&
+        invB.sword_bone_rare === 1 && !invB.sword_bone && !invB.sword_bone_epic &&
+        invC.sword_bone_rare === 1 &&
+        invD.sword_bone_epic === 1 && !invD.sword_bone && !invD.sword_bone_rare;
+      sub.t4_tiers = tiers_ok;
+      ok = ok && tiers_ok;
+
+      /* 5. 商店：货架含三档变体且价格正确；买卖变体正常 */
+      G.Systems.Map = G.Systems.Map || {};
+      G.Systems.Map.getFloor = function () { return 3; };
+      var stock = Shop.getStock();
+      var ids = {};
+      for (var s = 0; s < stock.length; s++) ids[stock[s].id] = stock[s].item;
+      var shopList_ok = !!(ids.sword_dragon && ids.sword_dragon_rare && ids.sword_dragon_epic &&
+        ids.armor_leather && ids.armor_leather_rare && ids.armor_leather_epic &&
+        ids.sword_dragon_epic.price === 600 && ids.armor_leather_rare.price === 160);
+      resetPlayer();
+      P.gold = 1000;
+      var buyR = Shop.buy('sword_dragon_epic');
+      var buy_ok = buyR.ok === true && P.gold === 400 && P.inventory.sword_dragon_epic === 1;
+      var sellR = Shop.sell('sword_dragon_epic');
+      var sell_ok = sellR.ok === true && P.gold === 700 && !P.inventory.sword_dragon_epic;
+      sub.t5_shop = shopList_ok && buy_ok && sell_ok;
+      ok = ok && sub.t5_shop;
+
+      /* 6. recalcEquip：稀有 maxHp 词缀加成与 hp 上下限钳制 */
+      resetPlayer();
+      Inv.add('sword_bone_epic', 1);
+      Inv.add('armor_leather_epic', 1);
+      var r1 = Inv.equip('sword_bone_epic');
+      var equip1_ok = r1.ok && P.atk === 10 + 6 && P.maxHp === 110 && P.hp === 100;
+      P.hp = 110; /* 满血 */
+      var r2 = Inv.equip('armor_leather_epic');
+      var equip2_ok = r2.ok && P.maxHp === 120 && P.hp === 110;
+      P.equipment.weapon = null; P.equipment.armor = null;
+      Inv.recalcEquip();
+      var unequip_ok = P.maxHp === 100 && P.hp === 100 && P.atk === 10; /* 回落钳制不溢出 */
+      sub.t6_recalc = equip1_ok && equip2_ok && unequip_ok;
+      ok = ok && sub.t6_recalc;
+
+      /* 7. 旧功能回归：use 药水 / 买卖普通装备 */
+      resetPlayer();
+      Inv.add('potion_small', 1);
+      P.hp = 50;
+      var useR = Inv.use('potion_small');
+      var use_ok = useR.ok && P.hp === 80 && !P.inventory.potion_small;
+      P.gold = 200;
+      var b2 = Shop.buy('sword_bone');
+      var oldBuy_ok = b2.ok && P.gold === 140 && P.inventory.sword_bone === 1;
+      sub.t7_oldFunc = use_ok && oldBuy_ok;
+      ok = ok && sub.t7_oldFunc;
+
+      /* 8. 重复操作不抛错 */
+      var repOk = true;
+      try {
+        resetPlayer();
+        Inv.add('sword_bone_epic', 1);
+        for (var t = 0; t < 20; t++) {
+          Inv.equip('sword_bone_epic');
+          P.equipment.weapon = null;
+          Inv.recalcEquip();
+        }
+      } catch (e) { repOk = false; }
+      sub.t8_repeat = repOk;
+      ok = ok && repOk;
+
+      Math.random = orand; /* 兜底恢复 */
+      out.sub = sub;
+      out.affixOk = ok;
+    }
+
+    var pass = out.affixLoaded && out.affixApi && out.affixOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e && e.stack ? e.stack : e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

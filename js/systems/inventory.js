@@ -43,15 +43,21 @@
       return { ok: true, msg: '装备了 ' + item.name };
     },
 
-    /* 重算装备加成：基础属性 + 装备效果 */
+    /* 重算装备加成：基础属性 + 装备效果
+     * M8-3：稀有词缀 maxHp 加成（基础 100 + 各装备 maxHp 之和），hp 钳制不超新上限（卸下回落同理） */
     recalcEquip: function () {
       var p = Game.Data.Player;
       var baseAtk = 10;
       var baseDef = 5;
+      var baseMaxHp = 100;
       var w = p.equipment.weapon ? Game.Data.ITEMS[p.equipment.weapon] : null;
       var a = p.equipment.armor ? Game.Data.ITEMS[p.equipment.armor] : null;
       p.atk = baseAtk + (w && w.effect.atk ? w.effect.atk : 0);
       p.def = baseDef + (a && a.effect.def ? a.effect.def : 0);
+      p.maxHp = baseMaxHp +
+        (w && w.effect.maxHp ? w.effect.maxHp : 0) +
+        (a && a.effect.maxHp ? a.effect.maxHp : 0);
+      if (p.hp > p.maxHp) p.hp = p.maxHp;
     },
 
     add: function (id, count) {

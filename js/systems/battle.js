@@ -103,6 +103,17 @@
     for (var i = 0; i < m.drops.length; i++) {
       if (Math.random() < m.drops[i].rate) {
         var id = m.drops[i].itemId;
+        /* M8-3：命中后若有 tiers，按权重随机选中一个品质变体（无 tiers 行为与原来完全一致） */
+        var tiers = m.drops[i].tiers;
+        if (tiers && tiers.length) {
+          var totalW = 0;
+          for (var j = 0; j < tiers.length; j++) totalW += tiers[j].w;
+          var r = Math.random() * totalW;
+          for (var k = 0; k < tiers.length; k++) {
+            if (r < tiers[k].w) { id = tiers[k].itemId; break; }
+            r -= tiers[k].w;
+          }
+        }
         drops.push(id);
         if (!p.inventory[id]) p.inventory[id] = 0;
         p.inventory[id]++;
