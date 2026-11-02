@@ -32,7 +32,15 @@
       hp: 150, atk: 18, def: 8,
       exp: 60, gold: [40, 80],
       drops: [{ itemId: 'sword_dragon', rate: 0.25 }, { itemId: 'potion_large', rate: 0.5 }],
-      color: '#ea6668'
+      color: '#ea6668',
+      /* M8-2：Boss 二阶段——血量 ≤50% 狂暴，攻防提升 + 30% 概率释放烈焰吐息；
+       * 全部可复算公式，不硬编码最终数值 */
+      enrage: {
+        hpPct: 0.5,
+        atkMul: 1.5,
+        defMul: 1.3,
+        skill: { name: '烈焰吐息', chance: 0.3, dmgMul: 1.4 }
+      }
     }
   };
 })();

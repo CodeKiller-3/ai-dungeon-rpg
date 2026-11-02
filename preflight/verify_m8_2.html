@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_2</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-2 验证页：加载顺序与主游戏一致（core → data → systems → main 最后）；main 设 NO_AUTOSTART -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/save.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { enrageLoaded: false, enrageApi: false, enrageOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+
+    /* 1. 模块加载与接口齐备 */
+    out.enrageLoaded = !!(G && G.Data && G.Data.MONSTERS && G.Data.MONSTERS.dragon &&
+      G.Data.MONSTERS.dragon.enrage && G.Systems && G.Systems.Battle);
+    if (out.enrageLoaded) {
+      var drg = G.Data.MONSTERS.dragon;
+      var ed = drg.enrage;
+      out.enrageApi = (typeof ed.hpPct === 'number') && (typeof ed.atkMul === 'number') &&
+        (typeof ed.defMul === 'number') && ed.skill &&
+        (typeof ed.skill.chance === 'number') && (typeof ed.skill.dmgMul === 'number');
+    }
+
+    if (out.enrageLoaded && out.enrageApi) {
+      var B = G.Systems.Battle, P = G.Data.Player, D = G.Data.MONSTERS;
+      var orand = Math.random;
+
+      /* 2. 狂暴数值公式复算：round(18×1.5)=27、round(8×1.3)=10、吐息 round(27×1.4)=38 */
+      var f_ok = (Math.round(D.dragon.atk * D.dragon.enrage.atkMul) === 27) &&
+        (Math.round(D.dragon.def * D.dragon.enrage.defMul) === 10) &&
+        (Math.round(27 * D.dragon.enrage.skill.dmgMul) === 38);
+      sub.t2_formula = f_ok;
+      ok = ok && f_ok;
+
+      /* 3. 触发：dragon hp 打到 ≤75 时 enraged=true，log 含"狂暴"；enrageAtk/Def 正确
+       *    mock random=0.5（≥0.3）确保怪物反击走普攻而非吐息，结果确定 */
+      Math.random = function () { return 0.5; };
+      B.start('dragon');
+      P.atk = 10; P.def = 5; P.hp = 100; P.maxHp = 100;
+      var st = B.getState();
+      st.monster.hp = 70; /* 直接压到阈值附近（≤75） */
+      B.playerAction('attack'); /* 这一击触发狂暴，怪物普攻反击 22 */
+      var trig_ok = st.enraged === true && (st.enrageAtk === 27) && (st.enrageDef === 10) &&
+        (st.log.join('|').indexOf('狂暴') >= 0);
+      sub.t3_trigger = trig_ok;
+      ok = ok && trig_ok;
+
+      /* 4. 单次触发：继续受击，enraged 仍 true，狂暴提示仅 1 条 */
+      var cnt1 = st.log.filter(function (l) { return l.indexOf('狂暴') >= 0; }).length;
+      B.playerAction('attack');
+      B.playerAction('attack');
+      var cnt2 = st.log.filter(function (l) { return l.indexOf('狂暴') >= 0; }).length;
+      var single_ok = (st.enraged === true) && (cnt1 === 1) && (cnt2 === 1);
+      sub.t4_single = single_ok;
+      ok = ok && single_ok;
+
+      /* 5. 吐息：狂暴后 mock Math.random<chance → 伤害 = max(round(27×1.4)-def,1)=max(38-5,1)=33 */
+      Math.random = function () { return 0.1; }; /* 稳定命中吐息（0.1 < 0.3） */
+      P.hp = 100; /* 回满，避免前序普攻把 HP 压低导致钳制 */
+      var hpBefore = P.hp;
+      B.playerAction('attack'); /* 攻击不致死，触发怪物吐息 */
+      var breathDmg = hpBefore - P.hp;
+      var breath_ok = (breathDmg === 33) && (st.log.join('|').indexOf('烈焰吐息') >= 0);
+      sub.t5_breath = breath_ok;
+      ok = ok && breath_ok;
+
+      /* 6. 防御减伤：玩家防御时吐息伤害减半（floor(33/2)=16） */
+      Math.random = function () { return 0.1; };
+      P.hp = 100;
+      var hpB2 = P.hp;
+      B.playerAction('defend');
+      var defDmg = hpB2 - P.hp;
+      var def_ok = (defDmg === 16);
+      sub.t6_defend = def_ok;
+      ok = ok && def_ok;
+
+      Math.random = orand;
+
+      /* 7. 普通怪（slime）无 enrage 行为：enraged 始终 false，普攻正常结算 */
+      B.start('slime');
+      var ss = B.getState();
+      var slimeHp0 = ss.monster.hp;
+      B.playerAction('attack');
+      var slime_ok = (ss.enraged === false) && (ss.monster.hp < slimeHp0);
+      sub.t7_normal = slime_ok;
+      ok = ok && slime_ok;
+
+      /* 8. 不写回数据：monsters.js dragon 原始 atk/def 不变 */
+      var data_ok = (D.dragon.atk === 18) && (D.dragon.def === 8);
+      sub.t8_dataImmutable = data_ok;
+      ok = ok && data_ok;
+
+      /* 9. getState 暴露字段 */
+      B.start('dragon');
+      var gs = B.getState();
+      var api_ok = (gs.enraged === false) && (gs.enrageAtk === 0) && (gs.enrageDef === 0);
+      sub.t9_getState = api_ok;
+      ok = ok && api_ok;
+
+      /* 10. 重复 start 不抛错 */
+      var repOk = true;
+      try { for (var i = 0; i < 5; i++) B.start('dragon'); } catch (e) { repOk = false; }
+      sub.t10_repeat = repOk;
+      ok = ok && repOk;
+
+      Math.random = orand; /* 兜底恢复 */
+      out.sub = sub;
+      out.enrageOk = ok;
+    }
+
+    var pass = out.enrageLoaded && out.enrageApi && out.enrageOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e && e.stack ? e.stack : e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

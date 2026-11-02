@@ -11,13 +11,30 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
-  var state = null; /* { monster, log, turn, defending, shieldValue, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
+  var state = null; /* { monster, log, turn, defending, shieldValue, enraged, enrageAtk, enrageDef, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
 
   var DYING_MS = 700; /* 死亡消散动画时长 ms（渐隐+上浮+缩小） */
 
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
   function damage(atk, def) { return Math.max(atk - def, 1); }
+
+  /* M8-2：怪物当前生效的 atk/def——狂暴时取 state.enrageAtk/enrageDef，否则取原始值（不写回 data） */
+  function monsterAtk() { return state && state.enraged ? state.enrageAtk : state.monster.atk; }
+  function monsterDef() { return state && state.enraged ? state.enrageDef : state.monster.def; }
+
+  /* M8-2：狂暴触发判定——受击后血量 ≤ maxHp×hpPct 且未狂暴时进入二阶段（单次触发） */
+  function tryEnrage() {
+    if (state.enraged) return;
+    var ed = state.monster.enrage;
+    if (!ed) return;
+    if (state.monster.hp > 0 && state.monster.hp <= state.monster.maxHp * ed.hpPct) {
+      state.enraged = true;
+      state.enrageAtk = Math.round(state.monster.atk * ed.atkMul);
+      state.enrageDef = Math.round(state.monster.def * ed.defMul);
+      logPush(state.monster.name + ' 发出怒吼，陷入狂暴！攻击与防御提升');
+    }
+  }
 
   function logPush(msg) {
     state.log.push(msg);
@@ -107,9 +124,14 @@
   function monsterTurn() {
     var p = Game.Data.Player;
     var m = state.monster;
+    var ed = m.enrage;
+    /* M8-2：狂暴后每回合 chance 概率用烈焰吐息替代普攻（伤害 = round(狂暴atk × dmgMul)） */
+    var useBreath = !!(state.enraged && ed && ed.skill && Math.random() < ed.skill.chance);
     state.monsterActionAt = performance.now(); /* M9-3：怪物攻击前摇帧 */
-    var raw = state.defending ? Math.max(Math.floor(damage(m.atk, p.def) / 2), 1) : damage(m.atk, p.def);
+    var atkVal = useBreath ? Math.round(monsterAtk() * ed.skill.dmgMul) : monsterAtk();
+    var raw = state.defending ? Math.max(Math.floor(damage(atkVal, p.def) / 2), 1) : damage(atkVal, p.def);
     state.defending = false;
+    if (useBreath) logPush(m.name + ' 喷出' + ed.skill.name + '！');
     /* M8-1：护盾先抵挡等量伤害（扣完归零），剩余伤害才进 HP */
     var absorbed = 0;
     if (state.shieldValue > 0) {
@@ -137,11 +159,14 @@
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
       state = {
-        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color },
+        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage },
         log: ['遭遇 ' + def.name + '！战斗开始'],
         turn: 0,
         defending: false,
-        shieldValue: 0 /* M8-1：本次战斗临时护盾 */
+        shieldValue: 0, /* M8-1：本次战斗临时护盾 */
+        enraged: false, /* M8-2：狂暴二阶段标记 */
+        enrageAtk: 0,
+        enrageDef: 0
       };
       /* M8-1：新战斗冷却清零（战斗外残留冷却不带到本场） */
       if (Game.Skills && typeof Game.Skills.resetCooldowns === 'function') Game.Skills.resetCooldowns();
@@ -156,10 +181,11 @@
       if (cmd === 'attack') {
         state.playerActionAt = performance.now(); /* M9-3：玩家攻击前摇帧（纯视觉） */
         Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
-        var dmg = damage(Game.Data.Player.atk, state.monster.def);
+        var dmg = damage(Game.Data.Player.atk, monsterDef());
         state.monster.hp -= dmg;
         spawnHitMonster(dmg); /* S3-4：命中怪物反馈（仅展示，不改数值） */
         logPush('你对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
+        tryEnrage(); /* M8-2：受击后判定狂暴 */
         if (state.monster.hp <= 0) {
           settleWin();
           if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick();
@@ -206,11 +232,12 @@
     applySkillDamage: function (id, def) {
       if (!state || state.dying) return;
       var p = Game.Data.Player;
-      var dmg = Math.max(def.dmg(p.atk) - state.monster.def, 1);
+      var dmg = Math.max(def.dmg(p.atk) - monsterDef(), 1);
       Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
       state.monster.hp -= dmg;
       spawnHitMonster(dmg);
       logPush('你释放「' + def.name + '」，对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
+      tryEnrage(); /* M8-2：受击后判定狂暴 */
       if (state.monster.hp <= 0) settleWin();
       else Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
     },

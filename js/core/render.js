@@ -408,6 +408,13 @@
         ctx.font = '15px monospace';
         ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
           W / 2 - 140, ey + 120);
+        /* M8-2：狂暴状态视觉提示（红色标识） */
+        if (state.enraged) {
+          ctx.fillStyle = '#ff5555';
+          ctx.font = 'bold 14px monospace';
+          ctx.fillText('⚡狂暴 ATK:' + (state.enrageAtk || 0) + ' DEF:' + (state.enrageDef || 0),
+            W / 2 + 60, ey + 120);
+        }
       }
 
       /* 玩家：素材就绪时用骑士精灵 */
