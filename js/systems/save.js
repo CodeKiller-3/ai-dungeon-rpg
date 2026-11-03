@@ -41,18 +41,26 @@
         var p = Game.Data.Player;
         var s = data.player || {};
         if (typeof s.hp === 'number') p.hp = s.hp;
-        if (typeof s.maxHp === 'number') p.maxHp = s.maxHp;
         /* M8-1：旧存档（无 mp/maxMp）补默认 50，不破坏旧档 */
         if (typeof s.maxMp === 'number') p.maxMp = s.maxMp; else p.maxMp = 50;
         if (typeof s.mp === 'number') p.mp = s.mp; else p.mp = p.maxMp;
-        if (typeof s.atk === 'number') p.atk = s.atk;
-        if (typeof s.def === 'number') p.def = s.def;
         if (typeof s.gold === 'number') p.gold = s.gold;
         if (typeof s.exp === 'number') p.exp = s.exp;
         if (typeof s.level === 'number') p.level = s.level;
         if (s.inventory) p.inventory = s.inventory;
         if (s.equipment) p.equipment = s.equipment;
         if (s.quests) p.quests = s.quests;
+        /* M8-6：不信任旧档 atk/def/maxHp 持久值——按当前等级成长规则重算（含装备加成），
+         * hp 超新上限时钳制（避免旧档错值带入新成长体系） */
+        if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
+          Game.Systems.Inventory.recalcEquip();
+        } else {
+          var lv = (typeof p.level === 'number' && p.level >= 1) ? p.level : 1;
+          p.atk = 10 + (lv - 1);
+          p.def = 5 + (lv - 1);
+          p.maxHp = 100 + (lv - 1) * 10;
+          if (p.hp > p.maxHp) p.hp = p.maxHp;
+        }
         Game.Systems.Quest.init();
         /* M8-4：图鉴恢复——旧档无 bestiary 字段时 mergeFrom(undefined) 静默保持默认空表；
          * 有则逐项合并取较大计数（防旧档回退覆盖新进度） */

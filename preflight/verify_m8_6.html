@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_6</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-6 验证页：加载顺序与主游戏一致（core → data → systems → main 最后）；main 设 NO_AUTOSTART -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/save.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { curveLoaded: false, curveApi: false, curveOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+    var B = G.Systems && G.Systems.Battle;
+    var Inv = G.Systems && G.Systems.Inventory;
+    var Hud = G.hud;
+    var P = G.Data && G.Data.Player;
+
+    /* 1. 模块加载与接口齐备（expToNext/checkLevelUp 可调用，HUD 数据含 exp/expNext） */
+    out.curveLoaded = !!(B && Inv && Hud && G.Data.MAPS && G.Data.MONSTERS &&
+      G.Data.QUESTS && G.Data.Player && G.Core.Main && G.Core.Render);
+    out.curveApi = !!(B &&
+      typeof B.expToNext === 'function' &&
+      typeof B.checkLevelUp === 'function' &&
+      typeof Hud.update === 'function' && typeof Hud.draw === 'function' &&
+      typeof Inv.recalcEquip === 'function');
+
+    if (out.curveLoaded && out.curveApi) {
+      var R = G.Core.Render;
+      function resetP() {
+        P.level = 1; P.exp = 0;
+        P.hp = 100; P.maxHp = 100; P.mp = 50; P.maxMp = 50;
+        P.atk = 10; P.def = 5; P.gold = 0;
+        P.inventory = {}; P.equipment = { weapon: null, armor: null };
+        Inv.recalcEquip();
+      }
+
+      /* 2. 公式：expToNext(1)===60、expToNext(3)===180（60×level） */
+      sub.t2_formula = (B.expToNext(1) === 60) && (B.expToNext(3) === 180) &&
+        (B.expToNext(5) === 300);
+      ok = ok && sub.t2_formula;
+
+      /* 3. 单次升级：L1 exp70 → L2 exp10，atk 11 / def 6 / maxHp 110 / hp 回满 / mp 回满 */
+      resetP();
+      P.exp = 70;
+      var ups3 = B.checkLevelUp();
+      sub.t3_level = (ups3 === 1) && P.level === 2 && P.exp === 10 &&
+        P.atk === 11 && P.def === 6 && P.maxHp === 110 &&
+        P.hp === 110 && P.mp === P.maxMp;
+      ok = ok && sub.t3_level;
+
+      /* 4. 连续升级：L1 exp300 → 消耗 60+120=180，L3 exp120（120<180 停在 3 级） */
+      resetP();
+      P.exp = 300;
+      var ups4 = B.checkLevelUp();
+      sub.t4_multi = (ups4 === 2) && P.level === 3 && P.exp === 120 &&
+        P.atk === 12 && P.def === 7 && P.maxHp === 120 && P.hp === 120;
+      ok = ok && sub.t4_multi;
+
+      /* 5. 幂等：exp 不足时重复调用不升级、属性不变 */
+      var ups5a = B.checkLevelUp();
+      var ups5b = B.checkLevelUp();
+      sub.t5_idem = (ups5a === 0) && (ups5b === 0) && P.level === 3 && P.atk === 12;
+      ok = ok && sub.t5_idem;
+
+      /* 6. 怪物表：3 层 dragon 0.25 / skeleton 0.75；逐层期望强度单调递增（rate×(atk+hp/10)） */
+      var et = G.Data.MAPS.enemyTable;
+      var M = G.Data.MONSTERS;
+      function rateOf(row, id) {
+        for (var i = 0; i < row.length; i++) if (row[i].id === id) return row[i].rate;
+        return 0;
+      }
+      function strength(row) {
+        var s = 0;
+        for (var i = 0; i < row.length; i++) {
+          var m = M[row[i].id];
+          s += row[i].rate * (m.atk + m.hp / 10);
+        }
+        return s;
+      }
+      var s1 = strength(et[0]), s2 = strength(et[1]), s3 = strength(et[2]);
+      sub.t6_table = rateOf(et[2], 'dragon') === 0.25 &&
+        rateOf(et[2], 'skeleton') === 0.75 &&
+        rateOf(et[0], 'slime') === 0.6 && rateOf(et[0], 'bat') === 0.4 &&
+        rateOf(et[1], 'bat') === 0.5 && rateOf(et[1], 'skeleton') === 0.5 &&
+        (s1 === 10.8) && (s2 === 15.5) && (s3 === 22.5) &&
+        s1 < s2 && s2 < s3;
+      ok = ok && sub.t6_table;
+
+      /* 7. 不刷可通关（数值模拟）：每层清一遍（1 层 5 史莱姆+2 蝙蝠=74、2 层 4 蝙蝠+5 骷髅=173、
+       * 3 层 dragon 前 3 骷髅=75），加支线奖励（史莱姆 20、金币 30）；断言 1 层后≥2、2 层后≥3、
+       * dragon 前≥4；L4 + sword_dragon(atk8) → atk≥20，对狂暴 dragon(def10) 单回合伤害≥10 */
+      resetP();
+      function gain(exp) { P.exp += exp; B.checkLevelUp(); }
+      gain(74);
+      var afterF1 = P.level;
+      gain(20); /* 支线 kill_slimes（1 层清 5 只史莱姆） */
+      gain(173);
+      var afterF2 = P.level;
+      gain(30); /* 支线 gold_rich（1+2 层累计金币 >100） */
+      gain(75); /* 3 层 dragon 前 3 场骷髅 */
+      var beforeDragon = P.level;
+      P.inventory.sword_dragon = 1;
+      P.equipment.weapon = 'sword_dragon';
+      Inv.recalcEquip();
+      var enrageDef = Math.round(M.dragon.def * M.dragon.enrage.defMul);
+      var perTurn = Math.max(P.atk - enrageDef, 1);
+      sub.t7_nogrind = afterF1 >= 2 && afterF2 >= 3 && beforeDragon >= 4 &&
+        P.level === 4 && P.atk >= 20 && perTurn >= 10;
+      ok = ok && sub.t7_nogrind;
+
+      /* 8. 读档重算：旧档 {level:5, atk/def/maxHp:999} load 后 atk===14、def===9、maxHp===140（不信任旧值） */
+      G.Systems.Map = {
+        getFloor: function () { return 1; },
+        changeFloor: function () { /* no-op */ },
+        getSpawn: function () { return { x: 1, y: 1 }; }
+      };
+      var legacy = {
+        savedAt: 'legacy', floor: 1,
+        player: { hp: 80, maxHp: 999, atk: 999, def: 999, mp: 50, maxMp: 50,
+          gold: 10, exp: 0, level: 5, inventory: {}, equipment: { weapon: null, armor: null }, quests: {} }
+      };
+      var loaded = null, recalcOk = true;
+      try {
+        localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify(legacy));
+        loaded = G.Systems.Save.load();
+      } catch (e) { recalcOk = false; }
+      var lv5Atk = 10 + (5 - 1), lv5Def = 5 + (5 - 1), lv5Hp = 100 + (5 - 1) * 10;
+      sub.t8_recalc = recalcOk && !!loaded && P.level === 5 &&
+        P.atk === lv5Atk && P.def === lv5Def && P.maxHp === lv5Hp && P.hp === 80;
+      ok = ok && sub.t8_recalc;
+      try { localStorage.removeItem('ai_dungeon_rpg_save_v1'); } catch (e) { /* ignore */ }
+
+      /* 9. HUD 数据含 exp/expNext；绘制路径（常规 + 窄窗口）不抛错 */
+      var hudData = Hud.update({
+        hp: 100, hpMax: 110, mp: 50, mpMax: 50, gold: 120, floor: 3, kills: 2, killTarget: 5,
+        level: 3, exp: 60, expNext: 180
+      });
+      sub.t9_hudData = !!hudData && hudData.level === 3 && hudData.exp === 60 && hudData.expNext === 180;
+      var drawOk = true;
+      try {
+        R.init(document.getElementById('game'));
+        Hud.draw();            /* 常规宽度 */
+        R.cssW = 400; R.cssH = 400;
+        Hud.draw();            /* 窄窗口紧凑路径（经验文本自动缩短/省略） */
+      } catch (e2) { drawOk = false; }
+      sub.t9_hudDraw = drawOk;
+      ok = ok && sub.t9_hudData && sub.t9_hudDraw;
+
+      /* 10. quest 完成奖励 exp 后触发升级：L1 exp40 + 史莱姆支线 20 → 恰好 60 → L2 exp0 */
+      resetP();
+      P.exp = 40;
+      P.quests = {};
+      G.Systems.Quest.init();
+      for (var qi = 0; qi < 5; qi++) G.Systems.Quest.progress('kill', 'slime');
+      sub.t10_quest = P.level === 2 && P.exp === 0 &&
+        !!(P.quests.kill_slimes && P.quests.kill_slimes.done);
+      ok = ok && sub.t10_quest;
+
+      /* 11. settleWin 加 exp 后触发升级：L1 exp50 + 史莱姆 10 → 60 → L2 */
+      resetP();
+      P.exp = 50;
+      P.quests = {};
+      G.Systems.Quest.init();
+      B.start('slime');
+      P.atk = 1000; /* 一击必杀，确保进入 settleWin */
+      B.playerAction('attack');
+      sub.t11_battle = P.level === 2 && P.exp === 0 && P.atk === 11;
+      ok = ok && sub.t11_battle;
+
+      /* 12. 重复调用不抛错、不重复升级 */
+      var repOk = true;
+      try {
+        for (var t = 0; t < 50; t++) B.checkLevelUp();
+      } catch (e3) { repOk = false; }
+      sub.t12_repeat = repOk && P.level === 2 && P.exp === 0;
+      ok = ok && repOk;
+
+      out.sub = sub;
+      out.curveOk = ok;
+    }
+
+    var pass = out.curveLoaded && out.curveApi && out.curveOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e && e.stack ? e.stack : e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

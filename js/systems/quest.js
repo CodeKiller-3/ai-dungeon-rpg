@@ -38,6 +38,10 @@
             st.done = true;
             p.gold += q.reward.gold;
             p.exp += q.reward.exp;
+            /* M8-6：任务奖励 exp 后统一走升级检查（Battle 未加载时跳过；幂等） */
+            if (Game.Systems.Battle && typeof Game.Systems.Battle.checkLevelUp === 'function') {
+              Game.Systems.Battle.checkLevelUp();
+            }
             Game.Core.EventBus.emit('quest:complete', { id: q.id, reward: q.reward });
           }
           changed = true;

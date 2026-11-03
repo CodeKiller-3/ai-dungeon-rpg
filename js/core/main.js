@@ -71,6 +71,7 @@
   }
 
   /* S3-2 HUD：汇总顶部信息栏数据。M8-1：MP 传真实 mp/maxMp（替换遗留 0/0 占位）；
+     M8-6：等级 + 经验进度传给 HUD（expNext 按 60×level 公式）；
      kills/killTarget 由 hud.js 自行统计（battle:end 胜场 + map:floorChanged 重置），故不在此传 */
   function syncHud() {
     if (!Game.hud || !Game.hud.update) return;
@@ -78,7 +79,11 @@
       hp: player.hp, hpMax: player.maxHp,
       mp: player.mp, mpMax: player.maxMp,
       gold: player.gold,
-      floor: player.floor
+      floor: player.floor,
+      level: player.level,
+      exp: player.exp,
+      expNext: (Game.Systems.Battle && typeof Game.Systems.Battle.expToNext === 'function')
+        ? Game.Systems.Battle.expToNext(player.level) : 60 * player.level
     });
   }
 

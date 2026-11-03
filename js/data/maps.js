@@ -12,7 +12,8 @@
     enemyTable: [                               /* 每层怪物概率表（M2 使用） */
       [{ id: 'slime', rate: 0.6 }, { id: 'bat', rate: 0.4 }],
       [{ id: 'bat', rate: 0.5 }, { id: 'skeleton', rate: 0.5 }],
-      [{ id: 'skeleton', rate: 0.6 }, { id: 'dragon', rate: 0.4 }]
+      /* M8-6：3 层 dragon 40%→25%，skeleton 补足 75%（逐层期望强度单调递增） */
+      [{ id: 'skeleton', rate: 0.75 }, { id: 'dragon', rate: 0.25 }]
     ]
   };
 

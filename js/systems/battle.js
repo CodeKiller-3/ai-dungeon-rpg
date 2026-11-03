@@ -4,6 +4,7 @@
  * 伤害公式：max(攻击方 atk - 防御方 def, 1)；防御指令本回合减伤 50%
  * 技能伤害：max(round(atk × 技能倍率) - 敌方 def, 1)（倍率版既有公式）
  * 护盾：battle state.shieldValue 本次战斗内抵挡等量伤害，扣完归零
+ * M8-6：exp 达标自动升级（expToNext(level)=60×level，每级 atk/def+1、maxHp+10，升级回满 HP/MP）
  * 来源：参考 freeCodeCamp RPG 教程重构（自写实现）
  * 事件：battle:start / battle:end */
 (function () {
@@ -18,6 +19,40 @@
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
   function damage(atk, def) { return Math.max(atk - def, 1); }
+
+  /* M8-6：升级成长——经验阈值 expToNext(level) = 60 × level（L1→L2 需 60，全部可复算） */
+  function expToNext(level) {
+    var lv = (typeof level === 'number' && level >= 1) ? level : 1;
+    return 60 * lv;
+  }
+
+  /* M8-6：exp 达标自动升级（可连续、溢出保留）；每级 atk+1/def+1/maxHp+10（L1 基础 10/5/100），
+   * 升级回满 hp/mp。幂等：exp 不足时无变化，重复调用不重复升级。
+   * 属性重算交给 Inventory.recalcEquip（基础属性随等级 + 装备加成），未加载时按成长公式兜底 */
+  function checkLevelUp() {
+    var p = Game.Data && Game.Data.Player;
+    if (!p) return 0;
+    if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+    if (typeof p.exp !== 'number' || !isFinite(p.exp)) p.exp = 0;
+    var ups = 0;
+    while (p.exp >= expToNext(p.level)) {
+      p.exp -= expToNext(p.level);
+      p.level++;
+      ups++;
+    }
+    if (ups > 0) {
+      if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
+        Game.Systems.Inventory.recalcEquip();
+      } else {
+        p.atk = 10 + (p.level - 1);
+        p.def = 5 + (p.level - 1);
+        p.maxHp = 100 + (p.level - 1) * 10;
+      }
+      p.hp = p.maxHp;   /* 升级回满 HP */
+      p.mp = p.maxMp;   /* 升级回满 MP */
+    }
+    return ups;
+  }
 
   /* M8-2：怪物当前生效的 atk/def——狂暴时取 state.enrageAtk/enrageDef，否则取原始值（不写回 data） */
   function monsterAtk() { return state && state.enraged ? state.enrageAtk : state.monster.atk; }
@@ -97,6 +132,7 @@
     var p = Game.Data.Player;
     var m = state.monster;
     p.exp += m.exp;
+    checkLevelUp(); /* M8-6：exp 累加后统一走升级检查（幂等） */
     var gold = roll(m.gold[0], m.gold[1]);
     p.gold += gold;
     var drops = [];
@@ -242,6 +278,10 @@
     },
 
     getState: function () { return state; },
+
+    /* M8-6：升级成长接口（供 quest.js 任务奖励后调用与验证页断言） */
+    expToNext: expToNext,
+    checkLevelUp: checkLevelUp,
 
     /* M8-1：技能伤害落地（由 Game.Skills.cast 调用）——倍率版既有伤害公式
      * 伤害 = max(round(atk × 倍率) - 敌方 def, 1)；命中反馈/音效/胜利结算复用既有通道 */

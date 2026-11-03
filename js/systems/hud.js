@@ -80,6 +80,15 @@
 
     update: function (stats) {
       stats = stats || {};
+      var p = Game.Data && Game.Data.Player;
+      var lv = field(stats.level, p ? p.level : null);
+      var xp = field(stats.exp, p ? p.exp : null);
+      var next = field(stats.expNext, null);
+      /* M8-6：expNext 未显式传入时按成长公式补算（Battle 未加载则留空） */
+      if (next === null && typeof lv === 'number' && Game.Systems &&
+          Game.Systems.Battle && typeof Game.Systems.Battle.expToNext === 'function') {
+        next = Game.Systems.Battle.expToNext(lv);
+      }
       last = {
         hp: field(stats.hp),
         hpMax: field(stats.hpMax),
@@ -88,7 +97,10 @@
         gold: field(stats.gold),
         floor: field(stats.floor),
         kills: field(stats.kills, kills),
-        killTarget: field(stats.killTarget, killTarget)
+        killTarget: field(stats.killTarget, killTarget),
+        level: lv,
+        exp: xp,
+        expNext: next
       };
       this.last = last;
       return last;
@@ -117,7 +129,18 @@
       x = drawBar(ctx, x, 'MP', s.mp, s.mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
       x = drawText(ctx, x, '金币 ' + fmt(s.gold), '#ffcf6e');
       x = drawText(ctx, x, '第 ' + fmt(s.floor) + '/' + fmt(floorTotal()) + ' 层', '#cfcfcf');
-      drawText(ctx, x, '击杀 ' + fmt(s.kills) + '/' + fmt(s.killTarget), '#f472b6');
+      x = drawText(ctx, x, '击杀 ' + fmt(s.kills) + '/' + fmt(s.killTarget), '#f472b6');
+      /* M8-6：等级 + 经验进度（Lv.3 60/180）；窄窗口先缩为 Lv.x，仍放不下则省略，不横向溢出 */
+      if (typeof s.level === 'number') {
+        var lvText = 'Lv.' + s.level;
+        var xpText = ' ' + fmt(s.exp) + '/' + fmt(s.expNext);
+        ctx.font = '11px monospace';
+        if (x + ctx.measureText(lvText + xpText).width <= W - 8) {
+          drawText(ctx, x, lvText + xpText, '#a78bfa');
+        } else if (x + ctx.measureText(lvText).width <= W - 8) {
+          drawText(ctx, x, lvText, '#a78bfa');
+        }
+      }
     },
 
     show: function () { visible = true; },

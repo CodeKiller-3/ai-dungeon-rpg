@@ -44,12 +44,14 @@
     },
 
     /* 重算装备加成：基础属性 + 装备效果
-     * M8-3：稀有词缀 maxHp 加成（基础 100 + 各装备 maxHp 之和），hp 钳制不超新上限（卸下回落同理） */
+     * M8-3：稀有词缀 maxHp 加成（基础 100 + 各装备 maxHp 之和），hp 钳制不超新上限（卸下回落同理）
+     * M8-6：基础属性随等级成长（L1=10/5/100，每级 atk/def+1、maxHp+10），装备加成叠加在其上 */
     recalcEquip: function () {
       var p = Game.Data.Player;
-      var baseAtk = 10;
-      var baseDef = 5;
-      var baseMaxHp = 100;
+      var lv = (typeof p.level === 'number' && p.level >= 1) ? p.level : 1;
+      var baseAtk = 10 + (lv - 1);
+      var baseDef = 5 + (lv - 1);
+      var baseMaxHp = 100 + (lv - 1) * 10;
       var w = p.equipment.weapon ? Game.Data.ITEMS[p.equipment.weapon] : null;
       var a = p.equipment.armor ? Game.Data.ITEMS[p.equipment.armor] : null;
       p.atk = baseAtk + (w && w.effect.atk ? w.effect.atk : 0);

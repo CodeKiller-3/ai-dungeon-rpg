@@ -51,6 +51,8 @@
       var orand = Math.random;
       function mockRandom(seq) { var i = 0; Math.random = function () { return seq[Math.min(i++, seq.length - 1)]; }; }
       function resetPlayer() {
+        /* M8-6：新增加成长系统后，隔离本页断言到 L1（击杀会累积 exp 触发升级，属性基线会变） */
+        P.level = 1; P.exp = 0;
         P.inventory = {}; P.equipment = { weapon: null, armor: null };
         P.hp = 100; P.atk = 10; P.def = 5; P.maxHp = 100;
         Inv.recalcEquip();
