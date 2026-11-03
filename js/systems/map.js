@@ -16,6 +16,9 @@
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
+  /* 修复 P1：楼层快照缓存——回访时恢复同一份地图/敌人/装饰/巡逻，
+   * 避免上下楼反复重新生成而刷怪、刷宝箱。只在重新开始（setFloor）时清空。 */
+  var floorCache = {};
 
   function initGrid(w, h) {
     var g = [];
@@ -100,6 +103,15 @@
         placed++;
       }
     }
+    /* 修复 P1：最深层保底 1 只巨龙——固定 25% 概率下 9+2 个刷新点全落空的概率约 4.2%，
+     * 会让主线"击败巨龙"无法完成。只替换最深层最后一个怪，怪物数量与逐层强度不变。 */
+    if (floorIndex === cfg.floors - 1 && enemies.length > 0) {
+      var hasDragon = false;
+      for (var d = 0; d < enemies.length; d++) {
+        if (enemies[d].monsterId === 'dragon') { hasDragon = true; break; }
+      }
+      if (!hasDragon) enemies[enemies.length - 1].monsterId = 'dragon';
+    }
   }
 
   /* M9-1：生成细节层与装饰层（纯视觉 + 宝箱，不影响通行/碰撞/寻路/FOV） */
@@ -181,6 +193,20 @@
   Game.Systems.Map = {
     generate: function () {
       cfg = Game.Data.MAPS;
+      /* 修复 P1：已有该层快照则原样恢复，不重新生成 */
+      var cached = floorCache[floorIndex];
+      if (cached) {
+        grid = cached.grid;
+        enemies = cached.enemies;
+        details = cached.details;
+        decor = cached.decor;
+        spawn = { x: cached.spawn.x, y: cached.spawn.y };
+        if (Game.Systems.AI && typeof Game.Systems.AI.setPatrols === 'function') {
+          Game.Systems.AI.setPatrols(cached.patrols);
+        }
+        Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
+        return grid;
+      }
       var size = cfg.sizes[floorIndex % cfg.sizes.length];
       grid = initGrid(size[0], size[1]);
       carve(1, 1);
@@ -190,6 +216,15 @@
       if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
       spawn = { x: 1, y: 1 };
       genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
+      floorCache[floorIndex] = {
+        grid: grid,
+        enemies: enemies,
+        details: details,
+        decor: decor,
+        spawn: { x: spawn.x, y: spawn.y },
+        patrols: (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+          ? Game.Systems.AI.getPatrols() : []
+      };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       return grid;
     },
@@ -207,9 +242,10 @@
     },
 
     changeFloor: function (dir) {
-      floorIndex += dir;
-      if (floorIndex < 0) floorIndex = 0;
-      if (floorIndex >= cfg.floors) floorIndex = cfg.floors - 1;
+      var next = floorIndex + dir;
+      /* 修复：超出楼层范围直接忽略（原实现钳制后仍 generate，会静默重生成当前层） */
+      if (next < 0 || next >= cfg.floors) return null;
+      floorIndex = next;
       var g = this.generate();
       Game.Core.EventBus.emit('audio:play', { sfx: 'stair' });
       return { grid: g, floor: floorIndex + 1 };
@@ -219,8 +255,10 @@
     getGrid: function () { return grid; },
     getSpawn: function () { return { x: spawn.x, y: spawn.y }; },
 
-    /* 存档恢复：直接切到指定楼层并重新生成 */
+    /* 存档恢复/重新开始：直接切到指定楼层并生成。
+     * 修复 P1：清空楼层快照——新局必须是新地图，不能复用上一局已清空的地图。 */
     setFloor: function (f) {
+      floorCache = {};
       floorIndex = Math.min(Math.max(f - 1, 0), cfg.floors - 1);
       return this.generate();
     },

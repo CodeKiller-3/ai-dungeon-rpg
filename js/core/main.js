@@ -26,6 +26,18 @@
   /* M9-5：本局开始时间戳（死亡结算"用时"；重新开始时重置） */
   var runStart = performance.now();
 
+  /* 修复 P1：移动节流。原实现每帧移动 1 格（60fps ≈ 60 格/秒），既难操控也违背 roguelike 手感。
+   * 取 120ms/步（≈8.3 格/秒）：接近传统 roguelike 长按移动的节奏，且与 140ms 移动插值同量级。
+   * 玩家与 AI 共用同一个"步"：每步只 tick 一次 AI（AI 内部 4 步一追击），
+   * 保持原有"怪物约比玩家慢 4 倍"的相对关系，不改变战斗数值。 */
+  var MOVE_INTERVAL = 120;
+  var lastStepAt = -1e9; /* 首帧立即可走 */
+
+  /* 修复：启动/读档期间禁止 floorChanged 自动写档。
+   * 原流程 init 中 Map.generate() 先于 Save.load() 触发 map:floorChanged → Save.save()，
+   * 会用默认新档覆盖磁盘旧档，导致读档永远读不到进度。 */
+  var booting = true;
+
   /* M9-5：首次引导覆盖层（localStorage 键 aiDungeon_guided） */
   var GUIDE_KEY = 'aiDungeon_guided';
   function needsGuide() {
@@ -46,9 +58,11 @@
     }
   }
 
+  /* 修复 P1：换层/重置只负责落点与特效清理，不再无条件回满 HP/MP。
+   * 回满只发生在：新局（init 默认值）、重新开始（restart 显式赋值）、升级（battle.js）。
+   * 这样上下楼无法刷血，血瓶/商店/升级回血仍是主要恢复手段。
+   * 注：读档由 Save.load 覆盖 hp/mp，不受此处影响。 */
   function resetPlayer() {
-    player.hp = player.maxHp;
-    player.mp = player.maxMp; /* M8-1：换层/重置回满 MP */
     var s = Game.Systems.Map.getSpawn();
     player.x = s.x;
     player.y = s.y;
@@ -59,6 +73,7 @@
   }
 
   function onFloorChanged() {
+    if (booting) return; /* 启动/读档期间不写档（含 Save.load 内部换层） */
     Game.Systems.Save.save();
   }
 
@@ -98,6 +113,8 @@
       if (Game.Systems.Quest.isDone('main_clear_dragon')) {
         /* M8-5：通关写本地排行榜（须在切 victory 前调用；scene 已为 victory 时幂等跳过） */
         Game.Core.Main.submitRank();
+        /* 修复 P1：通关也写档，避免玩家在结算页关闭页面后丢失本局战绩 */
+        Game.Systems.Save.save();
         Game.Core.EventBus.emit('audio:play', { sfx: 'victory' });
         Game.Core.Main.switchScene('victory');
         return;
@@ -105,6 +122,10 @@
     } else if (evt.result === 'lose') {
       /* M9-5：玩家死亡 → 结算弹窗（升级自原来的半血复活） */
       Game.Systems.Save.clear(); /* 死亡清档，重新开始走新档 */
+      /* 修复 P2：图鉴随存档一起清空，避免"磁盘已删、内存仍留、下次保存又写回"的不一致 */
+      if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
+        Game.Systems.Bestiary.reset();
+      }
       Game.Core.Main.openGameOver();
       return;
     }
@@ -159,6 +180,7 @@
       resetPlayer();
       /* 读档：有存档则恢复进度 */
       var loaded = Game.Systems.Save.load();
+      booting = false; /* 启动/读档完成，恢复 floorChanged 自动写档 */
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
       syncHud();    /* S3-2：初始顶部 HUD 数据 */
       Game.Core.EventBus.emit('ui:notice', {
@@ -233,6 +255,11 @@
       player.quests = {};
       if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
       if (Game.Systems && Game.Systems.Save) Game.Systems.Save.clear();
+      /* 修复 P2：新局图鉴从空开始，与已清空的存档保持一致 */
+      if (Game.Systems && Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
+        Game.Systems.Bestiary.reset();
+      }
+      lastStepAt = -1e9; /* 修复 P1：重开后立即响应移动 */
       try {
         if (Game.Systems && Game.Systems.Map) {
           Game.Systems.Map.setFloor(1);
@@ -262,21 +289,27 @@
       }
     },
 
-    /* 探索场景 */
-    _updateExplore: function () {
+    /* 探索场景。now 为帧时间戳（ms），loop 传入；验证页可传合成时间做确定性测试 */
+    _updateExplore: function (now) {
       /* M9-5：首次引导覆盖层显示时暂停游戏输入（dismissGuide 监听任意键关闭） */
       if (this._guideVisible) return;
       /* S3-3：弹窗打开时暂停地图移动输入（弹窗自行处理 Esc/↑↓/Enter/点击） */
       if (Game.Modal && Game.Modal.isOpen()) return;
       var k = Game.Core.Input.getState();
       if (k['KeyB']) { delete k['KeyB']; Game.Modal.open('inventory'); return; }
-      if (k['KeyS']) { delete k['KeyS']; Game.Modal.open('shop'); return; }
+      /* 修复：S 是 WASD 的“向下移动”，不能再同时作为商店热键（否则按 S 会弹出商店面板）。
+       * 商店改用 E 打开；S 保留给移动，其余按键语义不变。 */
+      if (k['KeyE']) { delete k['KeyE']; Game.Modal.open('shop'); return; }
       if (k['KeyM']) { delete k['KeyM']; Game.Modal.open('quests'); return; }
       if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
       if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
       /* M9-4：Q 打开设置弹窗；K 一键静音（不 return，允许同时移动） */
       if (k['KeyQ']) { delete k['KeyQ']; Game.Modal.open('settings'); return; }
       if (k['KeyK']) { delete k['KeyK']; Game.Systems.Audio.setMuted(!Game.Systems.Audio.isMuted()); }
+      /* 修复 P1：定步长（120ms）处理 AI 与移动；动作键仍即时响应 */
+      var tNow = (typeof now === 'number') ? now : performance.now();
+      if (tNow - lastStepAt < MOVE_INTERVAL) return;
+      lastStepAt = tNow;
       /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */
       Game.Systems.AI.tick(player);
       var d = Game.Core.Input.direction(k);
@@ -294,13 +327,17 @@
           Game.Core.EventBus.emit('audio:play', { sfx: 'move' });
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
-            Game.Systems.Map.changeFloor(1);
-            player.floor = Game.Systems.Map.getFloor();
-            resetPlayer();
+            /* 修复：最深层踩下行梯不再静默重生成当前层（changeFloor 边界返回 null） */
+            if (Game.Systems.Map.changeFloor(1)) {
+              player.floor = Game.Systems.Map.getFloor();
+              resetPlayer();
+            }
           } else if (t === 3) {
-            Game.Systems.Map.changeFloor(-1);
-            player.floor = Game.Systems.Map.getFloor();
-            resetPlayer();
+            /* 修复：第 1 层踩上行梯不再静默重生成当前层 */
+            if (Game.Systems.Map.changeFloor(-1)) {
+              player.floor = Game.Systems.Map.getFloor();
+              resetPlayer();
+            }
           } else {
             var e = Game.Systems.Map.enemyAt(nx, ny);
             if (e) {
@@ -424,7 +461,7 @@
       syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {
-        this._updateExplore();
+        this._updateExplore(ts);
         var grid = Game.Systems.Map.getGrid();
         Game.Core.Render.drawMap(grid, player);
         Game.Core.Render.drawPlayer(player);

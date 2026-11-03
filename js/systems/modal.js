@@ -59,9 +59,10 @@
 
   function itemDesc(item) {
     if (!item) return '';
+    var hp = (item.effect && item.effect.maxHp) ? (' 生命+' + item.effect.maxHp) : '';
     if (item.type === 'consumable') return '恢复HP+' + ((item.effect && item.effect.hp) || 0);
-    if (item.type === 'weapon') return '攻击+' + ((item.effect && item.effect.atk) || 0);
-    if (item.type === 'armor') return '防御+' + ((item.effect && item.effect.def) || 0);
+    if (item.type === 'weapon') return '攻击+' + ((item.effect && item.effect.atk) || 0) + hp;
+    if (item.type === 'armor') return '防御+' + ((item.effect && item.effect.def) || 0) + hp;
     return '';
   }
 
@@ -129,7 +130,13 @@
       onKey = function (e) {
         if (!self.isOpen()) return;
         var c = e.code;
-        if (c === 'Escape') { e.preventDefault(); self.close(); return; }
+        if (c === 'Escape') {
+          e.preventDefault();
+          /* 修复：死亡结算不允许 Esc 关闭。原逻辑关闭后留下 hp=0 且已清档的探索场景，
+           * 玩家无法重新开始也无法正常继续。 */
+          if (kind === 'gameover') return;
+          self.close(); return;
+        }
         /* M9-4：设置面板键盘——左右调音量、空格/回车切换静音 */
         if (kind === 'settings') {
           if (c === 'ArrowLeft') { e.preventDefault(); self._adjVolume(-0.05); return; }
@@ -305,7 +312,9 @@
     _handleClick: function (x, y) {
       if (!rect) return;
       if (x < rect.x || x > rect.x + rect.w || y < rect.y || y > rect.y + rect.h) {
-        this.close(); return;
+        /* 修复：死亡结算点遮罩不关闭（与 Esc 同理，避免 0 HP 游离态） */
+        if (kind !== 'gameover') this.close();
+        return;
       }
       if (kind === 'settings') {
         /* M9-4：点击静音开关区域切换静音 */
@@ -389,7 +398,7 @@
       c.font = '12px monospace';
       var lines = [
         '方向键 / WASD : 移动',
-        'B 背包 · S 商店 · M 任务',
+        'B 背包 · E 商店 · M 任务',
         'T 对话 · L 强化学习',
         'K 静音 · Q 设置',
         'Esc : 关闭弹窗'

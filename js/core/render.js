@@ -513,7 +513,7 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx) return;
-      this._drawPanel('商店 (S)', player.gold);
+      this._drawPanel('商店 (E)', player.gold);
       ctx.fillStyle = mode === 'buy' ? '#52c41a' : '#f4b393';
       ctx.font = '14px monospace';
       ctx.fillText('模式: ' + (mode === 'buy' ? '购买' : '出售') + '   Tab 切换', 30, 72);
@@ -606,39 +606,49 @@
       var blockH = topH + listH + 48;
       var y0 = Math.max((H - blockH) / 2, 12);
 
-      ctx.fillStyle = '#ffcf6e';
-      ctx.font = 'bold 34px monospace';
-      ctx.fillText('通 关 !', W / 2 - 80, y0 + 34);
-      ctx.fillStyle = '#cfcfcf';
-      ctx.font = '16px monospace';
-      ctx.fillText('勇者击败了地牢巨龙，冒险结束', W / 2 - 160, y0 + 66);
-      ctx.fillStyle = '#8f8';
-      ctx.font = '15px monospace';
-      ctx.fillText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
-        W / 2 - 180, y0 + 94);
+      /* 修复 P2：按实际文本宽度居中并在超宽时缩字号，替换原先 W/2-80/-160/-180 的硬编码偏移 */
+      var pad = 16;
+      function fitFont(str, size, bold) {
+        ctx.font = (bold ? 'bold ' : '') + size + 'px monospace';
+        var maxW = Math.max(W - pad * 2, 40);
+        var w = ctx.measureText(str).width;
+        if (w > maxW) {
+          size = Math.max(8, Math.floor(size * maxW / w));
+          ctx.font = (bold ? 'bold ' : '') + size + 'px monospace';
+          w = ctx.measureText(str).width;
+        }
+        return w;
+      }
+      function centerText(str, y, color, size, bold) {
+        var w = fitFont(str, size, bold);
+        ctx.fillStyle = color;
+        ctx.textAlign = 'left';
+        ctx.fillText(str, Math.max((W - w) / 2, pad), y);
+      }
+
+      centerText('通 关 !', y0 + 34, '#ffcf6e', 34, true);
+      centerText('勇者击败了地牢巨龙，冒险结束', y0 + 66, '#cfcfcf', 16, false);
+      centerText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
+        y0 + 94, '#8f8', 15, false);
 
       /* M8-5：本地排行榜（新→旧：#1 为最新一条） */
       if (rows > 0) {
-        var x = Math.max(W / 2 - 180, 16);
+        centerText('本地排行榜', y0 + topH, '#ffcf6e', 15, true);
         var rowY = y0 + topH + gap;
-        ctx.fillStyle = '#ffcf6e';
-        ctx.font = 'bold 15px monospace';
-        ctx.fillText('本地排行榜', x, y0 + topH);
-        ctx.font = '13px monospace';
         for (var i = 0; i < rows; i++) {
           var e = list[i] || {};
           var line = '#' + (i + 1) + '  ' + fmtRankTime(e.timeSec) +
             '  金币' + (typeof e.gold === 'number' ? e.gold : 0) +
             '  等级' + (typeof e.level === 'number' ? e.level : 0) +
             '  ' + (e.date || '');
+          var w = fitFont(line, 13, false);
           ctx.fillStyle = (i === 0) ? '#ffcf6e' : '#cfcfcf';
-          ctx.fillText(line, x, rowY + i * rowH);
+          ctx.textAlign = 'left';
+          ctx.fillText(line, Math.max((W - w) / 2, pad), rowY + i * rowH);
         }
       }
 
-      ctx.fillStyle = '#9bbbf4';
-      ctx.font = '14px monospace';
-      ctx.fillText('按 R 重新开始', W / 2 - 60, y0 + blockH - 22);
+      centerText('按 R 重新开始', y0 + blockH - 22, '#9bbbf4', 14, false);
       this._drawHud(); /* S3-2 */
     },
 
@@ -732,7 +742,7 @@
       var lines = [
         '方向键 / WASD : 移动',
         '1攻 2防 3逃 · 4火球 5冲刺 6护盾',
-        'B 背包 · S 商店 · M 任务',
+        'B 背包 · E 商店 · M 任务',
         'T 对话 · L 强化学习',
         'K 静音 · Q 设置',
         'Esc : 关闭弹窗'

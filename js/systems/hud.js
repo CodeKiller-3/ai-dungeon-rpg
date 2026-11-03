@@ -66,13 +66,16 @@
     return x + w + 8;
   }
 
-  function drawText(ctx, x, str, color) {
+  /* 修复 P1：绘制前先量宽，放不下返回 null（后续字段一并跳过），避免窄屏横向溢出 */
+  function drawText(ctx, x, str, color, maxW) {
     ctx.fillStyle = color;
     ctx.font = '11px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
+    var w = ctx.measureText(str).width;
+    if (typeof maxW === 'number' && x + w > maxW) return null;
     ctx.fillText(str, x, 15);
-    return x + ctx.measureText(str).width + 14;
+    return x + w + 14;
   }
 
   Game.hud = {
@@ -127,11 +130,19 @@
       var x = 8;
       x = drawBar(ctx, x, 'HP', s.hp, s.hpMax, '#4ade80', '#22131a', narrow ? 60 : 74);
       x = drawBar(ctx, x, 'MP', s.mp, s.mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
-      x = drawText(ctx, x, '金币 ' + fmt(s.gold), '#ffcf6e');
-      x = drawText(ctx, x, '第 ' + fmt(s.floor) + '/' + fmt(floorTotal()) + ' 层', '#cfcfcf');
-      x = drawText(ctx, x, '击杀 ' + fmt(s.kills) + '/' + fmt(s.killTarget), '#f472b6');
+      /* 修复 P1：窄屏用短标签；任一字段放不下就跳过其后所有字段，保证不越右边界 */
+      x = drawText(ctx, x, (narrow ? '金 ' : '金币 ') + fmt(s.gold), '#ffcf6e', W - 8);
+      if (x !== null) {
+        x = drawText(ctx, x,
+          (narrow ? '层 ' : '第 ') + fmt(s.floor) + '/' + fmt(floorTotal()) + (narrow ? '' : ' 层'),
+          '#cfcfcf', W - 8);
+      }
+      if (x !== null) {
+        x = drawText(ctx, x, (narrow ? '杀 ' : '击杀 ') + fmt(s.kills) + '/' + fmt(s.killTarget),
+          '#f472b6', W - 8);
+      }
       /* M8-6：等级 + 经验进度（Lv.3 60/180）；窄窗口先缩为 Lv.x，仍放不下则省略，不横向溢出 */
-      if (typeof s.level === 'number') {
+      if (x !== null && typeof s.level === 'number') {
         var lvText = 'Lv.' + s.level;
         var xpText = ' ' + fmt(s.exp) + '/' + fmt(s.expNext);
         ctx.font = '11px monospace';

@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>P1/P2 修复验证</title></head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc"><div id="npc-log"></div><input id="npc-input"></div>
+<div id="result">RUNNING</div>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var R = {}, A = {}, fail = [];
+  var M = Game.Core.Main, Map = Game.Systems.Map, P = Game.Data.Player;
+  var Input = Game.Core.Input, Bus = Game.Core.EventBus;
+
+  function findTile(t) {
+    var g = Map.getGrid();
+    for (var y = 1; y < g.length - 1; y++) {
+      for (var x = 1; x < g[0].length - 1; x++) if (g[y][x] === t) return { x: x, y: y };
+    }
+    return null;
+  }
+  function countDecor(id) {
+    var g = Map.getGrid(), n = 0;
+    for (var y = 1; y < g.length - 1; y++) {
+      for (var x = 1; x < g[0].length - 1; x++) if (Map.getDecor(x, y) === id) n++;
+    }
+    return n;
+  }
+  function findDecor(id) {
+    var g = Map.getGrid();
+    for (var y = 1; y < g.length - 1; y++) {
+      for (var x = 1; x < g[0].length - 1; x++) if (Map.getDecor(x, y) === id) return { x: x, y: y };
+    }
+    return null;
+  }
+  function countDragons() {
+    var n = 0, i;
+    var es = Map.getEnemies() || [];
+    for (i = 0; i < es.length; i++) if (es[i].monsterId === 'dragon') n++;
+    var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols()) ? Game.Systems.AI.getPatrols() : [];
+    for (i = 0; i < ps.length; i++) if (ps[i].monsterId === 'dragon') n++;
+    return n;
+  }
+  function stepOnto(tile, t) {
+    var s = findTile(tile);
+    if (!s) return false;
+    var offs = [[0, 1, 'KeyW'], [0, -1, 'KeyS'], [1, 0, 'KeyA'], [-1, 0, 'KeyD']];
+    var f0 = Map.getFloor();
+    for (var i = 0; i < offs.length; i++) {
+      var nx = s.x + offs[i][0], ny = s.y + offs[i][1];
+      if (Map.tileAt(nx, ny) !== 1) continue;
+      P.x = nx; P.y = ny;
+      Input.clear();
+      Input.getState()[offs[i][2]] = true;
+      M._updateExplore(t);
+      delete Input.getState()[offs[i][2]];
+      t += 300;
+      if (Map.getFloor() !== f0) return true;
+      if (Game.Modal && Game.Modal.isOpen()) Game.Modal.close();
+    }
+    return false;
+  }
+  function overflowOf(fn, width) {
+    var ctx = Game.Core.Render._ctx;
+    var orig = ctx.fillText, over = 0, maxRight = 0;
+    ctx.fillText = function (str, x, y) {
+      var w = ctx.measureText(String(str)).width;
+      var right = x + w;
+      if (right > width + 0.5 || x < -0.5) over++;
+      if (right > maxRight) maxRight = right;
+      return orig.apply(ctx, arguments);
+    };
+    try { fn(); } catch (e) { R.drawErr = e.message; } finally { ctx.fillText = orig; }
+    return { over: over, maxRight: Math.round(maxRight) };
+  }
+  function check(name, ok, detail) {
+    A[name] = !!ok;
+    if (!ok) fail.push(name + '=' + JSON.stringify(detail));
+  }
+
+  try {
+    localStorage.clear();
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init();
+    M._guideVisible = false;
+    M.switchScene('explore');
+
+    /* P1-1 移动节流：合成 60 帧（≈1 秒）持续按 A，统计移动尝试次数 */
+    Map.setFloor(1);
+    P.x = 1; P.y = 1;
+    if (Game.Systems.AI && Game.Systems.AI.getPatrols) Game.Systems.AI.getPatrols().length = 0;
+    Map.getEnemies().length = 0;
+    var walk = Map.isWalkable, moveTried = 0;
+    Map.isWalkable = function (x, y) { moveTried++; return walk.call(Map, x, y); };
+    Input.clear();
+    Input.getState()['KeyA'] = true;
+    for (var f = 0; f < 60; f++) M._updateExplore(f * 16.67);
+    delete Input.getState()['KeyA'];
+    Map.isWalkable = walk;
+    R.moveSteps1s = moveTried;
+    check('moveThrottle', moveTried >= 6 && moveTried <= 10, moveTried);
+
+    /* P1-3 三层保底出龙：3 层敌表临时改为 100% skeleton（最坏情况） */
+    var tbl3 = Game.Data.MAPS.enemyTable[2];
+    Game.Data.MAPS.enemyTable[2] = [{ id: 'skeleton', rate: 1 }];
+    Map.setFloor(3);
+    R.dragonsFloor3 = countDragons();
+    R.enemiesFloor3 = Map.getEnemies().length;
+    Game.Data.MAPS.enemyTable[2] = tbl3;
+    check('dragonGuarantee', R.dragonsFloor3 >= 1 && R.enemiesFloor3 === 9, R);
+
+    /* P1-2 换层不回满 + 楼层快照：扣血、杀 1 怪、拿 1 宝箱后下楼再上楼 */
+    Map.setFloor(1);
+    P.hp = 30; P.mp = 5;
+    Map.getEnemies().pop();
+    var chest = findDecor('chest');
+    if (chest) Map.takeDecor(chest.x, chest.y);
+    R.chestsBefore = countDecor('chest');
+    R.enemiesBefore = Map.getEnemies().length;
+    var gridBefore = Map.getGrid();
+    var t = 50000;
+    R.downOk = stepOnto(2, t); t += 500;
+    R.hpAfterDown = P.hp;
+    R.floorAfterDown = Map.getFloor();
+    R.upOk = stepOnto(3, t);
+    R.hpAfterUp = P.hp;
+    R.mpAfterUp = P.mp;
+    R.floorAfterUp = Map.getFloor();
+    R.gridSameAfterReturn = (Map.getGrid() === gridBefore);
+    R.enemiesAfterReturn = Map.getEnemies().length;
+    R.chestsAfterReturn = countDecor('chest');
+    check('floorTransitions', R.downOk && R.upOk && R.floorAfterDown === 2 && R.floorAfterUp === 1, R);
+    check('noHealOnFloorChange', R.hpAfterDown === 30 && R.hpAfterUp === 30 && R.mpAfterUp === 5, R);
+    check('floorCache', R.gridSameAfterReturn && R.enemiesAfterReturn === R.enemiesBefore &&
+      R.chestsAfterReturn === R.chestsBefore, R);
+
+    /* P1-4 窄屏 HUD */
+    Game.Core.Render.cssW = 375; Game.Core.Render.cssH = 640;
+    Game.hud.update({ hp: 999, hpMax: 999, mp: 99, mpMax: 99, gold: 123456, floor: 3,
+      kills: 16, killTarget: 16, level: 12, exp: 500, expNext: 720 });
+    R.hud375 = overflowOf(function () { Game.hud.draw(); }, 375);
+    Game.Core.Render.cssW = 320;
+    R.hud320 = overflowOf(function () { Game.hud.draw(); }, 320);
+    check('hudNarrow', R.hud375.over === 0 && R.hud320.over === 0, R);
+
+    /* P2-8 通关页窄屏 */
+    Game.Core.Render.cssW = 320; Game.Core.Render.cssH = 560;
+    Game.hud.hide();
+    Game.Systems.Leaderboard.clear();
+    Game.Systems.Leaderboard.submit({ timeSec: 120, gold: 9999, level: 9, floor: 3, date: '2026/11/03' });
+    R.victory320 = overflowOf(function () { Game.Core.Render.drawVictory(P); }, 320);
+    Game.hud.show();
+    check('victoryNarrow', R.victory320.over === 0, R.victory320);
+    Game.Core.Render.cssW = 756; Game.Core.Render.cssH = 441;
+
+    /* P2-7 稀有 maxHp 词缀 */
+    Game.Systems.Inventory.add('sword_bone_epic', 1);
+    var texts = [];
+    Game.Modal.open('inventory');
+    var ctx = Game.Core.Render._ctx, origFill = ctx.fillText;
+    ctx.fillText = function (str) { texts.push(String(str)); return origFill.apply(ctx, arguments); };
+    try { Game.Modal.draw(); } finally { ctx.fillText = origFill; Game.Modal.close(); }
+    R.epicDescShown = texts.join('|').indexOf('生命+10') >= 0;
+    check('rareMaxHpText', R.epicDescShown, R.epicDescShown);
+
+    /* P2-9 排行榜跨标签页 */
+    var L = Game.Systems.Leaderboard;
+    L.clear();
+    L.submit({ timeSec: 1, gold: 1, level: 1, floor: 1, date: 'x' });
+    R.rankBefore = L.get().length;
+    localStorage.setItem('aiDungeon_leaderboard',
+      JSON.stringify([{ timeSec: 2, gold: 777, level: 2, floor: 2, date: 'y' }]));
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'aiDungeon_leaderboard' })); } catch (e) { R.storageEventErr = e.message; }
+    R.rankAfterStorageGold = L.get()[0].gold;
+    check('leaderboardCrossTab', R.rankAfterStorageGold === 777, R.rankAfterStorageGold);
+
+    /* P1-5 通关写档 */
+    Game.Systems.Quest.init();
+    Game.Systems.Quest.progress('kill', 'dragon');
+    M.switchScene('explore');
+    Game.Systems.Save.clear();
+    Bus.emit('battle:end', { result: 'win', monsterId: 'dragon' });
+    R.victorySaveExists = !!localStorage.getItem('ai_dungeon_rpg_save_v1');
+    check('victorySave', R.victorySaveExists, R.victorySaveExists);
+
+    /* P2-6 死亡图鉴与存档一致 */
+    Game.Systems.Bestiary.record('monster', 'slime');
+    R.bestiaryBeforeDeath = Game.Systems.Bestiary.getMonsterCount('slime');
+    M.switchScene('explore');
+    Bus.emit('battle:end', { result: 'lose' });
+    R.bestiaryAfterDeath = Game.Systems.Bestiary.getMonsterCount('slime');
+    R.saveAfterDeath = !!localStorage.getItem('ai_dungeon_rpg_save_v1');
+    check('bestiaryClearedOnDeath', R.bestiaryAfterDeath === 0 && R.saveAfterDeath === false, R);
+    try { Game.Modal.close(); } catch (e) { R.modalCloseErr = e.message; }
+
+    if (fail.length) {
+      document.getElementById('result').textContent = 'FAIL ' + JSON.stringify(R) + ' :: ' + fail.join('; ');
+      document.title = 'FAIL P1/P2';
+    } else {
+      document.getElementById('result').textContent = 'PASS ' + JSON.stringify(R);
+      document.title = 'PASS P1/P2';
+    }
+  } catch (e) {
+    document.getElementById('result').textContent = 'FAIL ' + e.message;
+    document.title = 'FAIL P1/P2';
+  }
+})();
+</script>
+</body>
+</html>

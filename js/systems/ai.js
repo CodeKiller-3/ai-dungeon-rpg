@@ -70,6 +70,9 @@
 
     getPatrols: function () { return patrols; },
 
+    /* 修复 P1：楼层快照恢复时回填巡逻怪（保持回访层的怪物状态） */
+    setPatrols: function (arr) { patrols = arr || []; },
+
     /* 主循环每帧调用：更新所有巡逻怪 */
     tick: function (player) {
       for (var i = 0; i < patrols.length; i++) {

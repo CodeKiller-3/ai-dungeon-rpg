@@ -33,6 +33,12 @@
       return this.data.items[id] || 0;
     },
 
+    /* 修复 P2：死亡/重开时清空内存图鉴，与已清除的存档保持一致
+     *（原实现只删磁盘存档，内存仍留计数，下一次保存会把旧图鉴写回） */
+    reset: function () {
+      this.data = { monsters: {}, items: {} };
+    },
+
     /* 存档恢复合并：缺失（旧档无 bestiary 字段）静默保持默认空表；存在则逐项取较大计数 */
     mergeFrom: function (saved) {
       if (!saved) return;

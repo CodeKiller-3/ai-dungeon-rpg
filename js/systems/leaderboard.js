@@ -16,6 +16,13 @@
   var MAX = 10;
   var cache = null; /* 运行时缓存：渲染层每帧取榜单不反复读 localStorage */
 
+  /* 修复 P2：跨标签页同步——其他标签写入/删除榜单时丢弃缓存（key 为 null 表示整体 clear） */
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('storage', function (e) {
+      if (!e || e.key === KEY || e.key === null) cache = null;
+    });
+  }
+
   /* 读取并规范化：仅保留对象条目、最多 MAX 条；解析失败/存储禁用返回空数组 */
   function readStore() {
     if (cache) return cache;
