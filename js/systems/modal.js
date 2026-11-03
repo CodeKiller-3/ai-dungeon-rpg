@@ -29,6 +29,7 @@
   var data = [];
   var sel = 0;
   var shopMode = 'buy';
+  var page = 0;        /* M8-4：quests 三页签（0=任务 / 1=怪物 / 2=物品），open 时重置 */
   var rect = null;       /* 最近一帧面板矩形 {x,y,w,h}，点击命中用 */
   var onKey = null, onClick = null;
   /* M9-4：设置面板状态 */
@@ -64,12 +65,22 @@
     return '';
   }
 
+  /* M8-4：枚举数据表为图鉴条目 [{id, def}]（保持插入序；for-in + hasOwnProperty） */
+  function collectEntries(dict) {
+    var out = [];
+    for (var id in dict) {
+      if (Object.prototype.hasOwnProperty.call(dict, id)) out.push({ id: id, def: dict[id] });
+    }
+    return out;
+  }
+
   Game.Modal = {
     open: function (k, stats) {
       if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover') return;
       kind = k;
       sel = 0;
       shopMode = 'buy';
+      page = 0; /* M8-4：每次打开 quests 默认回到任务页 */
       volDragging = false;
       gameStats = (k === 'gameover') ? (stats || null) : null;
       gameRestartRect = null;
@@ -101,7 +112,12 @@
       try {
         if (kind === 'inventory') data = Game.Systems.Inventory.list();
         else if (kind === 'shop') data = (shopMode === 'buy') ? Game.Systems.Shop.getStock() : Game.Systems.Inventory.list();
-        else if (kind === 'quests') data = Game.Systems.Quest.getActive();
+        else if (kind === 'quests') {
+          /* M8-4：三页数据源——任务页保持 getActive（行为不变）；怪物/物品页枚举 Data 全量 */
+          if (page === 1) data = collectEntries(Game.Data.MONSTERS);
+          else if (page === 2) data = collectEntries(Game.Data.ITEMS);
+          else data = Game.Systems.Quest.getActive();
+        }
         /* gameover 无列表，战绩在 _drawGameover 现场拉取 */
       } catch (e) { data = []; }
       sel = clamp(sel, 0, Math.max(data.length - 1, 0));
@@ -132,6 +148,11 @@
         if (c === 'ArrowDown' || c === 'KeyS') { e.preventDefault(); sel = clamp(sel + 1, 0, Math.max(data.length - 1, 0)); return; }
         if (c === 'Enter' || c === 'NumpadEnter') { e.preventDefault(); self._confirm(); return; }
         if (c === 'Tab' && kind === 'shop') { e.preventDefault(); self._toggleShopMode(); return; }
+        /* M8-4：quests 三页签切页——Tab/→ 下一页、← 上一页（↑↓ 仍是列表选择，无冲突） */
+        if (kind === 'quests') {
+          if (c === 'Tab' || c === 'ArrowRight') { e.preventDefault(); self._setPage(page + 1); return; }
+          if (c === 'ArrowLeft') { e.preventDefault(); self._setPage(page - 1); return; }
+        }
       };
       onClick = function (e) {
         if (!self.isOpen()) return;
@@ -196,6 +217,16 @@
       shopMode = (shopMode === 'buy') ? 'sell' : 'buy';
       this._refresh();
     },
+
+    /* M8-4：quests 页签切换（环形 0→1→2→0；← 反向），切页后选中行归零 */
+    _setPage: function (p) {
+      page = ((p % 3) + 3) % 3;
+      sel = 0;
+      this._refresh();
+    },
+
+    /* M8-4：当前页签（验证/调试读取） */
+    getPage: function () { return page; },
 
     /* M9-4：设置面板辅助方法 */
     _getAudio: function () {
@@ -456,12 +487,21 @@
       var title = '';
       if (kind === 'inventory') title = '背包';
       else if (kind === 'shop') title = '商店 · ' + (shopMode === 'buy' ? '购买' : '出售');
-      else if (kind === 'quests') title = '任务';
       else if (kind === 'settings') title = '设置';
       else if (kind === 'gameover') title = '冒险结束';
-      c.fillStyle = '#ffcf6e';
-      c.font = 'bold 18px monospace';
-      c.fillText(title, px + 14, py + 30);
+      if (kind === 'quests') {
+        /* M8-4：三页签标题（任务/怪物/物品，当前页高亮加粗） */
+        var tabs = ['任务', '怪物', '物品'];
+        for (var ti = 0; ti < tabs.length; ti++) {
+          c.fillStyle = (ti === page) ? '#ffcf6e' : '#8a8aa0';
+          c.font = (ti === page) ? 'bold 18px monospace' : '15px monospace';
+          c.fillText(tabs[ti], px + 14 + ti * 72, py + 30);
+        }
+      } else {
+        c.fillStyle = '#ffcf6e';
+        c.font = 'bold 18px monospace';
+        c.fillText(title, px + 14, py + 30);
+      }
       if (kind === 'inventory' || kind === 'shop') {
         var p = Game.Data.Player;
         c.fillStyle = '#ffcf6e';
@@ -513,6 +553,7 @@
       var hint;
       if (kind === 'inventory') hint = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
+      else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
       c.fillText(hint, px + 14, py + h - 12);
     },
@@ -528,9 +569,27 @@
         var price = (shopMode === 'buy' ? (item ? item.price : 0) : (item ? item.sell : 0)) + ' 金币';
         return name + '   ' + itemDesc(item) + '   ' + price;
       } else if (kind === 'quests') {
-        var q = entry.q;
-        var prog = Math.min(entry.progress, q.count);
-        return q.desc + ' [' + prog + '/' + q.count + '] +' + q.reward.gold + '金+' + q.reward.exp + 'exp';
+        /* M8-4：page 0 任务页（行格式与改造前完全一致，行为不变） */
+        if (page === 0) {
+          var q = entry.q;
+          var prog = Math.min(entry.progress, q.count);
+          return q.desc + ' [' + prog + '/' + q.count + '] +' + q.reward.gold + '金+' + q.reward.exp + 'exp';
+        }
+        /* M8-4：page 1 怪物图鉴——已击杀显示 HP/ATK/DEF + 击杀数；未击杀只显示名称 + ???（隐藏数值，不新增描述文案） */
+        var b = Game.Systems && Game.Systems.Bestiary;
+        if (page === 1) {
+          var mc = (b && typeof b.getMonsterCount === 'function') ? b.getMonsterCount(entry.id) : 0;
+          if (mc > 0) {
+            return entry.def.name + '   HP:' + entry.def.hp + ' ATK:' + entry.def.atk + ' DEF:' + entry.def.def + '   击杀x' + mc;
+          }
+          return entry.def.name + '   ???';
+        }
+        /* M8-4：page 2 物品图鉴——已获得显示 类型/效果 + 价格 + 获得数；未获得只显示名称 + ???（变体 id 同理） */
+        var ic = (b && typeof b.getItemCount === 'function') ? b.getItemCount(entry.id) : 0;
+        if (ic > 0) {
+          return entry.def.name + '   ' + itemDesc(entry.def) + '   ' + entry.def.price + ' 金币   获得x' + ic;
+        }
+        return entry.def.name + '   ???';
       }
       return '';
     }

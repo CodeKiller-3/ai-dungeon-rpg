@@ -25,6 +25,10 @@
       if (p.gold < item.price) return { ok: false, msg: '金币不足' };
       p.gold -= item.price;
       Game.Systems.Inventory.add(id, 1);
+      /* M8-4：图鉴登记——购买成功登记物品（守卫式调用，无硬依赖） */
+      if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.record === 'function') {
+        Game.Systems.Bestiary.record('item', id);
+      }
       Game.Core.EventBus.emit('audio:play', { sfx: 'buy' });
       Game.Core.EventBus.emit('shop:changed', { action: 'buy', id: id });
       return { ok: true, msg: '购买 ' + item.name + '，花费 ' + item.price + ' 金币' };

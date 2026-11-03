@@ -20,7 +20,10 @@
           atk: p.atk, def: p.def,
           gold: p.gold, exp: p.exp, level: p.level,
           inventory: p.inventory, equipment: p.equipment, quests: p.quests
-        }
+        },
+        /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
+        bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
+          ? Game.Systems.Bestiary.data : { monsters: {}, items: {} }
       };
       try {
         localStorage.setItem(KEY, JSON.stringify(data));
@@ -51,6 +54,11 @@
         if (s.equipment) p.equipment = s.equipment;
         if (s.quests) p.quests = s.quests;
         Game.Systems.Quest.init();
+        /* M8-4：图鉴恢复——旧档无 bestiary 字段时 mergeFrom(undefined) 静默保持默认空表；
+         * 有则逐项合并取较大计数（防旧档回退覆盖新进度） */
+        if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.mergeFrom === 'function') {
+          Game.Systems.Bestiary.mergeFrom(data.bestiary);
+        }
         /* 恢复到存档楼层 */
         var targetFloor = data.floor || 1;
         var cur = Game.Systems.Map.getFloor();

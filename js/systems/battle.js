@@ -119,6 +119,11 @@
         p.inventory[id]++;
       }
     }
+    /* M8-4：图鉴登记——胜利时登记怪物击杀与掉落物品（变体 id 原样登记；守卫式调用，无硬依赖） */
+    if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.record === 'function') {
+      Game.Systems.Bestiary.record('monster', m.id);
+      for (var bi = 0; bi < drops.length; bi++) Game.Systems.Bestiary.record('item', drops[bi]);
+    }
     logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold + (drops.length ? ' 获得:' + drops.join(',') : ''));
     if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
     Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_4</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-4 验证页：加载顺序与主游戏一致（core → data → systems → main 最后）；main 设 NO_AUTOSTART -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { bestiaryLoaded: false, bestiaryApi: false, bestiaryOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+
+    /* 1. 模块加载与接口齐备：Bestiary.record/getMonsterCount/getItemCount/data（mergeFrom 供存档合并） */
+    var B = G && G.Systems && G.Systems.Bestiary;
+    out.bestiaryLoaded = !!(B && B.data && typeof B.data.monsters === 'object' && typeof B.data.items === 'object' &&
+      G.Data && G.Data.ITEMS && G.Data.MONSTERS && G.Systems.Battle && G.Systems.Shop &&
+      G.Systems.Save && G.Systems.Quest && G.Modal && G.Data.Player);
+    out.bestiaryApi = !!(B && typeof B.record === 'function' &&
+      typeof B.getMonsterCount === 'function' && typeof B.getItemCount === 'function' &&
+      typeof B.mergeFrom === 'function');
+
+    if (out.bestiaryLoaded && out.bestiaryApi) {
+      var P = G.Data.Player, Bat = G.Systems.Battle, Shop = G.Systems.Shop, Modal = G.Modal;
+      var Inv = G.Systems.Inventory;
+      var orand = Math.random;
+      function mockRandom(seq) { var i = 0; Math.random = function () { return seq[Math.min(i++, seq.length - 1)]; }; }
+      function resetPlayer() {
+        P.inventory = {}; P.equipment = { weapon: null, armor: null };
+        P.hp = 100; P.atk = 10; P.def = 5; P.maxHp = 100;
+        Inv.recalcEquip();
+      }
+      /* 一击必杀 + 指定随机序列击杀怪物 */
+      function killWith(monsterId, seq) {
+        resetPlayer();
+        P.atk = 1000;
+        Bat.start(monsterId);
+        mockRandom(seq);
+        Bat.playerAction('attack');
+        Math.random = orand;
+      }
+
+      /* 2. 登记：record('monster','slime') 计数 1→2；record('item','sword_bone') 计数 1；未知 id 为 0 */
+      B.record('monster', 'slime');
+      var c1 = B.getMonsterCount('slime') === 1;
+      B.record('monster', 'slime');
+      var c2 = B.getMonsterCount('slime') === 2;
+      B.record('item', 'sword_bone');
+      var c3 = B.getItemCount('sword_bone') === 1;
+      var c4 = B.getMonsterCount('nobody') === 0 && B.getItemCount('nothing') === 0;
+      sub.t2_record = c1 && c2 && c3 && c4;
+      ok = ok && sub.t2_record;
+
+      /* 3. battle 登记：胜利后 monsters.slime +1/次；命中掉落的 potion_small 登记，未命中不登记 */
+      var mB = B.getMonsterCount('slime'), iB = B.getItemCount('potion_small');
+      killWith('slime', [0.5, 0.0]); /* gold roll + rate 命中（0 < 0.3）→ 掉 potion_small */
+      killWith('slime', [0.5, 0.9]); /* rate 不命中 → 无掉落 */
+      sub.t3_battle = B.getMonsterCount('slime') === mB + 2 &&
+        B.getItemCount('potion_small') === iB + 1 &&
+        B.data.monsters.slime === B.getMonsterCount('slime');
+      ok = ok && sub.t3_battle;
+
+      /* 4. shop 登记：购买成功 item count 增加；金币不足购买失败不登记 */
+      resetPlayer();
+      P.gold = 100;
+      var ib2 = B.getItemCount('potion_small');
+      var buyR = Shop.buy('potion_small');
+      var t4a = buyR.ok === true && B.getItemCount('potion_small') === ib2 + 1;
+      P.gold = 0;
+      var buyF = Shop.buy('potion_large'); /* 40 金，失败 */
+      var t4b = buyF.ok === false && B.getItemCount('potion_large') === 0;
+      sub.t4_shop = t4a && t4b;
+      ok = ok && sub.t4_shop;
+
+      /* 5. 存档：save 写入顶层 bestiary；load 恢复；旧档无字段补默认不抛错；合并取较大计数 */
+      G.Systems.Map = G.Systems.Map || {};
+      var curFloor = 1;
+      G.Systems.Map.getFloor = function () { return curFloor; };
+      G.Systems.Map.changeFloor = function (d) { curFloor += d; };
+      G.Systems.Map.getSpawn = function () { return { x: 1, y: 1 }; };
+      var KEY = 'ai_dungeon_rpg_save_v1';
+      var sm = B.getMonsterCount('slime'), si = B.getItemCount('potion_small');
+      var saveOk = G.Systems.Save.save() === true;
+      var raw = JSON.parse(localStorage.getItem(KEY));
+      var t5a = saveOk && !!raw.bestiary &&
+        raw.bestiary.monsters.slime === sm && raw.bestiary.items.potion_small === si;
+      var loadR = G.Systems.Save.load();
+      var t5b = !!loadR && B.getMonsterCount('slime') === sm;
+      /* 旧档（无 bestiary 字段）：load 不抛错且计数保持 */
+      var legacy = { savedAt: 'legacy', floor: 1, player: { hp: 80, maxHp: 100, atk: 11, def: 6, gold: 50, exp: 5, level: 2, inventory: {}, equipment: { weapon: null, armor: null }, quests: {} } };
+      localStorage.setItem(KEY, JSON.stringify(legacy));
+      var legacyOk = true, loadLegacy = null;
+      try { loadLegacy = G.Systems.Save.load(); } catch (e) { legacyOk = false; }
+      var t5c = legacyOk && !!loadLegacy && B.getMonsterCount('slime') === sm;
+      /* 合并取大：大计数并入；小计数不回退 */
+      legacy.bestiary = { monsters: { slime: sm + 50 }, items: {} };
+      localStorage.setItem(KEY, JSON.stringify(legacy));
+      G.Systems.Save.load();
+      var t5d = B.getMonsterCount('slime') === sm + 50;
+      legacy.bestiary = { monsters: { slime: 1 }, items: { potion_small: 1 } };
+      localStorage.setItem(KEY, JSON.stringify(legacy));
+      G.Systems.Save.load();
+      var t5e = B.getMonsterCount('slime') === sm + 50 && B.getItemCount('potion_small') === si;
+      sub.t5_save = t5a && t5b && t5c && t5d && t5e;
+      ok = ok && sub.t5_save;
+
+      /* 6. 分页：open('quests') 默认 page 0；Tab/→ 下一页、← 上一页（环形） */
+      function pressKey(code) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: code, cancelable: true }));
+      }
+      var modalOk = true;
+      try {
+        Modal.open('quests');
+        var p0 = Modal.getPage() === 0;
+        pressKey('Tab');
+        var p1 = Modal.getPage() === 1;
+        pressKey('Tab');
+        var p2 = Modal.getPage() === 2;
+        pressKey('Tab');
+        var pWrap = Modal.getPage() === 0; /* 环形 */
+        pressKey('ArrowRight');
+        var pR = Modal.getPage() === 1;
+        pressKey('ArrowLeft');
+        var pL = Modal.getPage() === 0;
+        pressKey('ArrowLeft');
+        var pLW = Modal.getPage() === 2; /* 向左环形 */
+        sub.t6_pages = p0 && p1 && p2 && pWrap && pR && pL && pLW;
+
+        /* 7. 怪物页：未击杀（dragon）显示名称+??? 且不含数值；已击杀（slime）显示 HP/ATK/DEF+击杀数 */
+        Modal._setPage(1);
+        var unRow = Modal._rowText({ id: 'dragon', def: G.Data.MONSTERS.dragon });
+        var slimeCnt = B.getMonsterCount('slime');
+        var kRow = Modal._rowText({ id: 'slime', def: G.Data.MONSTERS.slime });
+        sub.t7_monsterRows =
+          unRow.indexOf('???') >= 0 && unRow.indexOf('HP') < 0 && unRow.indexOf('ATK') < 0 && unRow.indexOf('DEF') < 0 &&
+          kRow.indexOf('HP:40') >= 0 && kRow.indexOf('ATK:6') >= 0 && kRow.indexOf('DEF:2') >= 0 &&
+          kRow.indexOf('击杀x' + slimeCnt) >= 0;
+
+        /* 8. 物品页：未获得（sword_dragon_epic）名称+??? 且不含价格；已获得（potion_small）效果+价格+获得数 */
+        Modal._setPage(2);
+        var noRow = Modal._rowText({ id: 'sword_dragon_epic', def: G.Data.ITEMS.sword_dragon_epic });
+        var gRow = Modal._rowText({ id: 'potion_small', def: G.Data.ITEMS.potion_small });
+        var itemCnt = B.getItemCount('potion_small');
+        sub.t8_itemRows =
+          noRow.indexOf('???') >= 0 && noRow.indexOf('金币') < 0 &&
+          gRow.indexOf('恢复HP+30') >= 0 && gRow.indexOf('10 金币') >= 0 && gRow.indexOf('获得x' + itemCnt) >= 0;
+
+        /* 9. 任务页：行格式与改造前一致；getActive 返回结构不变（[{q, progress}]） */
+        Modal._setPage(0);
+        var qRow = Modal._rowText({ q: { desc: '测试任务', count: 3, reward: { gold: 5, exp: 7 } }, progress: 1 });
+        var act = G.Systems.Quest.getActive();
+        var actOk = Array.isArray(act) && (act.length === 0 || (!!act[0].q && typeof act[0].progress === 'number'));
+        sub.t9_questRow = (qRow === '测试任务 [1/3] +5金+7exp') && actOk;
+
+        /* 10. 翻页/关闭/重开不抛错；Esc 关闭；其他 kind 不受影响 */
+        var stab = true;
+        for (var t = 0; t < 5; t++) {
+          Modal.open('quests');
+          pressKey('Tab'); pressKey('ArrowRight'); pressKey('ArrowLeft');
+          Modal._refresh();
+          Modal.close();
+        }
+        Modal.open('quests');
+        pressKey('Escape');
+        if (Modal.isOpen()) stab = false;
+        Modal.open('inventory'); Modal.close();
+        sub.t10_stable = stab;
+
+        modalOk = sub.t6_pages && sub.t7_monsterRows && sub.t8_itemRows && sub.t9_questRow && sub.t10_stable;
+      } catch (e) { modalOk = false; sub.modalErr = String(e && e.stack ? e.stack : e); }
+      ok = ok && modalOk;
+
+      Math.random = orand; /* 兜底恢复 */
+      out.sub = sub;
+      out.bestiaryOk = ok;
+    }
+
+    var pass = out.bestiaryLoaded && out.bestiaryApi && out.bestiaryOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e && e.stack ? e.stack : e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>
