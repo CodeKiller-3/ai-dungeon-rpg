@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_m8_5</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- M8-5 验证页：加载顺序与主游戏一致（core → data → systems → main 最后）；main 设 NO_AUTOSTART -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  var out = { rankLoaded: false, rankApi: false, rankOk: false, err: null };
+  try {
+    var ok = true;
+    var sub = {};
+    var G = window.Game;
+    var KEY = 'aiDungeon_leaderboard';
+
+    /* 1. 模块加载与接口齐备 */
+    var L = G && G.Systems && G.Systems.Leaderboard;
+    out.rankLoaded = !!(L && G.Systems && G.Systems.Leaderboard &&
+      G.Core && G.Core.Main && G.Core.Render && G.Data && G.Data.Player);
+
+    /* 2. 接口：submit/get/clear + 主循环通关写榜入口 submitRank */
+    out.rankApi = !!(L &&
+      typeof L.submit === 'function' &&
+      typeof L.get === 'function' &&
+      typeof L.clear === 'function' &&
+      typeof G.Core.Main.submitRank === 'function');
+
+    if (out.rankLoaded && out.rankApi) {
+      var Main = G.Core.Main, R = G.Core.Render, P = G.Data.Player;
+
+      /* 3. 写入：单条字段原样返回，localStorage 键 JSON 合法 */
+      L.clear();
+      var e3 = { timeSec: 123, gold: 50, level: 3, floor: 2, date: '2026/11/3' };
+      var r3 = L.submit(e3);
+      var g3 = L.get();
+      var raw3 = null, parseOk = true;
+      try { raw3 = JSON.parse(localStorage.getItem(KEY)); } catch (e) { parseOk = false; }
+      sub.t3_write = Array.isArray(r3) && r3.length === 1 &&
+        g3.length === 1 &&
+        g3[0].timeSec === 123 && g3[0].gold === 50 && g3[0].level === 3 &&
+        g3[0].floor === 2 && g3[0].date === '2026/11/3' &&
+        parseOk && Array.isArray(raw3) && raw3.length === 1 && raw3[0].timeSec === 123;
+      ok = ok && sub.t3_write;
+
+      /* 4. 顺序：连续 submit 3 条，新→旧（先提交的在末尾） */
+      L.clear();
+      L.submit({ timeSec: 10, gold: 1, level: 1, floor: 1, date: 'd1' });
+      L.submit({ timeSec: 20, gold: 2, level: 2, floor: 2, date: 'd2' });
+      L.submit({ timeSec: 30, gold: 3, level: 3, floor: 3, date: 'd3' });
+      var g4 = L.get();
+      sub.t4_order = g4.length === 3 &&
+        g4[0].timeSec === 30 && g4[1].timeSec === 20 && g4[2].timeSec === 10;
+      ok = ok && sub.t4_order;
+
+      /* 5. 上限：submit 12 条后仅保留最新 10（丢最旧 2 条） */
+      L.clear();
+      for (var i = 1; i <= 12; i++) {
+        L.submit({ timeSec: i, gold: i, level: 1, floor: 1, date: 'd' + i });
+      }
+      var g5 = L.get();
+      sub.t5_cap = g5.length === 10 && g5[0].timeSec === 12 && g5[9].timeSec === 3;
+      ok = ok && sub.t5_cap;
+
+      /* 6. 持久化与降级：clear 后空；存储 mock 抛错时 submit/get 不抛错且返回空数组 */
+      L.clear();
+      var g6empty = L.get().length === 0;
+      var keyGone = localStorage.getItem(KEY) === null;
+      L.submit({ timeSec: 7, gold: 7, level: 7, floor: 7, date: 'd7' });
+      L.clear(); /* 清空，保证后续禁用场景下缓存为空 */
+      var oSet = localStorage.setItem, oGet = localStorage.getItem, oRem = localStorage.removeItem;
+      var disabledOk = true, disabledGet = null, disabledSubmit = null;
+      try {
+        localStorage.setItem = function () { throw new Error('storage disabled'); };
+        localStorage.getItem = function () { throw new Error('storage disabled'); };
+        localStorage.removeItem = function () { throw new Error('storage disabled'); };
+        L.clear();
+        disabledGet = L.get();
+        disabledSubmit = L.submit({ timeSec: 1, gold: 1, level: 1, floor: 1, date: 'x' });
+      } catch (e) { disabledOk = false; }
+      localStorage.setItem = oSet;
+      localStorage.getItem = oGet;
+      localStorage.removeItem = oRem;
+      sub.t6_persist = g6empty && keyGone && disabledOk &&
+        Array.isArray(disabledGet) && disabledGet.length === 0 &&
+        Array.isArray(disabledSubmit) && disabledSubmit.length === 0;
+      ok = ok && sub.t6_persist;
+
+      /* 7. 通关写入：submitRank 组装 entry（timeSec 数值、gold/level 取 Player 现值）；
+       *    切到 victory 场景后再次触发不重复写入（单局一条） */
+      L.clear();
+      P.gold = 120; P.level = 5; P.floor = 3;
+      var s7a = Main.submitRank();
+      var g7 = L.get();
+      var t7a = Array.isArray(s7a) && g7.length === 1 &&
+        typeof g7[0].timeSec === 'number' && g7[0].timeSec >= 0 &&
+        g7[0].gold === 120 && g7[0].level === 5 && g7[0].floor === 3 &&
+        typeof g7[0].date === 'string' && g7[0].date.length > 0;
+      Main.switchScene('victory');
+      var s7b = Main.submitRank(); /* scene 已为 victory → 幂等跳过 */
+      var g7b = L.get();
+      sub.t7_victory = t7a && s7b === null && g7b.length === 1;
+      ok = ok && sub.t7_victory;
+
+      /* 8. 展示：victory 绘制路径可调用不抛错（空榜单/有榜单两种） */
+      var drawOk = true;
+      try {
+        R.init(document.getElementById('game'));
+        L.clear();
+        R.drawVictory(P);          /* 空榜单 */
+        L.submit({ timeSec: 205, gold: 88, level: 4, floor: 3, date: '2026/11/3' });
+        R.drawVictory(P);          /* 有榜单 */
+      } catch (e2) { drawOk = false; }
+      sub.t8_display = drawOk && typeof R.drawVictory === 'function' && R.cssW > 0;
+      ok = ok && sub.t8_display;
+
+      /* 9. 重复 submit/clear 不抛错 */
+      var repOk = true;
+      try {
+        for (var t = 0; t < 20; t++) {
+          L.submit({ timeSec: t, gold: t, level: 1, floor: 1, date: 'r' + t });
+          L.clear();
+        }
+      } catch (e3) { repOk = false; }
+      sub.t9_repeat = repOk;
+      ok = ok && repOk;
+
+      /* 10. 恢复一个可展示的榜单（便于人工打开页面查看） */
+      L.clear();
+      var demo = [
+        { timeSec: 205, gold: 120, level: 5, floor: 3, date: '2026/11/3' },
+        { timeSec: 341, gold: 88, level: 4, floor: 3, date: '2026/11/2' }
+      ];
+      for (var d = demo.length - 1; d >= 0; d--) L.submit(demo[d]); /* 逆序提交 → 205 在前 */
+
+      out.sub = sub;
+      out.rankOk = ok;
+    }
+
+    var pass = out.rankLoaded && out.rankApi && out.rankOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode(
+      (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out)));
+  } catch (e) {
+    out.err = String(e && e.stack ? e.stack : e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    document.body.appendChild(document.createTextNode('FAIL ' + JSON.stringify(out)));
+  }
+})();
+</script>
+</body>
+</html>

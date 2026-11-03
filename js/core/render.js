@@ -10,6 +10,14 @@
   var TILE = 24; /* 瓦片像素尺寸 */
   var cam = { x: 0, y: 0 };
 
+  /* M8-5：排行榜用时格式（秒 → “分秒”，如 205 → 3分25秒） */
+  function fmtRankTime(sec) {
+    var s = Math.round(Number(sec));
+    if (!isFinite(s) || s < 0) s = 0;
+    if (s < 60) return s + '秒';
+    return Math.floor(s / 60) + '分' + (s % 60) + '秒';
+  }
+
   Game.Core.Render = {
     _canvas: null,
     _ctx: null,
@@ -563,7 +571,7 @@
       this._drawHud(); /* S3-2 */
     },
 
-    /* 通关画面（M4） */
+    /* 通关画面（M4；M8-5：下方展示本地排行榜最近 10 条，行格式与既有面板一致） */
     drawVictory: function (player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -572,19 +580,65 @@
       var W = this.cssW, H = this.cssH;
       ctx.fillStyle = '#0f0f1f';
       ctx.fillRect(0, 0, W, H);
+
+      /* M8-5：读榜单（模块缺失/存储禁用时为空数组，照常绘制通关信息） */
+      var list = [];
+      try {
+        var L = Game.Systems && Game.Systems.Leaderboard;
+        if (L && typeof L.get === 'function') list = L.get() || [];
+      } catch (e) { list = []; }
+      var rows = Math.min(list.length, 10);
+
+      /* 垂直居中布局：标题区 + 榜单区；窗口过矮时压缩行高，避免溢出 */
+      var topH = 132;
+      var gap = 24;
+      var rowH = 22;
+      var listH = rows > 0 ? (gap + rows * rowH) : 0;
+      var maxListH = Math.max(0, H - topH - 64);
+      if (listH > maxListH && rows > 0) {
+        rowH = Math.max(14, Math.floor((maxListH - gap) / rows));
+        /* 极矮窗口：即便压到最小行高仍放不下时，减少可见行数（保证不溢出底部） */
+        if (gap + rows * rowH > maxListH) {
+          rows = Math.max(0, Math.floor((maxListH - gap) / rowH));
+        }
+        listH = rows > 0 ? (gap + rows * rowH) : 0;
+      }
+      var blockH = topH + listH + 48;
+      var y0 = Math.max((H - blockH) / 2, 12);
+
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 34px monospace';
-      ctx.fillText('通 关 !', W / 2 - 80, H / 2 - 80);
+      ctx.fillText('通 关 !', W / 2 - 80, y0 + 34);
       ctx.fillStyle = '#cfcfcf';
       ctx.font = '16px monospace';
-      ctx.fillText('勇者击败了地牢巨龙，冒险结束', W / 2 - 160, H / 2 - 30);
+      ctx.fillText('勇者击败了地牢巨龙，冒险结束', W / 2 - 160, y0 + 66);
       ctx.fillStyle = '#8f8';
       ctx.font = '15px monospace';
       ctx.fillText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
-        W / 2 - 180, H / 2 + 20);
+        W / 2 - 180, y0 + 94);
+
+      /* M8-5：本地排行榜（新→旧：#1 为最新一条） */
+      if (rows > 0) {
+        var x = Math.max(W / 2 - 180, 16);
+        var rowY = y0 + topH + gap;
+        ctx.fillStyle = '#ffcf6e';
+        ctx.font = 'bold 15px monospace';
+        ctx.fillText('本地排行榜', x, y0 + topH);
+        ctx.font = '13px monospace';
+        for (var i = 0; i < rows; i++) {
+          var e = list[i] || {};
+          var line = '#' + (i + 1) + '  ' + fmtRankTime(e.timeSec) +
+            '  金币' + (typeof e.gold === 'number' ? e.gold : 0) +
+            '  等级' + (typeof e.level === 'number' ? e.level : 0) +
+            '  ' + (e.date || '');
+          ctx.fillStyle = (i === 0) ? '#ffcf6e' : '#cfcfcf';
+          ctx.fillText(line, x, rowY + i * rowH);
+        }
+      }
+
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
-      ctx.fillText('按 R 重新开始', W / 2 - 60, H / 2 + 70);
+      ctx.fillText('按 R 重新开始', W / 2 - 60, y0 + blockH - 22);
       this._drawHud(); /* S3-2 */
     },
 

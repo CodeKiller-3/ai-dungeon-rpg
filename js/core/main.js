@@ -91,6 +91,8 @@
     if (evt.result === 'win') {
       Game.Systems.Quest.progress('kill', evt.monsterId);
       if (Game.Systems.Quest.isDone('main_clear_dragon')) {
+        /* M8-5：通关写本地排行榜（须在切 victory 前调用；scene 已为 victory 时幂等跳过） */
+        Game.Core.Main.submitRank();
         Game.Core.EventBus.emit('audio:play', { sfx: 'victory' });
         Game.Core.Main.switchScene('victory');
         return;
@@ -179,6 +181,24 @@
     /* M9-5：本局用时（ms），供死亡结算战绩 */
     getElapsedMs: function () {
       return performance.now() - runStart;
+    },
+
+    /* M8-5：通关写本地排行榜——entry 全部取自现有状态（不新增数值系统）
+     * 幂等：scene 已为 victory 视为本局已写，不再重复提交（单局一条） */
+    submitRank: function () {
+      if (this._scene === 'victory') return null;
+      var L = Game.Systems && Game.Systems.Leaderboard;
+      if (!L || typeof L.submit !== 'function') return null;
+      var entry = {
+        timeSec: Math.round(this.getElapsedMs() / 1000),
+        gold: player.gold,
+        level: player.level,
+        floor: player.floor,
+        date: new Date().toLocaleDateString('zh-CN')
+      };
+      try {
+        return L.submit(entry);
+      } catch (e) { return null; }
     },
 
     /* M9-5：死亡结算——打开 gameover 弹窗（战绩来自 Player/HUD） */
