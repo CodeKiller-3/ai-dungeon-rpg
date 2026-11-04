@@ -80,12 +80,19 @@
       sub.t5_idem = (ups5a === 0) && (ups5b === 0) && P.level === 3 && P.atk === 12;
       ok = ok && sub.t5_idem;
 
-      /* 6. 怪物表：3 层 dragon 0.25 / skeleton 0.75；逐层期望强度单调递增（rate×(atk+hp/10)） */
+      /* 6. 怪物表（P2-1 扩为 10 种 / 每层 3~4 种）：三层概率和=1、dragon 仅 3 层；
+       * 逐层期望强度单调递增（rate×(atk+hp/10)）。
+       * P2-1 期望强度新旧对比：F1 10.8 → 11.125、F2 15.5 → 20.125、F3 22.5 → 27.5 */
       var et = G.Data.MAPS.enemyTable;
       var M = G.Data.MONSTERS;
       function rateOf(row, id) {
         for (var i = 0; i < row.length; i++) if (row[i].id === id) return row[i].rate;
         return 0;
+      }
+      function rowSum(row) {
+        var s = 0;
+        for (var i = 0; i < row.length; i++) s += row[i].rate;
+        return s;
       }
       function strength(row) {
         var s = 0;
@@ -95,12 +102,19 @@
         }
         return s;
       }
+      function near(a, b) { return Math.abs(a - b) < 1e-6; }
       var s1 = strength(et[0]), s2 = strength(et[1]), s3 = strength(et[2]);
-      sub.t6_table = rateOf(et[2], 'dragon') === 0.25 &&
-        rateOf(et[2], 'skeleton') === 0.75 &&
-        rateOf(et[0], 'slime') === 0.6 && rateOf(et[0], 'bat') === 0.4 &&
-        rateOf(et[1], 'bat') === 0.5 && rateOf(et[1], 'skeleton') === 0.5 &&
-        (s1 === 10.8) && (s2 === 15.5) && (s3 === 22.5) &&
+      sub.t6_table = (et.length === 3) &&
+        near(rowSum(et[0]), 1) && near(rowSum(et[1]), 1) && near(rowSum(et[2]), 1) &&
+        rateOf(et[2], 'dragon') === 0.25 &&
+        rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
+        rateOf(et[0], 'slime') === 0.45 && rateOf(et[0], 'bat') === 0.3 &&
+        rateOf(et[0], 'goblin') === 0.15 && rateOf(et[0], 'tiny_zombie') === 0.1 &&
+        rateOf(et[1], 'bat') === 0.15 && rateOf(et[1], 'skeleton') === 0.3 &&
+        rateOf(et[1], 'orc_warrior') === 0.3 && rateOf(et[1], 'orc_shaman') === 0.25 &&
+        rateOf(et[2], 'skeleton') === 0.3 && rateOf(et[2], 'ogre') === 0.25 &&
+        rateOf(et[2], 'wogol') === 0.2 &&
+        near(s1, 11.125) && near(s2, 20.125) && near(s3, 27.5) &&
         s1 < s2 && s2 < s3;
       ok = ok && sub.t6_table;
 

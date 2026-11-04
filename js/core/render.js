@@ -50,12 +50,6 @@
     return (Math.floor(now / step) + off) % 4;
   }
 
-  /* P1-1：骷髅动画帧序号——真实时间 4 帧/秒循环（f0→f1→f2→f3），
-   * 不用 rAF 计数，避免验证页两次同步绘制取到不同帧被误判为随机闪烁 */
-  function skeletonFrameIndex() {
-    return animIndex('skelet', 4);
-  }
-
   /* P1-3：按高度适配绘制（保持贴图宽高比）——cx=目标中心 x，bottom=目标底部 y，targetH=目标高。
    * 返回绘制宽度；naturalWidth 读取失败（未加载完成等异常）时按 1:1 回退。 */
   function drawSpriteByHeight(ctx, img, cx, bottom, targetH) {
@@ -67,10 +61,36 @@
     return w;
   }
 
+  /* P2-1：怪物视觉映射集中表——id → { idle, run } 帧组名（10 种怪物全覆盖）。
+   * 未登记的 id 由调用方回退 monster_chort（现状）；imp 只作 bat 的视觉帧组，不占怪物 id。 */
+  var MONSTER_ANIM = {
+    slime: { idle: 'tiny_slug', run: 'tiny_slug' },
+    bat: { idle: 'imp_idle', run: 'imp_run' },
+    skeleton: { idle: 'skelet_idle', run: 'skelet_run' },
+    dragon: { idle: 'big_demon_idle', run: 'big_demon_run' },
+    goblin: { idle: 'goblin_idle', run: 'goblin_run' },
+    tiny_zombie: { idle: 'tiny_zombie_idle', run: 'tiny_zombie_run' },
+    orc_warrior: { idle: 'orc_warrior_idle', run: 'orc_warrior_run' },
+    orc_shaman: { idle: 'orc_shaman_idle', run: 'orc_shaman_run' },
+    wogol: { idle: 'wogol_idle', run: 'wogol_run' },
+    ogre: { idle: 'ogre_idle', run: 'ogre_run' }
+  };
+
+  /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退） */
+  function monsterFrame(id, chasing) {
+    var set = MONSTER_ANIM[id];
+    if (!set) return null;
+    var S = Game.Core && Game.Core.Sprites;
+    if (!S || typeof S.getFrame !== 'function') return null;
+    var name = chasing ? set.run : set.idle;
+    return S.getFrame(name, animIndex(name, 4));
+  }
+
   Game.Core.Render = {
     _canvas: null,
     _ctx: null,
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
+    MONSTER_ANIM: MONSTER_ANIM,  /* P2-1：怪物 id → {idle,run} 帧组（验证/调试可读，运行时只读） */
     /* M9-5：DPR 高清适配——逻辑坐标统一用 CSS 像素，物理像素 = CSS * dpr */
     dpr: 1,
     scale: 1,      /* 自适应缩放系数：逻辑像素 → CSS 像素 */
@@ -397,16 +417,9 @@
         if (epx > -20 && epy > -20 && epx < W + 20 && epy < H + 20) {
           var eimg = null;
           if (this._hasSprites()) {
-            var eS = Game.Core.Sprites;
-            var mid = es[i].monsterId;
-            /* P1-3：按怪选动画帧——骷髅/史莱姆/蝙蝠/龙各自视觉；未知怪回退 chort */
-            if (typeof eS.getFrame === 'function') {
-              if (mid === 'skeleton') eimg = eS.getFrame('skelet_idle', skeletonFrameIndex());
-              else if (mid === 'slime') eimg = eS.getFrame('tiny_slug', animIndex('tiny_slug', 4));
-              else if (mid === 'bat') eimg = eS.getFrame('imp_idle', animIndex('imp_idle', 4));
-              else if (mid === 'dragon') eimg = eS.getFrame('big_demon_idle', animIndex('big_demon_idle', 4));
-            }
-            if (!eimg) eimg = eS.get('monster_chort');
+            /* P2-1：查 MONSTER_ANIM 表取 idle 帧；未知 id / 帧缺失回退 chort */
+            eimg = monsterFrame(es[i].monsterId, false);
+            if (!eimg) eimg = Game.Core.Sprites.get('monster_chort');
           }
           if (eimg) {
             ctx.fillStyle = 'rgba(234,102,104,0.22)';
@@ -439,16 +452,9 @@
           var chasing = ps[j].state === 'chase';
           var pimg = null;
           if (this._hasSprites()) {
-            var pS = Game.Core.Sprites;
-            var pmid = ps[j].monsterId;
-            /* P1-3：史莱姆单序列 / 蝙蝠 imp 双形态 / 骷髅双形态 / 龙 big_demon 双形态；未知怪回退 chort */
-            if (typeof pS.getFrame === 'function') {
-              if (pmid === 'slime') pimg = pS.getFrame('tiny_slug', animIndex('tiny_slug', 4));
-              else if (pmid === 'bat') pimg = pS.getFrame(chasing ? 'imp_run' : 'imp_idle', animIndex(chasing ? 'imp_run' : 'imp_idle', 4));
-              else if (pmid === 'skeleton') pimg = pS.getFrame(chasing ? 'skelet_run' : 'skelet_idle', skeletonFrameIndex());
-              else if (pmid === 'dragon') pimg = pS.getFrame(chasing ? 'big_demon_run' : 'big_demon_idle', animIndex(chasing ? 'big_demon_run' : 'big_demon_idle', 4));
-            }
-            if (!pimg) pimg = pS.get(chasing ? 'monster_chort_run' : 'monster_chort');
+            /* P2-1：查 MONSTER_ANIM 表按状态取 idle/run 帧；未知 id / 帧缺失回退 chort */
+            pimg = monsterFrame(ps[j].monsterId, chasing);
+            if (!pimg) pimg = Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort');
           }
           if (pimg) {
             if (chasing) {
@@ -584,13 +590,11 @@
       var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
       ey += mAtkOff;
       var boss = state.monster.id === 'dragon';
-      /* P1-3：Boss 用 big_demon 帧动画（战斗阶段固定 idle），帧缺失回退旧 boss_demon 单图；
-       * 其余怪保持 monster_chort（色块兜底在下方） */
+      /* P2-1：战斗侧同样查 MONSTER_ANIM 表取 idle 帧（ogre 等 32×36 走高适配）；
+       * dragon 帧缺失回退旧 boss_demon 单图，其他怪回退 monster_chort（色块兜底在下方） */
       var sp2 = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
-        if (boss && typeof Game.Core.Sprites.getFrame === 'function') {
-          sp2 = Game.Core.Sprites.getFrame('big_demon_idle', animIndex('big_demon_idle', 4));
-        }
+        sp2 = monsterFrame(state.monster.id, false);
         if (!sp2) sp2 = Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort');
       }
       ctx.save();

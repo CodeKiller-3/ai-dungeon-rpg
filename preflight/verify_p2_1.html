@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_1</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-1 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { monsterLoaded: false, monsterApi: false, monsterOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var rec = [];
+  var origDrawImage = ctx.drawImage;
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+  function names() {
+    var s = {};
+    for (var i = 0; i < rec.length; i++) s[rec[i].n] = true;
+    return Object.keys(s);
+  }
+  function hasPrefix(p) {
+    var ns = names();
+    for (var i = 0; i < ns.length; i++) if (ns[i].indexOf(p) === 0) return true;
+    return false;
+  }
+  function makeFloorGrid(n, w) {
+    var g = [];
+    for (var y = 0; y < n; y++) { g[y] = []; for (var x = 0; x < (w || n); x++) g[y][x] = 1; }
+    return g;
+  }
+  function finish() {
+    var pass = out.monsterLoaded && out.monsterApi && out.monsterOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var R = Game.Core.Render, S = Game.Core.Sprites, D = Game.Data;
+      out.monsterLoaded = !!(window.Game && Game.Core && R && S && D.MONSTERS && D.MAPS);
+      out.monsterApi = !!(typeof R.drawMap === 'function' && typeof R.drawBattle === 'function' &&
+        R.MONSTER_ANIM && typeof S.getFrame === 'function');
+
+      if (!out.monsterLoaded || !out.monsterApi) { finish(); return; }
+
+      R.init(cv);
+      R._animNow = function () { return 4321; }; /* 冻结动画时钟，绘制记录稳定 */
+
+      Game.Systems = Game.Systems || {};
+      Game.Systems.Map = {
+        getDetail: function () { return null; },
+        getDecor: function () { return null; },
+        getEnemies: function () { return []; },
+        getGrid: function () { return makeFloorGrid(10); }
+      };
+      Game.Systems.AI = undefined;
+      Game.fov = undefined;
+      Game.Lighting = undefined;
+      Game.Particles = undefined;
+      Game.Feedback = undefined;
+      if (Game.hud) Game.hud.draw = function () { };
+
+      var REQUIRED_NEW = ['goblin', 'tiny_zombie', 'orc_warrior', 'orc_shaman', 'wogol', 'ogre'];
+
+      /* t2_monsterData：MONSTERS 共 10 种（4 旧 + 6 新），数值字段均为有效正数 */
+      var ids = Object.keys(D.MONSTERS);
+      var t2ok = (ids.length === 10);
+      var badField = [];
+      for (var mi = 0; mi < ids.length; mi++) {
+        var m = D.MONSTERS[ids[mi]];
+        if (!(typeof m.hp === 'number' && m.hp > 0 && typeof m.atk === 'number' && m.atk > 0 &&
+          typeof m.def === 'number' && m.def >= 0 && typeof m.exp === 'number' && m.exp > 0)) {
+          badField.push(ids[mi]);
+        }
+      }
+      for (var ni = 0; ni < REQUIRED_NEW.length; ni++) {
+        if (!D.MONSTERS[REQUIRED_NEW[ni]]) t2ok = false;
+      }
+      t2ok = t2ok && (badField.length === 0);
+      sub.t2_monsterData = t2ok;
+      ok = ok && t2ok;
+
+      /* t3_floorTable：3 层、每层概率和=1、dragon 仅 3 层、期望强度严格递增（rate×(atk+hp/10)）
+       * 期望值（P2-1 新表）：F1 11.125 < F2 20.125 < F3 27.5（旧表 10.8/15.5/22.5） */
+      var et = D.MAPS.enemyTable;
+      function rateOf(row, id) {
+        for (var i = 0; i < row.length; i++) if (row[i].id === id) return row[i].rate;
+        return 0;
+      }
+      function rowSum(row) {
+        var s = 0;
+        for (var i = 0; i < row.length; i++) s += row[i].rate;
+        return s;
+      }
+      function strength(row) {
+        var s = 0;
+        for (var i = 0; i < row.length; i++) {
+          var mm = D.MONSTERS[row[i].id];
+          s += row[i].rate * (mm.atk + mm.hp / 10);
+        }
+        return s;
+      }
+      function near(a, b) { return Math.abs(a - b) < 1e-6; }
+      var s1 = strength(et[0]), s2 = strength(et[1]), s3 = strength(et[2]);
+      var t3ok = (et.length === 3) &&
+        near(rowSum(et[0]), 1) && near(rowSum(et[1]), 1) && near(rowSum(et[2]), 1) &&
+        rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
+        rateOf(et[2], 'dragon') > 0 &&
+        near(s1, 11.125) && near(s2, 20.125) && near(s3, 27.5) &&
+        s1 < s2 && s2 < s3;
+      sub.t3_floorTable = t3ok;
+      sub.t3_strength = { f1: s1, f2: s2, f3: s3 };
+      ok = ok && t3ok;
+
+      /* t4_animMap：MONSTER_ANIM 覆盖 10 种 id，idle/run 各 4 帧经 getFrame 非 null 且互异 */
+      var t4ok = (Object.keys(R.MONSTER_ANIM).length === 10);
+      for (var ai = 0; ai < ids.length; ai++) {
+        var set = R.MONSTER_ANIM[ids[ai]];
+        if (!set || !set.idle || !set.run) { t4ok = false; continue; }
+        ['idle', 'run'].forEach(function (k) {
+          var seen = {};
+          for (var f = 0; f < 4; f++) {
+            var img = S.getFrame(set[k], f);
+            if (!img) t4ok = false;
+            else if (img.src) seen[img.src] = true;
+          }
+          if (Object.keys(seen).length !== 4) t4ok = false;
+        });
+      }
+      sub.t4_animMap = t4ok;
+      ok = ok && t4ok;
+
+      /* t5_drawMap：六种新怪各一格，drawMap 记录含各自 *_anim_f* 落笔 */
+      var grid = makeFloorGrid(8);
+      Game.Systems.AI = {
+        getPatrols: function () {
+          return [
+            { x: 2, y: 2, monsterId: 'goblin', state: 'chase', path: [], frame: 0 },
+            { x: 3, y: 2, monsterId: 'tiny_zombie', state: 'idle', path: [], frame: 0 },
+            { x: 4, y: 2, monsterId: 'orc_warrior', state: 'chase', path: [], frame: 0 },
+            { x: 5, y: 2, monsterId: 'orc_shaman', state: 'idle', path: [], frame: 0 },
+            { x: 2, y: 3, monsterId: 'wogol', state: 'chase', path: [], frame: 0 },
+            { x: 3, y: 3, monsterId: 'ogre', state: 'idle', path: [], frame: 0 }
+          ];
+        }
+      };
+      Game.Systems.Map.getEnemies = function () {
+        return [
+          { x: 5, y: 4, monsterId: 'goblin' },
+          { x: 6, y: 4, monsterId: 'tiny_zombie' },
+          { x: 7, y: 4, monsterId: 'ogre' }
+        ];
+      };
+      rec = [];
+      var dOk = true;
+      try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { dOk = false; }
+      var t5ok = dOk &&
+        hasPrefix('goblin_idle_anim_f') && hasPrefix('goblin_run_anim_f') &&
+        hasPrefix('tiny_zombie_idle_anim_f') &&
+        hasPrefix('orc_warrior_run_anim_f') &&
+        hasPrefix('orc_shaman_idle_anim_f') &&
+        hasPrefix('wogol_run_anim_f') &&
+        hasPrefix('ogre_idle_anim_f');
+      sub.t5_drawMap = t5ok;
+      ok = ok && t5ok;
+
+      /* t6_battle：drawBattle 遇 ogre 时落 ogre_* 帧（并保持玩家侧 knight_m） */
+      Game.Data.Player.hp = 80; Game.Data.Player.maxHp = 100;
+      var st = {
+        monster: { id: 'ogre', name: '食人魔', hp: 130, maxHp: 130, color: '#a0522d' },
+        log: ['战斗开始'], dying: false,
+        monsterActionAt: null, playerActionAt: null, enraged: false
+      };
+      rec = [];
+      var bOk = true;
+      try { R.drawBattle(st); } catch (e) { bOk = false; }
+      var t6ok = bOk && hasPrefix('ogre_idle_anim_f') && hasPrefix('knight_m_');
+      sub.t6_battle = t6ok;
+      ok = ok && t6ok;
+
+      /* t7_fallback：未知 id → chort；素材缺失 → chort/色块，不抛错 */
+      var fbOk = true;
+      try {
+        /* 未知 id 巡逻 + 埋伏 */
+        Game.Systems.AI = { getPatrols: function () { return [{ x: 3, y: 3, monsterId: 'mystery_monster', state: 'idle', path: [], frame: 0 }]; } };
+        Game.Systems.Map.getEnemies = function () { return [{ x: 2, y: 2, monsterId: 'mystery_monster' }]; };
+        rec = [];
+        R.drawMap(grid, { x: 1, y: 1, floor: 1 });
+        var unknownChort = hasPrefix('monster_chort') && !hasPrefix('mystery');
+        /* 全素材缺失（get/getFrame 均 null）→ 色块，不落任何 drawImage */
+        var origGet = S.get, origGetFrame = S.getFrame;
+        S.get = function () { return null; };
+        S.getFrame = function () { return null; };
+        rec = [];
+        R.drawMap(grid, { x: 1, y: 1, floor: 1 });
+        var blankMap = (rec.length === 0);
+        rec = [];
+        R.drawBattle(st);
+        var blankBattle = (rec.length === 0);
+        S.get = origGet; S.getFrame = origGetFrame;
+        fbOk = unknownChort && blankMap && blankBattle;
+      } catch (e) { fbOk = false; }
+      sub.t7_fallback = fbOk;
+      ok = ok && fbOk;
+
+      out.sub = sub;
+      out.monsterOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.monsterOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

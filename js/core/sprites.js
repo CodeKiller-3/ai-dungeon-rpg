@@ -55,7 +55,20 @@
     'imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3',
     'imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3',
     'big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3',
-    'big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3'];
+    'big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3',
+    /* P2-1：怪物扩量——goblin/tiny_zombie/orc_warrior/orc_shaman/wogol 各 idle+run 8 帧、ogre 32×36 双态 8 帧 */
+    'goblin_idle_anim_f0', 'goblin_idle_anim_f1', 'goblin_idle_anim_f2', 'goblin_idle_anim_f3',
+    'goblin_run_anim_f0', 'goblin_run_anim_f1', 'goblin_run_anim_f2', 'goblin_run_anim_f3',
+    'tiny_zombie_idle_anim_f0', 'tiny_zombie_idle_anim_f1', 'tiny_zombie_idle_anim_f2', 'tiny_zombie_idle_anim_f3',
+    'tiny_zombie_run_anim_f0', 'tiny_zombie_run_anim_f1', 'tiny_zombie_run_anim_f2', 'tiny_zombie_run_anim_f3',
+    'orc_warrior_idle_anim_f0', 'orc_warrior_idle_anim_f1', 'orc_warrior_idle_anim_f2', 'orc_warrior_idle_anim_f3',
+    'orc_warrior_run_anim_f0', 'orc_warrior_run_anim_f1', 'orc_warrior_run_anim_f2', 'orc_warrior_run_anim_f3',
+    'orc_shaman_idle_anim_f0', 'orc_shaman_idle_anim_f1', 'orc_shaman_idle_anim_f2', 'orc_shaman_idle_anim_f3',
+    'orc_shaman_run_anim_f0', 'orc_shaman_run_anim_f1', 'orc_shaman_run_anim_f2', 'orc_shaman_run_anim_f3',
+    'wogol_idle_anim_f0', 'wogol_idle_anim_f1', 'wogol_idle_anim_f2', 'wogol_idle_anim_f3',
+    'wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3',
+    'ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3',
+    'ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */
@@ -70,7 +83,20 @@
     imp_idle: ['imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3'],
     imp_run: ['imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3'],
     big_demon_idle: ['big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3'],
-    big_demon_run: ['big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3']
+    big_demon_run: ['big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3'],
+    /* P2-1：六种新怪 idle/run 各 4 帧 */
+    goblin_idle: ['goblin_idle_anim_f0', 'goblin_idle_anim_f1', 'goblin_idle_anim_f2', 'goblin_idle_anim_f3'],
+    goblin_run: ['goblin_run_anim_f0', 'goblin_run_anim_f1', 'goblin_run_anim_f2', 'goblin_run_anim_f3'],
+    tiny_zombie_idle: ['tiny_zombie_idle_anim_f0', 'tiny_zombie_idle_anim_f1', 'tiny_zombie_idle_anim_f2', 'tiny_zombie_idle_anim_f3'],
+    tiny_zombie_run: ['tiny_zombie_run_anim_f0', 'tiny_zombie_run_anim_f1', 'tiny_zombie_run_anim_f2', 'tiny_zombie_run_anim_f3'],
+    orc_warrior_idle: ['orc_warrior_idle_anim_f0', 'orc_warrior_idle_anim_f1', 'orc_warrior_idle_anim_f2', 'orc_warrior_idle_anim_f3'],
+    orc_warrior_run: ['orc_warrior_run_anim_f0', 'orc_warrior_run_anim_f1', 'orc_warrior_run_anim_f2', 'orc_warrior_run_anim_f3'],
+    orc_shaman_idle: ['orc_shaman_idle_anim_f0', 'orc_shaman_idle_anim_f1', 'orc_shaman_idle_anim_f2', 'orc_shaman_idle_anim_f3'],
+    orc_shaman_run: ['orc_shaman_run_anim_f0', 'orc_shaman_run_anim_f1', 'orc_shaman_run_anim_f2', 'orc_shaman_run_anim_f3'],
+    wogol_idle: ['wogol_idle_anim_f0', 'wogol_idle_anim_f1', 'wogol_idle_anim_f2', 'wogol_idle_anim_f3'],
+    wogol_run: ['wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3'],
+    ogre_idle: ['ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3'],
+    ogre_run: ['ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3']
   };
 
   Game.Core.Sprites = {
