@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>自适应缩放验证</title></head>
+<body>
+<canvas id="game"></canvas>
+<div id="result">RUNNING</div>
+<!-- 自适应缩放验证：等比 scale / 逻辑视口 / 物理像素 / 点击换算 / 各尺寸文本不溢出 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  var out = { rzLoaded: false, rzApi: false, rzOk: false, err: null };
+  var sub = {}, fail = [];
+
+  function check(name, ok, detail) {
+    sub[name] = !!ok;
+    if (!ok) { sub[name + '_detail'] = detail; fail.push(name); }
+  }
+  /* 文本右边界溢出检测（逻辑坐标；与 verify_p1p2 的 over 同一口径） */
+  function overflowOf(fn, width) {
+    var ctx = Game.Core.Render._ctx;
+    var orig = ctx.fillText, over = 0, maxRight = 0;
+    ctx.fillText = function (str, x, y) {
+      var w = ctx.measureText(String(str)).width;
+      var right = x + w;
+      if (right > width + 0.5 || x < -0.5) over++;
+      if (right > maxRight) maxRight = right;
+      return orig.apply(ctx, arguments);
+    };
+    try { fn(); } catch (e) { sub.drawErr = e.message; over++; } finally { ctx.fillText = orig; }
+    return { over: over, maxRight: Math.round(maxRight) };
+  }
+
+  try {
+    var R = Game.Core && Game.Core.Render;
+    out.rzLoaded = !!(R && Game.Modal && Game.hud && Game.Systems.Inventory && Game.Systems.Quest);
+    if (out.rzLoaded) {
+      out.rzApi = (typeof R.resize === 'function') && (typeof R._computeScale === 'function') &&
+        (typeof R.toLogical === 'function') && (typeof R._applyDpr === 'function');
+    }
+
+    if (out.rzLoaded && out.rzApi) {
+      /* 测试用 Player（Modal/Quest 读取） */
+      Game.Data.Player = Game.Data.Player || {
+        x: 1, y: 1, floor: 1, hp: 100, maxHp: 100, mp: 50, maxMp: 50,
+        atk: 10, def: 5, gold: 0, exp: 0, level: 1, inventory: {}, equipment: {}, quests: {}
+      };
+      Game.Systems.Quest.init();
+
+      /* 1. 五档窗口的 scale 阶梯（设计基准 960×540，步进 0.25，范围 1–2） */
+      var sizes = [[320, 568], [768, 1024], [1280, 720], [1920, 1080], [2560, 1440]];
+      var expect = [1, 1, 1.25, 2, 2];
+      var scales = [];
+      for (var i = 0; i < sizes.length; i++) scales.push(R._computeScale(sizes[i][0], sizes[i][1]));
+      check('scaleLadder', scales.join(',') === expect.join(','), scales);
+
+      var cv = document.getElementById('game');
+      R.init(cv);
+
+      /* 2. 真实 resize：物理像素 = CSS*DPR，逻辑视口 = CSS/scale，横纵同系数（不变形） */
+      var pxW = R.cssPxW, pxH = R.cssPxH, sc = R.scale, dpr = R.dpr;
+      var ratioOk = Math.abs(R.cssW / R.cssH - pxW / pxH) < 0.001;
+      var logicalOk = Math.abs(R.cssW - pxW / sc) < 0.01 && Math.abs(R.cssH - pxH / sc) < 0.01;
+      var physicalOk = cv.width === Math.round(pxW * Math.min(dpr, 2));
+      var tr = cv.getContext('2d').getTransform ? cv.getContext('2d').getTransform() : null;
+      var transformOk = tr && Math.abs(tr.a - Math.min(dpr, 2) * sc) < 0.001;
+      check('resizeLayout', ratioOk && logicalOk && physicalOk && transformOk,
+        { scale: sc, dpr: dpr, px: [pxW, pxH], logical: [R.cssW, R.cssH],
+          canvas: [cv.width, cv.height], transform: tr ? tr.a : null });
+
+      /* 3. 点击换算：client → 逻辑坐标，在 scale=1.25 / 2 下均无偏移 */
+      var rect = cv.getBoundingClientRect();
+      var saved = { s: R.scale, w: R.cssW, h: R.cssH };
+      var mapOk = true, mapDeltas = [];
+      var testScales = [saved.s, 1.25, 2];
+      for (var ti = 0; ti < testScales.length; ti++) {
+        var ts = testScales[ti];
+        R.scale = ts;
+        R.cssW = rect.width / ts;
+        R.cssH = rect.height / ts;
+        var pts = [[0, 0], [Math.round(R.cssW / 2), Math.round(R.cssH / 2)],
+          [Math.round(R.cssW) - 1, Math.round(R.cssH) - 1]];
+        for (var pi = 0; pi < pts.length; pi++) {
+          var lx = pts[pi][0], ly = pts[pi][1];
+          var lp = R.toLogical(rect.left + lx * ts, rect.top + ly * ts);
+          var d = Math.max(Math.abs(lp.x - lx), Math.abs(lp.y - ly));
+          mapDeltas.push(Number(d.toFixed(3)));
+          if (d > 0.01) mapOk = false;
+        }
+      }
+      R.scale = saved.s; R.cssW = saved.w; R.cssH = saved.h;
+      check('clickMapping', mapOk, mapDeltas);
+
+      /* 4. 各尺寸下绘制不溢出（逻辑宽 = 窗口宽/scale） */
+      Game.hud.show();
+      Game.hud.update({ hp: 999, hpMax: 999, mp: 99, mpMax: 99, gold: 123456, floor: 3,
+        kills: 16, killTarget: 16, level: 12, exp: 500, expNext: 720 });
+      var drawOver = {}, allNoOver = true;
+      for (var si = 0; si < sizes.length; si++) {
+        var sw = sizes[si][0] / scales[si], sh = sizes[si][1] / scales[si];
+        R.cssW = sw; R.cssH = sh;
+        var o = {
+          hud: overflowOf(function () { Game.hud.draw(); }, sw).over,
+          victory: overflowOf(function () { R.drawVictory({ gold: 99999, exp: 999, level: 12 }); }, sw).over,
+          inventory: 0,
+          quests: 0
+        };
+        Game.Modal.open('inventory');
+        o.inventory = overflowOf(function () { Game.Modal.draw(); }, sw).over;
+        Game.Modal.close();
+        Game.Modal.open('quests');
+        o.quests = overflowOf(function () { Game.Modal.draw(); }, sw).over;
+        Game.Modal.close();
+        var over = o.hud + o.victory + o.inventory + o.quests;
+        drawOver[sizes[si].join('x')] = o;
+        if (over > 0) allNoOver = false;
+      }
+      check('noTextOverflow', allNoOver, drawOver);
+
+      /* 5. resize 可重复调用（模拟缩放/横竖屏切换后重算）：两次结果一致且不抛错 */
+      var repeatOk = true;
+      try {
+        R.resize(1); var a = [R.cssW, R.cssH, R.scale, R.cssPxW, R.cssPxH].join(',');
+        R.resize(1); var b = [R.cssW, R.cssH, R.scale, R.cssPxW, R.cssPxH].join(',');
+        repeatOk = (a === b) && R.cssW > 0 && R.cssH > 0;
+      } catch (e) { repeatOk = false; }
+      check('resizeRepeatable', repeatOk, a);
+
+      out.sub = sub;
+      out.rzOk = fail.length === 0;
+    }
+
+    var pass = out.rzLoaded && out.rzApi && out.rzOk;
+    document.title = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    var r = document.getElementById('result');
+    if (r) r.textContent = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  } catch (e) {
+    out.err = String(e);
+    document.title = 'FAIL ' + JSON.stringify(out);
+    var r2 = document.getElementById('result');
+    if (r2) r2.textContent = 'FAIL ' + JSON.stringify(out);
+  }
+})();
+</script>
+</body>
+</html>

@@ -59,21 +59,25 @@
     if (out.finLoaded && out.finApi) {
       var R = Game.Core.Render, M = Game.Modal, Main = Game.Core.Main;
 
-      /* 2. DPR：注入 dpr=2 → canvas.width = cssW*2 且 setTransform 生效 */
+      /* 2. DPR + 自适应：注入 dpr=2 → 物理像素 = 窗口CSS*2，变换 = dpr*scale */
       R.init(cv);
       R.resize(2);
-      var cssW = R.cssW;
-      var dpr2_width = (cv.width === Math.round(cssW * 2));
+      var pxW = R.cssPxW;
+      var sc2 = R.scale;
+      var dpr2_width = (cv.width === Math.round(pxW * 2));
       var tr2 = cv.getContext('2d').getTransform ? cv.getContext('2d').getTransform() : null;
-      var dpr2_transform = tr2 && Math.abs(tr2.a - 2) < 0.001;
+      var dpr2_transform = tr2 && Math.abs(tr2.a - 2 * sc2) < 0.001;
       sub.t2_dpr2 = dpr2_width && dpr2_transform && (R.dpr === 2);
       ok = ok && sub.t2_dpr2;
+      sub.t2_scale = (sc2 >= 1 && sc2 <= 2) &&
+        (Math.abs(R.cssW - pxW / sc2) < 0.01) && (Math.abs(R.cssH - R.cssPxH / sc2) < 0.01);
+      ok = ok && sub.t2_scale;
 
-      /* dpr=1 时无变化 */
+      /* dpr=1 时宽度回到 CSS 像素，变换 = scale */
       R.resize(1);
-      var dpr1_width = (cv.width === cssW);
+      var dpr1_width = (cv.width === Math.round(pxW));
       var tr1 = cv.getContext('2d').getTransform ? cv.getContext('2d').getTransform() : null;
-      var dpr1_transform = tr1 && Math.abs(tr1.a - 1) < 0.001;
+      var dpr1_transform = tr1 && Math.abs(tr1.a - R.scale) < 0.001;
       sub.t2_dpr1 = dpr1_width && dpr1_transform && (R.dpr === 1);
       ok = ok && sub.t2_dpr1;
 

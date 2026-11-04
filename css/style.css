@@ -20,7 +20,9 @@ canvas#game {
   position: fixed;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  /* 自适应缩放：--ui-scale 由 render.js 按窗口计算，NPC 对话框与画布同倍率 */
+  transform: translate(-50%, -50%) scale(var(--ui-scale, 1));
+  transform-origin: center center;
   width: min(560px, 92vw);
   height: 360px;
   background: rgba(15, 15, 31, 0.96);

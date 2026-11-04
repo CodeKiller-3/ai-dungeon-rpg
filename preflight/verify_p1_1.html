@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p1_1</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P1-1 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART 跳过自动启动。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir，默认契约不变）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { sceneLoaded: false, sceneApi: false, sceneOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+  var rec = [];              /* drawImage 记录：{n:文件名, x, y, w, h} */
+  var origDrawImage = ctx.drawImage;
+
+  /* 记录每帧 drawImage 的贴图名与目标矩形，用于"可复现/无闪烁"断言。
+   * 不依赖 getImageData：file:// 下 Canvas 被本地图片污染会抛 SecurityError。 */
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+
+  function seq() {
+    return rec.map(function (r) { return r.n + '@' + r.x + ',' + r.y + ',' + r.w + 'x' + r.h; }).join('|');
+  }
+  function imgNames() {
+    var names = {};
+    for (var i = 0; i < rec.length; i++) names[rec[i].n] = true;
+    return Object.keys(names);
+  }
+  function hasPrefix(prefix) {
+    var names = imgNames();
+    for (var i = 0; i < names.length; i++) {
+      if (names[i].indexOf(prefix) === 0) return true;
+    }
+    return false;
+  }
+
+  function makeFloorGrid(n) {
+    var g = [];
+    for (var y = 0; y < n; y++) { g[y] = []; for (var x = 0; x < n; x++) g[y][x] = 1; }
+    return g;
+  }
+  /* 12x12：四周墙 + 中央 3x3 墙块，可覆盖 wall_top_left/mid/right 与 wall_left/mid/right 全部路径 */
+  function makeMixedGrid() {
+    var n = 12, g = makeFloorGrid(n);
+    for (var i = 0; i < n; i++) {
+      g[0][i] = 0; g[n - 1][i] = 0;
+      g[i][0] = 0; g[i][n - 1] = 0;
+    }
+    for (var yy = 4; yy <= 6; yy++) for (var xx = 4; xx <= 6; xx++) g[yy][xx] = 0;
+    g[2][2] = 2; /* 下行楼梯 */
+    g[9][9] = 3; /* 上行楼梯 */
+    return g;
+  }
+
+  function finish() {
+    var pass = out.sceneLoaded && out.sceneApi && out.sceneOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var R = Game.Core.Render;
+      var S = Game.Core.Sprites;
+      out.sceneLoaded = !!(window.Game && Game.Core && R && S);
+      out.sceneApi = !!(typeof S.get === 'function' && typeof S.getFrame === 'function' &&
+        typeof R.drawMap === 'function' && typeof R._wallSprite === 'function');
+
+      if (!out.sceneLoaded || !out.sceneApi) { finish(); return; }
+
+      R.init(cv);
+
+      /* 独立渲染断言：桩掉地图/视野/光照，只测渲染层 */
+      Game.Systems = Game.Systems || {};
+      Game.Systems.Map = {
+        getDetail: function () { return null; },
+        getDecor: function () { return null; },
+        getEnemies: function () { return []; },
+        getGrid: function () { return null; }
+      };
+      Game.Systems.AI = undefined;
+      Game.fov = undefined;
+      Game.Lighting = undefined;
+      Game.Particles = undefined;
+      Game.Feedback = undefined;
+
+      var floorNames = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
+
+      /* t2_floor：floor_1~8 均入库 */
+      var missingFloor = [];
+      for (var fi = 0; fi < floorNames.length; fi++) {
+        if (!S.get(floorNames[fi])) missingFloor.push(floorNames[fi]);
+      }
+      sub.t2_floor = (missingFloor.length === 0);
+      ok = ok && sub.t2_floor;
+
+      /* t3_wall：wall_mid/left/right/top_mid 入库；另测选图逻辑落笔 */
+      var wallNeed = ['wall_mid', 'wall_left', 'wall_right', 'wall_top_mid'];
+      var missingWall = [];
+      for (var wi = 0; wi < wallNeed.length; wi++) {
+        if (!S.get(wallNeed[wi])) missingWall.push(wallNeed[wi]);
+      }
+      sub.t3_wall = (missingWall.length === 0);
+      ok = ok && sub.t3_wall;
+
+      /* t4_decor：chest/crate/skull/wall_goo 均入库 */
+      var decorNeed = ['chest', 'crate', 'skull', 'wall_goo'];
+      var missingDecor = [];
+      for (var di = 0; di < decorNeed.length; di++) {
+        if (!S.get(decorNeed[di])) missingDecor.push(decorNeed[di]);
+      }
+      sub.t4_decor = (missingDecor.length === 0);
+      ok = ok && sub.t4_decor;
+
+      /* t5_skelet：idle/run 各 4 帧经 getFrame 可取得且非 null，且 4 帧互不相同 */
+      var skeletOk = true, skeletMissing = [];
+      ['skelet_idle', 'skelet_run'].forEach(function (base) {
+        var seen = {};
+        for (var k = 0; k < 4; k++) {
+          var f = S.getFrame(base, k);
+          if (!f) { skeletOk = false; skeletMissing.push(base + '#' + k); }
+          else if (f.src) seen[f.src] = true;
+        }
+        if (Object.keys(seen).length !== 4) skeletOk = false;
+      });
+      sub.t5_skelet = skeletOk;
+      ok = ok && skeletOk;
+
+      /* 骷髅渲染：idle（未追击）与 run（追击）应分别取到对应帧 */
+      var skeletons = [
+        { x: 3, y: 3, monsterId: 'skeleton', state: 'idle', path: [], frame: 0 },
+        { x: 6, y: 3, monsterId: 'skeleton', state: 'chase', path: [], frame: 0 }
+      ];
+      Game.Systems.AI = { getPatrols: function () { return skeletons; } };
+      Game.Systems.Map.getEnemies = function () { return [{ x: 2, y: 2, monsterId: 'skeleton' }]; };
+      rec = [];
+      var skelDrawOk = true;
+      try { R.drawMap(makeMixedGrid(), { x: 1, y: 1, floor: 1 }); }
+      catch (e) { skelDrawOk = false; }
+      var skelIdle = hasPrefix('skelet_idle_anim_f');
+      var skelRun = hasPrefix('skelet_run_anim_f');
+      sub.t5b_skeletDraw = skelDrawOk && skelIdle && skelRun;
+      ok = ok && sub.t5b_skeletDraw;
+
+      /* 复原桩：无巡逻怪、无埋伏怪 */
+      Game.Systems.AI = undefined;
+      Game.Systems.Map.getEnemies = function () { return []; };
+
+      /* t6_draw：空地图（全地板）两次绘制不抛错，且选图结果完全一致（可复现） */
+      var floorGrid = makeFloorGrid(12);
+      rec = [];
+      var draw1Ok = true;
+      try { R.drawMap(floorGrid, { x: 1, y: 1, floor: 2 }); } catch (e) { draw1Ok = false; }
+      var s1 = seq();
+      var floorUsed = {};
+      for (var ri = 0; ri < rec.length; ri++) {
+        if (/^floor_[1-8]$/.test(rec[ri].n)) floorUsed[rec[ri].n] = true;
+      }
+      var variantCount = Object.keys(floorUsed).length;
+      rec = [];
+      var draw2Ok = true;
+      try { R.drawMap(floorGrid, { x: 1, y: 1, floor: 2 }); } catch (e) { draw2Ok = false; }
+      var s2 = seq();
+      sub.t6_draw = draw1Ok && draw2Ok && (s1 === s2) && (variantCount >= 2) && (s1.length > 0);
+      sub.t6_variants = variantCount;
+      ok = ok && sub.t6_draw;
+
+      /* t7_fallback：素材缺失（未就绪 + get 返回 null）时全部回退色块，不抛异常、不落 drawImage */
+      var origReady = S.isReady, origGet = S.get, origGetFrame = S.getFrame;
+      sub.t7_missingNull = (S.get('__not_exist__') === null) && (S.getFrame('__not_exist__', 0) === null);
+      var fallbackOk = sub.t7_missingNull;
+      try {
+        S.isReady = function () { return false; };
+        rec = [];
+        R.drawMap(makeMixedGrid(), { x: 1, y: 1, floor: 1 });
+        fallbackOk = fallbackOk && (rec.length === 0);
+        /* 仅 isReady=true 但所有 get 返回 null（部分素材缺失）同样要回退 */
+        S.isReady = function () { return true; };
+        S.get = function () { return null; };
+        S.getFrame = function () { return null; };
+        rec = [];
+        R.drawMap(makeMixedGrid(), { x: 1, y: 1, floor: 1 });
+        fallbackOk = fallbackOk && (rec.length === 0);
+      } catch (e) {
+        fallbackOk = false;
+      }
+      S.isReady = origReady; S.get = origGet; S.getFrame = origGetFrame;
+      sub.t7_fallback = fallbackOk;
+      ok = ok && fallbackOk;
+
+      /* t8_idem：混合地图（墙/地板/楼梯）连续两次 drawMap 输出完全一致（无随机闪烁） */
+      var mixed = makeMixedGrid();
+      rec = [];
+      R.drawMap(mixed, { x: 1, y: 1, floor: 3 });
+      var m1 = seq();
+      rec = [];
+      R.drawMap(mixed, { x: 1, y: 1, floor: 3 });
+      var m2 = seq();
+      sub.t8_idem = (m1 === m2) && (m1.length > 0);
+      ok = ok && sub.t8_idem;
+
+      /* 墙/楼梯贴图确实落笔（覆盖 wall 顶行与墙身、楼梯） */
+      var wallNames = {};
+      for (var mri = 0; mri < rec.length; mri++) wallNames[rec[mri].n] = true;
+      var wallOk = !!(wallNames['wall_top_mid'] && wallNames['wall_mid'] && wallNames['wall_left'] &&
+        wallNames['wall_right'] && wallNames['floor_stairs'] && wallNames['floor_ladder']);
+      sub.t8b_wallStairsDraw = wallOk;
+      ok = ok && wallOk;
+
+      out.sub = sub;
+      out.sceneOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.sceneOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

@@ -192,9 +192,18 @@
         window.addEventListener('keydown', dismissGuide);
         window.addEventListener('click', dismissGuide);
       }
-      window.addEventListener('resize', function () {
+      /* 自适应缩放：窗口 resize / 浏览器缩放 / 横竖屏切换 / 移动端视口变化都重新计算
+       * （resize 覆盖桌面缩放与横竖屏；orientationchange 兜底老浏览器；visualViewport 覆盖移动端地址栏收起） */
+      var onViewportChange = function () {
         try { Game.Core.Render.resize(); } catch (e) { /* 降级 */ }
-      });
+      };
+      window.addEventListener('resize', onViewportChange);
+      window.addEventListener('orientationchange', onViewportChange);
+      try {
+        if (window.visualViewport && window.visualViewport.addEventListener) {
+          window.visualViewport.addEventListener('resize', onViewportChange);
+        }
+      } catch (e) { /* 降级：不支持 visualViewport 时仅依赖 resize */ }
     },
 
     start: function () {

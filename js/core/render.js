@@ -10,6 +10,14 @@
   var TILE = 24; /* 瓦片像素尺寸 */
   var cam = { x: 0, y: 0 };
 
+  /* 自适应缩放（2026-11）：设计基准 960×540，等比缩放系数 scale∈[1,2]，按 0.25 步进取整。
+   * 逻辑视口 = 窗口 CSS 尺寸 / scale；所有绘制与命中判定仍用逻辑坐标（像素风 TILE=24 不变），
+   * 因此窗口变大时画面整体放大、字体/面板同步放大，且不拉伸（横纵同一系数）。
+   * 为什么不 letterbox：320×568 竖屏下固定逻辑分辨率会产生大面积黑边、弹窗放不下；
+   * 等比放大 + 逻辑视口随窗口比例更符合"320–2560 都能用"的目标。 */
+  var BASE_W = 960, BASE_H = 540;
+  var MIN_SCALE = 1, MAX_SCALE = 2, SCALE_STEP = 0.25;
+
   /* M8-5：排行榜用时格式（秒 → “分秒”，如 205 → 3分25秒） */
   function fmtRankTime(sec) {
     var s = Math.round(Number(sec));
@@ -18,13 +26,31 @@
     return Math.floor(s / 60) + '分' + (s % 60) + '秒';
   }
 
+  /* P1-1：地板变体名——坐标 + 楼层哈希（同一格同一层恒定，不依赖 Math.random，避免逐帧闪烁） */
+  function floorVariantName(x, y, floor) {
+    var f = (typeof floor === 'number' && floor > 0) ? floor : 1;
+    var h = (x * 7 + y * 13 + f * 3) % 8;
+    if (h < 0) h += 8;
+    return 'floor_' + (h + 1);
+  }
+
+  /* P1-1：骷髅动画帧序号——按真实时间 4 帧/秒循环（f0→f1→f2→f3）。
+   * 不用 rAF 计数，避免验证页两次同步绘制取到不同帧被误判为随机闪烁 */
+  function skeletonFrameIndex() {
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    return Math.floor(now / 250) % 4;
+  }
+
   Game.Core.Render = {
     _canvas: null,
     _ctx: null,
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
     /* M9-5：DPR 高清适配——逻辑坐标统一用 CSS 像素，物理像素 = CSS * dpr */
     dpr: 1,
-    cssW: 0,
+    scale: 1,      /* 自适应缩放系数：逻辑像素 → CSS 像素 */
+    cssPxW: 0,     /* 画布实际 CSS 尺寸（窗口尺寸） */
+    cssPxH: 0,
+    cssW: 0,       /* 逻辑视口尺寸（绘制/命中坐标空间 = cssPx / scale） */
     cssH: 0,
 
     init: function (canvas) {
@@ -33,32 +59,67 @@
       this.resize();
     },
 
-    /* M9-5：按 devicePixelRatio 缩放画布（上限 2），用 setTransform 统一缩放，不改绘制坐标语义
-     * dprOverride：验证页可注入固定 dpr 值断言，正常运行时留空读 window.devicePixelRatio */
+    /* M9-5 + 自适应：按 devicePixelRatio 设置画布物理像素，并按 scale 把逻辑坐标映射到 CSS 像素。
+     * dprOverride：验证页可注入固定 dpr 值断言，正常运行时留空读 window.devicePixelRatio
+     * 说明：resize 需在窗口 resize / 浏览器缩放 / 横竖屏切换时重复调用（main.js 已监听） */
     resize: function (dprOverride) {
       var cv = this._canvas;
       if (!cv) return;
       var raw = (typeof dprOverride === 'number' && dprOverride > 0) ? dprOverride : (window.devicePixelRatio || 1);
       var dpr = Math.min(raw, 2);
-      var cssW = window.innerWidth;
-      var cssH = window.innerHeight;
+      var pxW = Math.max(window.innerWidth || 0, 1);
+      var pxH = Math.max(window.innerHeight || 0, 1);
+      var scale = this._computeScale(pxW, pxH);
       this.dpr = dpr;
-      this.cssW = cssW;
-      this.cssH = cssH;
+      this.scale = scale;
+      this.cssPxW = pxW;
+      this.cssPxH = pxH;
+      /* 逻辑视口：保留小数，保证 client→logical 映射精确（不因取整产生点击偏移） */
+      this.cssW = pxW / scale;
+      this.cssH = pxH / scale;
       try {
-        cv.width = Math.round(cssW * dpr);
-        cv.height = Math.round(cssH * dpr);
-        cv.style.width = cssW + 'px';
-        cv.style.height = cssH + 'px';
+        cv.width = Math.round(pxW * dpr);
+        cv.height = Math.round(pxH * dpr);
+        cv.style.width = pxW + 'px';
+        cv.style.height = pxH + 'px';
       } catch (e) { /* 降级：极端环境下保持默认 */ }
+      /* DOM 覆盖层（NPC 对话框）跟随同一缩放系数，避免大屏下相对画布过小 */
+      try {
+        if (document && document.documentElement && document.documentElement.style) {
+          document.documentElement.style.setProperty('--ui-scale', String(scale));
+        }
+      } catch (e) { /* 降级 */ }
       this._applyDpr();
     },
 
-    /* M9-5：每帧绘制前重置变换矩阵为 DPR 缩放（CSS 像素坐标空间） */
+    /* 等比缩放系数：以 960×540 为设计基准，取横纵可容纳比例中较小值（避免任一方向超出），
+     * 限制在 [1,2] 并按 0.25 步进取整；竖屏小窗口保持 1，不做反向缩小，保证字号可读。 */
+    _computeScale: function (pxW, pxH) {
+      var rawScale = Math.min(pxW / BASE_W, pxH / BASE_H);
+      var s = Math.round(rawScale / SCALE_STEP) * SCALE_STEP;
+      if (s < MIN_SCALE) s = MIN_SCALE;
+      if (s > MAX_SCALE) s = MAX_SCALE;
+      return s;
+    },
+
+    /* 每帧绘制前重置变换矩阵：物理像素 = 逻辑像素 × dpr × scale */
     _applyDpr: function () {
       var ctx = this._ctx;
       if (!ctx) return;
-      try { ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); } catch (e) { /* 降级 */ }
+      try { ctx.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0); } catch (e) { /* 降级 */ }
+      /* 像素风：非整数倍放大时关闭图像平滑，避免精灵发糊（文字由矢量路径绘制，不受影响） */
+      try { if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = false; } catch (e) { /* 降级 */ }
+    },
+
+    /* 自适应：把浏览器 client 坐标（相对画布）换算为逻辑坐标，供鼠标/触屏命中使用。
+     * 画布 CSS 尺寸 = 窗口 CSS 尺寸，逻辑视口 = cssPx/scale，故比例系数为 cssW / rect.width。 */
+    toLogical: function (clientX, clientY) {
+      var cv = this._canvas;
+      if (!cv || typeof cv.getBoundingClientRect !== 'function') return { x: clientX, y: clientY };
+      var r = cv.getBoundingClientRect();
+      var sx = (r.width > 0) ? (this.cssW / r.width) : 1;
+      var sy = (r.height > 0) ? (this.cssH / r.height) : 1;
+      return { x: (clientX - r.left) * sx, y: (clientY - r.top) * sy };
     },
 
     /* M9-5：是否窄窗口（<520px），HUD/底部提示用紧凑版 */
@@ -67,13 +128,16 @@
     /* M9-2：返回当前相机偏移（供 Lighting 等模块计算屏幕坐标） */
     _getCam: function () { return cam; },
 
-    /* 计算镜头：地图比屏幕小则居中，否则跟随玩家 */
+    /* 计算镜头：地图比屏幕小则居中（负偏移），否则跟随玩家并夹在边界内。
+     * 自适应缩放后大窗口逻辑视口可能大于地图，居中可避免地图贴左上角、大片空背景。 */
     _updateCam: function (grid, player) {
       var W = this.cssW, H = this.cssH;
       var w = grid[0].length * TILE;
       var h = grid.length * TILE;
-      cam.x = Math.min(Math.max(player.x * TILE - W / 2 + TILE / 2, 0), Math.max(w - W, 0));
-      cam.y = Math.min(Math.max(player.y * TILE - H / 2 + TILE / 2, 0), Math.max(h - H, 0));
+      cam.x = (w <= W) ? -(W - w) / 2
+        : Math.min(Math.max(player.x * TILE - W / 2 + TILE / 2, 0), w - W);
+      cam.y = (h <= H) ? -(H - h) / 2
+        : Math.min(Math.max(player.y * TILE - H / 2 + TILE / 2, 0), h - H);
     },
 
     /* S3-2：每帧渲染末尾叠加常驻 HUD（hud.js 缺失/未就绪时静默跳过，不影响绘制） */
@@ -92,10 +156,44 @@
       } catch (e) { /* 降级：弹窗异常不影响主画面 */ }
     },
 
+    /* P1-1：素材是否就绪（加载器缺失/未完成时统一回退色块） */
+    _hasSprites: function () {
+      return !!(Game.Core.Sprites && typeof Game.Core.Sprites.isReady === 'function' && Game.Core.Sprites.isReady());
+    },
+
+    /* P1-1：墙格判断；地图外视为墙，保证边界墙贴图连续 */
+    _isWall: function (grid, x, y) {
+      if (!grid || !grid[y] || x < 0 || x >= grid[y].length) return true;
+      return grid[y][x] === 0;
+    },
+
+    /* P1-1：墙贴图选择——墙下方是地板 → 顶行 wall_top_*；否则按左右相邻墙选 wall_left/mid/right。
+     * edge/outer 系列为本卡可选增强，未接入；保底"墙身 + 顶行"两套即可显著改善观感。 */
+    _wallSprite: function (grid, x, y) {
+      if (!this._hasSprites()) return null;
+      var S = Game.Core.Sprites;
+      if (!this._isWall(grid, x, y + 1)) {
+        var leftTop = this._isWall(grid, x - 1, y) && !this._isWall(grid, x - 1, y + 1);
+        var rightTop = this._isWall(grid, x + 1, y) && !this._isWall(grid, x + 1, y + 1);
+        var topName = (!leftTop && rightTop) ? 'wall_top_left'
+          : (leftTop && !rightTop) ? 'wall_top_right'
+          : 'wall_top_mid';
+        return S.get(topName);
+      }
+      var leftWall = this._isWall(grid, x - 1, y);
+      var rightWall = this._isWall(grid, x + 1, y);
+      var bodyName = !leftWall ? 'wall_left' : (!rightWall ? 'wall_right' : 'wall_mid');
+      return S.get(bodyName);
+    },
+
     /* M9-1：tile 细节绘制——素材就绪用贴图，否则程序化色块兜底
-     * type: grass(草丛绿块) / puddle(水洼蓝块) / bones(碎骨白点) / moss(苔藓绿块) */
-    _drawDetail: function (ctx, type, px, py) {
-      var sp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get(type) : null;
+     * type: grass(草丛绿块) / puddle(水洼蓝块) / bones(碎骨白点) / moss(苔藓绿块)
+     * P1-1：onWall=true 且 type=moss 时改用 wall_goo 贴图；grass/puddle 等无真贴图保持兜底 */
+    _drawDetail: function (ctx, type, px, py, onWall) {
+      var sp = null;
+      if (this._hasSprites()) {
+        sp = (type === 'moss' && onWall) ? Game.Core.Sprites.get('wall_goo') : Game.Core.Sprites.get(type);
+      }
       if (sp) { ctx.drawImage(sp, px, py, TILE - 1, TILE - 1); return; }
       if (type === 'grass') {
         ctx.fillStyle = 'rgba(58,125,44,0.55)';
@@ -122,8 +220,10 @@
     /* M9-1：装饰物绘制——素材就绪用贴图，否则程序化矩形+轮廓兜底
      * id: chest(宝箱黄框) / barrel(木桶棕框) / torch(火把橙焰) / vine(藤蔓绿条) */
     _drawDecor: function (ctx, id, px, py) {
-      var sp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get(id) : null;
-      if (sp) { ctx.drawImage(sp, px + 2, py + 2, TILE - 5, TILE - 5); return; }
+      var sp = this._hasSprites() ? Game.Core.Sprites.get(id) : null;
+      /* P1-1：chest/crate/skull/wall_goo 有同名贴图则直接绘制；
+       * barrel/torch/vine 无同名文件（get 返回 null）→ 继续走下方程序化兜底 */
+      if (sp) { ctx.drawImage(sp, px + 1, py + 1, TILE - 2, TILE - 2); return; }
       if (id === 'chest') {
         ctx.fillStyle = '#8b5a2b';
         ctx.fillRect(px + 4, py + 8, TILE - 9, TILE - 12);
@@ -180,6 +280,8 @@
       ctx.fillRect(0, 0, W, H);
       /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
       var fovOn = !!(Game.fov && Game.fov.isVisible);
+      /* P1-1：地板变体带楼层因子（同一格跨层可变化，同层内恒定） */
+      var pf = (player && typeof player.floor === 'number' && player.floor > 0) ? player.floor : 1;
       for (var y = 0; y < grid.length; y++) {
         for (var x = 0; x < grid[0].length; x++) {
           var t = grid[y][x];
@@ -192,39 +294,63 @@
             continue;
           }
           if (t === 0) {
-            /* 墙：砖纹 */
-            ctx.fillStyle = '#3a2e5c';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
-            ctx.fillStyle = 'rgba(0,0,0,0.28)';
-            ctx.fillRect(px, py + TILE / 2 - 1, TILE - 1, 2);
-            ctx.fillRect(px + (x % 2) * 8, py, 1, TILE - 1);
+            /* P1-1：墙贴图（顶行 wall_top_* / 墙身 wall_left|mid|right）；素材缺失回退砖纹色块 */
+            var wsp = this._wallSprite(grid, x, y);
+            if (wsp) {
+              ctx.drawImage(wsp, px, py, TILE - 1, TILE - 1);
+            } else {
+              /* 墙：砖纹 */
+              ctx.fillStyle = '#3a2e5c';
+              ctx.fillRect(px, py, TILE - 1, TILE - 1);
+              ctx.fillStyle = 'rgba(0,0,0,0.28)';
+              ctx.fillRect(px, py + TILE / 2 - 1, TILE - 1, 2);
+              ctx.fillRect(px + (x % 2) * 8, py, 1, TILE - 1);
+            }
           } else if (t === 1) {
-            /* 地板：稳定噪点 */
-            ctx.fillStyle = '#2b2b4a';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
-            ctx.fillStyle = 'rgba(255,255,255,0.07)';
-            var seed = (x * 7 + y * 13) % 4;
-            if (seed === 0) ctx.fillRect(px + 6, py + 6, 2, 2);
-            else if (seed === 1) ctx.fillRect(px + 14, py + 3, 2, 2);
-            else if (seed === 2) ctx.fillRect(px + 4, py + 12, 2, 2);
+            /* P1-1：地板贴图 floor_1~8 按坐标哈希选变体；素材缺失回退稳定噪点色块 */
+            var fsp = this._hasSprites() ? Game.Core.Sprites.get(floorVariantName(x, y, pf)) : null;
+            if (fsp) {
+              ctx.drawImage(fsp, px, py, TILE - 1, TILE - 1);
+            } else {
+              /* 地板：稳定噪点 */
+              ctx.fillStyle = '#2b2b4a';
+              ctx.fillRect(px, py, TILE - 1, TILE - 1);
+              ctx.fillStyle = 'rgba(255,255,255,0.07)';
+              var seed = (x * 7 + y * 13) % 4;
+              if (seed === 0) ctx.fillRect(px + 6, py + 6, 2, 2);
+              else if (seed === 1) ctx.fillRect(px + 14, py + 3, 2, 2);
+              else if (seed === 2) ctx.fillRect(px + 4, py + 12, 2, 2);
+            }
           } else if (t === 2) {
-            /* 楼梯下：紫台 */
-            ctx.fillStyle = '#b06ce0';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
-            ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
-            ctx.fillRect(px, py + TILE - 12, TILE - 1, 2);
+            /* P1-1：下行楼梯贴图；缺失回退紫台色块 */
+            var stDown = this._hasSprites() ? Game.Core.Sprites.get('floor_stairs') : null;
+            if (stDown) {
+              ctx.drawImage(stDown, px, py, TILE - 1, TILE - 1);
+            } else {
+              /* 楼梯下：紫台 */
+              ctx.fillStyle = '#b06ce0';
+              ctx.fillRect(px, py, TILE - 1, TILE - 1);
+              ctx.fillStyle = 'rgba(255,255,255,0.25)';
+              ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
+              ctx.fillRect(px, py + TILE - 12, TILE - 1, 2);
+            }
           } else {
-            /* 楼梯上：绿台 */
-            ctx.fillStyle = '#52c41a';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
-            ctx.fillStyle = 'rgba(255,255,255,0.3)';
-            ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
+            /* P1-1：上行梯贴图；缺失回退绿台色块 */
+            var stUp = this._hasSprites() ? Game.Core.Sprites.get('floor_ladder') : null;
+            if (stUp) {
+              ctx.drawImage(stUp, px, py, TILE - 1, TILE - 1);
+            } else {
+              /* 楼梯上：绿台 */
+              ctx.fillStyle = '#52c41a';
+              ctx.fillRect(px, py, TILE - 1, TILE - 1);
+              ctx.fillStyle = 'rgba(255,255,255,0.3)';
+              ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
+            }
           }
           /* M9-1：细节层与装饰层——仅当前可见格绘制（FOV 外不画，与怪物隐藏规则一致） */
           if (!fovOn || Game.fov.isVisible(x, y)) {
             var det = Game.Systems.Map.getDetail(x, y);
-            if (det) this._drawDetail(ctx, det, px, py);
+            if (det) this._drawDetail(ctx, det, px, py, t === 0);
             var dec = Game.Systems.Map.getDecor(x, y);
             if (dec) this._drawDecor(ctx, dec, px, py);
           }
@@ -242,11 +368,18 @@
         var epx = es[i].x * TILE - cam.x + 2;
         var epy = es[i].y * TILE - cam.y + 2;
         if (epx > -20 && epy > -20 && epx < W + 20 && epy < H + 20) {
-          var eimg = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('monster_chort') : null;
+          var eimg = null;
+          if (this._hasSprites()) {
+            var eS = Game.Core.Sprites;
+            /* P1-1：骷髅埋伏怪用 idle 帧动画；其他怪保持 chort 精灵（原行为） */
+            eimg = (es[i].monsterId === 'skeleton' && typeof eS.getFrame === 'function')
+              ? eS.getFrame('skelet_idle', skeletonFrameIndex())
+              : eS.get('monster_chort');
+          }
           if (eimg) {
             ctx.fillStyle = 'rgba(234,102,104,0.22)';
             ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
-            ctx.drawImage(eimg, epx, epy, TILE - 4, TILE - 4);
+            ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
           } else {
             ctx.fillStyle = '#ea6668';
             ctx.beginPath();
@@ -267,15 +400,22 @@
         var ppy = pry * TILE - cam.y + 2;
         if (ppx > -20 && ppy > -20 && ppx < W + 20 && ppy < H + 20) {
           var chasing = ps[j].state === 'chase';
-          var pimg = (Game.Core.Sprites && Game.Core.Sprites.isReady())
-            ? Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort')
-            : null;
+          var pimg = null;
+          if (this._hasSprites()) {
+            var pS = Game.Core.Sprites;
+            /* P1-1：骷髅怪按追击状态切换 idle/run 各 4 帧；其他怪保持原 chort 精灵 */
+            if (ps[j].monsterId === 'skeleton' && typeof pS.getFrame === 'function') {
+              pimg = pS.getFrame(chasing ? 'skelet_run' : 'skelet_idle', skeletonFrameIndex());
+            } else {
+              pimg = pS.get(chasing ? 'monster_chort_run' : 'monster_chort');
+            }
+          }
           if (pimg) {
             if (chasing) {
               ctx.fillStyle = 'rgba(234,102,104,0.25)';
               ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
             }
-            ctx.drawImage(pimg, ppx, ppy, TILE - 4, TILE - 4);
+            ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
             if (chasing) {
               ctx.fillStyle = '#fff';
               ctx.font = '9px monospace';

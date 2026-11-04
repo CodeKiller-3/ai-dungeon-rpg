@@ -165,21 +165,22 @@
         if (!self.isOpen()) return;
         var v = canvas();
         if (!v) return;
-        var r = v.getBoundingClientRect();
-        var sz = cssSize();
-        var sx = sz.w / r.width, sy = sz.h / r.height;
-        self._handleClick((e.clientX - r.left) * sx, (e.clientY - r.top) * sy);
+        /* 自适应缩放：统一用 Render.toLogical 换算，避免 scale≠1 时点击偏移 */
+        var R = Game.Core && Game.Core.Render;
+        var pt = (R && typeof R.toLogical === 'function') ? R.toLogical(e.clientX, e.clientY)
+          : { x: e.clientX, y: e.clientY };
+        self._handleClick(pt.x, pt.y);
       };
       /* M9-4：设置面板音量滑块拖拽 */
       onMouseDown = function (e) {
         if (!self.isOpen() || kind !== 'settings' || !volTrack) return;
         var v = canvas();
         if (!v) return;
-        var r = v.getBoundingClientRect();
-        var sz = cssSize();
-        var sx = sz.w / r.width, sy = sz.h / r.height;
-        var mx = (e.clientX - r.left) * sx;
-        var my = (e.clientY - r.top) * sy;
+        var R = Game.Core && Game.Core.Render;
+        var pt = (R && typeof R.toLogical === 'function') ? R.toLogical(e.clientX, e.clientY)
+          : { x: e.clientX, y: e.clientY };
+        var mx = pt.x;
+        var my = pt.y;
         if (mx >= volTrack.x && mx <= volTrack.x + volTrack.w &&
             my >= volTrack.y - 8 && my <= volTrack.y + volTrack.h + 8) {
           volDragging = true;
@@ -191,11 +192,10 @@
         if (!volDragging) return;
         var v = canvas();
         if (!v) return;
-        var r = v.getBoundingClientRect();
-        var sz = cssSize();
-        var sx = sz.w / r.width;
-        var mx = (e.clientX - r.left) * sx;
-        self._setVolumeFromX(mx);
+        var R = Game.Core && Game.Core.Render;
+        var pt = (R && typeof R.toLogical === 'function') ? R.toLogical(e.clientX, e.clientY)
+          : { x: e.clientX, y: e.clientY };
+        self._setVolumeFromX(pt.x);
       };
       onMouseUp = function () { volDragging = false; };
       window.addEventListener('keydown', onKey);
@@ -407,9 +407,9 @@
         c.fillText(lines[i], left, y + i * 18);
       }
 
-      /* 底部提示 */
+      /* 底部提示（窄屏缩字号，避免 320 宽溢出） */
       c.fillStyle = '#9bbbf4';
-      c.font = '12px monospace';
+      c.font = (cssSize().w < 420 ? '11px monospace' : '12px monospace');
       c.fillText('← → 调音量 · 空格切换静音 · Esc/点遮罩关闭', px + 14, py + h - 12);
     },
 
@@ -453,9 +453,9 @@
       c.fillText('重新开始 (R / 回车)', px + w / 2, by + btnH / 2 + 5);
       c.textAlign = 'left';
 
-      /* 底部提示 */
+      /* 底部提示（窄屏缩字号，避免 320 宽溢出） */
       c.fillStyle = '#9bbbf4';
-      c.font = '12px monospace';
+      c.font = (cssSize().w < 420 ? '11px monospace' : '12px monospace');
       c.fillText('本局战绩 · R/回车/点击按钮重新开始', px + 14, py + h - 12);
     },
 
@@ -530,7 +530,7 @@
         return;
       }
 
-      /* 条目列表 */
+      /* 条目列表（窄屏单行超长时截断加省略号，避免 320 宽溢出） */
       c.font = '14px monospace';
       for (var i = 0; i < rows; i++) {
         var ry = py + HEADER_H + i * ROW_H;
@@ -541,7 +541,7 @@
         } else {
           c.fillStyle = '#cfcfcf';
         }
-        c.fillText(this._rowText(data[i]), px + 14, ry + 20);
+        c.fillText(this._fitRow(c, this._rowText(data[i]), w - 28), px + 14, ry + 20);
       }
       /* M9-5：空状态——居中灰字提示（背包/任务各自文案） */
       if (data.length === 0) {
@@ -556,15 +556,26 @@
         c.textAlign = 'left';
       }
 
-      /* 底部操作提示 */
+      /* 底部操作提示（窄屏缩字号，避免 320 宽溢出） */
       c.fillStyle = '#9bbbf4';
-      c.font = '12px monospace';
+      c.font = (cw < 420 ? '11px monospace' : '12px monospace');
       var hint;
       if (kind === 'inventory') hint = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
       c.fillText(hint, px + 14, py + h - 12);
+    },
+
+    /* 自适应：单行文本超宽时按实际字宽截断并加省略号（调用前已设好字体） */
+    _fitRow: function (c, text, maxW) {
+      var str = String(text);
+      if (!c || c.measureText(str).width <= maxW) return str;
+      var ell = '…';
+      while (str.length > 0 && c.measureText(str + ell).width > maxW) {
+        str = str.slice(0, -1);
+      }
+      return str + ell;
     },
 
     _rowText: function (entry) {
