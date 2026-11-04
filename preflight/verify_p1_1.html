@@ -112,6 +112,9 @@
       Game.Lighting = undefined;
       Game.Particles = undefined;
       Game.Feedback = undefined;
+      /* P1-2 起 drawMap 末尾的 HUD 会绘制 UI 贴图（心形/金币等）；本页断言"场景素材层"的
+       * 贴图与回退，故测试期间禁用 HUD 绘制，避免 UI 贴图混入 drawImage 记录（口径分离） */
+      if (Game.hud) Game.hud.draw = function () { };
 
       var floorNames = ['floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8'];
 

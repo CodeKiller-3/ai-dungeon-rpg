@@ -41,6 +41,91 @@
 
   function fmt(v) { return (typeof v === 'number') ? String(v) : '--'; }
 
+  /* P1-2：取素材（Sprites 未加载/未就绪/缺失均返回 null，调用方回退程序化绘制） */
+  function sprite(name) {
+    var S = Game.Core && Game.Core.Sprites;
+    return (S && typeof S.get === 'function') ? S.get(name) : null;
+  }
+
+  /* P1-2：HP 心形血条。规则（任务卡 P1-2）：
+   *   - 每 HEART_HP=20 点一颗心（maxHp 100 → 5 颗；190 → 10 颗）；
+   *   - 整颗=ui_heart_full，余量 ≥10 点=ui_heart_half，其余=ui_heart_empty；
+   *   - 全尺寸 15×14、间距 2px；窄窗口缩至 11×10 且省略数值；
+   *   - 心形序列后仍显示小字 "hp/hpMax"（11px 灰白）；
+   *   - 素材缺失 → 回退既有短条；放不下（心多）→ 省略数字 → 仍放不下 → 回退短条。 */
+  function drawHearts(ctx, x, hp, hpMax, narrow, maxW) {
+    var full = sprite('ui_heart_full');
+    var half = sprite('ui_heart_half');
+    var empty = sprite('ui_heart_empty');
+    if (!full || !half || !empty) {
+      return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', narrow ? 60 : 74);
+    }
+    var HEART_HP = 20;
+    var hw = narrow ? 11 : 15;
+    var hh = narrow ? 10 : 14;
+    var gap = 2;
+    var barH = narrow ? 18 : BAR_H;
+    var hy = Math.floor((barH - hh) / 2);
+    var hpMaxN = (typeof hpMax === 'number' && hpMax > 0) ? hpMax : 0;
+    var hpV = (typeof hp === 'number') ? Math.max(0, hp) : 0;
+    var count = hpMaxN > 0 ? Math.max(1, Math.ceil(hpMaxN / HEART_HP)) : 1;
+    var totalW = count * hw + (count - 1) * gap;
+    /* 数字宽（窄窗口省略） */
+    var numW = 0;
+    if (!narrow) {
+      ctx.font = '11px monospace';
+      numW = ctx.measureText(fmt(hpV) + '/' + fmt(hpMaxN)).width + 6;
+    }
+    /* 放不下 → 降级：省数字；仍放不下 → 回退短条 */
+    if (typeof maxW === 'number' && x + totalW + numW > maxW) {
+      if (narrow) return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', 60);
+      if (x + totalW > maxW) return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', 74);
+      numW = 0;
+    }
+    for (var i = 0; i < count; i++) {
+      var rem = hpV - i * HEART_HP;
+      var img = (rem >= HEART_HP) ? full : ((rem >= HEART_HP / 2) ? half : empty);
+      ctx.drawImage(img, x + i * (hw + gap), hy, hw, hh);
+    }
+    var nx = x + totalW + 2;
+    if (numW > 0) {
+      ctx.fillStyle = '#c8c8d4';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(fmt(hpV) + '/' + fmt(hpMaxN), nx, 15);
+      nx += numW;
+    }
+    return nx;
+  }
+
+  /* P1-2：MP 短条 + flask_blue 图标（14×14）；图标缺失回退纯短条 */
+  function drawMpBar(ctx, x, mp, mpMax, narrow) {
+    var icon = sprite('flask_blue');
+    if (!icon) return drawBar(ctx, x, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
+    var iw = 14, ih = 14;
+    var iy = narrow ? Math.floor((18 - ih) / 2) : 5;
+    ctx.drawImage(icon, x, iy, iw, ih);
+    return drawBar(ctx, x + iw + 3, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
+  }
+
+  /* P1-2：金币文字 + coin 图标（9×10）；图标缺失回退纯文字 */
+  function drawGold(ctx, x, gold, narrow, maxW) {
+    var icon = sprite('coin');
+    var label = (narrow ? '金 ' : '金币 ') + fmt(gold);
+    if (!icon) return drawText(ctx, x, label, '#ffcf6e', maxW);
+    var iw = 9, ih = 10;
+    var iy = narrow ? Math.floor((18 - ih) / 2) : 5;
+    ctx.font = '11px monospace';
+    var textW = ctx.measureText(label).width;
+    /* 图标+文字放不下 → 回退纯文字（drawText 自带 maxW 判定） */
+    if (typeof maxW === 'number' && x + iw + 3 + textW > maxW) {
+      return drawText(ctx, x, label, '#ffcf6e', maxW);
+    }
+    ctx.drawImage(icon, x, iy, iw, ih);
+    return drawText(ctx, x + iw + 3, label, '#ffcf6e', maxW);
+  }
+
   /* 短条：底 + 填充 + 边框 + 居中文字（HP/MP） */
   function drawBar(ctx, x, label, v, vmax, color, bg, w) {
     var y = 6;
@@ -128,10 +213,14 @@
       ctx.fillRect(0, barH - 1, W, 1);
 
       var x = 8;
-      x = drawBar(ctx, x, 'HP', s.hp, s.hpMax, '#4ade80', '#22131a', narrow ? 60 : 74);
-      x = drawBar(ctx, x, 'MP', s.mp, s.mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
+      /* P1-2：HP 心形序列（素材缺失/放不下自动回退短条），MP 图标短条，金币图标文字；
+       * 修复 P1：任一字段放不下（返回 null）就跳过其后所有字段，保证不越右边界 */
+      x = drawHearts(ctx, x, s.hp, s.hpMax, narrow, W - 8);
+      if (x !== null) {
+        x = drawMpBar(ctx, x, s.mp, s.mpMax, narrow);
+        x = drawGold(ctx, x, s.gold, narrow, W - 8);
+      }
       /* 修复 P1：窄屏用短标签；任一字段放不下就跳过其后所有字段，保证不越右边界 */
-      x = drawText(ctx, x, (narrow ? '金 ' : '金币 ') + fmt(s.gold), '#ffcf6e', W - 8);
       if (x !== null) {
         x = drawText(ctx, x,
           (narrow ? '层 ' : '第 ') + fmt(s.floor) + '/' + fmt(floorTotal()) + (narrow ? '' : ' 层'),

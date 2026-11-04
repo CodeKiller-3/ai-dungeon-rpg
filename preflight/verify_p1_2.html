@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p1_2</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P1-2 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { uiLoaded: false, uiApi: false, uiOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage/strokeRect/fillRect 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var rec = [];          /* [{n,x,y,w,h}] 贴图绘制 */
+  var strokeCount = 0;   /* strokeRect 调用次数（双层边框断言） */
+  var goldFill = false;  /* 金色系 fillRect 是否出现（标题分隔线断言） */
+  var origDrawImage = ctx.drawImage;
+  var origStrokeRect = ctx.strokeRect;
+  var origFillRect = ctx.fillRect;
+
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+  ctx.strokeRect = function () {
+    strokeCount++;
+    return origStrokeRect.apply(ctx, arguments);
+  };
+  ctx.fillRect = function () {
+    try {
+      var fs = String(ctx.fillStyle || '');
+      if (/255\s*,\s*207\s*,\s*110|ffcf6e/i.test(fs)) goldFill = true;
+    } catch (e) { /* 忽略 */ }
+    return origFillRect.apply(ctx, arguments);
+  };
+
+  function seq() {
+    return rec.map(function (r) { return r.n + '@' + r.x + ',' + r.y + ',' + r.w + 'x' + r.h; }).join('|');
+  }
+  function countImg(name) {
+    var c = 0;
+    for (var i = 0; i < rec.length; i++) if (rec[i].n === name) c++;
+    return c;
+  }
+  function hasImg(name) { return countImg(name) > 0; }
+
+  function finish() {
+    var pass = out.uiLoaded && out.uiApi && out.uiOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var R = Game.Core.Render, H = Game.hud, M = Game.Modal, S = Game.Core.Sprites;
+      out.uiLoaded = !!(window.Game && Game.Core && R && H && M && S);
+      out.uiApi = !!(typeof H.update === 'function' && typeof H.draw === 'function' &&
+        typeof S.get === 'function' && typeof M.open === 'function' && typeof M.draw === 'function');
+
+      if (!out.uiLoaded || !out.uiApi) { finish(); return; }
+
+      R.init(cv);
+
+      /* 桩掉弹窗数据源：构造 potion_small/sword_bone 的背包数据 */
+      Game.Systems.Inventory.list = function () {
+        return [{ id: 'potion_small', count: 1 }, { id: 'sword_bone', count: 1 }];
+      };
+
+      /* t2_hearts：hp=50/maxHp=100 → 2 full + 1 half + 2 empty = 5 颗 */
+      rec = [];
+      H.update({ hp: 50, hpMax: 100, mp: 50, mpMax: 50, gold: 21, floor: 1, level: 1 });
+      var hDrawOk = true;
+      try { H.draw(); } catch (e) { hDrawOk = false; }
+      var nFull = countImg('ui_heart_full');
+      var nHalf = countImg('ui_heart_half');
+      var nEmpty = countImg('ui_heart_empty');
+      sub.t2_hearts = hDrawOk && (nFull === 2) && (nHalf === 1) && (nEmpty === 2) && (nFull + nHalf + nEmpty === 5);
+      ok = ok && sub.t2_hearts;
+      /* t3_goldIcon / t4_mpIcon：同一帧内金币 coin、MP flask_blue 均落笔 */
+      sub.t3_goldIcon = hasImg('coin');
+      ok = ok && sub.t3_goldIcon;
+      sub.t4_mpIcon = hasImg('flask_blue');
+      ok = ok && sub.t4_mpIcon;
+
+      /* t5_itemIcon：打开背包弹窗，行左出现 flask_red / weapon_rusty_sword */
+      rec = []; strokeCount = 0; goldFill = false;
+      var modalOk = true;
+      try { M.open('inventory'); M.draw(); } catch (e) { modalOk = false; }
+      sub.t5_itemIcon = modalOk && hasImg('flask_red') && hasImg('weapon_rusty_sword');
+      ok = ok && sub.t5_itemIcon;
+
+      /* t6_panel：双层边框（strokeRect≥2）+ 金色标题分隔线（fillRect 金色系） */
+      sub.t6_panel = (strokeCount >= 2) && goldFill;
+      ok = ok && sub.t6_panel;
+
+      /* t9_idem：同参两次 draw 序列一致（HUD + 弹窗各两次） */
+      var idemOk = true;
+      rec = [];
+      H.update({ hp: 50, hpMax: 100, mp: 50, mpMax: 50, gold: 21, floor: 1, level: 1 });
+      try { H.draw(); } catch (e) { idemOk = false; }
+      var h1 = seq();
+      rec = [];
+      try { H.draw(); } catch (e) { idemOk = false; }
+      var h2 = seq();
+      rec = [];
+      try { M.draw(); } catch (e) { idemOk = false; }
+      var m1 = seq();
+      rec = [];
+      try { M.draw(); } catch (e) { idemOk = false; }
+      var m2 = seq();
+      sub.t9_idem = idemOk && (h1 === h2) && (m1 === m2) && (h1.length > 0) && (m1.length > 0);
+      ok = ok && sub.t9_idem;
+      try { M.close(); } catch (e) { /* 降级 */ }
+
+      /* t7_narrow：模拟窄窗 cssW=320（hpMax=190 → 10 颗心缩至 11×10 省略数字），
+       * 所有 drawImage 目标 x+w ≤ 320，无横向溢出 */
+      var savedW = R.cssW, savedH = R.cssH;
+      R.cssW = 320; R.cssH = 568;
+      rec = [];
+      var narrowOk = true;
+      try {
+        H.update({ hp: 190, hpMax: 190, mp: 50, mpMax: 50, gold: 123456, floor: 3, kills: 7, killTarget: 9, level: 10, exp: 60, expNext: 600 });
+        H.draw();
+        var hn = 0, overflow = false, smallHearts = true;
+        for (var ri = 0; ri < rec.length; ri++) {
+          if (rec[ri].n.indexOf('ui_heart_') === 0) {
+            hn++;
+            if (rec[ri].w !== 11 || rec[ri].h !== 10) smallHearts = false;
+          }
+          if (rec[ri].x + rec[ri].w > 320 + 0.01) overflow = true;
+        }
+        narrowOk = narrowOk && !overflow && (hn === 10) && smallHearts;
+      } catch (e) { narrowOk = false; }
+      sub.t7_narrow = narrowOk;
+      ok = ok && narrowOk;
+      R.cssW = savedW; R.cssH = savedH;
+
+      /* t8_fallback：素材全部缺失（get 返回 null）→ HUD 回退短条/纯文字、弹窗行无图标，均不抛错 */
+      var origGet = S.get;
+      var fallbackOk = true;
+      try {
+        S.get = function () { return null; };
+        rec = [];
+        H.update({ hp: 50, hpMax: 100, mp: 50, mpMax: 50, gold: 21, floor: 1, level: 1 });
+        H.draw();
+        fallbackOk = fallbackOk && !hasImg('ui_heart_full') && !hasImg('ui_heart_empty') && !hasImg('coin') && !hasImg('flask_blue');
+        rec = [];
+        M.open('inventory');
+        M.draw();
+        fallbackOk = fallbackOk && !hasImg('flask_red') && !hasImg('weapon_rusty_sword');
+        M.close();
+      } catch (e) { fallbackOk = false; }
+      S.get = origGet;
+      sub.t8_fallback = fallbackOk;
+      ok = ok && fallbackOk;
+
+      out.sub = sub;
+      out.uiOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.uiOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

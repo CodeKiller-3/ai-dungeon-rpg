@@ -66,6 +66,26 @@
     return '';
   }
 
+  /* P1-2：物品行图标映射（以 js/data/items.js 实际 id 为准，已核对）：
+   *   potion_small→flask_red、potion_large→flask_big_red、
+   *   sword_bone→weapon_rusty_sword、sword_dragon→weapon_red_gem_sword、
+   *   sword_*_rare→weapon_golden_sword、sword_*_epic→weapon_lavish_sword；
+   *   armor_* / 未知 id → null（不画，行文字保持原位）。素材缺失同样返回 null。 */
+  function itemIcon(id) {
+    if (typeof id !== 'string' || !id) return null;
+    var name;
+    if (id === 'potion_small') name = 'flask_red';
+    else if (id === 'potion_large') name = 'flask_big_red';
+    else if (id === 'sword_bone') name = 'weapon_rusty_sword';
+    else if (id === 'sword_dragon') name = 'weapon_red_gem_sword';
+    else if (/^sword_.+_rare$/.test(id)) name = 'weapon_golden_sword';
+    else if (/^sword_.+_epic$/.test(id)) name = 'weapon_lavish_sword';
+    else return null;
+    var S = Game.Core && Game.Core.Sprites;
+    if (!S || typeof S.get !== 'function') return null;
+    return S.get(name) || null;
+  }
+
   /* M8-4：枚举数据表为图鉴条目 [{id, def}]（保持插入序；for-in + hasOwnProperty） */
   function collectEntries(dict) {
     var out = [];
@@ -485,12 +505,21 @@
       c.fillStyle = 'rgba(0,0,0,0.55)';
       c.fillRect(0, 0, cw, ch);
 
-      /* 居中面板 */
+      /* 居中面板：P1-2 双层像素边框（外黑 1px + 内白 1px） */
       c.fillStyle = '#14142a';
       c.fillRect(px, py, w, h);
-      c.strokeStyle = 'rgba(255,255,255,0.18)';
-      c.lineWidth = 2;
-      c.strokeRect(px + 1, py + 1, w - 2, h - 2);
+      /* 底部操作提示区分隔线（设置/结算面板同样适用，先于各自 return 绘制） */
+      c.fillStyle = 'rgba(255,255,255,0.12)';
+      c.fillRect(px + 10, py + h - FOOTER_H, w - 20, 1);
+      c.strokeStyle = 'rgba(0,0,0,0.9)';
+      c.lineWidth = 1;
+      c.strokeRect(px + 0.5, py + 0.5, w - 1, h - 1);
+      c.strokeStyle = 'rgba(255,255,255,0.35)';
+      c.strokeRect(px + 1.5, py + 1.5, w - 3, h - 3);
+
+      /* P1-2：标题行分隔线（金色 1px，标题 y=py+30，线在 y=py+34） */
+      c.fillStyle = 'rgba(255,207,110,0.35)';
+      c.fillRect(px + 10, py + 34, w - 20, 1);
 
       /* 标题 + 金币 */
       var title = '';
@@ -537,11 +566,24 @@
         if (i === sel) {
           c.fillStyle = 'rgba(255,207,110,0.18)';
           c.fillRect(px + 6, ry + 2, w - 12, ROW_H - 4);
+          /* P1-2：选中行左侧 2px 金色竖条 */
+          c.fillStyle = '#ffcf6e';
+          c.fillRect(px + 6, ry + 2, 2, ROW_H - 4);
           c.fillStyle = '#ffcf6e';
         } else {
           c.fillStyle = '#cfcfcf';
         }
-        c.fillText(this._fitRow(c, this._rowText(data[i]), w - 28), px + 14, ry + 20);
+        /* P1-2：行左物品图标（16×16，y 居中）；无图标时文字保持原位 */
+        var ric = this._rowIcon(data[i]);
+        var rowTextX = px + 14;
+        var rowMaxW = w - 28;
+        if (ric) {
+          rowTextX = px + 14 + 22;
+          rowMaxW = w - 28 - 22;
+          var riy = ry + Math.floor((ROW_H - 16) / 2);
+          c.drawImage(ric, px + 14 + 2, riy, 16, 16);
+        }
+        c.fillText(this._fitRow(c, this._rowText(data[i]), rowMaxW), rowTextX, ry + 20);
       }
       /* M9-5：空状态——居中灰字提示（背包/任务各自文案） */
       if (data.length === 0) {
@@ -576,6 +618,18 @@
         str = str.slice(0, -1);
       }
       return str + ell;
+    },
+
+    /* P1-2：当前行物品图标（inventory/shop/图鉴物品页；armor/未知返回 null 不画）
+     * shop 条目结构为 {id, item}，inventory 为 {id, count}，图鉴 page2 为 {id, def} */
+    _rowIcon: function (entry) {
+      if (!entry) return null;
+      var id = null;
+      if (kind === 'shop') id = (entry.item && entry.item.id) || entry.id;
+      else if (kind === 'inventory') id = entry.id;
+      else if (kind === 'quests' && page === 2) id = entry.id;
+      if (!id) return null;
+      return itemIcon(id);
     },
 
     _rowText: function (entry) {

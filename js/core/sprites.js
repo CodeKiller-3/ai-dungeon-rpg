@@ -37,11 +37,16 @@
     /* P1-1：骷髅士兵 idle/run 各 4 帧 */
     'skelet_idle_anim_f0', 'skelet_idle_anim_f1', 'skelet_idle_anim_f2', 'skelet_idle_anim_f3',
     'skelet_run_anim_f0', 'skelet_run_anim_f1', 'skelet_run_anim_f2', 'skelet_run_anim_f3',
-    /* P1-1：UI 图标（本卡只入库，P1-2 才接入 HUD） */
+    /* P1-1：UI 图标（P1-2 接入 HUD/弹窗） */
     'ui_heart_empty', 'ui_heart_full', 'ui_heart_half',
     'flask_blue', 'flask_green', 'flask_red', 'flask_yellow',
     'coin',
-    'button_blue_up', 'button_blue_down', 'button_red_up', 'button_red_down'];
+    'button_blue_up', 'button_blue_down', 'button_red_up', 'button_red_down',
+    /* P1-2：大药水 + 武器图标（items.js 实际 id 映射用） */
+    'flask_big_blue', 'flask_big_green', 'flask_big_red',
+    'weapon_rusty_sword', 'weapon_regular_sword', 'weapon_golden_sword',
+    'weapon_red_gem_sword', 'weapon_lavish_sword',
+    'weapon_axe', 'weapon_bow', 'weapon_spear'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */
