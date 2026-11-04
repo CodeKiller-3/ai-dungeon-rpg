@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p1_3</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P1-3 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { animLoaded: false, animApi: false, animOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var rec = [];
+  var origDrawImage = ctx.drawImage;
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+
+  function seq() {
+    return rec.map(function (r) { return r.n + '@' + r.x + ',' + r.y + ',' + r.w + 'x' + r.h; }).join('|');
+  }
+  function names() {
+    var s = {};
+    for (var i = 0; i < rec.length; i++) s[rec[i].n] = true;
+    return Object.keys(s);
+  }
+  function hasPrefix(prefix) {
+    var ns = names();
+    for (var i = 0; i < ns.length; i++) if (ns[i].indexOf(prefix) === 0) return true;
+    return false;
+  }
+
+  function makeFloorGrid(n) {
+    var g = [];
+    for (var y = 0; y < n; y++) { g[y] = []; for (var x = 0; x < n; x++) g[y][x] = 1; }
+    return g;
+  }
+
+  function finish() {
+    var pass = out.animLoaded && out.animApi && out.animOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var R = Game.Core.Render, S = Game.Core.Sprites;
+      out.animLoaded = !!(window.Game && Game.Core && R && S && Game.Motion);
+      out.animApi = !!(typeof S.getFrame === 'function' && typeof R.drawPlayer === 'function' &&
+        typeof R.drawMap === 'function' && typeof R.drawBattle === 'function' &&
+        typeof R._animNow !== 'undefined');
+
+      if (!out.animLoaded || !out.animApi) { finish(); return; }
+
+      R.init(cv);
+      R._animNow = function () { return 1234; }; /* 冻结动画时钟，保证幂等断言稳定 */
+
+      /* 桩掉地图/视野/光照/HUD（本页只断言角色动画层） */
+      Game.Systems = Game.Systems || {};
+      Game.Systems.Map = {
+        getDetail: function () { return null; },
+        getDecor: function () { return null; },
+        getEnemies: function () { return []; },
+        getGrid: function () { return makeFloorGrid(8); }
+      };
+      Game.Systems.AI = undefined;
+      Game.fov = undefined;
+      Game.Lighting = undefined;
+      Game.Particles = undefined;
+      Game.Feedback = undefined;
+      if (Game.hud) Game.hud.draw = function () { };
+
+      /* t2_playerFrames：knight_m idle/run/hit 各 4 帧经 getFrame 非 null 且同组互异 */
+      var t2ok = true;
+      ['knight_m_idle', 'knight_m_run', 'knight_m_hit'].forEach(function (base) {
+        var seen = {};
+        for (var k = 0; k < 4; k++) {
+          var f = S.getFrame(base, k);
+          if (!f) { t2ok = false; }
+          else if (f.src) seen[f.src] = true;
+        }
+        if (Object.keys(seen).length !== 4) t2ok = false;
+      });
+      sub.t2_playerFrames = t2ok;
+      ok = ok && t2ok;
+
+      /* t3_playerDraw：静止 → knight_m_idle 帧；模拟移动（Motion 插值 t<1）→ knight_m_run 帧 */
+      Game.Motion.clear();
+      rec = [];
+      var dIdleOk = true;
+      try { R.drawPlayer({ x: 1, y: 1 }); } catch (e) { dIdleOk = false; }
+      var idleOk = dIdleOk && hasPrefix('knight_m_idle_anim_f');
+      Game.Motion.setStep('player', 1, 1, 2, 1, 140);
+      Game.Motion.update(70); /* t=0.5，插值未完成 → 移动中 */
+      rec = [];
+      var dRunOk = true;
+      try { R.drawPlayer({ x: 2, y: 1 }); } catch (e) { dRunOk = false; }
+      var runOk = dRunOk && hasPrefix('knight_m_run_anim_f');
+      /* 骑士帧绘制按 16×28 高度适配：高=TILE-2，宽约 12（非方形拉伸） */
+      var hok = false;
+      for (var ri = 0; ri < rec.length; ri++) {
+        var nm = rec[ri].n;
+        if (nm.indexOf('knight_m_') === 0) {
+          if (rec[ri].h === R.TILE - 2 && rec[ri].w > 8 && rec[ri].w < 18) hok = true;
+        }
+      }
+      sub.t3_playerDraw = idleOk && runOk && hok;
+      ok = ok && sub.t3_playerDraw;
+      Game.Motion.clear();
+
+      /* t4_monsterMap：埋伏 slime/bat/dragon 各一格 + 巡逻 bat/dragon 双形态，记录含三类动画前缀 */
+      var grid = makeFloorGrid(8);
+      Game.Systems.Map.getEnemies = function () {
+        return [
+          { x: 2, y: 2, monsterId: 'slime' },
+          { x: 3, y: 2, monsterId: 'bat' },
+          { x: 4, y: 2, monsterId: 'dragon' }
+        ];
+      };
+      Game.Systems.AI = {
+        getPatrols: function () {
+          return [
+            { x: 2, y: 3, monsterId: 'slime', state: 'idle', path: [], frame: 0 },
+            { x: 3, y: 3, monsterId: 'bat', state: 'idle', path: [], frame: 0 },
+            { x: 4, y: 3, monsterId: 'bat', state: 'chase', path: [], frame: 0 },
+            { x: 2, y: 4, monsterId: 'dragon', state: 'idle', path: [], frame: 0 },
+            { x: 4, y: 4, monsterId: 'dragon', state: 'chase', path: [], frame: 0 }
+          ];
+        }
+      };
+      rec = [];
+      var mDrawOk = true;
+      try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { mDrawOk = false; }
+      sub.t4_monsterMap = mDrawOk && hasPrefix('tiny_slug_anim_f') &&
+        hasPrefix('imp_idle_anim_f') && hasPrefix('imp_run_anim_f') &&
+        hasPrefix('big_demon_idle_anim_f') && hasPrefix('big_demon_run_anim_f');
+      ok = ok && sub.t4_monsterMap;
+
+      /* t5_battle：玩家侧 knight_m 帧、Boss 侧 big_demon 帧；攻击态切换 knight_m_hit */
+      Game.Data.Player.hp = 80; Game.Data.Player.maxHp = 100;
+      var st = {
+        monster: { id: 'dragon', name: '地牢巨龙', hp: 200, maxHp: 200, color: '#ff6666' },
+        log: ['战斗开始'], dying: false,
+        monsterActionAt: null, playerActionAt: null, enraged: false
+      };
+      rec = [];
+      var bDrawOk = true;
+      try { R.drawBattle(st); } catch (e) { bDrawOk = false; }
+      var playerSide = hasPrefix('knight_m_idle_anim_f');
+      var bossSide = hasPrefix('big_demon_idle_anim_f');
+      /* 玩家攻击动作期间 → knight_m_hit 帧 */
+      st.playerActionAt = 1234; /* _animNow 冻结为 1234，now 读 performance.now 会不同 → 用注入时钟不可行；
+                                   直接把 playerActionAt 设成当前真实时间，_attackOffset 用真实 performance.now */
+      R._animNow = null; /* 攻防偏移用真实时间，动画帧取 now —— 本段只断言 knight_m_hit 出现 */
+      st.playerActionAt = performance.now(); /* 攻击刚发生，320ms 内 → hit */
+      rec = [];
+      var hDrawOk = true;
+      try { R.drawBattle(st); } catch (e) { hDrawOk = false; }
+      var hitSide = hasPrefix('knight_m_hit_anim_f');
+      R._animNow = function () { return 1234; }; /* 恢复冻结 */
+      sub.t5_battle = bDrawOk && playerSide && bossSide && hDrawOk && hitSide;
+      ok = ok && sub.t5_battle;
+
+      /* t7_idem：冻结时钟下同参两次绘制序列一致（玩家/地图/战斗） */
+      var idemOk = true;
+      Game.Systems.Map.getEnemies = function () { return []; };
+      Game.Systems.AI = undefined;
+      rec = []; try { R.drawPlayer({ x: 1, y: 1 }); } catch (e) { idemOk = false; }
+      var p1 = seq();
+      rec = []; try { R.drawPlayer({ x: 1, y: 1 }); } catch (e) { idemOk = false; }
+      var p2 = seq();
+      rec = []; try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { idemOk = false; }
+      var g1 = seq();
+      rec = []; try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { idemOk = false; }
+      var g2 = seq();
+      st.playerActionAt = null;
+      rec = []; try { R.drawBattle(st); } catch (e) { idemOk = false; }
+      var b1 = seq();
+      rec = []; try { R.drawBattle(st); } catch (e) { idemOk = false; }
+      var b2 = seq();
+      sub.t7_idem = idemOk && (p1 === p2) && (g1 === g2) && (b1 === b2) && (p1.length > 0) && (g1.length > 0) && (b1.length > 0);
+      ok = ok && sub.t7_idem;
+
+      /* t6_fallback：动画帧缺失 → 回退旧单图（player/chort/boss_demon）；全素材清空 → 色块，均不抛错 */
+      var origGetFrame = S.getFrame, origGet = S.get, origReady = S.isReady;
+      var fbOk = true;
+      try {
+        /* 段1：仅动画帧缺失（getFrame 全 null），get 正常 → 回退 player.png / monster_chort / boss_demon */
+        S.getFrame = function () { return null; };
+        Game.Systems.Map.getEnemies = function () { return [{ x: 2, y: 2, monsterId: 'slime' }]; };
+        Game.Systems.AI = { getPatrols: function () { return [{ x: 3, y: 3, monsterId: 'bat', state: 'idle', path: [], frame: 0 }]; } };
+        rec = [];
+        R.drawPlayer({ x: 1, y: 1 });
+        var fbPlayer = hasPrefix('player');
+        rec = [];
+        R.drawMap(grid, { x: 1, y: 1, floor: 1 });
+        var fbChort = hasPrefix('monster_chort');
+        rec = [];
+        R.drawBattle(st); /* dragon → 回退 boss_demon */
+        var fbBoss = hasPrefix('boss_demon');
+        /* 段2：全素材清空（get 全 null）→ 纯色块，不落任何 drawImage */
+        S.get = function () { return null; };
+        rec = [];
+        R.drawPlayer({ x: 1, y: 1 });
+        R.drawMap(grid, { x: 1, y: 1, floor: 1 });
+        R.drawBattle(st);
+        var fbBlank = (rec.length === 0);
+        fbOk = fbPlayer && fbChort && fbBoss && fbBlank;
+      } catch (e) { fbOk = false; }
+      S.getFrame = origGetFrame; S.get = origGet; S.isReady = origReady;
+      sub.t6_fallback = fbOk;
+      ok = ok && fbOk;
+
+      out.sub = sub;
+      out.animOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.animOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

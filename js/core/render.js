@@ -34,11 +34,37 @@
     return 'floor_' + (h + 1);
   }
 
-  /* P1-1：骷髅动画帧序号——按真实时间 4 帧/秒循环（f0→f1→f2→f3）。
+  /* P1-3：通用动画帧序号——按真实时间取模（fps 帧/秒），同一调用窗口内结果稳定。
+   * key 为序列名（字符串哈希作固定相位偏移，不同序列错相，同序列同刻同帧）。
+   * Render._animNow 可注入时钟函数（验证页冻结动画帧用），默认 performance.now。 */
+  function animIndex(key, fps) {
+    var now;
+    var R = (typeof Game !== 'undefined' && Game.Core) ? Game.Core.Render : null;
+    if (R && typeof R._animNow === 'function') now = R._animNow();
+    else now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var step = (typeof fps === 'number' && fps > 0) ? Math.round(1000 / fps) : 250;
+    var off = 0;
+    if (typeof key === 'string' && key) {
+      for (var i = 0; i < key.length; i++) off += key.charCodeAt(i);
+    }
+    return (Math.floor(now / step) + off) % 4;
+  }
+
+  /* P1-1：骷髅动画帧序号——真实时间 4 帧/秒循环（f0→f1→f2→f3），
    * 不用 rAF 计数，避免验证页两次同步绘制取到不同帧被误判为随机闪烁 */
   function skeletonFrameIndex() {
-    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-    return Math.floor(now / 250) % 4;
+    return animIndex('skelet', 4);
+  }
+
+  /* P1-3：按高度适配绘制（保持贴图宽高比）——cx=目标中心 x，bottom=目标底部 y，targetH=目标高。
+   * 返回绘制宽度；naturalWidth 读取失败（未加载完成等异常）时按 1:1 回退。 */
+  function drawSpriteByHeight(ctx, img, cx, bottom, targetH) {
+    var nw = img && (img.naturalWidth || 0);
+    var nh = img && (img.naturalHeight || 0);
+    if (nw <= 0 || nh <= 0) { nw = targetH; nh = targetH; }
+    var w = Math.max(2, Math.round(nw * targetH / nh));
+    ctx.drawImage(img, cx - Math.floor(w / 2), bottom - targetH, w, targetH);
+    return w;
   }
 
   Game.Core.Render = {
@@ -52,6 +78,7 @@
     cssPxH: 0,
     cssW: 0,       /* 逻辑视口尺寸（绘制/命中坐标空间 = cssPx / scale） */
     cssH: 0,
+    _animNow: null,  /* P1-3：可注入时钟函数（验证页冻结动画帧）；null=用 performance.now */
 
     init: function (canvas) {
       this._canvas = canvas;
@@ -371,15 +398,25 @@
           var eimg = null;
           if (this._hasSprites()) {
             var eS = Game.Core.Sprites;
-            /* P1-1：骷髅埋伏怪用 idle 帧动画；其他怪保持 chort 精灵（原行为） */
-            eimg = (es[i].monsterId === 'skeleton' && typeof eS.getFrame === 'function')
-              ? eS.getFrame('skelet_idle', skeletonFrameIndex())
-              : eS.get('monster_chort');
+            var mid = es[i].monsterId;
+            /* P1-3：按怪选动画帧——骷髅/史莱姆/蝙蝠/龙各自视觉；未知怪回退 chort */
+            if (typeof eS.getFrame === 'function') {
+              if (mid === 'skeleton') eimg = eS.getFrame('skelet_idle', skeletonFrameIndex());
+              else if (mid === 'slime') eimg = eS.getFrame('tiny_slug', animIndex('tiny_slug', 4));
+              else if (mid === 'bat') eimg = eS.getFrame('imp_idle', animIndex('imp_idle', 4));
+              else if (mid === 'dragon') eimg = eS.getFrame('big_demon_idle', animIndex('big_demon_idle', 4));
+            }
+            if (!eimg) eimg = eS.get('monster_chort');
           }
           if (eimg) {
             ctx.fillStyle = 'rgba(234,102,104,0.22)';
             ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
-            ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
+            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规 16×16 帧铺满格 */
+            if ((eimg.naturalWidth || 0) > 26) {
+              drawSpriteByHeight(ctx, eimg, epx - 1 + TILE / 2, epy - 1 + TILE - 1, TILE - 3);
+            } else {
+              ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
+            }
           } else {
             ctx.fillStyle = '#ea6668';
             ctx.beginPath();
@@ -403,19 +440,27 @@
           var pimg = null;
           if (this._hasSprites()) {
             var pS = Game.Core.Sprites;
-            /* P1-1：骷髅怪按追击状态切换 idle/run 各 4 帧；其他怪保持原 chort 精灵 */
-            if (ps[j].monsterId === 'skeleton' && typeof pS.getFrame === 'function') {
-              pimg = pS.getFrame(chasing ? 'skelet_run' : 'skelet_idle', skeletonFrameIndex());
-            } else {
-              pimg = pS.get(chasing ? 'monster_chort_run' : 'monster_chort');
+            var pmid = ps[j].monsterId;
+            /* P1-3：史莱姆单序列 / 蝙蝠 imp 双形态 / 骷髅双形态 / 龙 big_demon 双形态；未知怪回退 chort */
+            if (typeof pS.getFrame === 'function') {
+              if (pmid === 'slime') pimg = pS.getFrame('tiny_slug', animIndex('tiny_slug', 4));
+              else if (pmid === 'bat') pimg = pS.getFrame(chasing ? 'imp_run' : 'imp_idle', animIndex(chasing ? 'imp_run' : 'imp_idle', 4));
+              else if (pmid === 'skeleton') pimg = pS.getFrame(chasing ? 'skelet_run' : 'skelet_idle', skeletonFrameIndex());
+              else if (pmid === 'dragon') pimg = pS.getFrame(chasing ? 'big_demon_run' : 'big_demon_idle', animIndex(chasing ? 'big_demon_run' : 'big_demon_idle', 4));
             }
+            if (!pimg) pimg = pS.get(chasing ? 'monster_chort_run' : 'monster_chort');
           }
           if (pimg) {
             if (chasing) {
               ctx.fillStyle = 'rgba(234,102,104,0.25)';
               ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
             }
-            ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
+            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规帧铺满 */
+            if ((pimg.naturalWidth || 0) > 26) {
+              drawSpriteByHeight(ctx, pimg, ppx - 1 + TILE / 2, ppy - 1 + TILE - 1, TILE - 3);
+            } else {
+              ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
+            }
             if (chasing) {
               ctx.fillStyle = '#fff';
               ctx.font = '9px monospace';
@@ -442,12 +487,26 @@
     drawPlayer: function (player) {
       var ctx = this._ctx;
       if (!ctx) return;
-      /* M9-3：取插值渲染位置；未登记移动时降级用逻辑坐标 */
+      /* M9-3：取插值渲染位置；未登记移动时降级用逻辑坐标。
+       * P1-3：t<1（插值未完成）视为移动中 → run 帧；已到终点/未登记 → idle 帧 */
       var rp = (Game.Motion && Game.Motion.getRenderPos) ? Game.Motion.getRenderPos('player') : null;
+      var moving = !!(rp && rp.t < 1);
       var rx = rp ? rp.x : player.x;
       var ry = rp ? rp.y : player.y;
       var px = rx * TILE - cam.x;
       var py = ry * TILE - cam.y;
+      /* P1-3：骑士三态帧动画（16×28 按高度适配 TILE 格，底部贴格底、水平居中）；
+       * 帧缺失回退 kni 单图（player.png），再缺失回退像素小人色块 */
+      var kimg = null;
+      if (this._hasSprites() && typeof Game.Core.Sprites.getFrame === 'function') {
+        kimg = Game.Core.Sprites.getFrame(moving ? 'knight_m_run' : 'knight_m_idle',
+          animIndex(moving ? 'knight_m_run' : 'knight_m_idle', 4));
+      }
+      if (kimg) {
+        /* 高=TILE-2≈21px，宽=round(16×21/28)=12px，水平居中、底部贴格底 */
+        drawSpriteByHeight(ctx, kimg, px + TILE / 2, py + TILE - 1, TILE - 2);
+        return;
+      }
       /* M7.5：素材就绪时使用 kni-dungeon 骑士精灵，否则回退像素小人色块 */
       var sp = Game.Core.Sprites && Game.Core.Sprites.isReady() ? Game.Core.Sprites.get('player') : null;
       if (sp) {
@@ -525,9 +584,15 @@
       var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
       ey += mAtkOff;
       var boss = state.monster.id === 'dragon';
-      var sp2 = (Game.Core.Sprites && Game.Core.Sprites.isReady())
-        ? Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort')
-        : null;
+      /* P1-3：Boss 用 big_demon 帧动画（战斗阶段固定 idle），帧缺失回退旧 boss_demon 单图；
+       * 其余怪保持 monster_chort（色块兜底在下方） */
+      var sp2 = null;
+      if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
+        if (boss && typeof Game.Core.Sprites.getFrame === 'function') {
+          sp2 = Game.Core.Sprites.getFrame('big_demon_idle', animIndex('big_demon_idle', 4));
+        }
+        if (!sp2) sp2 = Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort');
+      }
       ctx.save();
       if (dying) {
         /* M9-3：死亡消散——渐隐 + 上浮 + 缩小 */
@@ -537,14 +602,16 @@
         var mDrawX = ex + (90 - mSize) / 2;
         var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
         if (sp2) {
-          ctx.drawImage(sp2, mDrawX, mDrawY, mSize, mSize);
+          /* P1-3：按贴图宽高比绘制（big_demon 32×36 → 高 mSize 宽 32/36×mSize，不再拉方） */
+          drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, mSize);
         } else {
           ctx.fillStyle = state.monster.color;
           ctx.fillRect(mDrawX, mDrawY, mSize, mSize);
         }
       } else {
         if (sp2) {
-          ctx.drawImage(sp2, ex, ey, 90, 90);
+          /* P1-3：非 Boss 图（chort 16×23 / boss_demon）同样按比例绘制，宽高比正确 */
+          drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90);
         } else {
           ctx.fillStyle = state.monster.color;
           ctx.fillRect(ex, ey, 90, 90);
@@ -572,9 +639,18 @@
       /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
       var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1);
       py += pAtkOff;
-      var psp = (Game.Core.Sprites && Game.Core.Sprites.isReady()) ? Game.Core.Sprites.get('player') : null;
+      /* P1-3：玩家侧骑士帧动画——攻击动作期间（playerActionAt 后 320ms 内）切 knight_m_hit，
+       * 否则 knight_m_idle；帧缺失回退 player.png 单图，再缺失回退色块 */
+      var psp = null;
+      if (Game.Core.Sprites && Game.Core.Sprites.isReady() && typeof Game.Core.Sprites.getFrame === 'function') {
+        var pActing = !!(state.playerActionAt && (now - state.playerActionAt) < 320);
+        psp = Game.Core.Sprites.getFrame(pActing ? 'knight_m_hit' : 'knight_m_idle',
+          animIndex(pActing ? 'knight_m_hit' : 'knight_m_idle', 4));
+      }
+      if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
       if (psp) {
-        ctx.drawImage(psp, px, py, 90, 90);
+        /* 16×28 按高度适配 90px 高绘制（宽 ≈ 51px，保持比例） */
+        drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
       } else {
         ctx.fillStyle = '#ffcf6e';
         ctx.fillRect(px, py, 90, 90);

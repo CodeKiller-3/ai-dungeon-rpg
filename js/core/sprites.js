@@ -46,13 +46,31 @@
     'flask_big_blue', 'flask_big_green', 'flask_big_red',
     'weapon_rusty_sword', 'weapon_regular_sword', 'weapon_golden_sword',
     'weapon_red_gem_sword', 'weapon_lavish_sword',
-    'weapon_axe', 'weapon_bow', 'weapon_spear'];
+    'weapon_axe', 'weapon_bow', 'weapon_spear',
+    /* P1-3：角色与怪物动画——玩家骑士 16×28 三态、史莱姆 16×16、蝙蝠 imp 16×16、Boss 大恶魔 32×36 */
+    'knight_m_idle_anim_f0', 'knight_m_idle_anim_f1', 'knight_m_idle_anim_f2', 'knight_m_idle_anim_f3',
+    'knight_m_run_anim_f0', 'knight_m_run_anim_f1', 'knight_m_run_anim_f2', 'knight_m_run_anim_f3',
+    'knight_m_hit_anim_f0', 'knight_m_hit_anim_f1', 'knight_m_hit_anim_f2', 'knight_m_hit_anim_f3',
+    'tiny_slug_anim_f0', 'tiny_slug_anim_f1', 'tiny_slug_anim_f2', 'tiny_slug_anim_f3',
+    'imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3',
+    'imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3',
+    'big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3',
+    'big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */
   var FRAME_SETS = {
     skelet_idle: ['skelet_idle_anim_f0', 'skelet_idle_anim_f1', 'skelet_idle_anim_f2', 'skelet_idle_anim_f3'],
-    skelet_run: ['skelet_run_anim_f0', 'skelet_run_anim_f1', 'skelet_run_anim_f2', 'skelet_run_anim_f3']
+    skelet_run: ['skelet_run_anim_f0', 'skelet_run_anim_f1', 'skelet_run_anim_f2', 'skelet_run_anim_f3'],
+    /* P1-3：玩家骑士三态 / imp 双态 / 大恶魔双态 / 史莱姆单序列（idle/run 共用） */
+    knight_m_idle: ['knight_m_idle_anim_f0', 'knight_m_idle_anim_f1', 'knight_m_idle_anim_f2', 'knight_m_idle_anim_f3'],
+    knight_m_run: ['knight_m_run_anim_f0', 'knight_m_run_anim_f1', 'knight_m_run_anim_f2', 'knight_m_run_anim_f3'],
+    knight_m_hit: ['knight_m_hit_anim_f0', 'knight_m_hit_anim_f1', 'knight_m_hit_anim_f2', 'knight_m_hit_anim_f3'],
+    tiny_slug: ['tiny_slug_anim_f0', 'tiny_slug_anim_f1', 'tiny_slug_anim_f2', 'tiny_slug_anim_f3'],
+    imp_idle: ['imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3'],
+    imp_run: ['imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3'],
+    big_demon_idle: ['big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3'],
+    big_demon_run: ['big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3']
   };
 
   Game.Core.Sprites = {
