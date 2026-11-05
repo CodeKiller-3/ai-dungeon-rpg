@@ -73,7 +73,14 @@
     orc_warrior: { idle: 'orc_warrior_idle', run: 'orc_warrior_run' },
     orc_shaman: { idle: 'orc_shaman_idle', run: 'orc_shaman_run' },
     wogol: { idle: 'wogol_idle', run: 'wogol_run' },
-    ogre: { idle: 'ogre_idle', run: 'ogre_run' }
+    ogre: { idle: 'ogre_idle', run: 'ogre_run' },
+    /* P2-3：imp 独立登场 + F4/F5 主题怪（big_zombie/necromancer/angel 单态：idle=run） */
+    imp: { idle: 'imp_idle', run: 'imp_run' },
+    big_zombie: { idle: 'big_zombie_idle', run: 'big_zombie_idle' },
+    necromancer: { idle: 'necromancer', run: 'necromancer' },
+    masked_orc: { idle: 'masked_orc_idle', run: 'masked_orc_run' },
+    pumpkin_dude: { idle: 'pumpkin_dude_idle', run: 'pumpkin_dude_run' },
+    angel: { idle: 'angel_idle', run: 'angel_idle' }
   };
 
   /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退） */
@@ -406,6 +413,18 @@
             ctx.fillStyle = 'rgba(4,4,12,0.55)';
             ctx.fillRect(px, py, TILE - 1, TILE - 1);
           }
+        }
+      }
+      /* P2-3：本层主题色调——场景层（地板/墙/细节/装饰）之后、怪物/玩家之前叠加全屏 tint。
+       * save/restore 包裹，fillStyle 不外泄到后续怪物/HUD 绘制；themes 缺失时跳过 */
+      var themes = Game.Data.MAPS && Game.Data.MAPS.themes;
+      if (themes && themes.length) {
+        var theme = themes[(pf - 1) % themes.length];
+        if (theme && theme.tint) {
+          ctx.save();
+          ctx.fillStyle = theme.tint;
+          ctx.fillRect(0, 0, W, H);
+          ctx.restore();
         }
       }
       /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */

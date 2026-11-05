@@ -135,14 +135,14 @@
     R.moveSteps1s = moveTried;
     check('moveThrottle', moveTried >= 6 && moveTried <= 10, moveTried);
 
-    /* P1-3 三层保底出龙：3 层敌表临时改为 100% skeleton（最坏情况） */
-    var tbl3 = Game.Data.MAPS.enemyTable[2];
-    Game.Data.MAPS.enemyTable[2] = [{ id: 'skeleton', rate: 1 }];
-    Map.setFloor(3);
-    R.dragonsFloor3 = countDragons();
-    R.enemiesFloor3 = Map.getEnemies().length;
-    Game.Data.MAPS.enemyTable[2] = tbl3;
-    check('dragonGuarantee', R.dragonsFloor3 >= 1 && R.enemiesFloor3 === 9, R);
+    /* P1-3 末层保底出龙（P2-3 起终层为 F5）：末层敌表临时改为 100% skeleton（最坏情况） */
+    var tblLast = Game.Data.MAPS.enemyTable[4];
+    Game.Data.MAPS.enemyTable[4] = [{ id: 'skeleton', rate: 1 }];
+    Map.setFloor(5);
+    R.dragonsFinalFloor = countDragons();
+    R.enemiesFinalFloor = Map.getEnemies().length;
+    Game.Data.MAPS.enemyTable[4] = tblLast;
+    check('dragonGuarantee', R.dragonsFinalFloor >= 1 && R.enemiesFinalFloor === 13, R);
 
     /* P1-2 换层不回满 + 楼层快照：扣血、杀 1 怪、拿 1 宝箱后下楼再上楼 */
     Map.setFloor(1);

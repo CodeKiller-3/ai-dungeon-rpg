@@ -7,19 +7,36 @@
   Game.Data = Game.Data || {};
 
   Game.Data.MAPS = {
-    floors: 3,                                   /* 楼层数 */
-    sizes: [[21, 15], [25, 17], [29, 19]],       /* 每层网格尺寸 */
-    enemyTable: [                               /* 每层怪物概率表（M2 使用；P2-1 三层扩为 3~4 种，概率和均为 1） */
-      /* P2-1：1 层主题"地牢杂兵"（slime/bat/goblin/tiny_zombie），期望强度 10.8→11.125 */
+    floors: 5,                                   /* 楼层数（P2-3：3→5，dragon 移至 F5） */
+    sizes: [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]], /* 每层网格尺寸 */
+    enemyTable: [                               /* 每层怪物概率表（M2 使用；每行概率和=1，逐层期望强度严格递增） */
+      /* F1 地牢杂兵（P2-1，期望 11.125） */
       [{ id: 'slime', rate: 0.45 }, { id: 'bat', rate: 0.3 },
         { id: 'goblin', rate: 0.15 }, { id: 'tiny_zombie', rate: 0.1 }],
-      /* P2-1：2 层主题"兽人营地"（bat/skeleton/orc_warrior/orc_shaman），期望强度 15.5→20.125 */
+      /* F2 兽人营地（P2-1，期望 20.125） */
       [{ id: 'bat', rate: 0.15 }, { id: 'skeleton', rate: 0.3 },
         { id: 'orc_warrior', rate: 0.3 }, { id: 'orc_shaman', rate: 0.25 }],
-      /* P2-1：3 层主题"龙巢"（skeleton/dragon/ogre/wogol），dragon 仅此层；期望强度 22.5→27.5。
-       * imp 目前只作 bat 的视觉帧组，不占出现位（任务卡允许留待 P2-3） */
-      [{ id: 'skeleton', rate: 0.3 }, { id: 'dragon', rate: 0.25 },
-        { id: 'ogre', rate: 0.25 }, { id: 'wogol', rate: 0.2 }]
+      /* F3 龙巢前哨（P2-3：dragon 移出、imp 独立登场，期望 23.75） */
+      [{ id: 'skeleton', rate: 0.3 }, { id: 'ogre', rate: 0.25 },
+        { id: 'wogol', rate: 0.2 }, { id: 'imp', rate: 0.25 }],
+      /* F4 冰霜墓穴（P2-3b 数值上调后期望 36.85） */
+      [{ id: 'big_zombie', rate: 0.2 }, { id: 'necromancer', rate: 0.2 },
+        { id: 'pumpkin_dude', rate: 0.15 }, { id: 'masked_orc', rate: 0.3 },
+        { id: 'skeleton', rate: 0.15 }],
+      /* F5 恶魔深渊（P2-3b：dragon 降至 .05 作为稀有 roll，map.js 再钳制为恰好 1 只 Boss；
+       * F5 权重向高阶怪倾斜（big_zombie .3 / angel .35 / necromancer .15 / masked_orc .15），
+       * 期望强度 44.075，落在卡面 44~48 目标区间） */
+      [{ id: 'dragon', rate: 0.05 }, { id: 'big_zombie', rate: 0.3 },
+        { id: 'necromancer', rate: 0.15 }, { id: 'masked_orc', rate: 0.15 },
+        { id: 'angel', rate: 0.35 }]
+    ],
+    /* P2-3：层主题（纯视觉参数，透明度 ≤0.12，避免压暗贴图；drawMap 叠色用） */
+    themes: [
+      { name: '地牢', tint: 'rgba(120,130,150,0.06)' },
+      { name: '兽人营地', tint: 'rgba(150,120,70,0.08)' },
+      { name: '龙巢前哨', tint: 'rgba(160,60,50,0.10)' },
+      { name: '冰霜墓穴', tint: 'rgba(80,140,200,0.10)' },
+      { name: '恶魔深渊', tint: 'rgba(110,60,160,0.12)' }
     ]
   };
 

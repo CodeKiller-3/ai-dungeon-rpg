@@ -74,7 +74,16 @@
     'wogol_idle_anim_f0', 'wogol_idle_anim_f1', 'wogol_idle_anim_f2', 'wogol_idle_anim_f3',
     'wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3',
     'ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3',
-    'ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3'];
+    'ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3',
+    /* P2-3：F4/F5 主题怪——big_zombie 32×36 单态 4 帧、necromancer 16×23 单态 4 帧、
+     * masked_orc/pumpkin_dude 双态各 8 帧、angel 16×16 单态 4 帧 */
+    'big_zombie_idle_anim_f0', 'big_zombie_idle_anim_f1', 'big_zombie_idle_anim_f2', 'big_zombie_idle_anim_f3',
+    'necromancer_anim_f0', 'necromancer_anim_f1', 'necromancer_anim_f2', 'necromancer_anim_f3',
+    'masked_orc_idle_anim_f0', 'masked_orc_idle_anim_f1', 'masked_orc_idle_anim_f2', 'masked_orc_idle_anim_f3',
+    'masked_orc_run_anim_f0', 'masked_orc_run_anim_f1', 'masked_orc_run_anim_f2', 'masked_orc_run_anim_f3',
+    'pumpkin_dude_idle_anim_f0', 'pumpkin_dude_idle_anim_f1', 'pumpkin_dude_idle_anim_f2', 'pumpkin_dude_idle_anim_f3',
+    'pumpkin_dude_run_anim_f0', 'pumpkin_dude_run_anim_f1', 'pumpkin_dude_run_anim_f2', 'pumpkin_dude_run_anim_f3',
+    'angel_idle_anim_f0', 'angel_idle_anim_f1', 'angel_idle_anim_f2', 'angel_idle_anim_f3'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */
@@ -102,7 +111,15 @@
     wogol_idle: ['wogol_idle_anim_f0', 'wogol_idle_anim_f1', 'wogol_idle_anim_f2', 'wogol_idle_anim_f3'],
     wogol_run: ['wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3'],
     ogre_idle: ['ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3'],
-    ogre_run: ['ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3']
+    ogre_run: ['ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3'],
+    /* P2-3：F4/F5 主题怪帧组（big_zombie/necromancer/angel 单态：idle 与 run 共用同一组） */
+    big_zombie_idle: ['big_zombie_idle_anim_f0', 'big_zombie_idle_anim_f1', 'big_zombie_idle_anim_f2', 'big_zombie_idle_anim_f3'],
+    necromancer: ['necromancer_anim_f0', 'necromancer_anim_f1', 'necromancer_anim_f2', 'necromancer_anim_f3'],
+    masked_orc_idle: ['masked_orc_idle_anim_f0', 'masked_orc_idle_anim_f1', 'masked_orc_idle_anim_f2', 'masked_orc_idle_anim_f3'],
+    masked_orc_run: ['masked_orc_run_anim_f0', 'masked_orc_run_anim_f1', 'masked_orc_run_anim_f2', 'masked_orc_run_anim_f3'],
+    pumpkin_dude_idle: ['pumpkin_dude_idle_anim_f0', 'pumpkin_dude_idle_anim_f1', 'pumpkin_dude_idle_anim_f2', 'pumpkin_dude_idle_anim_f3'],
+    pumpkin_dude_run: ['pumpkin_dude_run_anim_f0', 'pumpkin_dude_run_anim_f1', 'pumpkin_dude_run_anim_f2', 'pumpkin_dude_run_anim_f3'],
+    angel_idle: ['angel_idle_anim_f0', 'angel_idle_anim_f1', 'angel_idle_anim_f2', 'angel_idle_anim_f3']
   };
 
   Game.Core.Sprites = {

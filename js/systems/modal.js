@@ -30,6 +30,7 @@
   var sel = 0;
   var shopMode = 'buy';
   var page = 0;        /* M8-4：quests 三页签（0=任务 / 1=怪物 / 2=物品），open 时重置 */
+  var qScroll = 0;     /* P2-3b：图鉴（quests page1/2）滚动窗口起点；其他页恒为 0（行为不变） */
   var rect = null;       /* 最近一帧面板矩形 {x,y,w,h}，点击命中用 */
   var onKey = null, onClick = null;
   /* M9-4：设置面板状态 */
@@ -60,7 +61,12 @@
   function itemDesc(item) {
     if (!item) return '';
     var hp = (item.effect && item.effect.maxHp) ? (' 生命+' + item.effect.maxHp) : '';
-    if (item.type === 'consumable') return '恢复HP+' + ((item.effect && item.effect.hp) || 0);
+    if (item.type === 'consumable') {
+      var parts = [];
+      if (item.effect && item.effect.hp) parts.push('恢复HP+' + item.effect.hp);
+      if (item.effect && item.effect.mp) parts.push('恢复MP+' + item.effect.mp);
+      return parts.length ? parts.join(' ') : '回复道具';
+    }
     if (item.type === 'weapon') return '攻击+' + ((item.effect && item.effect.atk) || 0) + hp;
     if (item.type === 'armor') return '防御+' + ((item.effect && item.effect.def) || 0) + hp;
     return '';
@@ -122,6 +128,7 @@
       sel = 0;
       shopMode = 'buy';
       page = 0; /* M8-4：每次打开 quests 默认回到任务页 */
+      qScroll = 0; /* P2-3b：打开面板重置滚动窗口 */
       volDragging = false;
       gameStats = (k === 'gameover') ? (stats || null) : null;
       gameRestartRect = null;
@@ -132,6 +139,7 @@
     close: function () {
       kind = null;
       data = [];
+      qScroll = 0;
       volDragging = false;
       volTrack = null;
       muteRect = null;
@@ -162,6 +170,10 @@
         /* gameover 无列表，战绩在 _drawGameover 现场拉取 */
       } catch (e) { data = []; }
       sel = clamp(sel, 0, Math.max(data.length - 1, 0));
+      /* P2-3b：数据变化后把滚动窗口夹回有效区间（仅 quests 图鉴会 >0） */
+      var maxScroll = Math.max(0, data.length - MAX_VISIBLE);
+      if (qScroll > maxScroll) qScroll = maxScroll;
+      if (qScroll < 0) qScroll = 0;
     },
 
     _bind: function () {
@@ -191,8 +203,8 @@
           }
           return;
         }
-        if (c === 'ArrowUp' || c === 'KeyW') { e.preventDefault(); sel = clamp(sel - 1, 0, Math.max(data.length - 1, 0)); return; }
-        if (c === 'ArrowDown' || c === 'KeyS') { e.preventDefault(); sel = clamp(sel + 1, 0, Math.max(data.length - 1, 0)); return; }
+        if (c === 'ArrowUp' || c === 'KeyW') { e.preventDefault(); sel = clamp(sel - 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
+        if (c === 'ArrowDown' || c === 'KeyS') { e.preventDefault(); sel = clamp(sel + 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
         if (c === 'Enter' || c === 'NumpadEnter') { e.preventDefault(); self._confirm(); return; }
         if (c === 'Tab' && kind === 'shop') { e.preventDefault(); self._toggleShopMode(); return; }
         /* M8-4：quests 三页签切页——Tab/→ 下一页、← 上一页（↑↓ 仍是列表选择，无冲突） */
@@ -269,7 +281,24 @@
     _setPage: function (p) {
       page = ((p % 3) + 3) % 3;
       sel = 0;
+      qScroll = 0; /* P2-3b：切页重置滚动窗口，避免停在上次中间位置 */
       this._refresh();
+    },
+
+    /* P2-3b：选中行变化后让滚动窗口跟随（仅 quests 图鉴且条目超一屏时生效） */
+    _syncScroll: function () {
+      if (kind !== 'quests' || data.length <= MAX_VISIBLE) return;
+      if (sel < qScroll) qScroll = sel;
+      else if (sel >= qScroll + MAX_VISIBLE) qScroll = sel - MAX_VISIBLE + 1;
+      var maxScroll = Math.max(0, data.length - MAX_VISIBLE);
+      if (qScroll > maxScroll) qScroll = maxScroll;
+      if (qScroll < 0) qScroll = 0;
+    },
+
+    /* P2-3b：当前可见窗口（验证/调试读取）：{start, rows, total, sel} */
+    _visibleRange: function () {
+      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
+      return { start: start, rows: Math.min(data.length - start, MAX_VISIBLE), total: data.length, sel: sel };
     },
 
     /* M8-4：当前页签（验证/调试读取） */
@@ -374,8 +403,11 @@
       }
       var rowY = rect.y + HEADER_H;
       var rowIdx = Math.floor((y - rowY) / ROW_H);
-      if (rowIdx >= 0 && rowIdx < data.length && rowIdx < MAX_VISIBLE) {
-        sel = rowIdx;
+      /* P2-3b：点击行按滚动窗口偏移换算为绝对索引（tasks/shop/inventory 的 start 恒为 0） */
+      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
+      var absIdx = rowIdx + start;
+      if (rowIdx >= 0 && rowIdx < MAX_VISIBLE && absIdx >= 0 && absIdx < data.length) {
+        sel = absIdx;
         this._confirm();
       }
     },
@@ -511,7 +543,9 @@
       var sz = cssSize();
       var cw = sz.w, ch = sz.h;
 
-      var rows = Math.min(data.length, MAX_VISIBLE);
+      /* P2-3b：图鉴滚动窗口起点；非 quests 图鉴页 start 恒为 0（tasks/shop/inventory 行为不变） */
+      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
+      var rows = Math.min(data.length - start, MAX_VISIBLE);
       var w = Math.min(cw * W_RATIO, MAX_W);
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
       var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
@@ -583,7 +617,8 @@
       c.font = '14px monospace';
       for (var i = 0; i < rows; i++) {
         var ry = py + HEADER_H + i * ROW_H;
-        if (i === sel) {
+        var entry = data[start + i]; /* P2-3b：按滚动窗口取行数据 */
+        if (i + start === sel) {
           c.fillStyle = 'rgba(255,207,110,0.18)';
           c.fillRect(px + 6, ry + 2, w - 12, ROW_H - 4);
           /* P1-2：选中行左侧 2px 金色竖条 */
@@ -594,7 +629,7 @@
           c.fillStyle = '#cfcfcf';
         }
         /* P1-2：行左物品图标（16×16，y 居中）；无图标时文字保持原位 */
-        var ric = this._rowIcon(data[i]);
+        var ric = this._rowIcon(entry);
         var rowTextX = px + 14;
         var rowMaxW = w - 28;
         if (ric) {
@@ -603,7 +638,7 @@
           var riy = ry + Math.floor((ROW_H - 16) / 2);
           c.drawImage(ric, px + 14 + 2, riy, 16, 16);
         }
-        c.fillText(this._fitRow(c, this._rowText(data[i]), rowMaxW), rowTextX, ry + 20);
+        c.fillText(this._fitRow(c, this._rowText(entry), rowMaxW), rowTextX, ry + 20);
       }
       /* M9-5：空状态——居中灰字提示（背包/任务各自文案） */
       if (data.length === 0) {
@@ -626,6 +661,10 @@
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
+      /* P2-3b：图鉴滚动时底部显示当前位置 (sel+1)/total（窄屏用短文案避免溢出） */
+      if (kind === 'quests' && data.length > MAX_VISIBLE) {
+        hint = '↑↓ 浏览 · ' + (sel + 1) + '/' + data.length + ' · Tab 切页 · Esc 关闭';
+      }
       c.fillText(hint, px + 14, py + h - 12);
     },
 

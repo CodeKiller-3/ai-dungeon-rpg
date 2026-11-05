@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_3</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-3 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { mapLoaded: false, mapApi: false, mapOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage / fillRect 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var imgs = [];   /* [{n,x,y,w,h}] */
+  var fills = [];  /* [{s,w,h}] 全屏/大面积填充的 fillStyle */
+  var origDrawImage = ctx.drawImage, origFillRect = ctx.fillRect;
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        imgs.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 忽略 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+  ctx.fillRect = function (x, y, w, h) {
+    try {
+      if (w >= 200 && h >= 200) fills.push({ s: String(ctx.fillStyle || ''), w: w, h: h });
+    } catch (e) { /* 忽略 */ }
+    return origFillRect.apply(ctx, arguments);
+  };
+
+  function hasPrefix(p) {
+    for (var i = 0; i < imgs.length; i++) if (imgs[i].n.indexOf(p) === 0) return true;
+    return false;
+  }
+  function tintUsed(r, g, b) {
+    for (var i = 0; i < fills.length; i++) {
+      if (new RegExp('rgba\\(' + r + ',\\s*' + g + ',\\s*' + b + ',').test(fills[i].s)) return true;
+    }
+    return false;
+  }
+  function makeFloorGrid(nx, ny) {
+    var g = [];
+    for (var y = 0; y < ny; y++) { g[y] = []; for (var x = 0; x < nx; x++) g[y][x] = 1; }
+    return g;
+  }
+  function finish() {
+    var pass = out.mapLoaded && out.mapApi && out.mapOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var R = Game.Core.Render, S = Game.Core.Sprites, D = Game.Data, MP = Game.Systems.Map;
+      out.mapLoaded = !!(window.Game && Game.Core && R && S && D.MAPS && D.MONSTERS && MP && Game.Systems.AI);
+      out.mapApi = !!(MP.setFloor && MP.changeFloor && MP.getGrid && MP.getFloor &&
+        R.drawMap && R.MONSTER_ANIM && typeof S.getFrame === 'function');
+
+      if (!out.mapLoaded || !out.mapApi) { finish(); return; }
+
+      R.init(cv);
+      R._animNow = function () { return 4321; };
+      Game.fov = undefined;
+      Game.Lighting = undefined;
+      Game.Particles = undefined;
+      Game.Feedback = undefined;
+      if (Game.hud) Game.hud.draw = function () { };
+
+      /* t2_floors：5 层、sizes/enemyTable 各 5 行、每行概率和=1 */
+      var et = D.MAPS.enemyTable;
+      var sumsOk = true, sums = [];
+      for (var ri = 0; ri < et.length; ri++) {
+        var s = 0;
+        for (var ei = 0; ei < et[ri].length; ei++) s += et[ri][ei].rate;
+        sums.push(s);
+        if (Math.abs(s - 1) > 1e-6) sumsOk = false;
+      }
+      var t2ok = D.MAPS.floors === 5 && D.MAPS.sizes.length === 5 && et.length === 5 && sumsOk;
+      sub.t2_floors = t2ok;
+      sub.t2_sums = sums;
+      ok = ok && t2ok;
+
+      /* t3_strength：五层期望强度严格递增（rate×(atk+hp/10)），输出 f1~f5
+       * P2-3b 数值上调后：F1 11.125 / F2 20.125 / F3 23.75 / F4 36.85 / F5 44.075 */
+      function strength(row) {
+        var v = 0;
+        for (var i = 0; i < row.length; i++) {
+          var m = D.MONSTERS[row[i].id];
+          v += row[i].rate * (m.atk + m.hp / 10);
+        }
+        return v;
+      }
+      var st = et.map(strength);
+      var chainOk = true;
+      for (var ci = 1; ci < st.length; ci++) if (!(st[ci - 1] < st[ci])) chainOk = false;
+      var t3ok = chainOk && Math.abs(st[0] - 11.125) < 1e-6 && Math.abs(st[1] - 20.125) < 1e-6 &&
+        Math.abs(st[2] - 23.75) < 1e-6 && Math.abs(st[3] - 36.85) < 1e-6 &&
+        Math.abs(st[4] - 44.075) < 1e-6;
+      sub.t3_strength = t3ok;
+      sub.t3_values = st;
+      ok = ok && t3ok;
+
+      /* t4_monster15：MONSTERS ≥15 种、MONSTER_ANIM ≥15 项且五个主题怪帧组非 null */
+      var ids = Object.keys(D.MONSTERS);
+      var NEW5 = ['big_zombie', 'necromancer', 'masked_orc', 'pumpkin_dude', 'angel'];
+      var t4ok = ids.length >= 15 && Object.keys(R.MONSTER_ANIM).length >= 15;
+      for (var ni = 0; ni < NEW5.length; ni++) {
+        if (!D.MONSTERS[NEW5[ni]]) t4ok = false;
+        var set = R.MONSTER_ANIM[NEW5[ni]];
+        if (!set || !set.idle || !set.run) { t4ok = false; continue; }
+        ['idle', 'run'].forEach(function (k) {
+          for (var f = 0; f < 4; f++) if (!S.getFrame(set[k], f)) t4ok = false;
+        });
+      }
+      for (var mi = 0; mi < ids.length; mi++) {
+        if (!R.MONSTER_ANIM[ids[mi]]) t4ok = false; /* 全部怪物都有视觉映射 */
+      }
+      sub.t4_monster15 = t4ok;
+      sub.t4_counts = { monsters: ids.length, anim: Object.keys(R.MONSTER_ANIM).length };
+      ok = ok && t4ok;
+
+      /* 桩掉场景取数，做绘制断言（真实 Map 保留供 t7/t8） */
+      var origEnemies = MP.getEnemies, origDetail = MP.getDetail, origDecor = MP.getDecor;
+      var origAI = Game.Systems.AI;
+      MP.getDetail = function () { return null; };
+      MP.getDecor = function () { return null; };
+      MP.getEnemies = function () { return []; };
+
+      /* t5_drawMap：F4 四主题怪 + F5 天使各一格，落笔对应动画前缀 */
+      var grid8 = makeFloorGrid(8, 8);
+      Game.Systems.AI = {
+        getPatrols: function () {
+          return [
+            { x: 2, y: 2, monsterId: 'big_zombie', state: 'idle', path: [], frame: 0 },
+            { x: 3, y: 2, monsterId: 'necromancer', state: 'idle', path: [], frame: 0 },
+            { x: 4, y: 2, monsterId: 'masked_orc', state: 'chase', path: [], frame: 0 },
+            { x: 5, y: 2, monsterId: 'pumpkin_dude', state: 'chase', path: [], frame: 0 }
+          ];
+        }
+      };
+      imgs = [];
+      var d1 = true;
+      try { R.drawMap(grid8, { x: 1, y: 1, floor: 4 }); } catch (e) { d1 = false; }
+      var f4ok = d1 && hasPrefix('big_zombie_idle_anim_f') && hasPrefix('necromancer_anim_f') &&
+        hasPrefix('masked_orc_run_anim_f') && hasPrefix('pumpkin_dude_run_anim_f');
+      Game.Systems.AI = {
+        getPatrols: function () { return [{ x: 2, y: 2, monsterId: 'angel', state: 'idle', path: [], frame: 0 }]; }
+      };
+      imgs = [];
+      var d2 = true;
+      try { R.drawMap(grid8, { x: 1, y: 1, floor: 5 }); } catch (e) { d2 = false; }
+      var f5ok = d2 && hasPrefix('angel_idle_anim_f');
+      sub.t5_drawMap = f4ok && f5ok;
+      ok = ok && sub.t5_drawMap;
+
+      /* t6_theme：F1/F4 drawMap 使用不同主题 tint（rgba 全屏填充），且 restore 后 tint 不残留 */
+      Game.Systems.AI = { getPatrols: function () { return []; } };
+      fills = [];
+      R.drawMap(grid8, { x: 1, y: 1, floor: 1 });
+      var f1Tint = tintUsed(120, 130, 150);
+      fills = [];
+      R.drawMap(grid8, { x: 1, y: 1, floor: 4 });
+      var f4Tint = tintUsed(80, 140, 200);
+      var f4LeaksF1 = false;
+      for (var fi = 0; fi < fills.length; fi++) {
+        if (/rgba\(120,\s*130,\s*150,/.test(fills[fi].s)) f4LeaksF1 = true; /* F4 帧不应再出现 F1 tint */
+      }
+      var afterStyle = String(ctx.fillStyle || '');
+      var tintLeftOver = /rgba\(80,\s*140,\s*200,/.test(afterStyle);
+      sub.t6_theme = f1Tint && f4Tint && !f4LeaksF1 && !tintLeftOver;
+      ok = ok && sub.t6_theme;
+
+      /* 恢复真实 Map 取数（t7/t8 用真实生成） */
+      MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+      Game.Systems.AI = origAI;
+
+      /* t7_floorSwitch：1→5→1 切换无越界，尺寸与配置匹配；F5 再向下返回 null */
+      var switchOk = true, sizes = [];
+      MP.generate(); /* map.js 的 cfg 在首次 generate 时初始化，之后 setFloor 才可用 */
+      for (var fl = 1; fl <= 5; fl++) {
+        var g = MP.setFloor(fl);
+        var want = D.MAPS.sizes[fl - 1];
+        sizes.push([g[0].length, g.length]);
+        if (!(g[0].length === want[0] && g.length === want[1] && MP.getFloor() === fl)) switchOk = false;
+      }
+      var downAt5 = MP.changeFloor(1); /* 最后一层再向下 → null（不覆写当前层） */
+      if (downAt5 !== null) switchOk = false;
+      if (MP.getFloor() !== 5) switchOk = false;
+      MP.changeFloor(-1);
+      if (MP.getFloor() !== 4) switchOk = false;
+      var back = MP.setFloor(1);
+      if (!(back[0].length === D.MAPS.sizes[0][0] && MP.getFloor() === 1)) switchOk = false;
+      /* 各层生成的怪 id 必须都在 MONSTERS 中且属于本层表；
+       * P2-3b：F5 的 dragon 由 map.js 强制保底（可能不在 F5 表内），末层允许该例外 */
+      var tableOk = true;
+      for (var fl2 = 1; fl2 <= 5; fl2++) {
+        MP.setFloor(fl2);
+        var row = D.MAPS.enemyTable[fl2 - 1];
+        var rowIds = {};
+        for (var rj = 0; rj < row.length; rj++) rowIds[row[rj].id] = true;
+        var es = MP.getEnemies();
+        for (var e2 = 0; e2 < es.length; e2++) {
+          var mid2 = es[e2].monsterId;
+          if (!D.MONSTERS[mid2]) { tableOk = false; continue; }
+          if (!rowIds[mid2] && !(fl2 === 5 && mid2 === 'dragon')) tableOk = false;
+        }
+      }
+      sub.t7_floorSwitch = switchOk && tableOk;
+      sub.t7_sizes = sizes;
+      ok = ok && sub.t7_floorSwitch;
+
+      /* t8_dragonFinal：F5 生成后必含 dragon（map.js 末层强制保底） */
+      MP.setFloor(5);
+      var es5 = MP.getEnemies();
+      var hasDragon = false;
+      for (var di = 0; di < es5.length; di++) if (es5[di].monsterId === 'dragon') hasDragon = true;
+      sub.t8_dragonFinal = hasDragon;
+      ok = ok && hasDragon;
+
+      /* t9_fallback：未知 id / 素材缺失 / themes 缺失，drawMap 不抛错 */
+      var fbOk = true;
+      try {
+        Game.Systems.AI = { getPatrols: function () { return [{ x: 2, y: 2, monsterId: 'unknown_monster', state: 'chase', path: [], frame: 0 }]; } };
+        MP.getEnemies = function () { return [{ x: 3, y: 3, monsterId: 'unknown_monster' }]; };
+        imgs = [];
+        R.drawMap(grid8, { x: 1, y: 1, floor: 2 });
+        var fallbackChort = hasPrefix('monster_chort');
+        var origGet = S.get, origGetFrame = S.getFrame;
+        S.get = function () { return null; };
+        S.getFrame = function () { return null; };
+        imgs = [];
+        R.drawMap(grid8, { x: 1, y: 1, floor: 3 });
+        var blank = imgs.length === 0;
+        S.get = origGet; S.getFrame = origGetFrame;
+        var origThemes = D.MAPS.themes;
+        D.MAPS.themes = undefined;
+        R.drawMap(grid8, { x: 1, y: 1, floor: 1 });
+        D.MAPS.themes = origThemes;
+        fbOk = fallbackChort && blank;
+      } catch (e) { fbOk = false; }
+      MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+      Game.Systems.AI = origAI;
+      sub.t9_fallback = fbOk;
+      ok = ok && fbOk;
+
+      out.sub = sub;
+      out.mapOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.mapOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

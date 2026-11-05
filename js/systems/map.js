@@ -103,14 +103,42 @@
         placed++;
       }
     }
-    /* 修复 P1：最深层保底 1 只巨龙——固定 25% 概率下 9+2 个刷新点全落空的概率约 4.2%，
-     * 会让主线"击败巨龙"无法完成。只替换最深层最后一个怪，怪物数量与逐层强度不变。 */
+    /* P2-3b：最深层恰好 1 只巨龙（Boss 唯一）。
+     * 原逻辑只保证"至少 1 只"；这里统计 dragon 数量：无 dragon → 末位替换为 dragon（保底）；
+     * 多于 1 只 → 保留第一只，其余替换为同层敌表中的非 dragon 项（用额外一次 random 取表内项）。
+     * 敌表内全为 dragon（无非 dragon 项）时兜底保留原样，不抛错。 */
     if (floorIndex === cfg.floors - 1 && enemies.length > 0) {
-      var hasDragon = false;
+      var dragonFirst = -1, dragonCount = 0;
       for (var d = 0; d < enemies.length; d++) {
-        if (enemies[d].monsterId === 'dragon') { hasDragon = true; break; }
+        if (enemies[d].monsterId === 'dragon') {
+          dragonCount++;
+          if (dragonFirst < 0) dragonFirst = d;
+        }
       }
-      if (!hasDragon) enemies[enemies.length - 1].monsterId = 'dragon';
+      if (dragonCount === 0) {
+        enemies[enemies.length - 1].monsterId = 'dragon';
+      } else if (dragonCount > 1) {
+        var nonDragon = [];
+        var nonDragonTotal = 0;
+        for (var nt = 0; nt < table.length; nt++) {
+          if (table[nt].id !== 'dragon') {
+            nonDragon.push(table[nt]);
+            nonDragonTotal += table[nt].rate;
+          }
+        }
+        if (nonDragon.length > 0 && nonDragonTotal > 0) {
+          for (var k = 0; k < enemies.length; k++) {
+            if (k === dragonFirst || enemies[k].monsterId !== 'dragon') continue;
+            var roll2 = Math.random() * nonDragonTotal;
+            var acc2 = 0, pick2 = nonDragon[0].id;
+            for (var p2 = 0; p2 < nonDragon.length; p2++) {
+              acc2 += nonDragon[p2].rate;
+              if (roll2 <= acc2) { pick2 = nonDragon[p2].id; break; }
+            }
+            enemies[k].monsterId = pick2;
+          }
+        }
+      }
     }
   }
 

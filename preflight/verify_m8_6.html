@@ -80,9 +80,12 @@
       sub.t5_idem = (ups5a === 0) && (ups5b === 0) && P.level === 3 && P.atk === 12;
       ok = ok && sub.t5_idem;
 
-      /* 6. 怪物表（P2-1 扩为 10 种 / 每层 3~4 种）：三层概率和=1、dragon 仅 3 层；
+      /* 6. 怪物表（P2-3b 数值上调后仍为 5 层 / 每层 3~5 种）：每层概率和=1、dragon 仅 F5；
        * 逐层期望强度单调递增（rate×(atk+hp/10)）。
-       * P2-1 期望强度新旧对比：F1 10.8 → 11.125、F2 15.5 → 20.125、F3 22.5 → 27.5 */
+       * P2-3b 期望强度对比（P2-3 → P2-3b）：
+       *   F1 11.125（不变）、F2 20.125（不变）、F3 23.75（不变）、
+       *   F4 29.65 → 36.85（5 怪 hp 上调）、F5 32.1 → 44.075（dragon 权重 .2→.05、高阶怪加权）；
+       *   全链 11.125 < 20.125 < 23.75 < 36.85 < 44.075 */
       var et = G.Data.MAPS.enemyTable;
       var M = G.Data.MONSTERS;
       function rateOf(row, id) {
@@ -104,40 +107,54 @@
       }
       function near(a, b) { return Math.abs(a - b) < 1e-6; }
       var s1 = strength(et[0]), s2 = strength(et[1]), s3 = strength(et[2]);
-      sub.t6_table = (et.length === 3) &&
-        near(rowSum(et[0]), 1) && near(rowSum(et[1]), 1) && near(rowSum(et[2]), 1) &&
-        rateOf(et[2], 'dragon') === 0.25 &&
+      var s4 = strength(et[3]), s5 = strength(et[4]);
+      var sumsOk = true;
+      for (var ri = 0; ri < et.length; ri++) if (!near(rowSum(et[ri]), 1)) sumsOk = false;
+      sub.t6_table = (et.length === 5) && sumsOk &&
+        rateOf(et[4], 'dragon') === 0.05 &&
         rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
+        rateOf(et[2], 'dragon') === 0 && rateOf(et[3], 'dragon') === 0 &&
         rateOf(et[0], 'slime') === 0.45 && rateOf(et[0], 'bat') === 0.3 &&
         rateOf(et[0], 'goblin') === 0.15 && rateOf(et[0], 'tiny_zombie') === 0.1 &&
         rateOf(et[1], 'bat') === 0.15 && rateOf(et[1], 'skeleton') === 0.3 &&
         rateOf(et[1], 'orc_warrior') === 0.3 && rateOf(et[1], 'orc_shaman') === 0.25 &&
         rateOf(et[2], 'skeleton') === 0.3 && rateOf(et[2], 'ogre') === 0.25 &&
-        rateOf(et[2], 'wogol') === 0.2 &&
-        near(s1, 11.125) && near(s2, 20.125) && near(s3, 27.5) &&
-        s1 < s2 && s2 < s3;
+        rateOf(et[2], 'wogol') === 0.2 && rateOf(et[2], 'imp') === 0.25 &&
+        rateOf(et[3], 'big_zombie') === 0.2 && rateOf(et[3], 'necromancer') === 0.2 &&
+        rateOf(et[3], 'pumpkin_dude') === 0.15 && rateOf(et[3], 'masked_orc') === 0.3 &&
+        rateOf(et[3], 'skeleton') === 0.15 &&
+        rateOf(et[4], 'big_zombie') === 0.3 && rateOf(et[4], 'necromancer') === 0.15 &&
+        rateOf(et[4], 'masked_orc') === 0.15 && rateOf(et[4], 'angel') === 0.35 &&
+        near(s1, 11.125) && near(s2, 20.125) && near(s3, 23.75) &&
+        near(s4, 36.85) && near(s5, 44.075) &&
+        s1 < s2 && s2 < s3 && s3 < s4 && s4 < s5;
       ok = ok && sub.t6_table;
 
-      /* 7. 不刷可通关（数值模拟）：每层清一遍（1 层 5 史莱姆+2 蝙蝠=74、2 层 4 蝙蝠+5 骷髅=173、
-       * 3 层 dragon 前 3 骷髅=75），加支线奖励（史莱姆 20、金币 30）；断言 1 层后≥2、2 层后≥3、
-       * dragon 前≥4；L4 + sword_dragon(atk8) → atk≥20，对狂暴 dragon(def10) 单回合伤害≥10 */
+      /* 7. 不刷可通关（5 层数值模拟，期望经验累计）：
+       * 每层按实际怪物数（F1=5/F2=7/F3=9/F4=11）与期望经验：
+       *   F1 59 / F2 184 / F3 273 / F4 458；F5 dragon 前保守 4 只（非龙均 45.75 → 183）；
+       * 支线奖励 kill_slimes 20 + gold_rich 30。累计 1146 → L6（升 L6 累计 900，余 246）；
+       * 断言 F5 前等级≥5、atk（L6 基础 15 + sword_dragon 8 = 23）、对狂暴 dragon(def10) 单回合伤害≥10 */
       resetP();
       function gain(exp) { P.exp += exp; B.checkLevelUp(); }
-      gain(74);
+      gain(59);  /* F1 5 只期望经验 */
       var afterF1 = P.level;
-      gain(20); /* 支线 kill_slimes（1 层清 5 只史莱姆） */
-      gain(173);
+      gain(20);  /* 支线 kill_slimes */
+      gain(184); /* F2 7 只 */
       var afterF2 = P.level;
-      gain(30); /* 支线 gold_rich（1+2 层累计金币 >100） */
-      gain(75); /* 3 层 dragon 前 3 场骷髅 */
+      gain(30);  /* 支线 gold_rich */
+      gain(273); /* F3 9 只 */
+      gain(458); /* F4 11 只 */
+      var afterF4 = P.level;
+      gain(183); /* F5 dragon 前 4 只（保守口径） */
       var beforeDragon = P.level;
       P.inventory.sword_dragon = 1;
       P.equipment.weapon = 'sword_dragon';
       Inv.recalcEquip();
       var enrageDef = Math.round(M.dragon.def * M.dragon.enrage.defMul);
       var perTurn = Math.max(P.atk - enrageDef, 1);
-      sub.t7_nogrind = afterF1 >= 2 && afterF2 >= 3 && beforeDragon >= 4 &&
-        P.level === 4 && P.atk >= 20 && perTurn >= 10;
+      sub.t7_nogrind = afterF1 >= 1 && afterF2 >= 3 && afterF4 >= 5 && beforeDragon >= 5 &&
+        P.level >= 5 && P.atk >= 21 && perTurn >= 10;
       ok = ok && sub.t7_nogrind;
 
       /* 8. 读档重算：旧档 {level:5, atk/def/maxHp:999} load 后 atk===14、def===9、maxHp===140（不信任旧值） */

@@ -98,9 +98,9 @@
 
       var REQUIRED_NEW = ['goblin', 'tiny_zombie', 'orc_warrior', 'orc_shaman', 'wogol', 'ogre'];
 
-      /* t2_monsterData：MONSTERS 共 10 种（4 旧 + 6 新），数值字段均为有效正数 */
+      /* t2_monsterData：MONSTERS ≥15 种（P2-1 10 种 + P2-3 imp 与 5 种主题怪），数值字段均为有效正数 */
       var ids = Object.keys(D.MONSTERS);
-      var t2ok = (ids.length === 10);
+      var t2ok = (ids.length >= 15);
       var badField = [];
       for (var mi = 0; mi < ids.length; mi++) {
         var m = D.MONSTERS[ids[mi]];
@@ -116,8 +116,9 @@
       sub.t2_monsterData = t2ok;
       ok = ok && t2ok;
 
-      /* t3_floorTable：3 层、每层概率和=1、dragon 仅 3 层、期望强度严格递增（rate×(atk+hp/10)）
-       * 期望值（P2-1 新表）：F1 11.125 < F2 20.125 < F3 27.5（旧表 10.8/15.5/22.5） */
+      /* t3_floorTable：P2-3 起 5 层、每层概率和=1、dragon 仅 F5、期望强度严格递增（rate×(atk+hp/10)）
+       * 期望值（P2-3b 数值上调后）：F1 11.125 < F2 20.125 < F3 23.75 < F4 36.85 < F5 44.075
+       * （P2-1 旧 3 层值：11.125 / 20.125 / 27.5；F3 因 dragon 移出而下降） */
       var et = D.MAPS.enemyTable;
       function rateOf(row, id) {
         for (var i = 0; i < row.length; i++) if (row[i].id === id) return row[i].rate;
@@ -137,19 +138,27 @@
         return s;
       }
       function near(a, b) { return Math.abs(a - b) < 1e-6; }
-      var s1 = strength(et[0]), s2 = strength(et[1]), s3 = strength(et[2]);
-      var t3ok = (et.length === 3) &&
-        near(rowSum(et[0]), 1) && near(rowSum(et[1]), 1) && near(rowSum(et[2]), 1) &&
+      var strengthRows = et.map(strength);
+      var sumsOk = true;
+      for (var eti = 0; eti < et.length; eti++) if (!near(rowSum(et[eti]), 1)) sumsOk = false;
+      var chainOk = true;
+      for (var sci = 1; sci < strengthRows.length; sci++) {
+        if (!(strengthRows[sci - 1] < strengthRows[sci])) chainOk = false;
+      }
+      var t3ok = (et.length === 5) && sumsOk &&
         rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
-        rateOf(et[2], 'dragon') > 0 &&
-        near(s1, 11.125) && near(s2, 20.125) && near(s3, 27.5) &&
-        s1 < s2 && s2 < s3;
+        rateOf(et[2], 'dragon') === 0 && rateOf(et[3], 'dragon') === 0 &&
+        rateOf(et[4], 'dragon') > 0 &&
+        near(strengthRows[0], 11.125) && near(strengthRows[1], 20.125) &&
+        near(strengthRows[2], 23.75) && near(strengthRows[3], 36.85) &&
+        near(strengthRows[4], 44.075) && chainOk;
       sub.t3_floorTable = t3ok;
-      sub.t3_strength = { f1: s1, f2: s2, f3: s3 };
+      sub.t3_strength = { f1: strengthRows[0], f2: strengthRows[1], f3: strengthRows[2],
+        f4: strengthRows[3], f5: strengthRows[4] };
       ok = ok && t3ok;
 
-      /* t4_animMap：MONSTER_ANIM 覆盖 10 种 id，idle/run 各 4 帧经 getFrame 非 null 且互异 */
-      var t4ok = (Object.keys(R.MONSTER_ANIM).length === 10);
+      /* t4_animMap：MONSTER_ANIM 覆盖 ≥15 种 id（P2-3 扩到 16），idle/run 各 4 帧经 getFrame 非 null 且互异 */
+      var t4ok = (Object.keys(R.MONSTER_ANIM).length >= 15);
       for (var ai = 0; ai < ids.length; ai++) {
         var set = R.MONSTER_ANIM[ids[ai]];
         if (!set || !set.idle || !set.run) { t4ok = false; continue; }

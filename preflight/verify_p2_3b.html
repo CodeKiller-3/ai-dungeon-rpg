@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_3b</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-3b 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { patchLoaded: false, patchApi: false, patchOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 fillText 记录弹窗行文本（避免 file:// 本地图片污染 getImageData） */
+  var texts = [];
+  var origFillText = ctx.fillText;
+  ctx.fillText = function (t, x, y) {
+    try { texts.push(String(t)); } catch (e) { /* 忽略 */ }
+    return origFillText.apply(ctx, arguments);
+  };
+
+  function hasText(sub) {
+    for (var i = 0; i < texts.length; i++) if (texts[i].indexOf(sub) >= 0) return true;
+    return false;
+  }
+  function pressKey(code) {
+    try {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: code }));
+    } catch (e) { /* 忽略 */ }
+  }
+  function finish() {
+    var pass = out.patchLoaded && out.patchApi && out.patchOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var D = Game.Data, M = Game.Modal, R = Game.Core.Render, MP = Game.Systems.Map;
+      out.patchLoaded = !!(window.Game && Game.Core && D.NPC && D.MAPS && D.MONSTERS && D.ITEMS &&
+        MP && M && Game.Systems.AI);
+      out.patchApi = !!(typeof M._visibleRange === 'function' && typeof M._setPage === 'function' &&
+        typeof M.draw === 'function' && typeof MP.setFloor === 'function');
+
+      if (!out.patchLoaded || !out.patchApi) { finish(); return; }
+
+      R.init(cv);
+
+      /* t2_dialogue：NPC 文案无"第3层/第三层/3层"残留，且已改为"地牢最深处" */
+      var raw = JSON.stringify(D.NPC);
+      var noOld = !/第3层|第三层|3层/.test(raw);
+      var hasNew = raw.indexOf('地牢最深处') >= 0;
+      sub.t2_dialogue = noOld && hasNew;
+      ok = ok && sub.t2_dialogue;
+
+      /* t3_bestiaryScroll：怪物图鉴 16 条，sel 移到 15 后可见窗口包含第 16 条（data[15]） */
+      var t3ok = true;
+      M.open('quests');
+      M._setPage(1); /* page=1 怪物图鉴 */
+      var r0 = M._visibleRange();
+      if (!(r0.total === 16 && r0.start === 0 && r0.sel === 0)) t3ok = false;
+      for (var i3 = 0; i3 < 15; i3++) pressKey('ArrowDown');
+      var r1 = M._visibleRange();
+      if (!(r1.sel === 15 && r1.total === 16 && r1.start + r1.rows > 15 && r1.start <= 15)) t3ok = false;
+      texts = [];
+      var draw3 = true;
+      try { M.draw(); } catch (e) { draw3 = false; }
+      var lastVisible = hasText('天使'); /* data[15] = angel（插入序最后一个怪物） */
+      t3ok = t3ok && draw3 && lastVisible;
+      /* 关闭再打开：滚动与选中归零；切页也重置 */
+      M.close();
+      M.open('quests');
+      var r2 = M._visibleRange();
+      if (!(r2.start === 0 && r2.sel === 0)) t3ok = false;
+      M._setPage(2);
+      var r3 = M._visibleRange();
+      if (!(r3.start === 0 && r3.sel === 0)) t3ok = false;
+      sub.t3_bestiaryScroll = t3ok;
+      ok = ok && t3ok;
+
+      /* t4_bestiaryItems：物品图鉴 42 条，sel 移到 41 后可见窗口包含第 42 条（data[41]） */
+      var t4ok = true;
+      var r4 = M._visibleRange();
+      if (!(r4.total === 42 && r4.start === 0 && r4.sel === 0)) t4ok = false;
+      for (var i4 = 0; i4 < 41; i4++) pressKey('ArrowDown');
+      var r5 = M._visibleRange();
+      if (!(r5.sel === 41 && r5.total === 42 && r5.start + r5.rows > 41 && r5.start <= 41)) t4ok = false;
+      /* 渲染末页窗口并确认第 42 条（potion_mana / 蓝瓶）实际出现在行文本中 */
+      texts = [];
+      var draw4 = true;
+      try { M.draw(); } catch (e) { draw4 = false; }
+      var lastItemVisible = hasText('蓝瓶'); /* data[41] = potion_mana（插入序最后一个物品） */
+      t4ok = t4ok && draw4 && lastItemVisible;
+      M.close();
+      sub.t4_bestiaryItems = t4ok;
+      ok = ok && t4ok;
+
+      /* t5_oneDragon：F5 生成 20 次每次恰 1 只 dragon；F1~F4 均 0 */
+      var oneOk = true, counts = [];
+      function dragonsOnFloor(f) {
+        MP.setFloor(f);
+        var es = MP.getEnemies(), n = 0;
+        for (var d = 0; d < es.length; d++) if (es[d].monsterId === 'dragon') n++;
+        return n;
+      }
+      MP.generate(); /* 初始化 map.js 的 cfg */
+      for (var f1 = 1; f1 <= 4; f1++) {
+        if (dragonsOnFloor(f1) !== 0) oneOk = false;
+      }
+      for (var g = 0; g < 20; g++) {
+        var dn = dragonsOnFloor(5);
+        counts.push(dn);
+        if (dn !== 1) oneOk = false;
+      }
+      sub.t5_oneDragon = oneOk;
+      sub.t5_counts = counts;
+      ok = ok && oneOk;
+
+      /* t6_strengthUp：F1~F3 不变；F4 35~38、F5 44~48；五层严格单调 */
+      function strength(row) {
+        var v = 0;
+        for (var i = 0; i < row.length; i++) {
+          var m = D.MONSTERS[row[i].id];
+          v += row[i].rate * (m.atk + m.hp / 10);
+        }
+        return v;
+      }
+      var st = D.MAPS.enemyTable.map(strength);
+      var chain = true;
+      for (var c = 1; c < st.length; c++) if (!(st[c - 1] < st[c])) chain = false;
+      var near = function (a, b) { return Math.abs(a - b) < 1e-6; };
+      var t6ok = D.MAPS.enemyTable.length === 5 && chain &&
+        near(st[0], 11.125) && near(st[1], 20.125) && near(st[2], 23.75) &&
+        st[3] >= 35 && st[3] <= 38 && st[4] >= 44 && st[4] <= 48;
+      sub.t6_strengthUp = t6ok;
+      sub.t6_values = st;
+      ok = ok && t6ok;
+
+      out.sub = sub;
+      out.patchOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.patchOk = false;
+    }
+    finish();
+  }
+
+  /* 无需等待素材：本页只测数据/滚动/生成逻辑；仍按 R-01 直接执行 */
+  runTests();
+})();
+</script>
+</body>
+</html>

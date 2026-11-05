@@ -125,6 +125,58 @@
         ]
       }],
       color: '#a0522d'
+    },
+    /* P2-3：imp 由 bat 的视觉帧组转为独立怪物（F3 登场）；数值按 F3 期望介于 F2/F4 配平 */
+    imp: {
+      id: 'imp', name: '小恶魔',
+      hp: 60, atk: 12, def: 4,
+      exp: 24, gold: [8, 16],
+      drops: [{ itemId: 'potion_small', rate: 0.2 }],
+      color: '#ff8c42'
+    },
+    /* P2-3b：F4/F5 数值上调（F1~F3 不动）——目标 F4 期望 35~38、F5 44~48。
+     * 说明：按卡面 atk 全部保留，仅上调 hp 与 F5 权重（卡面原值按 hp/10 公式只能到 F4 34.75 / F5 40.275）。 */
+    big_zombie: {
+      id: 'big_zombie', name: '大僵尸',
+      hp: 240, atk: 26, def: 10,
+      exp: 55, gold: [26, 48],
+      drops: [{ itemId: 'potion_large', rate: 0.3 }],
+      color: '#8f9b6e'
+    },
+    necromancer: {
+      id: 'necromancer', name: '死灵法师',
+      hp: 135, atk: 24, def: 6,
+      exp: 42, gold: [20, 36],
+      drops: [{ itemId: 'potion_mana', rate: 0.35 }],
+      color: '#7b5aa6'
+    },
+    masked_orc: {
+      id: 'masked_orc', name: '面具兽人',
+      hp: 150, atk: 23, def: 8,
+      exp: 41, gold: [18, 34],
+      drops: [{
+        itemId: 'sword_bone', rate: 0.18,
+        tiers: [
+          { itemId: 'sword_bone', w: 60 },
+          { itemId: 'sword_bone_rare', w: 30 },
+          { itemId: 'sword_bone_epic', w: 10 }
+        ]
+      }],
+      color: '#b3743f'
+    },
+    pumpkin_dude: {
+      id: 'pumpkin_dude', name: '南瓜怪',
+      hp: 120, atk: 22, def: 7,
+      exp: 40, gold: [17, 32],
+      drops: [{ itemId: 'potion_xl', rate: 0.2 }],
+      color: '#e88a2a'
+    },
+    angel: {
+      id: 'angel', name: '天使',
+      hp: 180, atk: 28, def: 5,
+      exp: 45, gold: [22, 40],
+      drops: [{ itemId: 'potion_mana', rate: 0.3 }],
+      color: '#cfe6ff'
     }
   };
 })();
