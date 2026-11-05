@@ -19,13 +19,55 @@
     sword_dragon_rare: { id: 'sword_dragon_rare', name: '优秀龙牙剑', type: 'weapon', effect: { atk: 12 }, price: 300, sell: 150 },
     sword_dragon_epic: { id: 'sword_dragon_epic', name: '稀有龙牙剑', type: 'weapon', effect: { atk: 16, maxHp: 10 }, price: 600, sell: 300 },
     armor_leather_rare: { id: 'armor_leather_rare', name: '优秀皮革甲', type: 'armor', effect: { def: 5 }, price: 160, sell: 80 },
-    armor_leather_epic: { id: 'armor_leather_epic', name: '稀有皮革甲', type: 'armor', effect: { def: 6, maxHp: 10 }, price: 320, sell: 160 }
+    armor_leather_epic: { id: 'armor_leather_epic', name: '稀有皮革甲', type: 'armor', effect: { def: 6, maxHp: 10 }, price: 320, sell: 160 },
+
+    /* P2-2：物品扩量 11→42 条（纯新增，现有 11 条原文不动）。
+     * 武器 effect 仅 atk（价格≈atk×20、sell=price/2 向下取整），护甲仅 def/maxHp，药水 hp/mp。
+     * 1 层：sword_rusty / knife / machete / sword_iron */
+    sword_rusty: { id: 'sword_rusty', name: '生锈短剑', type: 'weapon', effect: { atk: 1 }, price: 30, sell: 15 },
+    knife: { id: 'knife', name: '匕首', type: 'weapon', effect: { atk: 1 }, price: 20, sell: 10 },
+    machete: { id: 'machete', name: '砍刀', type: 'weapon', effect: { atk: 2 }, price: 45, sell: 22 },
+    sword_iron: { id: 'sword_iron', name: '铁剑', type: 'weapon', effect: { atk: 3 }, price: 60, sell: 30 },
+    /* 2 层：sword_steel / axe_war / bow_hunter / hammer / spear */
+    sword_steel: { id: 'sword_steel', name: '钢剑', type: 'weapon', effect: { atk: 5 }, price: 100, sell: 50 },
+    axe_war: { id: 'axe_war', name: '战斧', type: 'weapon', effect: { atk: 6 }, price: 120, sell: 60 },
+    bow_hunter: { id: 'bow_hunter', name: '猎弓', type: 'weapon', effect: { atk: 4 }, price: 90, sell: 45 },
+    hammer: { id: 'hammer', name: '战锤', type: 'weapon', effect: { atk: 4 }, price: 85, sell: 42 },
+    spear: { id: 'spear', name: '长矛', type: 'weapon', effect: { atk: 4 }, price: 90, sell: 45 },
+    /* 3 层：sword_magic / staff_fire / bow_elite / axe_double / sword_anime */
+    sword_magic: { id: 'sword_magic', name: '魔剑', type: 'weapon', effect: { atk: 8 }, price: 160, sell: 80 },
+    staff_fire: { id: 'staff_fire', name: '烈焰法杖', type: 'weapon', effect: { atk: 9 }, price: 180, sell: 90 },
+    bow_elite: { id: 'bow_elite', name: '精弓', type: 'weapon', effect: { atk: 7 }, price: 140, sell: 70 },
+    axe_double: { id: 'axe_double', name: '双刃斧', type: 'weapon', effect: { atk: 10 }, price: 200, sell: 100 },
+    sword_anime: { id: 'sword_anime', name: '妖刀', type: 'weapon', effect: { atk: 12 }, price: 260, sell: 130 },
+    /* 品质档按 M8-3 公式（rare=round(atk×1.5) 价×2；epic=round(atk×2)+maxHp:10 价×4），3 组各 2 档 */
+    sword_iron_rare: { id: 'sword_iron_rare', name: '优秀铁剑', type: 'weapon', effect: { atk: 5 }, price: 120, sell: 60 },
+    sword_iron_epic: { id: 'sword_iron_epic', name: '稀有铁剑', type: 'weapon', effect: { atk: 6, maxHp: 10 }, price: 240, sell: 120 },
+    sword_steel_rare: { id: 'sword_steel_rare', name: '优秀钢剑', type: 'weapon', effect: { atk: 8 }, price: 200, sell: 100 },
+    sword_steel_epic: { id: 'sword_steel_epic', name: '稀有钢剑', type: 'weapon', effect: { atk: 10, maxHp: 10 }, price: 400, sell: 200 },
+    sword_magic_rare: { id: 'sword_magic_rare', name: '优秀魔剑', type: 'weapon', effect: { atk: 12 }, price: 320, sell: 160 },
+    sword_magic_epic: { id: 'sword_magic_epic', name: '稀有魔剑', type: 'weapon', effect: { atk: 16, maxHp: 10 }, price: 640, sell: 320 },
+    /* 护甲：chain_mail / plate_armor / robe_mage + 各自品质档（公式同 M8-3，def 阶梯） */
+    chain_mail: { id: 'chain_mail', name: '锁链甲', type: 'armor', effect: { def: 5 }, price: 120, sell: 60 },
+    plate_armor: { id: 'plate_armor', name: '板甲', type: 'armor', effect: { def: 8 }, price: 200, sell: 100 },
+    robe_mage: { id: 'robe_mage', name: '法袍', type: 'armor', effect: { def: 4, maxHp: 10 }, price: 150, sell: 75 },
+    chain_mail_rare: { id: 'chain_mail_rare', name: '优秀锁链甲', type: 'armor', effect: { def: 8 }, price: 240, sell: 120 },
+    chain_mail_epic: { id: 'chain_mail_epic', name: '稀有锁链甲', type: 'armor', effect: { def: 10, maxHp: 10 }, price: 480, sell: 240 },
+    plate_armor_rare: { id: 'plate_armor_rare', name: '优秀板甲', type: 'armor', effect: { def: 12 }, price: 400, sell: 200 },
+    plate_armor_epic: { id: 'plate_armor_epic', name: '稀有板甲', type: 'armor', effect: { def: 16, maxHp: 10 }, price: 800, sell: 400 },
+    robe_mage_rare: { id: 'robe_mage_rare', name: '优秀法袍', type: 'armor', effect: { def: 6, maxHp: 10 }, price: 300, sell: 150 },
+    robe_mage_epic: { id: 'robe_mage_epic', name: '稀有法袍', type: 'armor', effect: { def: 8, maxHp: 20 }, price: 600, sell: 300 },
+    /* 药水：特大血瓶（hp150）+ 蓝瓶（mp40，需 Inventory.use 支持 effect.mp） */
+    potion_xl: { id: 'potion_xl', name: '特大血瓶', type: 'consumable', effect: { hp: 150 }, price: 80, sell: 40 },
+    potion_mana: { id: 'potion_mana', name: '蓝瓶', type: 'consumable', effect: { mp: 40 }, price: 35, sell: 17 }
   };
 
-  /* 商店货架（按楼层解锁，越深越强；M8-3：装备三档变体并排售卖） */
+  /* 商店货架（P2-2 三层重配，每层 6~9 种按楼层解锁递进；每层条目 ≤ modal MAX_VISIBLE=12，无需滚动）
+   * F3 保留 sword_dragon 三档（M8-3 既有验收：稀有装备并排售卖） */
   Game.Data.SHOP_STOCK = [
-    ['potion_small', 'potion_large'],
-    ['potion_small', 'sword_bone', 'sword_bone_rare', 'sword_bone_epic', 'armor_leather', 'armor_leather_rare', 'armor_leather_epic'],
-    ['potion_large', 'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic', 'armor_leather', 'armor_leather_rare', 'armor_leather_epic']
+    ['potion_small', 'potion_large', 'knife', 'machete', 'sword_rusty', 'sword_iron', 'armor_leather'],
+    ['potion_large', 'potion_mana', 'sword_steel', 'axe_war', 'bow_hunter', 'hammer', 'spear', 'chain_mail', 'robe_mage'],
+    ['potion_xl', 'sword_magic', 'staff_fire', 'axe_double', 'sword_anime', 'plate_armor',
+      'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic']
   ];
 })();

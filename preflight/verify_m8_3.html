@@ -107,15 +107,15 @@
       sub.t4_tiers = tiers_ok;
       ok = ok && tiers_ok;
 
-      /* 5. 商店：货架含三档变体且价格正确；买卖变体正常 */
+      /* 5. 商店：P2-2 货架重配后 3 层仍含 sword_dragon 三档 + 板甲；价格正确 */
       G.Systems.Map = G.Systems.Map || {};
       G.Systems.Map.getFloor = function () { return 3; };
       var stock = Shop.getStock();
       var ids = {};
       for (var s = 0; s < stock.length; s++) ids[stock[s].id] = stock[s].item;
       var shopList_ok = !!(ids.sword_dragon && ids.sword_dragon_rare && ids.sword_dragon_epic &&
-        ids.armor_leather && ids.armor_leather_rare && ids.armor_leather_epic &&
-        ids.sword_dragon_epic.price === 600 && ids.armor_leather_rare.price === 160);
+        ids.plate_armor &&
+        ids.sword_dragon_epic.price === 600 && ids.plate_armor.price === 200);
       resetPlayer();
       P.gold = 1000;
       var buyR = Shop.buy('sword_dragon_epic');

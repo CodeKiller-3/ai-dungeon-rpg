@@ -47,6 +47,12 @@
     'weapon_rusty_sword', 'weapon_regular_sword', 'weapon_golden_sword',
     'weapon_red_gem_sword', 'weapon_lavish_sword',
     'weapon_axe', 'weapon_bow', 'weapon_spear',
+    /* P2-2：物品扩量——追加 18 把武器图标（与 P1-2 已裁 8 把共 26 把全覆盖） */
+    'weapon_anime_sword', 'weapon_baton_with_spikes', 'weapon_big_hammer', 'weapon_bow_2',
+    'weapon_double_axe', 'weapon_cleaver', 'weapon_duel_sword', 'weapon_green_magic_staff',
+    'weapon_hammer', 'weapon_katana', 'weapon_knife', 'weapon_knight_sword',
+    'weapon_mace', 'weapon_saw_sword', 'weapon_machete', 'weapon_red_magic_staff',
+    'weapon_waraxe', 'weapon_throwing_axe',
     /* P1-3：角色与怪物动画——玩家骑士 16×28 三态、史莱姆 16×16、蝙蝠 imp 16×16、Boss 大恶魔 32×36 */
     'knight_m_idle_anim_f0', 'knight_m_idle_anim_f1', 'knight_m_idle_anim_f2', 'knight_m_idle_anim_f3',
     'knight_m_run_anim_f0', 'knight_m_run_anim_f1', 'knight_m_run_anim_f2', 'knight_m_run_anim_f3',

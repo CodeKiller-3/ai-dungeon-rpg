@@ -15,18 +15,26 @@
   }
 
   Game.Systems.Inventory = {
-    /* 使用消耗品 */
+    /* 使用消耗品（P2-2：新增 effect.mp 回蓝分支，与 hp 同构；满 MP 时拒绝使用蓝瓶） */
     use: function (id) {
       var p = Game.Data.Player;
       var item = Game.Data.ITEMS[id];
       if (!item || item.type !== 'consumable') return { ok: false, msg: '不是消耗品' };
       if (!p.inventory[id] || p.inventory[id] <= 0) return { ok: false, msg: '没有该物品' };
       var hpGain = item.effect.hp || 0;
+      var mpGain = item.effect.mp || 0;
+      /* 蓝瓶：MP 已满则拒绝（不消耗物品，提示避免浪费） */
+      if (mpGain > 0 && p.mp >= p.maxMp) return { ok: false, msg: 'MP 已满，无需使用 ' + item.name };
       p.hp = Math.min(p.hp + hpGain, p.maxHp);
+      p.mp = Math.min((p.mp || 0) + mpGain, p.maxMp);
       p.inventory[id]--;
       if (p.inventory[id] === 0) delete p.inventory[id];
       notify();
-      return { ok: true, msg: '使用 ' + item.name + '，回复 ' + hpGain + ' HP' };
+      var msg = '使用 ' + item.name + '，';
+      if (hpGain > 0 && mpGain > 0) msg += '回复 ' + hpGain + ' HP、' + mpGain + ' MP';
+      else if (mpGain > 0) msg += '回复 ' + mpGain + ' MP';
+      else msg += '回复 ' + hpGain + ' HP';
+      return { ok: true, msg: msg };
     },
 
     /* 装备武器/防具 */

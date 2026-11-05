@@ -66,18 +66,38 @@
     return '';
   }
 
-  /* P1-2：物品行图标映射（以 js/data/items.js 实际 id 为准，已核对）：
-   *   potion_small→flask_red、potion_large→flask_big_red、
-   *   sword_bone→weapon_rusty_sword、sword_dragon→weapon_red_gem_sword、
-   *   sword_*_rare→weapon_golden_sword、sword_*_epic→weapon_lavish_sword；
-   *   armor_* / 未知 id → null（不画，行文字保持原位）。素材缺失同样返回 null。 */
+  /* P2-2：物品行图标映射（以 js/data/items.js 实际 id 为准）：
+   *   potion_small→flask_red、potion_large/potion_xl→flask_big_red、potion_mana→flask_blue；
+   *   新武器按卡面逐一映射（sword_rusty→weapon_rusty_sword、knife→weapon_knife、
+   *   machete→weapon_machete、sword_iron→weapon_regular_sword、sword_steel→weapon_duel_sword、
+   *   axe_war→weapon_waraxe、bow_hunter→weapon_bow_2、hammer→weapon_hammer、spear→weapon_spear、
+   *   sword_magic→weapon_knight_sword、staff_fire→weapon_red_magic_staff、bow_elite→weapon_bow、
+   *   axe_double→weapon_double_axe、sword_anime→weapon_anime_sword）；
+   *   品质档沿用 P1-2 既有规则（*_rare→weapon_golden_sword、*_epic→weapon_lavish_sword，
+   *   保持品质可辨识，不改为基础档图标）；armor_* / 未知 → null（不画，行文字原位）。素材缺失同样返回 null。 */
   function itemIcon(id) {
     if (typeof id !== 'string' || !id) return null;
     var name;
     if (id === 'potion_small') name = 'flask_red';
     else if (id === 'potion_large') name = 'flask_big_red';
+    else if (id === 'potion_xl') name = 'flask_big_red';
+    else if (id === 'potion_mana') name = 'flask_blue';
     else if (id === 'sword_bone') name = 'weapon_rusty_sword';
     else if (id === 'sword_dragon') name = 'weapon_red_gem_sword';
+    else if (id === 'sword_rusty') name = 'weapon_rusty_sword';
+    else if (id === 'knife') name = 'weapon_knife';
+    else if (id === 'machete') name = 'weapon_machete';
+    else if (id === 'sword_iron') name = 'weapon_regular_sword';
+    else if (id === 'sword_steel') name = 'weapon_duel_sword';
+    else if (id === 'axe_war') name = 'weapon_waraxe';
+    else if (id === 'bow_hunter') name = 'weapon_bow_2';
+    else if (id === 'hammer') name = 'weapon_hammer';
+    else if (id === 'spear') name = 'weapon_spear';
+    else if (id === 'sword_magic') name = 'weapon_knight_sword';
+    else if (id === 'staff_fire') name = 'weapon_red_magic_staff';
+    else if (id === 'bow_elite') name = 'weapon_bow';
+    else if (id === 'axe_double') name = 'weapon_double_axe';
+    else if (id === 'sword_anime') name = 'weapon_anime_sword';
     else if (/^sword_.+_rare$/.test(id)) name = 'weapon_golden_sword';
     else if (/^sword_.+_epic$/.test(id)) name = 'weapon_lavish_sword';
     else return null;

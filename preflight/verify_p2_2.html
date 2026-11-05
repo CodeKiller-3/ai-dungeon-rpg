@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_2</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-2 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     素材路径相对本页为 ../assets/sprites/（Sprites.load 支持可选 baseDir）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { itemLoaded: false, itemApi: false, itemOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var rec = [];
+  var origDrawImage = ctx.drawImage;
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+  function hasImg(name) {
+    for (var i = 0; i < rec.length; i++) if (rec[i].n === name) return true;
+    return false;
+  }
+
+  function finish() {
+    var pass = out.itemLoaded && out.itemApi && out.itemOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var I = Game.Data.ITEMS, S = Game.Data.SHOP_STOCK, Inv = Game.Systems.Inventory;
+      var M = Game.Modal, R = Game.Core.Render;
+      out.itemLoaded = !!(window.Game && Game.Data && I && S && Inv && M && Game.Core.Sprites);
+      out.itemApi = !!(typeof Inv.use === 'function' && typeof Inv.recalcEquip === 'function' &&
+        typeof M.open === 'function' && typeof M.draw === 'function' &&
+        typeof Game.Core.Sprites.get === 'function');
+
+      if (!out.itemLoaded || !out.itemApi) { finish(); return; }
+
+      R.init(cv);
+      R._animNow = function () { return 4321; };
+
+      var VALID_TYPES = { consumable: 1, weapon: 1, armor: 1 };
+      var VALID_EFFECT = { atk: 1, def: 1, maxHp: 1, hp: 1, mp: 1 };
+
+      /* t2_itemCount：条目 ≥40、type/effect 键合法、现有 11 条关键字段不变、新品质档符合 M8-3 公式 */
+      var ids = Object.keys(I);
+      var t2ok = (ids.length >= 40);
+      var badType = [], badEffect = [];
+      for (var i = 0; i < ids.length; i++) {
+        var it = I[ids[i]];
+        if (!VALID_TYPES[it.type]) badType.push(ids[i]);
+        for (var k in it.effect) {
+          if (it.effect.hasOwnProperty(k) && !VALID_EFFECT[k]) badEffect.push(ids[i] + '.' + k);
+        }
+      }
+      /* 现有 11 条不删不改（抽查 id/price/effect） */
+      var legacyOk = !!(I.potion_small && I.potion_small.price === 10 && I.potion_small.effect.hp === 30 &&
+        I.potion_large && I.potion_large.price === 40 && I.potion_large.effect.hp === 80 &&
+        I.sword_bone && I.sword_bone.price === 60 && I.sword_bone.effect.atk === 3 &&
+        I.sword_dragon && I.sword_dragon.price === 150 && I.sword_dragon.effect.atk === 8 &&
+        I.armor_leather && I.armor_leather.price === 80 && I.armor_leather.effect.def === 3 &&
+        I.sword_bone_rare && I.sword_bone_rare.price === 120 && I.sword_bone_rare.effect.atk === 5 &&
+        I.sword_bone_epic && I.sword_bone_epic.price === 240 && I.sword_bone_epic.effect.atk === 6 &&
+        I.sword_bone_epic.effect.maxHp === 10 &&
+        I.sword_dragon_rare && I.sword_dragon_rare.price === 300 && I.sword_dragon_rare.effect.atk === 12 &&
+        I.sword_dragon_epic && I.sword_dragon_epic.price === 600 && I.sword_dragon_epic.effect.atk === 16 &&
+        I.armor_leather_rare && I.armor_leather_rare.price === 160 && I.armor_leather_rare.effect.def === 5 &&
+        I.armor_leather_epic && I.armor_leather_epic.price === 320 && I.armor_leather_epic.effect.def === 6);
+      /* 新品质档按 M8-3 公式复算（抽查三组） */
+      function m3(baseId, rareId, epicId) {
+        var b = I[baseId], r = I[rareId], e = I[epicId];
+        if (!b || !r || !e) return false;
+        var stat = b.effect.atk || b.effect.def;
+        return r.effect[Object.keys(r.effect)[0]] === Math.round(stat * 1.5) &&
+          r.price === b.price * 2 && e.price === b.price * 4 &&
+          e.effect.maxHp === 10;
+      }
+      var formulaOk = m3('sword_iron', 'sword_iron_rare', 'sword_iron_epic') &&
+        m3('sword_steel', 'sword_steel_rare', 'sword_steel_epic') &&
+        m3('sword_magic', 'sword_magic_rare', 'sword_magic_epic') &&
+        m3('chain_mail', 'chain_mail_rare', 'chain_mail_epic') &&
+        m3('plate_armor', 'plate_armor_rare', 'plate_armor_epic');
+      sub.t2_itemCount = t2ok && legacyOk && formulaOk && badType.length === 0 && badEffect.length === 0;
+      sub.t2_count = ids.length;
+      ok = ok && sub.t2_itemCount;
+
+      /* t3_weaponTier：分楼层武器 atk 组间非降、护甲 def 阶梯非降 */
+      var tiers = [
+        ['sword_rusty', 'knife', 'machete', 'sword_iron'],
+        ['sword_steel', 'axe_war', 'bow_hunter', 'hammer', 'spear'],
+        ['sword_magic', 'staff_fire', 'bow_elite', 'axe_double', 'sword_anime']
+      ];
+      var tierOk = true, prevMax = -1;
+      for (var ti = 0; ti < tiers.length; ti++) {
+        var lo = 999, hi = -1;
+        for (var wi = 0; wi < tiers[ti].length; wi++) {
+          var w = I[tiers[ti][wi]];
+          if (!w || !w.effect.atk) { tierOk = false; continue; }
+          if (w.effect.atk < lo) lo = w.effect.atk;
+          if (w.effect.atk > hi) hi = w.effect.atk;
+        }
+        if (lo < prevMax) tierOk = false;
+        prevMax = hi;
+      }
+      var armorTier = ['armor_leather', 'robe_mage', 'chain_mail', 'plate_armor'];
+      var armorOk = true, prevDef = -1;
+      for (var ai = 0; ai < armorTier.length; ai++) {
+        var ar = I[armorTier[ai]];
+        if (!ar || !ar.effect.def || ar.effect.def < prevDef) armorOk = false;
+        else prevDef = ar.effect.def;
+      }
+      sub.t3_weaponTier = tierOk && armorOk;
+      ok = ok && sub.t3_weaponTier;
+
+      /* t4_shopStock：3 层、每层 6~9、id 全部有效、F1 不含 3 层专属、F3 保留 dragon 三档 */
+      var t4ok = (S.length === 3);
+      var stockBad = [], dupBad = [];
+      var F3_ONLY = ['sword_magic', 'staff_fire', 'bow_elite', 'axe_double', 'sword_anime',
+        'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic', 'plate_armor'];
+      for (var fi = 0; fi < S.length; fi++) {
+        var row = S[fi];
+        if (!(row.length >= 6 && row.length <= 9)) t4ok = false;
+        var seen = {};
+        for (var si = 0; si < row.length; si++) {
+          if (!I[row[si]]) stockBad.push(row[si]);
+          if (seen[row[si]]) dupBad.push(row[si]);
+          seen[row[si]] = true;
+          if (fi === 0 && F3_ONLY.indexOf(row[si]) >= 0) t4ok = false;
+        }
+      }
+      var f3ok = S[2].indexOf('sword_dragon') >= 0 && S[2].indexOf('sword_dragon_rare') >= 0 &&
+        S[2].indexOf('sword_dragon_epic') >= 0 && S[2].indexOf('plate_armor') >= 0;
+      sub.t4_shopStock = t4ok && (stockBad.length === 0) && (dupBad.length === 0) && f3ok;
+      sub.t4_counts = S.map(function (r) { return r.length; });
+      ok = ok && sub.t4_shopStock;
+
+      /* t5_useMp：蓝瓶回蓝 40 且不超 maxMp；满 MP 拒绝且不消耗 */
+      var P = Game.Data.Player;
+      P.hp = 100; P.maxHp = 100; P.mp = 10; P.maxMp = 50;
+      P.inventory = { potion_mana: 1 };
+      var r1 = Inv.use('potion_mana');
+      var t5a = r1.ok && P.mp === 50 && !P.inventory.potion_mana;
+      P.inventory.potion_mana = 1;
+      var r2 = Inv.use('potion_mana'); /* MP 已满 → 拒绝 */
+      var t5b = r2.ok === false && P.inventory.potion_mana === 1;
+      /* 回归：HP 药水行为不变（上限钳制） */
+      P.hp = 60;
+      P.inventory.potion_small = 1;
+      var r3 = Inv.use('potion_small');
+      var t5c = r3.ok && P.hp === 90;
+      sub.t5_useMp = t5a && t5b && t5c;
+      ok = ok && sub.t5_useMp;
+
+      /* t6_itemIcon：背包/商店行落笔新武器对应图标（含品质档 golden 规则） */
+      Game.Systems.Inventory.list = function () {
+        return [
+          { id: 'sword_steel', count: 1 },
+          { id: 'staff_fire', count: 1 },
+          { id: 'potion_mana', count: 1 },
+          { id: 'sword_steel_rare', count: 1 }
+        ];
+      };
+      rec = [];
+      var t6ok = true;
+      try { M.open('inventory'); M.draw(); } catch (e) { t6ok = false; }
+      t6ok = t6ok && hasImg('weapon_duel_sword') && hasImg('weapon_red_magic_staff') &&
+        hasImg('flask_blue') && hasImg('weapon_golden_sword');
+      sub.t6_itemIcon = t6ok;
+      ok = ok && t6ok;
+      try { M.close(); } catch (e) { /* 降级 */ }
+
+      /* t7_fallback：未知物品/护甲/素材缺失 → 行无图标，不抛错 */
+      Game.Systems.Inventory.list = function () {
+        return [
+          { id: 'unknown_item_x', count: 1 },
+          { id: 'armor_leather', count: 1 }
+        ];
+      };
+      rec = [];
+      var t7ok = true;
+      try {
+        M.open('inventory'); M.draw();
+        var noIconOk = !hasImg('unknown_item_x');
+        M.close();
+        /* 素材全缺失：get 返回 null → 仍无图标、不抛错 */
+        var origGet = Game.Core.Sprites.get;
+        Game.Core.Sprites.get = function () { return null; };
+        rec = [];
+        M.open('inventory'); M.draw(); M.close();
+        t7ok = noIconOk && rec.length === 0;
+        Game.Core.Sprites.get = origGet;
+      } catch (e) { t7ok = false; }
+      sub.t7_fallback = t7ok;
+      ok = ok && t7ok;
+
+      /* t8_recalc：L1 装备 sword_steel(atk5)+chain_mail(def5) → atk15 / def10 / maxHp100 */
+      P.level = 1;
+      P.equipment = { weapon: null, armor: null };
+      P.inventory = { sword_steel: 1, chain_mail: 1 };
+      var e1 = Inv.equip('sword_steel');
+      var e2 = Inv.equip('chain_mail');
+      var t8ok = e1.ok && e2.ok && P.atk === 15 && P.def === 10 && P.maxHp === 100;
+      sub.t8_recalc = t8ok;
+      ok = ok && t8ok;
+
+      out.sub = sub;
+      out.itemOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.itemOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 5s）；超时也跑断言，失败项会明确为 false */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 5000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>
