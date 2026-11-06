@@ -39,6 +39,8 @@
       id: 'dragon', name: '地牢巨龙',
       hp: 150, atk: 18, def: 8,
       exp: 60, gold: [40, 80],
+      /* P2-4：Boss 标记（仅用于地图保底与战斗强化，数值不动） */
+      boss: true,
       /* M8-3：装备掉落加可选 tiers（药水掉落保持原样，无 tiers 行为不变） */
       drops: [
         {
@@ -177,6 +179,49 @@
       exp: 45, gold: [22, 40],
       drops: [{ itemId: 'potion_mana', rate: 0.3 }],
       color: '#cfe6ff'
+    },
+    /* P2-4：层 Boss 2 种（enrage 结构复用 battle.js 既有通用实现，不改战斗逻辑；
+     * 掉落 id 均为 items.js 已有物品：sword_steel 三档 / chain_mail / plate_armor / potion_xl） */
+    ogre_boss: {
+      id: 'ogre_boss', name: '独眼酋长',
+      boss: true,
+      hp: 280, atk: 24, def: 10,
+      exp: 130, gold: [60, 110],
+      drops: [
+        {
+          itemId: 'sword_steel', rate: 0.5,
+          tiers: [
+            { itemId: 'sword_steel', w: 60 },
+            { itemId: 'sword_steel_rare', w: 30 },
+            { itemId: 'sword_steel_epic', w: 10 }
+          ]
+        },
+        { itemId: 'chain_mail', rate: 0.3 }
+      ],
+      color: '#c08a3e',
+      enrage: {
+        hpPct: 0.5,
+        atkMul: 1.4,
+        defMul: 1.2,
+        skill: { name: '战吼重击', chance: 0.35, dmgMul: 1.5 }
+      }
+    },
+    zombie_king: {
+      id: 'zombie_king', name: '僵尸王',
+      boss: true,
+      hp: 420, atk: 30, def: 12,
+      exp: 200, gold: [90, 160],
+      drops: [
+        { itemId: 'plate_armor', rate: 0.4 },
+        { itemId: 'potion_xl', rate: 0.5 }
+      ],
+      color: '#6fae6f',
+      enrage: {
+        hpPct: 0.5,
+        atkMul: 1.35,
+        defMul: 1.25,
+        skill: { name: '腐毒吐息', chance: 0.3, dmgMul: 1.4 }
+      }
     }
   };
 })();

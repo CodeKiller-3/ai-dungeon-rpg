@@ -116,9 +116,9 @@
       sub.t2_monsterData = t2ok;
       ok = ok && t2ok;
 
-      /* t3_floorTable：P2-3 起 5 层、每层概率和=1、dragon 仅 F5、期望强度严格递增（rate×(atk+hp/10)）
-       * 期望值（P2-3b 数值上调后）：F1 11.125 < F2 20.125 < F3 23.75 < F4 36.85 < F5 44.075
-       * （P2-1 旧 3 层值：11.125 / 20.125 / 27.5；F3 因 dragon 移出而下降） */
+      /* t3_floorTable：P2-4 起 5 层、每层概率和=1、普通表不含 Boss（dragon 由 MAPS.bosses 注入）、期望强度严格递增
+       * 期望值：F1 11.125 < F2 20.125 < F3 23.75 < F4 36.85 < F5 44.1
+       * （P2-1 旧 3 层值：11.125 / 20.125 / 27.5；P2-3 起 dragon 移出 F3，P2-4 起移出 F5 普通表） */
       var et = D.MAPS.enemyTable;
       function rateOf(row, id) {
         for (var i = 0; i < row.length; i++) if (row[i].id === id) return row[i].rate;
@@ -148,10 +148,10 @@
       var t3ok = (et.length === 5) && sumsOk &&
         rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
         rateOf(et[2], 'dragon') === 0 && rateOf(et[3], 'dragon') === 0 &&
-        rateOf(et[4], 'dragon') > 0 &&
+        rateOf(et[4], 'dragon') === 0 &&
         near(strengthRows[0], 11.125) && near(strengthRows[1], 20.125) &&
         near(strengthRows[2], 23.75) && near(strengthRows[3], 36.85) &&
-        near(strengthRows[4], 44.075) && chainOk;
+        near(strengthRows[4], 44.1) && chainOk;
       sub.t3_floorTable = t3ok;
       sub.t3_strength = { f1: strengthRows[0], f2: strengthRows[1], f3: strengthRows[2],
         f4: strengthRows[3], f5: strengthRows[4] };

@@ -103,37 +103,44 @@
         placed++;
       }
     }
-    /* P2-3b：最深层恰好 1 只巨龙（Boss 唯一）。
-     * 原逻辑只保证"至少 1 只"；这里统计 dragon 数量：无 dragon → 末位替换为 dragon（保底）；
-     * 多于 1 只 → 保留第一只，其余替换为同层敌表中的非 dragon 项（用额外一次 random 取表内项）。
-     * 敌表内全为 dragon（无非 dragon 项）时兜底保留原样，不抛错。 */
-    if (floorIndex === cfg.floors - 1 && enemies.length > 0) {
-      var dragonFirst = -1, dragonCount = 0;
+    /* P2-4：通用层 Boss 保底（合并 P2-3b 的末层 dragon 逻辑，不再保留两套）。
+     * cfg.bosses 中 floor 匹配本层 → 保证恰好 1 只该 Boss：
+     *   0 只 → 末位替换为 Boss（保底，保证主线可达）；1 只 → 不动；
+     *   >1 只 → 保留第一只，其余替换为本层敌表中非 Boss 的随机项（普通表不含 Boss id，通常不触发）。
+     * 无配置的层不处理；敌表全为 Boss 项时兜底保留原样，不抛错。 */
+    var bossId = null;
+    if (cfg.bosses) {
+      for (var bi = 0; bi < cfg.bosses.length; bi++) {
+        if (cfg.bosses[bi].floor === floorIndex + 1) { bossId = cfg.bosses[bi].id; break; }
+      }
+    }
+    if (bossId && enemies.length > 0) {
+      var bossFirst = -1, bossCount = 0;
       for (var d = 0; d < enemies.length; d++) {
-        if (enemies[d].monsterId === 'dragon') {
-          dragonCount++;
-          if (dragonFirst < 0) dragonFirst = d;
+        if (enemies[d].monsterId === bossId) {
+          bossCount++;
+          if (bossFirst < 0) bossFirst = d;
         }
       }
-      if (dragonCount === 0) {
-        enemies[enemies.length - 1].monsterId = 'dragon';
-      } else if (dragonCount > 1) {
-        var nonDragon = [];
-        var nonDragonTotal = 0;
+      if (bossCount === 0) {
+        enemies[enemies.length - 1].monsterId = bossId;
+      } else if (bossCount > 1) {
+        var nonBoss = [];
+        var nonBossTotal = 0;
         for (var nt = 0; nt < table.length; nt++) {
-          if (table[nt].id !== 'dragon') {
-            nonDragon.push(table[nt]);
-            nonDragonTotal += table[nt].rate;
+          if (table[nt].id !== bossId) {
+            nonBoss.push(table[nt]);
+            nonBossTotal += table[nt].rate;
           }
         }
-        if (nonDragon.length > 0 && nonDragonTotal > 0) {
+        if (nonBoss.length > 0 && nonBossTotal > 0) {
           for (var k = 0; k < enemies.length; k++) {
-            if (k === dragonFirst || enemies[k].monsterId !== 'dragon') continue;
-            var roll2 = Math.random() * nonDragonTotal;
-            var acc2 = 0, pick2 = nonDragon[0].id;
-            for (var p2 = 0; p2 < nonDragon.length; p2++) {
-              acc2 += nonDragon[p2].rate;
-              if (roll2 <= acc2) { pick2 = nonDragon[p2].id; break; }
+            if (k === bossFirst || enemies[k].monsterId !== bossId) continue;
+            var roll2 = Math.random() * nonBossTotal;
+            var acc2 = 0, pick2 = nonBoss[0].id;
+            for (var p2 = 0; p2 < nonBoss.length; p2++) {
+              acc2 += nonBoss[p2].rate;
+              if (roll2 <= acc2) { pick2 = nonBoss[p2].id; break; }
             }
             enemies[k].monsterId = pick2;
           }

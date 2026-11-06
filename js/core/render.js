@@ -80,7 +80,10 @@
     necromancer: { idle: 'necromancer', run: 'necromancer' },
     masked_orc: { idle: 'masked_orc_idle', run: 'masked_orc_run' },
     pumpkin_dude: { idle: 'pumpkin_dude_idle', run: 'pumpkin_dude_run' },
-    angel: { idle: 'angel_idle', run: 'angel_idle' }
+    angel: { idle: 'angel_idle', run: 'angel_idle' },
+    /* P2-4：层 Boss 复用既有大图帧组（素材零新增） */
+    ogre_boss: { idle: 'ogre_idle', run: 'ogre_run' },
+    zombie_king: { idle: 'big_zombie_idle', run: 'big_zombie_idle' }
   };
 
   /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退） */
@@ -609,6 +612,11 @@
       var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
       ey += mAtkOff;
       var boss = state.monster.id === 'dragon';
+      /* P2-4：Boss 判定读 MONSTERS[id].boss（battle.js 的 state.monster 不复制 boss 字段，本卡不改 battle.js），
+       * dragon / ogre_boss / zombie_king 均走放大绘制与【BOSS】名字前缀 */
+      var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[state.monster.id] &&
+        Game.Data.MONSTERS[state.monster.id].boss);
+      var bossScale = isBoss ? 1.25 : 1; /* 保持宽高比放大 1.25 倍（不越面板） */
       /* P2-1：战斗侧同样查 MONSTER_ANIM 表取 idle 帧（ogre 等 32×36 走高适配）；
        * dragon 帧缺失回退旧 boss_demon 单图，其他怪回退 monster_chort（色块兜底在下方） */
       var sp2 = null;
@@ -625,16 +633,19 @@
         var mDrawX = ex + (90 - mSize) / 2;
         var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
         if (sp2) {
-          /* P1-3：按贴图宽高比绘制（big_demon 32×36 → 高 mSize 宽 32/36×mSize，不再拉方） */
-          drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, mSize);
+          /* P1-3：按贴图宽高比绘制（big_demon 32×36 → 高 mSize 宽 32/36×mSize，不再拉方）
+           * P2-4：Boss 再放 bossScale 倍（仍以同一中心/底边对齐） */
+          var dmSize = mSize * bossScale;
+          drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, dmSize);
         } else {
           ctx.fillStyle = state.monster.color;
           ctx.fillRect(mDrawX, mDrawY, mSize, mSize);
         }
       } else {
         if (sp2) {
-          /* P1-3：非 Boss 图（chort 16×23 / boss_demon）同样按比例绘制，宽高比正确 */
-          drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90);
+          /* P1-3：非 Boss 图（chort 16×23 / boss_demon）同样按比例绘制，宽高比正确
+           * P2-4：Boss 放大 1.25 倍（底部对齐 ey+90，向上生长） */
+          drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90 * bossScale);
         } else {
           ctx.fillStyle = state.monster.color;
           ctx.fillRect(ex, ey, 90, 90);
@@ -644,7 +655,7 @@
       if (!dying) {
         ctx.fillStyle = '#fff';
         ctx.font = '15px monospace';
-        ctx.fillText(state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
+        ctx.fillText((isBoss ? '【BOSS】' : '') + state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
           W / 2 - 140, ey + 120);
         /* M8-2：狂暴状态视觉提示（红色标识） */
         if (state.enraged) {

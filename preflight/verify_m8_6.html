@@ -82,10 +82,9 @@
 
       /* 6. 怪物表（P2-3b 数值上调后仍为 5 层 / 每层 3~5 种）：每层概率和=1、dragon 仅 F5；
        * 逐层期望强度单调递增（rate×(atk+hp/10)）。
-       * P2-3b 期望强度对比（P2-3 → P2-3b）：
-       *   F1 11.125（不变）、F2 20.125（不变）、F3 23.75（不变）、
-       *   F4 29.65 → 36.85（5 怪 hp 上调）、F5 32.1 → 44.075（dragon 权重 .2→.05、高阶怪加权）；
-       *   全链 11.125 < 20.125 < 23.75 < 36.85 < 44.075 */
+       * P2-4 期望强度对比（P2-3b → P2-4）：F1/F2/F3 不变；
+       *   F4 36.85（不变）、F5 44.075 → 44.1（dragon 移出普通表，权重 bz .35/necro .2/orc .2/angel .25）；
+       *   全链 11.125 < 20.125 < 23.75 < 36.85 < 44.1 */
       var et = G.Data.MAPS.enemyTable;
       var M = G.Data.MONSTERS;
       function rateOf(row, id) {
@@ -111,7 +110,7 @@
       var sumsOk = true;
       for (var ri = 0; ri < et.length; ri++) if (!near(rowSum(et[ri]), 1)) sumsOk = false;
       sub.t6_table = (et.length === 5) && sumsOk &&
-        rateOf(et[4], 'dragon') === 0.05 &&
+        rateOf(et[4], 'dragon') === 0 &&
         rateOf(et[0], 'dragon') === 0 && rateOf(et[1], 'dragon') === 0 &&
         rateOf(et[2], 'dragon') === 0 && rateOf(et[3], 'dragon') === 0 &&
         rateOf(et[0], 'slime') === 0.45 && rateOf(et[0], 'bat') === 0.3 &&
@@ -123,10 +122,10 @@
         rateOf(et[3], 'big_zombie') === 0.2 && rateOf(et[3], 'necromancer') === 0.2 &&
         rateOf(et[3], 'pumpkin_dude') === 0.15 && rateOf(et[3], 'masked_orc') === 0.3 &&
         rateOf(et[3], 'skeleton') === 0.15 &&
-        rateOf(et[4], 'big_zombie') === 0.3 && rateOf(et[4], 'necromancer') === 0.15 &&
-        rateOf(et[4], 'masked_orc') === 0.15 && rateOf(et[4], 'angel') === 0.35 &&
+        rateOf(et[4], 'big_zombie') === 0.35 && rateOf(et[4], 'necromancer') === 0.2 &&
+        rateOf(et[4], 'masked_orc') === 0.2 && rateOf(et[4], 'angel') === 0.25 &&
         near(s1, 11.125) && near(s2, 20.125) && near(s3, 23.75) &&
-        near(s4, 36.85) && near(s5, 44.075) &&
+        near(s4, 36.85) && near(s5, 44.1) &&
         s1 < s2 && s2 < s3 && s3 < s4 && s4 < s5;
       ok = ok && sub.t6_table;
 

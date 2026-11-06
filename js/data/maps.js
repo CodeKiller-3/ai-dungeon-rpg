@@ -23,12 +23,17 @@
       [{ id: 'big_zombie', rate: 0.2 }, { id: 'necromancer', rate: 0.2 },
         { id: 'pumpkin_dude', rate: 0.15 }, { id: 'masked_orc', rate: 0.3 },
         { id: 'skeleton', rate: 0.15 }],
-      /* F5 恶魔深渊（P2-3b：dragon 降至 .05 作为稀有 roll，map.js 再钳制为恰好 1 只 Boss；
-       * F5 权重向高阶怪倾斜（big_zombie .3 / angel .35 / necromancer .15 / masked_orc .15），
-       * 期望强度 44.075，落在卡面 44~48 目标区间） */
-      [{ id: 'dragon', rate: 0.05 }, { id: 'big_zombie', rate: 0.3 },
-        { id: 'necromancer', rate: 0.15 }, { id: 'masked_orc', rate: 0.15 },
-        { id: 'angel', rate: 0.35 }]
+      /* F5 恶魔深渊（P2-4：Boss（dragon）不再出现在普通表，由 MAPS.bosses + map.js 注入恰 1 只；
+       * 普通怪权重 big_zombie .35 / necromancer .2 / masked_orc .2 / angel .25，期望强度 44.1） */
+      [{ id: 'big_zombie', rate: 0.35 }, { id: 'necromancer', rate: 0.2 },
+        { id: 'masked_orc', rate: 0.2 }, { id: 'angel', rate: 0.25 }]
+    ],
+    /* P2-4：层 Boss 配置（floor 为 1-based；普通 enemyTable 不含 Boss id，
+     * map.js 按此表在对应层注入恰好 1 只 Boss） */
+    bosses: [
+      { floor: 2, id: 'ogre_boss' },
+      { floor: 4, id: 'zombie_king' },
+      { floor: 5, id: 'dragon' }
     ],
     /* P2-3：层主题（纯视觉参数，透明度 ≤0.12，避免压暗贴图；drawMap 叠色用） */
     themes: [

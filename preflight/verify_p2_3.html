@@ -112,7 +112,8 @@
       ok = ok && t2ok;
 
       /* t3_strength：五层期望强度严格递增（rate×(atk+hp/10)），输出 f1~f5
-       * P2-3b 数值上调后：F1 11.125 / F2 20.125 / F3 23.75 / F4 36.85 / F5 44.075 */
+       * P2-3b/P2-4 数值调整后：F1 11.125 / F2 20.125 / F3 23.75 / F4 36.85 / F5 44.1
+       * （P2-4 起 dragon 移出 F5 普通表，由 MAPS.bosses 保底注入） */
       function strength(row) {
         var v = 0;
         for (var i = 0; i < row.length; i++) {
@@ -126,7 +127,7 @@
       for (var ci = 1; ci < st.length; ci++) if (!(st[ci - 1] < st[ci])) chainOk = false;
       var t3ok = chainOk && Math.abs(st[0] - 11.125) < 1e-6 && Math.abs(st[1] - 20.125) < 1e-6 &&
         Math.abs(st[2] - 23.75) < 1e-6 && Math.abs(st[3] - 36.85) < 1e-6 &&
-        Math.abs(st[4] - 44.075) < 1e-6;
+        Math.abs(st[4] - 44.1) < 1e-6;
       sub.t3_strength = t3ok;
       sub.t3_values = st;
       ok = ok && t3ok;
@@ -221,19 +222,23 @@
       if (MP.getFloor() !== 4) switchOk = false;
       var back = MP.setFloor(1);
       if (!(back[0].length === D.MAPS.sizes[0][0] && MP.getFloor() === 1)) switchOk = false;
-      /* 各层生成的怪 id 必须都在 MONSTERS 中且属于本层表；
-       * P2-3b：F5 的 dragon 由 map.js 强制保底（可能不在 F5 表内），末层允许该例外 */
+      /* 各层生成的怪 id 必须都在 MONSTERS 中且属于本层表（或本层 Boss 配置，由 map.js 保底注入） */
       var tableOk = true;
       for (var fl2 = 1; fl2 <= 5; fl2++) {
         MP.setFloor(fl2);
         var row = D.MAPS.enemyTable[fl2 - 1];
         var rowIds = {};
         for (var rj = 0; rj < row.length; rj++) rowIds[row[rj].id] = true;
+        var bossIds = {};
+        var cfgBosses = D.MAPS.bosses || [];
+        for (var bj = 0; bj < cfgBosses.length; bj++) {
+          if (cfgBosses[bj].floor === fl2) bossIds[cfgBosses[bj].id] = true;
+        }
         var es = MP.getEnemies();
         for (var e2 = 0; e2 < es.length; e2++) {
           var mid2 = es[e2].monsterId;
           if (!D.MONSTERS[mid2]) { tableOk = false; continue; }
-          if (!rowIds[mid2] && !(fl2 === 5 && mid2 === 'dragon')) tableOk = false;
+          if (!rowIds[mid2] && !bossIds[mid2]) tableOk = false;
         }
       }
       sub.t7_floorSwitch = switchOk && tableOk;

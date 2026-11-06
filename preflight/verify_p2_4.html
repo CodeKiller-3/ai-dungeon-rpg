@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_4</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-4 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { bossLoaded: false, bossApi: false, bossOk: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+
+  /* 包装 drawImage / fillText 记录绘制行为（避免 file:// 本地图片污染 getImageData） */
+  var imgs = [], texts = [];
+  var origDrawImage = ctx.drawImage, origFillText = ctx.fillText;
+  ctx.drawImage = function (img, dx, dy, dw, dh) {
+    try {
+      if (img && img.src) {
+        imgs.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          x: Math.round(Number(dx) * 100) / 100,
+          y: Math.round(Number(dy) * 100) / 100,
+          w: Number(dw), h: Number(dh)
+        });
+      }
+    } catch (e) { /* 忽略 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+  ctx.fillText = function (t) {
+    try { texts.push(String(t)); } catch (e) { /* 忽略 */ }
+    return origFillText.apply(ctx, arguments);
+  };
+
+  function hasPrefix(p) {
+    for (var i = 0; i < imgs.length; i++) if (imgs[i].n.indexOf(p) === 0) return true;
+    return false;
+  }
+  function imgHeight(p) {
+    for (var i = 0; i < imgs.length; i++) if (imgs[i].n.indexOf(p) === 0) return imgs[i].h;
+    return -1;
+  }
+  function hasText(s) {
+    for (var i = 0; i < texts.length; i++) if (texts[i].indexOf(s) >= 0) return true;
+    return false;
+  }
+  function finish() {
+    var pass = out.bossLoaded && out.bossApi && out.bossOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  function runTests() {
+    var ok = true, sub = {};
+    try {
+      var D = Game.Data, MP = Game.Systems.Map, B = Game.Systems.Battle, R = Game.Core.Render;
+      var S = Game.Core.Sprites;
+      out.bossLoaded = !!(window.Game && Game.Core && D.MONSTERS && D.MAPS && D.ITEMS &&
+        MP && B && R && S);
+      out.bossApi = !!(typeof B.start === 'function' && typeof B.playerAction === 'function' &&
+        typeof B.getState === 'function' && typeof R.drawBattle === 'function' &&
+        R.MONSTER_ANIM && D.MAPS.bosses);
+
+      if (!out.bossLoaded || !out.bossApi) { finish(); return; }
+
+      R.init(cv);
+      R._animNow = function () { return 4321; };
+      /* 注意：不能把 Game.fov 置空——fov.js 在 map:floorChanged 里调用 Game.fov.reset()，
+       * 本页需要真实 setFloor 生成 100 次，故保留 fov 模块（Lighting/Particles 由 drawBattle 内部 try 包裹） */
+      if (Game.hud) Game.hud.draw = function () { };
+
+      /* t2_bossData：MONSTERS 18 种；三 Boss 的 boss/enrage/数值齐全 */
+      var ids = Object.keys(D.MONSTERS);
+      var BOSSES = ['ogre_boss', 'zombie_king', 'dragon'];
+      var t2ok = (ids.length === 18);
+      for (var bi = 0; bi < BOSSES.length; bi++) {
+        var m = D.MONSTERS[BOSSES[bi]];
+        if (!m) { t2ok = false; continue; }
+        if (m.boss !== true) t2ok = false;
+        var ed = m.enrage;
+        if (!ed || typeof ed.hpPct !== 'number' || typeof ed.atkMul !== 'number' ||
+          typeof ed.defMul !== 'number' || !ed.skill || typeof ed.skill.name !== 'string' ||
+          typeof ed.skill.chance !== 'number' || typeof ed.skill.dmgMul !== 'number') t2ok = false;
+        if (!(m.hp > 0 && m.atk > 0 && m.def > 0 && m.exp > 0)) t2ok = false;
+      }
+      sub.t2_bossData = t2ok;
+      sub.t2_count = ids.length;
+      ok = ok && t2ok;
+
+      /* t3_bossConfig：bosses 3 项（floor 2/4/5 → ogre_boss/zombie_king/dragon）；五层普通表无 Boss id */
+      var cfgB = D.MAPS.bosses;
+      var t3ok = !!cfgB && cfgB.length === 3 &&
+        cfgB[0].floor === 2 && cfgB[0].id === 'ogre_boss' &&
+        cfgB[1].floor === 4 && cfgB[1].id === 'zombie_king' &&
+        cfgB[2].floor === 5 && cfgB[2].id === 'dragon';
+      for (var fi = 0; fi < D.MAPS.enemyTable.length; fi++) {
+        var row = D.MAPS.enemyTable[fi];
+        for (var ri = 0; ri < row.length; ri++) {
+          if (BOSSES.indexOf(row[ri].id) >= 0) t3ok = false;
+        }
+      }
+      sub.t3_bossConfig = t3ok;
+      ok = ok && t3ok;
+
+      /* t4_spawnEvery：F2/F4/F5 各生成 20 次恰 1 只对应 Boss；F1/F3 每次 0 */
+      MP.generate(); /* 初始化 map.js cfg */
+      function countOn(f, id) {
+        MP.setFloor(f);
+        var es = MP.getEnemies(), n = 0;
+        for (var i = 0; i < es.length; i++) if (es[i].monsterId === id) n++;
+        return n;
+      }
+      var t4ok = true, sample = { f2: [], f4: [], f5: [] };
+      for (var g = 0; g < 20; g++) {
+        var n2 = countOn(2, 'ogre_boss');
+        var n4 = countOn(4, 'zombie_king');
+        var n5 = countOn(5, 'dragon');
+        sample.f2.push(n2); sample.f4.push(n4); sample.f5.push(n5);
+        if (n2 !== 1 || n4 !== 1 || n5 !== 1) t4ok = false;
+        if (countOn(1, 'ogre_boss') !== 0 || countOn(1, 'dragon') !== 0) t4ok = false;
+        if (countOn(3, 'ogre_boss') !== 0 || countOn(3, 'dragon') !== 0) t4ok = false;
+      }
+      sub.t4_spawnEvery = t4ok;
+      sub.t4_sample = sample;
+      ok = ok && t4ok;
+
+      /* t5_enrage：半血触发，攻防按 enrage 公式取整 */
+      var P = D.Player;
+      P.hp = 99999; P.maxHp = 99999; P.def = 9999; P.atk = 10;
+      var e1ok = true;
+      try {
+        B.start('ogre_boss');
+        var st1 = B.getState();
+        st1.monster.hp = 130; /* ≤ 280×0.5=140 */
+        B.playerAction('attack');
+        e1ok = st1.enraged === true && st1.enrageAtk === Math.round(24 * 1.4) &&
+          st1.enrageDef === Math.round(10 * 1.2);
+        sub.t5_ogre = { enraged: st1.enraged, atk: st1.enrageAtk, def: st1.enrageDef };
+      } catch (e) { e1ok = false; sub.t5_ogreErr = String(e); }
+      var e2ok = true;
+      try {
+        B.start('zombie_king');
+        var st2 = B.getState();
+        st2.monster.hp = 200; /* ≤ 420×0.5=210 */
+        B.playerAction('attack');
+        e2ok = st2.enraged === true && st2.enrageAtk === Math.round(30 * 1.35) &&
+          st2.enrageDef === Math.round(12 * 1.25);
+        sub.t5_zombie = { enraged: st2.enraged, atk: st2.enrageAtk, def: st2.enrageDef };
+      } catch (e) { e2ok = false; sub.t5_zombieErr = String(e); }
+      var t5ok = e1ok && e2ok &&
+        sub.t5_ogre.atk === 34 && sub.t5_ogre.def === 12 &&
+        sub.t5_zombie.atk === 41 && sub.t5_zombie.def === 15;
+      sub.t5_enrage = t5ok;
+      ok = ok && t5ok;
+
+      /* t6_battleDraw：三 Boss 落对应大图帧 + 【BOSS】前缀 + 放大 1.25 倍（高 112.5） */
+      function drawFor(id) {
+        B.start(id);
+        var st = B.getState();
+        imgs = []; texts = [];
+        var thrown = false;
+        try { R.drawBattle(st); } catch (e) { thrown = true; }
+        return { thrown: thrown, imgs: imgs.slice(), texts: texts.slice() };
+      }
+      var d1 = drawFor('ogre_boss');
+      var ogreOk = !d1.thrown && hasPrefix('ogre_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('ogre_idle_anim_f') - 112.5) < 0.01;
+      var d2 = drawFor('zombie_king');
+      var zkOk = !d2.thrown && hasPrefix('big_zombie_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('big_zombie_idle_anim_f') - 112.5) < 0.01;
+      var d3 = drawFor('dragon');
+      var drOk = !d3.thrown && hasPrefix('big_demon_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('big_demon_idle_anim_f') - 112.5) < 0.01;
+      /* 普通怪不加倍：slime 90 高、无【BOSS】前缀 */
+      var d4 = drawFor('slime');
+      var normalOk = !d4.thrown && hasPrefix('tiny_slug_anim_f') && !hasText('【BOSS】') &&
+        Math.abs(imgHeight('tiny_slug_anim_f') - 90) < 0.01;
+      sub.t6_battleDraw = ogreOk && zkOk && drOk && normalOk;
+      ok = ok && sub.t6_battleDraw;
+      try { Game.Modal && Game.Modal.close && Game.Modal.close(); } catch (e) { /* 忽略 */ }
+
+      /* t7_drops：三 Boss 掉落（含 tiers 变体）id 全部存在于 ITEMS */
+      var t7ok = true, badDrops = [];
+      for (var dbi = 0; dbi < BOSSES.length; dbi++) {
+        var bd = D.MONSTERS[BOSSES[dbi]].drops || [];
+        for (var di = 0; di < bd.length; di++) {
+          if (!D.ITEMS[bd[di].itemId]) { t7ok = false; badDrops.push(bd[di].itemId); }
+          var tiers = bd[di].tiers || [];
+          for (var ti = 0; ti < tiers.length; ti++) {
+            if (!D.ITEMS[tiers[ti].itemId]) { t7ok = false; badDrops.push(tiers[ti].itemId); }
+          }
+        }
+      }
+      sub.t7_drops = t7ok;
+      sub.t7_badDrops = badDrops;
+      ok = ok && t7ok;
+
+      /* t8_fallback：未知 Boss id / 素材缺失 / 无 bosses 配置均不抛错 */
+      var fbOk = true;
+      try {
+        /* 未知 id 战斗绘制 → 回退 chort，不抛错 */
+        var stUnknown = {
+          monster: { id: 'unknown_boss', name: '未知', hp: 1, maxHp: 1, color: '#fff' },
+          log: [], dying: false, monsterActionAt: null, playerActionAt: null, enraged: false
+        };
+        imgs = []; texts = [];
+        R.drawBattle(stUnknown);
+        fbOk = hasPrefix('monster_chort') && !hasText('【BOSS】');
+        /* 素材缺失 → 色块，不抛错 */
+        var origGet = S.get, origGetFrame = S.getFrame;
+        S.get = function () { return null; };
+        S.getFrame = function () { return null; };
+        imgs = [];
+        R.drawBattle({ monster: { id: 'ogre_boss', name: '独眼酋长', hp: 10, maxHp: 10, color: '#c08a3e' },
+          log: [], dying: false, monsterActionAt: null, playerActionAt: null, enraged: false });
+        fbOk = fbOk && imgs.length === 0;
+        S.get = origGet; S.getFrame = origGetFrame;
+        /* 无 bosses 配置 → 生成不抛错（不注入 Boss） */
+        var origBosses = D.MAPS.bosses;
+        D.MAPS.bosses = undefined;
+        MP.setFloor(2);
+        var noBossOk = true;
+        var es2 = MP.getEnemies();
+        for (var i2 = 0; i2 < es2.length; i2++) if (es2[i2].monsterId === 'ogre_boss') noBossOk = false;
+        D.MAPS.bosses = origBosses;
+        fbOk = fbOk && noBossOk;
+      } catch (e) { fbOk = false; sub.t8_err = String(e); }
+      sub.t8_fallback = fbOk;
+      ok = ok && fbOk;
+
+      out.sub = sub;
+      out.bossOk = ok;
+    } catch (e) {
+      out.err = String(e);
+      out.bossOk = false;
+    }
+    finish();
+  }
+
+  /* 等待素材加载（最多 8s，本页生成 100 次地图）；超时也跑断言 */
+  var S = Game.Core.Sprites;
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 8000) { runTests(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

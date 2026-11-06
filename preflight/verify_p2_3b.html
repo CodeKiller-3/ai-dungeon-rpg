@@ -77,19 +77,23 @@
       sub.t2_dialogue = noOld && hasNew;
       ok = ok && sub.t2_dialogue;
 
-      /* t3_bestiaryScroll：怪物图鉴 16 条，sel 移到 15 后可见窗口包含第 16 条（data[15]） */
+      /* t3_bestiaryScroll：怪物图鉴全量（P2-4 起 18 条）可滚到末条（data[total-1]） */
+      var monsterTotal = Object.keys(D.MONSTERS).length;
+      var monsterLast = D.MONSTERS[Object.keys(D.MONSTERS)[monsterTotal - 1]].name;
       var t3ok = true;
       M.open('quests');
       M._setPage(1); /* page=1 怪物图鉴 */
       var r0 = M._visibleRange();
-      if (!(r0.total === 16 && r0.start === 0 && r0.sel === 0)) t3ok = false;
-      for (var i3 = 0; i3 < 15; i3++) pressKey('ArrowDown');
+      if (!(r0.total === monsterTotal && r0.start === 0 && r0.sel === 0)) t3ok = false;
+      for (var i3 = 0; i3 < monsterTotal - 1; i3++) pressKey('ArrowDown');
       var r1 = M._visibleRange();
-      if (!(r1.sel === 15 && r1.total === 16 && r1.start + r1.rows > 15 && r1.start <= 15)) t3ok = false;
+      var lastIdx3 = monsterTotal - 1;
+      if (!(r1.sel === lastIdx3 && r1.total === monsterTotal &&
+        r1.start + r1.rows > lastIdx3 && r1.start <= lastIdx3)) t3ok = false;
       texts = [];
       var draw3 = true;
       try { M.draw(); } catch (e) { draw3 = false; }
-      var lastVisible = hasText('天使'); /* data[15] = angel（插入序最后一个怪物） */
+      var lastVisible = hasText(monsterLast);
       t3ok = t3ok && draw3 && lastVisible;
       /* 关闭再打开：滚动与选中归零；切页也重置 */
       M.close();
