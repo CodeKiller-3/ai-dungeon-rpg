@@ -14,6 +14,7 @@
   var details = null;   /* M9-1：2D 数组，每格细节类型 string|null（纯视觉） */
   var decor = null;     /* M9-1：2D 数组，每格装饰物 id string|null（chest 可拾取） */
   var traps = null;     /* S-04：2D 数组，每格 {id, seen}|null；seen=true 表示已触发并永久显现 */
+  var rooms = [];       /* S-05：特殊房间 [{x,y,w,h,cx,cy,doorX,doorY}]，坐标均为室内/门所在格 */
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
@@ -64,10 +65,152 @@
       var x = 1 + Math.floor(Math.random() * (w - 2));
       var y = 1 + Math.floor(Math.random() * (h - 2));
       if (grid[y][x] === 1 && dist(x, y, spawn.x, spawn.y) > Math.min(w, h) * 0.35) {
+        /* S-05：楼梯不放密室里，也不放门口（否则密室失去"绕进去"的意义） */
+        if (inRoom(x, y) || inRoomDoor(x, y)) continue;
         return { x: x, y: y };
       }
     }
     return { x: 1, y: 1 };
+  }
+
+  /* S-05：格子是否落在某间密室的内部 */
+  function inRoom(x, y) {
+    for (var i = 0; i < rooms.length; i++) {
+      var r = rooms[i];
+      if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) return true;
+    }
+    return false;
+  }
+
+  function inRoomDoor(x, y) {
+    for (var i = 0; i < rooms.length; i++) {
+      if (rooms[i].doorX === x && rooms[i].doorY === y) return true;
+    }
+    return false;
+  }
+
+  /* BFS：从 (sx,sy) 出发能否走到 (tx,ty)，只走非墙格（含楼梯 2/3 与地板 1） */
+  function reachable(sx, sy, tx, ty) {
+    var w = grid[0].length, h = grid.length;
+    var seen = [], q = [[sx, sy]], qi = 0;
+    for (var yy = 0; yy < h; yy++) { seen[yy] = []; for (var xx = 0; xx < w; xx++) seen[yy][xx] = false; }
+    seen[sy][sx] = true;
+    var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1];
+      qi++;
+      if (cx === tx && cy === ty) return true;
+      for (var d = 0; d < dirs.length; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (seen[ny][nx] || grid[ny][nx] === 0) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+
+  /* S-05：从现有迷宫里"圈"出一间封闭小房 + 一扇门。
+   * 做法：房间内部全部铺地板，房间四周一圈改成墙（把已有走廊封死），只留 1 扇门通向外部地板；
+   * 生成后必须通过两条校验——① 门口与房间中心从出生点可达；② 全图地板格仍然全连通
+   * （等价于"楼梯 100% 可达"的更强断言）。任一校验失败就把受影响的格子整体还原并重试。
+   * 返回房间记录或 null（该层没有密室也是合法结果） */
+  function placeSpecialRoom(w, h) {
+    rooms = [];
+    var cfgR = Game.Data.ROOMS;
+    if (!cfgR || (floorIndex + 1) < (cfgR.startFloor || 2)) return null;
+    var tries = cfgR.tries || 40;
+    /* 全图连通性：从出生点旁的第一块地板出发能走到的地板格数 vs 总地板格数。
+     * 注意 (1,1) 本身是墙（DFS 迷宫从墙角起挖，真正的第一块地板在 (2,1)），不能拿它当起点计数 */
+    function fullyConnected() {
+      var total = 0, seen = [], qi = 0, cnt = 0, sx0 = -1, sy0 = -1;
+      for (var yy = 0; yy < h; yy++) {
+        seen[yy] = [];
+        for (var xx = 0; xx < w; xx++) {
+          seen[yy][xx] = false;
+          if (grid[yy][xx] !== 0) {
+            total++;
+            if (sx0 < 0) { sx0 = xx; sy0 = yy; }
+          }
+        }
+      }
+      if (total === 0 || sx0 < 0) return false;
+      var q = [[sx0, sy0]];
+      seen[sy0][sx0] = true;
+      var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      while (qi < q.length) {
+        var cx = q[qi][0], cy = q[qi][1];
+        qi++; cnt++;
+        for (var d = 0; d < dirs.length; d++) {
+          var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (seen[ny][nx] || grid[ny][nx] === 0) continue;
+          seen[ny][nx] = true;
+          q.push([nx, ny]);
+        }
+      }
+      return cnt === total;
+    }
+    for (var t = 0; t < tries; t++) {
+      var rw = cfgR.minW + Math.floor(Math.random() * (Math.max(cfgR.minW, cfgR.maxW) - cfgR.minW + 1));
+      var rh = cfgR.minH + Math.floor(Math.random() * (Math.max(cfgR.minH, cfgR.maxH) - cfgR.minH + 1));
+      if (rw < 2 || rh < 2) continue;
+      var x0 = 2 + Math.floor(Math.random() * Math.max(1, w - rw - 5));
+      var y0 = 2 + Math.floor(Math.random() * Math.max(1, h - rh - 5));
+      if (x0 + rw >= w - 1 || y0 + rh >= h - 1) continue;
+      /* 密室中心离出生点太近就不挖（出生点旁边直接给厚赏会破坏经济与风险回报感） */
+      var ccx = x0 + Math.floor(rw / 2), ccy = y0 + Math.floor(rh / 2);
+      if (dist(ccx, ccy, spawn.x, spawn.y) < (cfgR.safeRadius || 7)) continue;
+      /* 先备份"房间内部 + 四周一圈墙"的原状，失败时整体还原 */
+      var back = [];
+      for (var by = y0 - 1; by <= y0 + rh; by++) {
+        back[by] = [];
+        for (var bx = x0 - 1; bx <= x0 + rw; bx++) back[by][bx] = grid[by][bx];
+      }
+      /* 房间内部铺平 + 四周封成墙 */
+      for (var iy = y0; iy < y0 + rh; iy++) {
+        for (var ix = x0; ix < x0 + rw; ix++) grid[iy][ix] = 1;
+      }
+      for (var sy3 = y0 - 1; sy3 <= y0 + rh; sy3++) {
+        for (var sx3 = x0 - 1; sx3 <= x0 + rw; sx3++) {
+          /* 只封边，不清内部（内部已铺平） */
+          if (sx3 === x0 - 1 || sx3 === x0 + rw || sy3 === y0 - 1 || sy3 === y0 + rh) grid[sy3][sx3] = 0;
+        }
+      }
+      /* 开门候选：边界圈上、紧邻"圈外地板"的墙格（不取四个角，避免门开在角上） */
+      var cands = [];
+      var ring = [];
+      for (var rx = x0; rx < x0 + rw; rx++) { ring.push([rx, y0 - 1]); ring.push([rx, y0 + rh]); }
+      for (var ry = y0; ry < y0 + rh; ry++) { ring.push([x0 - 1, ry]); ring.push([x0 + rw, ry]); }
+      for (var ri = 0; ri < ring.length; ri++) {
+        var qx = ring[ri][0], qy = ring[ri][1];
+        var near = false;
+        var around = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+        for (var ai = 0; ai < around.length; ai++) {
+          var ax = qx + around[ai][0], ay = qy + around[ai][1];
+          if (ax < 0 || ay < 0 || ax >= w || ay >= h) continue;
+          if (ax >= x0 - 1 && ax <= x0 + rw && ay >= y0 - 1 && ay <= y0 + rh) continue; /* 圈内不算 */
+          if (grid[ay][ax] !== 0) { near = true; break; }
+        }
+        if (near) cands.push([qx, qy]);
+      }
+      if (!cands.length) {
+        for (var by2 = y0 - 1; by2 <= y0 + rh; by2++) for (var bx2 = x0 - 1; bx2 <= x0 + rw; bx2++) grid[by2][bx2] = back[by2][bx2];
+        continue;
+      }
+      var door = cands[Math.floor(Math.random() * cands.length)];
+      grid[door[1]][door[0]] = 1;
+      var cx = x0 + Math.floor(rw / 2), cy = y0 + Math.floor(rh / 2);
+      if (!reachable(spawn.x, spawn.y, cx, cy) || !reachable(spawn.x, spawn.y, door[0], door[1]) || !fullyConnected()) {
+        for (var by3 = y0 - 1; by3 <= y0 + rh; by3++) for (var bx3 = x0 - 1; bx3 <= x0 + rw; bx3++) grid[by3][bx3] = back[by3][bx3];
+        continue;
+      }
+      var rec = { x: x0, y: y0, w: rw, h: rh, cx: cx, cy: cy, doorX: door[0], doorY: door[1] };
+      rooms.push(rec);
+      return rec;
+    }
+    return null;
   }
 
   function placeStairs() {
@@ -207,7 +350,19 @@
     placeDecor('barrel', 3 + f, w, h);
     placeDecor('torch', 2 + f * 2, w, h);
     placeDecor('vine', 2 + f, w, h);
+    furnishRooms(); /* S-05：密室内固定 1 个密室宝箱 + 2 个火把 */
     placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
+  }
+
+  /* S-05：密室内固定陈设——中心密室宝箱，左右上角各一支火把（若有空间） */
+  function furnishRooms() {
+    for (var i = 0; i < rooms.length; i++) {
+      var r = rooms[i];
+      decor[r.cy][r.cx] = 'room_chest';
+      var t1 = { x: r.x, y: r.y }, t2 = { x: r.x + r.w - 1, y: r.y };
+      if (!(t1.x === r.cx && t1.y === r.cy)) decor[t1.y][t1.x] = 'torch';
+      if (!(t2.x === r.cx && t2.y === r.cy) && !(t2.x === t1.x && t2.y === t1.y)) decor[t2.y][t2.x] = 'torch';
+    }
   }
 
   /* S-04：陷阱放置——每层 3~6 个，只放地板格；
@@ -227,7 +382,8 @@
       var dx = x - spawn.x, dy = y - spawn.y;
       if (dx * dx + dy * dy <= cfgT.safeRadius * cfgT.safeRadius) continue;
       if (traps[y][x]) continue;
-      if (decor[y][x] === 'chest') continue;
+      if (decor[y][x] === 'chest' || decor[y][x] === 'room_chest') continue;
+      if (inRoom(x, y)) continue; /* S-05：密室内不放陷阱（房内必须靠走位，不靠踩坑） */
       var occupied = false;
       for (var i = 0; i < enemies.length; i++) {
         if (enemies[i].x === x && enemies[i].y === y) { occupied = true; break; }
@@ -249,6 +405,7 @@
       /* 只放地板格、不放楼梯/出生点/已有装饰/敌人格 */
       if (grid[y][x] !== 1) continue;
       if (x === spawn.x && y === spawn.y) continue;
+      if (inRoom(x, y)) continue; /* S-05：密室陈设由 furnishRooms 独占，不参与普通装饰抽位 */
       if (decor[y][x]) continue;
       var occupied = false;
       for (var i = 0; i < enemies.length; i++) {
@@ -279,6 +436,7 @@
         details = cached.details;
         decor = cached.decor;
         traps = cached.traps || traps;
+        rooms = cached.rooms || [];
         spawn = { x: cached.spawn.x, y: cached.spawn.y };
         if (Game.Systems.AI && typeof Game.Systems.AI.setPatrols === 'function') {
           Game.Systems.AI.setPatrols(cached.patrols);
@@ -291,6 +449,7 @@
       grid = initGrid(size[0], size[1]);
       carve(1, 1);
       openRooms();
+      placeSpecialRoom(size[0], size[1]); /* S-05：先挖密室（需要整片实心墙），再放楼梯 */
       placeStairs();
       spawnEnemies();
       if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
@@ -302,6 +461,7 @@
         details: details,
         decor: decor,
         traps: traps,
+        rooms: rooms,
         spawn: { x: spawn.x, y: spawn.y },
         patrols: (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
           ? Game.Systems.AI.getPatrols() : []
@@ -416,19 +576,35 @@
       return res;
     },
 
-    /* M9-1：拾取宝箱——仅 chest 可拾取，成功后置空并 emit 'decor:taken'
+    /* S-05：取本层密室（可能为 0 间） */
+    getRooms: function () { return rooms; },
+
+    /* M9-1：拾取宝箱——chest / room_chest 可拾取，成功后置空并 emit 'decor:taken'
      * 金币走 Player.gold，道具走 Inventory.add，不新增数值系统 */
     takeDecor: function (x, y) {
       if (!decor || !decor[y]) return false;
       if (x < 0 || y < 0 || x >= decor[0].length || y >= decor.length) return false;
       var id = decor[y][x];
-      if (id !== 'chest') return false;
+      if (id !== 'chest' && id !== 'room_chest') return false;
       decor[y][x] = null;
       var loot = 'gold';
-      var def = Game.Data.DECOR && Game.Data.DECOR.chest;
+      var def = Game.Data.DECOR && Game.Data.DECOR[id];
       if (def && def.loot === 'random') loot = Math.random() < 0.5 ? 'gold' : 'item';
       else if (def && def.loot) loot = def.loot;
-      if (loot === 'gold') {
+      if (loot === 'rich') {
+        /* S-05：密室宝箱 = 厚金币 + 保底 1 件道具（可出强化卷轴），金币倍率取自 ROOMS */
+        var mul = (Game.Data.ROOMS && Game.Data.ROOMS.roomChestGoldMul) || 2.5;
+        var rich = Math.floor((8 + Math.floor(Math.random() * 20)) * (floorIndex + 1) * mul);
+        Game.Data.Player.gold += rich;
+        Game.Core.EventBus.emit('ui:notice', { msg: '密室宝箱：获得 ' + rich + ' 金币' });
+        var richPool = ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade'];
+        var richId = richPool[Math.floor(Math.random() * richPool.length)];
+        if (Game.Systems.Inventory && Game.Systems.Inventory.add) {
+          Game.Systems.Inventory.add(richId, 1);
+          var rit = Game.Data.ITEMS && Game.Data.ITEMS[richId];
+          Game.Core.EventBus.emit('ui:notice', { msg: '密室宝箱：获得 ' + (rit ? rit.name : richId) });
+        }
+      } else if (loot === 'gold') {
         var gold = (5 + Math.floor(Math.random() * 15)) * (floorIndex + 1);
         Game.Data.Player.gold += gold;
         Game.Core.EventBus.emit('ui:notice', { msg: '宝箱：获得 ' + gold + ' 金币' });
@@ -441,7 +617,7 @@
           Game.Core.EventBus.emit('ui:notice', { msg: '宝箱：获得 ' + (it ? it.name : itemId) });
         }
       }
-      Game.Core.EventBus.emit('decor:taken', { x: x, y: y, kind: 'chest' });
+      Game.Core.EventBus.emit('decor:taken', { x: x, y: y, kind: id });
       Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
       return true;
     }

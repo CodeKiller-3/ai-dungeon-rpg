@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s05</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- S-05 验证页：特殊房间（密室）
+     断言口径：数据口径 → F1 无密室 → F2~F5 每层 ≤1 间 → 单门密封（堵门即不可达）
+     → 房内 1 个密室宝箱 + 2 支火把、无陷阱 → 楼梯不在房内且可达
+     → 密室宝箱厚赏（金币倍率 + 保底道具）→ 宝箱绘制可调 → 上下楼缓存复现同一间房。
+     只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { s05Loaded: false, s05Api: false, s05Ok: false, sub: {} };
+  function finish() {
+    var pass = out.s05Loaded && out.s05Api && out.s05Ok;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, M = Game.Systems.Map, R = Game.Core && Game.Core.Render,
+        Inv = Game.Systems.Inventory;
+    out.s05Loaded = !!(window.Game && D.ROOMS && D.DECOR && D.DECOR.room_chest);
+    out.s05Api = !!(M && typeof M.getRooms === 'function' && typeof M.getGrid === 'function' &&
+      typeof M.setFloor === 'function' && typeof M.getSpawn === 'function' &&
+      typeof M.takeDecor === 'function' && typeof M.getDecor === 'function' &&
+      typeof M.getTrap === 'function' && Inv && typeof Inv.add === 'function');
+    if (!out.s05Loaded || !out.s05Api) { finish(); return; }
+
+    var sub = {};
+    out.sub = sub;
+    var ok = true;
+    var P = D.Player;
+
+    /* 通用 BFS：只走非墙格；blocked 为 true 的格视为墙 */
+    function bfs(gx, sx, sy, tx, ty, blocked) {
+      var h = gx.length, w = gx[0].length;
+      var seen = [], q = [[sx, sy]], head = 0;
+      for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+      seen[sy][sx] = true;
+      var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      while (head < q.length) {
+        var cx = q[head][0], cy = q[head][1];
+        head++;
+        if (cx === tx && cy === ty) return true;
+        for (var d = 0; d < dirs.length; d++) {
+          var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (seen[ny][nx]) continue;
+          if (gx[ny][nx] === 0) continue;
+          if (blocked && blocked(nx, ny)) continue;
+          seen[ny][nx] = true;
+          q.push([nx, ny]);
+        }
+      }
+      return false;
+    }
+
+    /* t2：数据口径 */
+    var t2 = !!(D.ROOMS.startFloor === 2 && D.ROOMS.minW === 4 && D.ROOMS.maxW === 6 &&
+      D.ROOMS.minH === 3 && D.ROOMS.maxH === 4 && D.ROOMS.roomChestMin === 1 &&
+      typeof D.ROOMS.roomChestGoldMul === 'number' && D.ROOMS.roomChestGoldMul > 1 &&
+      typeof D.ROOMS.safeRadius === 'number' && D.ROOMS.safeRadius >= 5 &&
+      D.DECOR.room_chest.loot === 'rich' && D.DECOR.room_chest.name === '密室宝箱');
+    sub.t2_data = t2;
+    ok = ok && t2;
+
+    /* t3：F1 不出现密室（startFloor=2） */
+    var t3 = false;
+    try {
+      M.generate(); /* 已知坑：Map 模块级 cfg 只在首次 generate() 注入，setFloor/changeFloor 之前必须先跑一次 */
+      M.setFloor(1);
+      t3 = M.getRooms().length === 0;
+    } catch (e3) { t3 = false; }
+    sub.t3_floor1None = t3;
+    ok = ok && t3;
+
+    /* t4 + t5 + t6 + t7：F2~F5 逐层检查（每层允许最多重生成 8 次来取样，断言"存在即合规"）
+     * 统计：有几层生成了密室、每层房间数、密封性、陈设、楼梯位置 */
+    var roomsFound = 0, floorsChecked = 0, perFloor = [], allSealed = true,
+        allFurnished = true, allNoTrap = true, allStairsOut = true, allStairsReach = true,
+        allSingle = true, allSize = true, allFar = true;
+    try {
+      for (var f = 2; f <= D.MAPS.floors; f++) {
+        var rec = null, grid0 = null, triesF = 0;
+        while (triesF < 8 && !rec) {
+          triesF++;
+          M.setFloor(f);
+          if (M.getRooms().length > 0) { rec = M.getRooms()[0]; grid0 = M.getGrid(); }
+        }
+        floorsChecked++;
+        var roomCount = M.getRooms().length;
+        if (roomCount > 1) allSingle = false;
+        if (!rec) { perFloor.push({ f: f, rooms: 0, tries: triesF }); continue; }
+        roomsFound++;
+        var sp = M.getSpawn();
+        /* 单门密封：中心可达；把门口那格当墙后不可达 */
+        var canReach = bfs(grid0, sp.x, sp.y, rec.cx, rec.cy, null);
+        var sealed = canReach && !bfs(grid0, sp.x, sp.y, rec.cx, rec.cy, function (x, y) {
+          return x === rec.doorX && y === rec.doorY;
+        });
+        if (!sealed) allSealed = false;
+        /* 尺寸合规 */
+        if (rec.w < D.ROOMS.minW || rec.w > D.ROOMS.maxW || rec.h < D.ROOMS.minH || rec.h > D.ROOMS.maxH) allSize = false;
+        /* 离出生点足够远（防止一落地就白拿厚赏） */
+        if (Math.abs(rec.cx - sp.x) + Math.abs(rec.cy - sp.y) < D.ROOMS.safeRadius) allFar = false;
+        /* 陈设：中心 1 个 room_chest、房间内恰好 2 支火把、全房无陷阱 */
+        var chestAtCenter = M.getDecor(rec.cx, rec.cy) === 'room_chest';
+        var torchCount = 0, trapIn = 0, chestCount = 0;
+        for (var yy = rec.y; yy < rec.y + rec.h; yy++) {
+          for (var xx = rec.x; xx < rec.x + rec.w; xx++) {
+            if (M.getDecor(xx, yy) === 'torch') torchCount++;
+            if (M.getDecor(xx, yy) === 'room_chest') chestCount++;
+            if (M.getTrap(xx, yy)) trapIn++;
+          }
+        }
+        if (!chestAtCenter || chestCount !== D.ROOMS.roomChestMin || torchCount !== 2) allFurnished = false;
+        if (trapIn !== 0) allNoTrap = false;
+        /* 楼梯（tile 2/3）不在房内且可达 */
+        var stairsOk = true, stairsReach = true;
+        for (var y2 = 0; y2 < grid0.length; y2++) {
+          for (var x2 = 0; x2 < grid0[0].length; x2++) {
+            if (grid0[y2][x2] === 2 || grid0[y2][x2] === 3) {
+              if (x2 >= rec.x && x2 < rec.x + rec.w && y2 >= rec.y && y2 < rec.y + rec.h) stairsOk = false;
+              if (!bfs(grid0, sp.x, sp.y, x2, y2, null)) stairsReach = false;
+            }
+          }
+        }
+        if (!stairsOk) allStairsOut = false;
+        if (!stairsReach) allStairsReach = false;
+        perFloor.push({ f: f, rooms: 1, tries: triesF, x: rec.x, y: rec.y, w: rec.w, h: rec.h,
+          door: rec.doorX + ',' + rec.doorY, sealed: sealed, chest: chestAtCenter,
+          torches: torchCount, traps: trapIn });
+      }
+    } catch (e4) { out.err4 = String(e4 && e4.message ? e4.message : e4); }
+    sub.t4_eachFloorAtMostOne = allSingle;
+    sub.t4_floorsWithRoom = roomsFound;
+    sub.t4_perFloor = perFloor;
+    sub.t5_sealed = allSealed;
+    sub.t6_furnished = allFurnished;
+    sub.t6_size = allSize;
+    sub.t6_farFromSpawn = allFar;
+    sub.t7_noTrapInside = allNoTrap;
+    sub.t7_stairsOutside = allStairsOut;
+    sub.t7_stairsReachable = allStairsReach;
+    ok = ok && allSingle && allSealed && allFurnished && allSize && allFar && allNoTrap && allStairsOut && allStairsReach;
+    /* 4 层里至少 3 层真的生成了密室（F2 地图最小，允许偶发挖不出合规位置） */
+    var enough = roomsFound >= 3;
+    sub.t4_roomExists = enough && roomsFound > 0;
+    ok = ok && enough;
+
+    /* t8：密室宝箱厚赏——金币按倍率给、保底 1 件道具、拾取后置空、二次拾取返回 false */
+    var t8 = false, t8detail = {};
+    try {
+      var landF = null;
+      for (var ff = 2; ff <= D.MAPS.floors && !landF; ff++) {
+        M.setFloor(ff);
+        if (M.getRooms().length > 0) landF = ff;
+      }
+      if (landF) {
+        var r8 = M.getRooms()[0];
+        var gold0 = P.gold, inv0 = 0;
+        for (var kk in P.inventory) inv0 += P.inventory[kk];
+        var got = M.takeDecor(r8.cx, r8.cy);
+        var gold1 = P.gold, inv1 = 0;
+        for (var kk2 in P.inventory) inv1 += P.inventory[kk2];
+        var mul = D.ROOMS.roomChestGoldMul;
+        var minGold = Math.floor(8 * landF * mul);
+        var again = M.takeDecor(r8.cx, r8.cy);
+        t8 = !!(got === true && gold1 - gold0 >= minGold && inv1 - inv0 === 1 &&
+          M.getDecor(r8.cx, r8.cy) === null && again === false);
+        t8detail = { floor: landF, goldGain: gold1 - gold0, minGold: minGold,
+          invGain: inv1 - inv0, secondCall: again };
+      }
+    } catch (e8) { t8detail.err = String(e8 && e8.message ? e8.message : e8); }
+    sub.t8_richLoot = t8;
+    sub.t8_detail = t8detail;
+    ok = ok && t8;
+
+    /* t9：密室宝箱绘制可调用（stub ctx，不抛错） */
+    var t9 = false;
+    try {
+      var stub = {
+        fillStyle: '', strokeStyle: '', lineWidth: 1,
+        fillRect: function () {}, strokeRect: function () {}, beginPath: function () {},
+        arc: function () {}, fill: function () {}, moveTo: function () {},
+        lineTo: function () {}, closePath: function () {}
+      };
+      if (R && typeof R._drawDecor === 'function') { R._drawDecor(stub, 'room_chest', 0, 0); t9 = true; }
+    } catch (e9) { t9 = false; }
+    sub.t9_drawApi = t9;
+    ok = ok && t9;
+
+    /* t10：上下楼缓存复现同一间房（回访不换房，避免反复刷宝箱） */
+    var t10 = false, t10detail = {};
+    try {
+      var fT = null;
+      for (var f10 = 2; f10 < D.MAPS.floors && !fT; f10++) {
+        M.setFloor(f10);
+        if (M.getRooms().length > 0) fT = f10;
+      }
+      if (fT) {
+        var before = M.getRooms()[0];
+        var snap = before.x + ',' + before.y + ',' + before.w + ',' + before.h;
+        M.changeFloor(1);
+        M.changeFloor(-1);
+        var after = M.getRooms()[0];
+        var snap2 = after ? after.x + ',' + after.y + ',' + after.w + ',' + after.h : 'none';
+        t10 = snap === snap2 && after.cx === before.cx && after.cy === before.cy;
+        t10detail = { floor: fT, before: snap, after: snap2 };
+      }
+    } catch (e10) { t10detail.err = String(e10 && e10.message ? e10.message : e10); }
+    sub.t10_cacheStable = t10;
+    sub.t10_detail = t10detail;
+    ok = ok && t10;
+
+    P.hp = 100; P.maxHp = 100;
+    M.setFloor(1);
+    out.s05Ok = !!ok;
+  } catch (e) {
+    out.err = String(e && e.message ? e.message : e);
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

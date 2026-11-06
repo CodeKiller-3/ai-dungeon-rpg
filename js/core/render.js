@@ -277,10 +277,29 @@
     /* M9-1：装饰物绘制——素材就绪用贴图，否则程序化矩形+轮廓兜底
      * id: chest(宝箱黄框) / barrel(木桶棕框) / torch(火把橙焰) / vine(藤蔓绿条) */
     _drawDecor: function (ctx, id, px, py) {
+      /* S-05：密室宝箱——先铺一层金色光晕（有贴图时也保留，远看就能认出"这里有厚赏"） */
+      if (id === 'room_chest') {
+        ctx.fillStyle = 'rgba(255,207,110,0.20)';
+        ctx.beginPath();
+        ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 2 + 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       var sp = this._hasSprites() ? Game.Core.Sprites.get(id) : null;
       /* P1-1：chest/crate/skull/wall_goo 有同名贴图则直接绘制；
        * barrel/torch/vine 无同名文件（get 返回 null）→ 继续走下方程序化兜底 */
       if (sp) { ctx.drawImage(sp, px + 1, py + 1, TILE - 2, TILE - 2); return; }
+      if (id === 'room_chest') {
+        ctx.fillStyle = '#5a3a18';
+        ctx.fillRect(px + 2, py + 6, TILE - 4, TILE - 8);
+        ctx.fillStyle = '#a8722e';
+        ctx.fillRect(px + 3, py + 7, TILE - 6, (TILE - 10) / 2);
+        ctx.strokeStyle = '#ffd24a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px + 2, py + 6, TILE - 4, TILE - 8);
+        ctx.fillStyle = '#ffd24a';
+        ctx.fillRect(px + TILE / 2 - 2, py + TILE / 2 - 1, 4, 6);
+        return;
+      }
       if (id === 'chest') {
         ctx.fillStyle = '#8b5a2b';
         ctx.fillRect(px + 4, py + 8, TILE - 9, TILE - 12);

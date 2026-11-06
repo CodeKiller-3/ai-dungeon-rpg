@@ -21,6 +21,8 @@
   var NAMES = ['player', 'monster_chort', 'monster_chort_run', 'boss_demon', 'boss_demon_run',
     /* M9-1：装饰物素材（S-02a 补齐 barrel/torch/vine；其余装饰仍由渲染层程序化绘制） */
     'chest', 'barrel', 'torch', 'vine',
+    /* S-05：密室宝箱（比普通宝箱更大更亮，自绘 16×16） */
+    'room_chest',
     /* P1-1：地板变体与楼梯 */
     'floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8',
     'floor_stairs', 'floor_ladder',

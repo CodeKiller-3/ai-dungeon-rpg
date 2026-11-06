@@ -64,9 +64,22 @@
    * loot: 'gold' | 'item' | 'random' */
   Game.Data.DECOR = {
     chest:  { id: 'chest',  name: '宝箱', desc: '内含金币或道具', loot: 'random' },
+    room_chest: { id: 'room_chest', name: '密室宝箱', desc: '封闭小房里的厚赏', loot: 'rich' },
     barrel: { id: 'barrel', name: '木桶', desc: '装饰物' },
     torch:  { id: 'torch',  name: '火把', desc: '照亮周围（静态，M9-2 加光晕）' },
     vine:   { id: 'vine',   name: '藤蔓', desc: '装饰物' }
+  };
+
+  /* S-05：特殊房间（密室）——每层最多 1 间，F2 起出现；房内只放 1 个密室宝箱与 2 个火把，
+   * 不放陷阱、不放普通装饰、不放楼梯；单扇门与主迷宫相连，生成后必须通过可达性校验 */
+  Game.Data.ROOMS = {
+    startFloor: 2,          /* 从第 2 层开始出现 */
+    minW: 4, maxW: 6,       /* 房间内部宽（含边界墙外的可用区） */
+    minH: 3, maxH: 4,       /* 房间内部高 */
+    tries: 40,              /* 找封闭空区的最大尝试次数 */
+    safeRadius: 7,          /* 房间中心与出生点的曼哈顿距离下限（避免一出生白拿厚赏） */
+    roomChestGoldMul: 2.5,  /* 密室宝箱金币倍率（普通宝箱为 1） */
+    roomChestMin: 1         /* 每间房恰好 1 个密室宝箱 */
   };
 
   /* S-04：陷阱定义——踩中即触发一次，触发后该格永久显现（seen=true）且不再伤人

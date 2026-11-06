@@ -372,9 +372,10 @@
               Game.Systems.Battle.start(e.monsterId);
               this.switchScene('battle');
             } else {
-              /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空） */
+              /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空）
+               * S-05：密室宝箱（room_chest）同样走 takeDecor，掉落口径在 map.js 内区分 */
               var dec = Game.Systems.Map.getDecor(nx, ny);
-              if (dec === 'chest') Game.Systems.Map.takeDecor(nx, ny);
+              if (dec === 'chest' || dec === 'room_chest') Game.Systems.Map.takeDecor(nx, ny);
             }
           }
           refreshFov(); /* S3-1：移动/换层后刷新视野 */
