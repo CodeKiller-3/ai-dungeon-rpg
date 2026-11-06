@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_p2_5</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- P2-5 验证页：加载顺序与主游戏同序（core → data → systems → main 最后）；main 设 NO_AUTOSTART。
+     本页为纯逻辑断言（任务数据 / progress 匹配 / 三处触发点 / init 兼容 / 防重复），不生成地图、不加载素材。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { questLoaded: false, questApi: false, questOk: false };
+  function finish() {
+    var pass = out.questLoaded && out.questApi && out.questOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, Q = Game.Systems.Quest, Inv = Game.Systems.Inventory;
+    out.questLoaded = !!(window.Game && D.QUESTS && D.Player && D.ITEMS && Q && Inv);
+    out.questApi = !!(typeof Q.init === 'function' && typeof Q.progress === 'function' &&
+      typeof Q.getActive === 'function' && typeof Q.isDone === 'function' &&
+      typeof Inv.add === 'function' &&
+      Game.Systems.Battle && typeof Game.Systems.Battle.checkLevelUp === 'function' &&
+      Game.Systems.Map && typeof Game.Systems.Map.generate === 'function');
+    if (!out.questLoaded || !out.questApi) { finish(); return; }
+
+    var sub = {};
+    var P = D.Player;
+    var LIST = D.QUESTS;
+    var ok = true;
+
+    /* t2_questCount：≥12 条、type 合法、count>0、reward≥0、id 唯一 */
+    var TYPES = { kill: 1, gold: 1, floor: 1, level: 1, collect: 1 };
+    var seen = {}, t2ok = LIST.length >= 12;
+    for (var i = 0; i < LIST.length; i++) {
+      var q = LIST[i];
+      if (!q || !TYPES[q.type]) t2ok = false;
+      if (seen[q.id]) t2ok = false;
+      seen[q.id] = 1;
+      if (!(q.count > 0)) t2ok = false;
+      if (!q.reward || !(q.reward.gold >= 0) || !(q.reward.exp >= 0)) t2ok = false;
+    }
+    sub.t2_questCount = t2ok;
+    sub.t2_count = LIST.length;
+    ok = ok && t2ok;
+
+    /* t3_oldQuests：现有 3 条与基线逐字一致（id/type/target/count/reward/desc） */
+    var BASE = [
+      { id: 'main_clear_dragon', type: 'kill', target: 'dragon', count: 1,
+        gold: 200, exp: 100, desc: '主线：击败地牢深处的巨龙' },
+      { id: 'kill_slimes', type: 'kill', target: 'slime', count: 5,
+        gold: 30, exp: 20, desc: '支线：击败 5 只史莱姆' },
+      { id: 'gold_rich', type: 'gold', target: 100, count: 100,
+        gold: 50, exp: 30, desc: '支线：累计获得 100 金币' }
+    ];
+    var t3ok = true;
+    for (var bi = 0; bi < BASE.length; bi++) {
+      var b = BASE[bi], f = null;
+      for (var fi = 0; fi < LIST.length; fi++) if (LIST[fi].id === b.id) f = LIST[fi];
+      if (!f) { t3ok = false; continue; }
+      if (f.type !== b.type || f.target !== b.target || f.count !== b.count ||
+        f.reward.gold !== b.gold || f.reward.exp !== b.exp || f.desc !== b.desc) t3ok = false;
+    }
+    sub.t3_oldQuests = t3ok;
+    ok = ok && t3ok;
+
+    /* t8_initCompat：清空 Player.quests 后 init 补齐 12 条，默认 progress 0 / done false；重复 init 幂等 */
+    P.quests = {};
+    Q.init();
+    var t8ok = true, keys = Object.keys(P.quests);
+    if (keys.length !== 12) t8ok = false;
+    for (var ki = 0; ki < LIST.length; ki++) {
+      var st8 = P.quests[LIST[ki].id];
+      if (!st8 || st8.progress !== 0 || st8.done !== false) t8ok = false;
+    }
+    Q.init(); /* 二次 init 不应重置/报错 */
+    if (Object.keys(P.quests).length !== 12) t8ok = false;
+    sub.t8_initCompat = t8ok;
+    sub.t8_keys = keys.length;
+    ok = ok && t8ok;
+
+    /* 以下测试共享 Player 状态流（起始 gold0/exp0/level1），顺序固定、奖励可复算 */
+
+    /* t6_collectQuest：add 失败 / 数量 0 不推进；add×3 完成 collect_potions */
+    var rZero = Inv.add('potion_large', 0);      /* 0 兜底成 1 入包，但不推进 */
+    var rBad = Inv.add('__no_such_item__', 1);   /* 物品不存在 → false */
+    var c0 = P.quests.collect_potions.progress;
+    Inv.add('potion_large', 1);
+    Inv.add('potion_large', 1);
+    Inv.add('potion_large', 1);
+    var t6ok = rZero === true && rBad === false && c0 === 0 &&
+      P.quests.collect_potions.done === true;
+    sub.t6_collectQuest = t6ok;
+    sub.t6_state = { rZero: rZero, rBad: rBad, progressBefore: c0,
+      done: P.quests.collect_potions.done, gold: P.gold, exp: P.exp };
+    ok = ok && t6ok;
+    /* 状态：gold=50 exp=30 level=1 */
+
+    /* t4_floorQuest：progress('floor',3) 完成 reach_floor3；奖励只发一次 */
+    var g0 = P.gold;
+    Q.progress('floor', 3);
+    var d1 = P.gold - g0;
+    Q.progress('floor', 3); /* 已完成 → 不再发奖 */
+    Q.progress('floor', 5); /* 超额到达也不重复 */
+    var d2 = P.gold - g0 - d1;
+    var t4ok = P.quests.reach_floor3.done === true && d1 === 60 && d2 === 0;
+    sub.t4_floorQuest = t4ok;
+    sub.t4_state = { goldDelta1: d1, goldDelta2: d2, done: P.quests.reach_floor3.done };
+    ok = ok && t4ok;
+    /* 状态：gold=110；exp 30+40=70 → L2（余 10）；level=2 触发 progress('level',2) 但不达标 */
+
+    /* t5_levelQuest：progress('level',5) 完成 level_5 */
+    Q.progress('level', 5);
+    var t5ok = P.quests.level_5.done === true;
+    sub.t5_levelQuest = t5ok;
+    ok = ok && t5ok;
+    /* 状态：gold=190；exp 10+60=70 < 120 不升级；level=2 */
+
+    /* t7_killQuests：goblin×5 / orc_warrior×5 / ogre_boss×1 / zombie_king×1 各自完成 */
+    var ki2;
+    for (ki2 = 0; ki2 < 5; ki2++) Q.progress('kill', 'goblin');
+    for (ki2 = 0; ki2 < 5; ki2++) Q.progress('kill', 'orc_warrior');
+    Q.progress('kill', 'ogre_boss');
+    Q.progress('kill', 'zombie_king');
+    var t7ok = P.quests.kill_goblins.done === true &&
+      P.quests.kill_orcs.done === true &&
+      P.quests.slay_ogre_chief.done === true &&
+      P.quests.slay_zombie_king.done === true &&
+      P.quests.kill_undead.done === false &&   /* 未杀骷髅，不得完成 */
+      P.quests.kill_zombies.done === false &&   /* 未杀大僵尸，不得完成 */
+      P.quests.main_clear_dragon.done === false; /* 未杀龙，主线不得完成 */
+    sub.t7_killQuests = t7ok;
+    ok = ok && t7ok;
+    /* 状态：gold=580；exp 链 95→L3(20)→100→210→L4(30)；level=4 */
+
+    /* t9_noDuplicate：已完成任务重复 progress 不重复发奖（gold/exp/level 均不变） */
+    var g9 = P.gold, e9 = P.exp, l9 = P.level;
+    Q.progress('kill', 'ogre_boss');
+    Q.progress('floor', 9);
+    Q.progress('level', 9);
+    Q.progress('collect', 'potion_large');
+    Q.progress('kill', 'goblin');
+    var t9ok = P.gold === g9 && P.exp === e9 && P.level === l9;
+    sub.t9_noDuplicate = t9ok;
+    sub.t9_state = { gold: P.gold, exp: P.exp, level: P.level };
+    ok = ok && t9ok;
+
+    out.sub = sub;
+    out.questOk = ok;
+  } catch (e) {
+    out.err = String(e && e.message || e);
+    out.questOk = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

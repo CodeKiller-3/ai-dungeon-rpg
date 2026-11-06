@@ -50,6 +50,10 @@
       }
       p.hp = p.maxHp;   /* 升级回满 HP */
       p.mp = p.maxMp;   /* 升级回满 MP */
+      /* P2-5：level 任务推进——只在确实升级时调用（ups>0），避免每战重复 */
+      if (Game.Systems.Quest && typeof Game.Systems.Quest.progress === 'function') {
+        Game.Systems.Quest.progress('level', p.level);
+      }
     }
     return ups;
   }

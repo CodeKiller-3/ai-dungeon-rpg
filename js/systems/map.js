@@ -225,6 +225,14 @@
     }
   }
 
+  /* P2-5：floor 任务推进——每次 map:floorChanged 后调用（含缓存恢复分支）；
+   * 守卫式调用避免硬依赖，Quest 未加载时跳过 */
+  function notifyFloorQuest() {
+    if (Game.Systems.Quest && typeof Game.Systems.Quest.progress === 'function') {
+      Game.Systems.Quest.progress('floor', floorIndex + 1);
+    }
+  }
+
   Game.Systems.Map = {
     generate: function () {
       cfg = Game.Data.MAPS;
@@ -240,6 +248,7 @@
           Game.Systems.AI.setPatrols(cached.patrols);
         }
         Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
+        notifyFloorQuest();
         return grid;
       }
       var size = cfg.sizes[floorIndex % cfg.sizes.length];
@@ -261,6 +270,7 @@
           ? Game.Systems.AI.getPatrols() : []
       };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
+      notifyFloorQuest();
       return grid;
     },
 

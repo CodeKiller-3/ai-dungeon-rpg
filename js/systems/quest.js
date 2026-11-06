@@ -20,7 +20,8 @@
       }
     },
 
-    /* 事件推进：type=kill 传怪物 id；type=gold 传金币数 */
+    /* 事件推进：type=kill 传怪物 id；type=gold 传金币数；
+     * P2-5：type=floor/level 传到达值（>=target 即完成）；type=collect 传物品 id */
     progress: function (type, arg) {
       var p = Game.Data.Player;
       var list = Game.Data.QUESTS;
@@ -32,8 +33,15 @@
         var match = false;
         if (q.type === 'kill' && type === 'kill' && q.target === arg) match = true;
         if (q.type === 'gold' && type === 'gold') match = true;
+        /* P2-5：floor/level 到达即完成；collect 与 kill 同构按目标 id 匹配 */
+        if (q.type === 'floor' && type === 'floor' && arg >= q.target) match = true;
+        if (q.type === 'level' && type === 'level' && arg >= q.target) match = true;
+        if (q.type === 'collect' && type === 'collect' && q.target === arg) match = true;
         if (match) {
-          st.progress += (q.type === 'gold') ? arg : 1;
+          /* gold 按金额累加；floor/level 到达即置满；kill/collect 按 +1 累加 */
+          if (q.type === 'gold') st.progress += arg;
+          else if (q.type === 'floor' || q.type === 'level') st.progress = q.count;
+          else st.progress += 1;
           if (st.progress >= q.count) {
             st.done = true;
             p.gold += q.reward.gold;

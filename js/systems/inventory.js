@@ -77,6 +77,12 @@
       if (!p.inventory[id]) p.inventory[id] = 0;
       p.inventory[id] += count;
       notify();
+      /* P2-5：collect 任务推进——物品真正入包后调用（每次入包 +1）；
+       * 数量 ≤0 不推进（!count 会把 0 兜底成 1，故须以原始入参判断）；物品不存在已在上方 return false */
+      if (arguments.length >= 2 && !(arguments[1] > 0)) return true;
+      if (Game.Systems.Quest && typeof Game.Systems.Quest.progress === 'function') {
+        Game.Systems.Quest.progress('collect', id);
+      }
       return true;
     },
 
