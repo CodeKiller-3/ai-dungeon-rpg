@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s03</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- S-03 验证页：装备强化 +1~+5
+     断言口径：卷轴数据 → 每层货架恰 1 张 → 单次强化数值 → 上限封顶 → 武器/护甲交替 → 未装备拒绝
+     → 存档往返 → 旧档无 upg 字段兼容。只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { s03Loaded: false, s03Api: false, s03Ok: false, sub: {} };
+  function finish() {
+    var pass = out.s03Loaded && out.s03Api && out.s03Ok;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, Inv = Game.Systems.Inventory, Shop = Game.Systems.Shop,
+        M = Game.Systems.Map, Save = Game.Systems.Save;
+    out.s03Loaded = !!(window.Game && D.ITEMS && D.Player && D.SHOP_STOCK && D.SHOP_SCROLLS);
+    out.s03Api = !!(Inv && typeof Inv.use === 'function' && typeof Inv.upgrade === 'function' &&
+      typeof Inv.recalcEquip === 'function' && typeof Inv.add === 'function' &&
+      Shop && typeof Shop.getStock === 'function' && M && typeof M.setFloor === 'function' &&
+      Save && typeof Save.save === 'function' && typeof Save.load === 'function');
+    if (!out.s03Loaded || !out.s03Api) { finish(); return; }
+
+    var sub = {};
+    out.sub = sub;
+    var ok = true;
+    var P = D.Player;
+    var I = D.ITEMS;
+
+    /* 基线重置：L1、空背包、空强化 */
+    function resetP() {
+      P.hp = 100; P.maxHp = 100; P.atk = 10; P.def = 5; P.level = 1;
+      P.inventory = {}; P.equipment = { weapon: null, armor: null }; P.upg = {};
+      Inv.recalcEquip();
+    }
+
+    /* t2：4 张卷轴的数据口径（价格阶梯 / sell=floor(price/2) / effect 为空 / scroll:true） */
+    var SIDS = ['scroll_upgrade', 'scroll_upgrade_2', 'scroll_upgrade_3', 'scroll_upgrade_4'];
+    var PRICES = [80, 120, 200, 300];
+    var t2 = true;
+    for (var i = 0; i < SIDS.length; i++) {
+      var it = I[SIDS[i]];
+      if (!it || it.type !== 'consumable' || it.scroll !== true) { t2 = false; break; }
+      if (it.price !== PRICES[i] || it.sell !== Math.floor(PRICES[i] / 2)) { t2 = false; break; }
+      if (!it.effect || Object.keys(it.effect).length !== 0) { t2 = false; break; }
+    }
+    sub.t2_scrollData = t2;
+    ok = ok && t2;
+
+    /* t3：五层货架各含恰 1 张卷轴；核心货架均价不变（40.7/92.2/236.7/259.4/441.9） */
+    var CORE_AVG = [40.7, 92.2, 236.7, 259.4, 441.9];
+    var t3 = true, t3detail = [];
+    /* Map 的 cfg 在首次 generate 时才注入，故先生成一层再逐层推进（setFloor 在 cfg 为空时会抛错） */
+    M.generate();
+    for (var f = 1; f <= 5; f++) {
+      if (f > 1) M.changeFloor(1);
+      var stock = Shop.getStock();
+      var scCount = 0, coreSum = 0, coreN = 0;
+      for (var s = 0; s < stock.length; s++) {
+        var id = stock[s].id;
+        if (I[id] && I[id].scroll === true) { scCount++; continue; }
+        if (D.SHOP_STOCK[f - 1].indexOf(id) >= 0 || D.SHOP_ROTATION[f - 1].indexOf(id) >= 0) {
+          coreSum += I[id].price; coreN++;
+        }
+      }
+      var coreIds = D.SHOP_STOCK[f - 1];
+      var coreAvg = 0, cn = 0;
+      for (var c = 0; c < coreIds.length; c++) { if (I[coreIds[c]]) { coreAvg += I[coreIds[c]].price; cn++; } }
+      coreAvg = cn ? Math.round((coreAvg / cn) * 10) / 10 : 0;
+      if (scCount !== 1 || coreAvg !== CORE_AVG[f - 1] || coreN < cn) t3 = false;
+      t3detail.push({ f: f, scrolls: scCount, coreAvg: coreAvg });
+    }
+    sub.t3_shopScroll = t3;
+    sub.t3_detail = t3detail;
+    ok = ok && t3;
+
+    /* t4：单次强化——钢剑 atk5 → +1 后 atk=10+5+ceil(0.5)=16；卷轴消耗 1 张 */
+    resetP();
+    Inv.add('scroll_upgrade', 1);
+    Inv.add('sword_steel', 1);
+    Inv.equip('sword_steel');
+    var r4 = Inv.use('scroll_upgrade');
+    sub.t4_oneUpgrade = !!(r4 && r4.ok && r4.level === 1 && P.upg.sword_steel === 1 &&
+      P.atk === 16 && !P.inventory.scroll_upgrade);
+    sub.t4_atk = P.atk;
+    ok = ok && sub.t4_oneUpgrade;
+
+    /* t5：上限 +5——继续 4 张到 +5（atk=10+5+ceil(2.5)=18），第 6 张拒绝且不消耗 */
+    var t5 = true;
+    for (var k = 0; k < 4; k++) { Inv.add('scroll_upgrade', 1); if (!Inv.use('scroll_upgrade').ok) t5 = false; }
+    Inv.add('scroll_upgrade', 1);
+    var r5 = Inv.use('scroll_upgrade');
+    if (r5.ok || P.upg.sword_steel !== 5 || P.atk !== 18 || P.inventory.scroll_upgrade !== 1) t5 = false;
+    sub.t5_cap = t5;
+    sub.t5_atk = P.atk;
+    sub.t5_msg = r5.msg;
+    ok = ok && t5;
+
+    /* t6：武器/护甲交替——等级低者优先，两件都装时第 2 张升护甲（def8→+1 得 def 5+8+1=14） */
+    resetP();
+    P.equipment = { weapon: 'sword_steel', armor: 'plate_armor' };
+    Inv.recalcEquip();
+    Inv.add('scroll_upgrade', 2);
+    Inv.use('scroll_upgrade');
+    Inv.use('scroll_upgrade');
+    sub.t6_alternate = !!(P.upg.sword_steel === 1 && P.upg.plate_armor === 1 &&
+      P.atk === 16 && P.def === 14);
+    ok = ok && sub.t6_alternate;
+
+    /* t7：两件都未装备 → 拒绝且卷轴不消耗 */
+    resetP();
+    Inv.add('scroll_upgrade', 2);
+    var r7 = Inv.use('scroll_upgrade');
+    sub.t7_noEquip = !!(r7 && !r7.ok && P.inventory.scroll_upgrade === 2 && !P.upg.sword_steel);
+    ok = ok && sub.t7_noEquip;
+
+    /* t8：存档往返——upg 与 atk 一致 */
+    resetP();
+    P.equipment = { weapon: 'sword_steel', armor: null };
+    P.upg = { sword_steel: 2 };
+    Inv.recalcEquip();
+    var beforeAtk = P.atk;
+    Save.save();
+    P.upg = {}; P.atk = 0;
+    var loaded = Save.load();
+    sub.t8_saveLoad = !!(loaded && P.upg && P.upg.sword_steel === 2 && P.atk === beforeAtk);
+    sub.t8_atk = { before: beforeAtk, after: P.atk };
+    ok = ok && sub.t8_saveLoad;
+
+    /* t9：旧档（无 upg 字段）→ 读档补 {}，数值按装备重算不丢 */
+    try {
+      localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify({
+        floor: 1,
+        player: { hp: 100, gold: 50, level: 1, inventory: { sword_steel: 1 },
+          equipment: { weapon: 'sword_steel', armor: null }, quests: {} }
+      }));
+      var oldLoaded = Save.load();
+      sub.t9_oldSave = !!(oldLoaded && P.upg && typeof P.upg === 'object' &&
+        Object.keys(P.upg).length === 0 && P.atk === 15);
+      sub.t9_atk = P.atk;
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+    } catch (e9) { sub.t9_oldSave = false; }
+    ok = ok && sub.t9_oldSave;
+
+    resetP();
+    M.setFloor(1);
+    out.s03Ok = !!ok;
+  } catch (e) {
+    out.err = String(e && e.message ? e.message : e);
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

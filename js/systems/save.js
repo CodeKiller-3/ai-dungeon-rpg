@@ -19,7 +19,9 @@
           mp: p.mp, maxMp: p.maxMp, /* M8-1：MP 存档字段 */
           atk: p.atk, def: p.def,
           gold: p.gold, exp: p.exp, level: p.level,
-          inventory: p.inventory, equipment: p.equipment, quests: p.quests
+          inventory: p.inventory, equipment: p.equipment, quests: p.quests,
+          /* S-03：强化等级表（按物品 id）；旧档无此字段时读档补 {} */
+          upg: p.upg || {}
         },
         /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
         bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
@@ -50,6 +52,8 @@
         if (s.inventory) p.inventory = s.inventory;
         if (s.equipment) p.equipment = s.equipment;
         if (s.quests) p.quests = s.quests;
+        /* S-03：旧档无 upg 字段 → 补空表，不破坏已读档的既有数值 */
+        p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};
         /* M8-6：不信任旧档 atk/def/maxHp 持久值——按当前等级成长规则重算（含装备加成），
          * hp 超新上限时钳制（避免旧档错值带入新成长体系） */
         if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {

@@ -62,6 +62,8 @@
     if (!item) return '';
     var hp = (item.effect && item.effect.maxHp) ? (' 生命+' + item.effect.maxHp) : '';
     if (item.type === 'consumable') {
+      /* S-03：强化卷轴（scroll:true）不靠 effect 字段，单独描述 */
+      if (item.scroll === true) return '强化装备 +1（上限 +5）';
       var parts = [];
       if (item.effect && item.effect.hp) parts.push('恢复HP+' + item.effect.hp);
       if (item.effect && item.effect.mp) parts.push('恢复MP+' + item.effect.mp);
@@ -70,6 +72,13 @@
     if (item.type === 'weapon') return '攻击+' + ((item.effect && item.effect.atk) || 0) + hp;
     if (item.type === 'armor') return '防御+' + ((item.effect && item.effect.def) || 0) + hp;
     return '';
+  }
+
+  /* S-03：背包行强化后缀 +N（只对已强化的武器/护甲有意义；商店卖的是未强化新货，不加后缀） */
+  function upgSuffix(id) {
+    var p = Game.Data && Game.Data.Player;
+    var n = (p && p.upg && p.upg[id]) || 0;
+    return n > 0 ? ' +' + n : '';
   }
 
   /* P2-2：物品行图标映射（以 js/data/items.js 实际 id 为准）：
@@ -358,6 +367,7 @@
           p.gold = 0; p.exp = 0; p.level = 1;
           p.inventory = {}; p.equipment = { weapon: null, armor: null };
           p.quests = {};
+          p.upg = {};
         }
         this.close();
       } catch (e) { this.close(); }
@@ -699,7 +709,7 @@
       if (kind === 'inventory') {
         var it = Game.Data.ITEMS[entry.id];
         var nm = (it && it.name) ? it.name : entry.id;
-        return nm + ' x' + entry.count + '   ' + itemDesc(it);
+        return nm + upgSuffix(entry.id) + ' x' + entry.count + '   ' + itemDesc(it);
       } else if (kind === 'shop') {
         var item = entry.item || Game.Data.ITEMS[entry.id];
         var name = (item && item.name) ? item.name : entry.id;

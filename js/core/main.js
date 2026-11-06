@@ -16,6 +16,8 @@
     atk: 10, def: 5,
     gold: 0, exp: 0, level: 1,
     inventory: {}, equipment: { weapon: null, armor: null },
+    /* S-03：装备强化等级表 { itemId: 0..5 }；按物品 id 记，换装后旧装备保留强化 */
+    upg: {},
     quests: {}
   };
   Game.Data.Player = player;
@@ -262,6 +264,7 @@
       player.gold = 0; player.exp = 0; player.level = 1;
       player.inventory = {}; player.equipment = { weapon: null, armor: null };
       player.quests = {};
+      player.upg = {}; /* S-03：新局强化清零 */
       if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
       if (Game.Systems && Game.Systems.Save) Game.Systems.Save.clear();
       /* 修复 P2：新局图鉴从空开始，与已清空的存档保持一致 */

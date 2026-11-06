@@ -59,7 +59,14 @@
     robe_mage_epic: { id: 'robe_mage_epic', name: '稀有法袍', type: 'armor', effect: { def: 8, maxHp: 20 }, price: 600, sell: 300 },
     /* 药水：特大血瓶（hp150）+ 蓝瓶（mp40，需 Inventory.use 支持 effect.mp） */
     potion_xl: { id: 'potion_xl', name: '特大血瓶', type: 'consumable', effect: { hp: 150 }, price: 80, sell: 40 },
-    potion_mana: { id: 'potion_mana', name: '蓝瓶', type: 'consumable', effect: { mp: 40 }, price: 35, sell: 17 }
+    potion_mana: { id: 'potion_mana', name: '蓝瓶', type: 'consumable', effect: { mp: 40 }, price: 35, sell: 17 },
+
+    /* S-03：强化卷轴——consumable + scroll:true，effect 为空（强化不走 effect 字段）；
+     * 价格按层抬升 80/120/200/300，sell=floor(price/2)；使用后给已装备物品 +1，上限 +5 */
+    scroll_upgrade: { id: 'scroll_upgrade', name: '强化卷轴', type: 'consumable', scroll: true, effect: {}, price: 80, sell: 40 },
+    scroll_upgrade_2: { id: 'scroll_upgrade_2', name: '精制强化卷轴', type: 'consumable', scroll: true, effect: {}, price: 120, sell: 60 },
+    scroll_upgrade_3: { id: 'scroll_upgrade_3', name: '秘银强化卷轴', type: 'consumable', scroll: true, effect: {}, price: 200, sell: 100 },
+    scroll_upgrade_4: { id: 'scroll_upgrade_4', name: '龙纹强化卷轴', type: 'consumable', scroll: true, effect: {}, price: 300, sell: 150 }
   };
 
   /* 商店核心货架（S-01：补 F4/F5，五层逐层解锁；每层 6~9 种，核心货架常驻展示）
@@ -86,5 +93,11 @@
     ['bow_elite', 'sword_magic_rare', 'potion_mana'],
     ['sword_iron_epic', 'armor_leather_epic', 'sword_bone_epic'],
     ['sword_magic_rare', 'chain_mail_rare', 'potion_large']
+  ];
+
+  /* S-03：每层固定 1 张强化卷轴（单独货位，不并入核心货架，
+   * 因核心货架均价 40.7/92.2/236.7/259.4/441.9 是既有验收口径） */
+  Game.Data.SHOP_SCROLLS = [
+    'scroll_upgrade', 'scroll_upgrade_2', 'scroll_upgrade_3', 'scroll_upgrade_4', 'scroll_upgrade_4'
   ];
 })();

@@ -50,6 +50,11 @@
           added++;
         }
       }
+      /* S-03：每层固定 1 张强化卷轴（独立货位，不动核心货架均价口径） */
+      var sc = (Game.Data.SHOP_SCROLLS || [])[Math.min(floor - 1, (Game.Data.SHOP_SCROLLS || []).length - 1)];
+      if (sc && !seen[sc] && Game.Data.ITEMS[sc]) {
+        out.push({ id: sc, item: Game.Data.ITEMS[sc] });
+      }
       return out;
     },
 

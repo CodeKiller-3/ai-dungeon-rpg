@@ -133,7 +133,10 @@ for (const id of itemIds) {
     if (keys.some((k) => !['atk', 'def', 'hp', 'mp', 'maxHp'].includes(k))) itemBad.push(id + ' effect 含未知键:' + keys.join('/'));
     if (it.type === 'weapon' && !(it.effect.atk > 0)) itemBad.push(id + ' 武器无 atk');
     if (it.type === 'armor' && !(it.effect.def > 0)) itemBad.push(id + ' 护甲无 def');
-    if (it.type === 'consumable' && !(it.effect.hp > 0 || it.effect.mp > 0)) itemBad.push(id + ' 消耗品无 hp/mp');
+    if (it.type === 'consumable' && it.scroll === true) {
+      /* S-03：强化卷轴按设计 effect 为空（强化不走 effect），以 scroll:true 标记 */
+      if (keys.length) itemBad.push(id + ' 卷轴 effect 应为空');
+    } else if (it.type === 'consumable' && !(it.effect.hp > 0 || it.effect.mp > 0)) itemBad.push(id + ' 消耗品无 hp/mp');
   }
   if (!it.name) itemBad.push(id + ' 缺 name');
 }

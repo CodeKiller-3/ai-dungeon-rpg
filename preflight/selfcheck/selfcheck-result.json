@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-06T11:41:51.729Z",
+  "at": "2026-11-06T11:51:26.582Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -10,7 +10,7 @@
       "level": "WARN",
       "id": "QF-01",
       "name": "单文件体积偏大",
-      "detail": "js/core/render.js 46.2KB, js/systems/modal.js 31.6KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
+      "detail": "js/core/render.js 46.2KB, js/systems/modal.js 32.1KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
     },
     {
       "level": "PASS",
@@ -46,7 +46,7 @@
       "level": "PASS",
       "id": "DC-01",
       "name": "物品表结构与取值",
-      "detail": "42 条：id/type/price/sell=floor(price/2)/effect 全部合规"
+      "detail": "46 条：id/type/price/sell=floor(price/2)/effect 全部合规"
     },
     {
       "level": "PASS",
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "36 文件 / 384.9 KB（不含 vendor）"
+      "detail": "36 文件 / 389.2 KB（不含 vendor）"
     },
     {
       "level": "PASS",
@@ -213,7 +213,7 @@
       "ogre_boss",
       "zombie_king"
     ],
-    "items": 42,
+    "items": 46,
     "quests": 12,
     "reactions": 240,
     "expect": [
