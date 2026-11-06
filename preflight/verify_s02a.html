@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s02a</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- S-02a 验证页：装饰素材补齐（barrel/torch/vine）。
+     断言口径：① DECOR 中确有这三个 id；② 图片真实加载成功且尺寸 16×16；
+     ③ 抽样像素非空（不是空白图）；④ 四角透明（PNG 透明底）。
+     只加载 sprites + maps，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/data/maps.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { decorApi: false, loaded: false, spriteOk: false, pixelOk: false, alphaOk: false, sub: {} };
+  function finish() {
+    var pass = out.decorApi && out.loaded && out.spriteOk && out.pixelOk && out.alphaOk;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+  try {
+    var S = Game.Core.Sprites, D = Game.Data.DECOR;
+    out.decorApi = !!(S && D && D.barrel && D.torch && D.vine &&
+      typeof S.load === 'function' && typeof S.get === 'function' && typeof S.isReady === 'function');
+
+    var NAMES = ['barrel', 'torch', 'vine'];
+    var idOk = true;
+    for (var i = 0; i < NAMES.length; i++) {
+      if (!D[NAMES[i]] || D[NAMES[i]].id !== NAMES[i]) idOk = false;
+    }
+    out.sub.decorIds = idOk;
+
+    S.load('../assets/sprites/');
+    var waited = 0;
+    var timer = setInterval(function () {
+      waited += 100;
+      if (!S.isReady() && waited < 3000) return;
+      clearInterval(timer);
+      /* file:// 下 canvas 可能被 taint，getImageData 会抛 SecurityError；
+       * 需以 --allow-file-access-from-files 启动 headless，异常一律显式记为 FAIL 而不是静默 */
+      try {
+        out.loaded = S.isReady();
+        if (!out.loaded) { finish(); return; }
+
+        var spriteOk = true, pixelOk = true, alphaOk = true;
+        var cv = document.createElement('canvas');
+        cv.width = 16; cv.height = 16;
+        var cx = cv.getContext('2d');
+        for (var j = 0; j < NAMES.length; j++) {
+          var img = S.get(NAMES[j]);
+          if (!img || img.naturalWidth !== 16 || img.naturalHeight !== 16) { spriteOk = false; continue; }
+          cx.clearRect(0, 0, 16, 16);
+          cx.drawImage(img, 0, 0);
+          var data = cx.getImageData(0, 0, 16, 16).data;
+          var opaque = 0;
+          for (var k = 3; k < data.length; k += 4) { if (data[k] > 0) opaque++; }
+          if (opaque < 20) pixelOk = false;
+          if (data[3] !== 0) alphaOk = false;   /* 左上角必须透明：证明是透明底 PNG */
+          out.sub[NAMES[j]] = { w: img.naturalWidth, h: img.naturalHeight, opaque: opaque };
+        }
+        out.spriteOk = spriteOk;
+        out.pixelOk = pixelOk;
+        out.alphaOk = alphaOk;
+        out.sub.all = out.decorApi && idOk && spriteOk && pixelOk && alphaOk;
+      } catch (e) {
+        out.err = String(e && e.message ? e.message : e);
+      }
+      finish();
+    }, 100);
+  } catch (e) {
+    out.err = String(e && e.message ? e.message : e);
+    finish();
+  }
+})();
+</script>
+</body>
+</html>

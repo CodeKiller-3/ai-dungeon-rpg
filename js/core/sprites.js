@@ -15,11 +15,12 @@
 
   /* P1-1：场景素材注册表。现有关键精灵（前 5 项）与 M9-1 装饰名保留，
    * 新增 0x72 DungeonTileset II v1.7 裁剪图（地板 8 变体 / 楼梯 / 墙体体系 / 装饰 / 骷髅动画 / UI）。
-   * 未在 assets/ 中存在同名文件的项（barrel/torch/vine/grass/puddle/bones/moss）
-   * 依然保留在 NAMES 中，onerror 不入库，渲染层走既有程序化兜底。 */
+   * 2026-11-06 自检：移除七个无对应 PNG 的注册项（此前每次启动都会 404，虽被 onerror 兜住但污染控制台）。
+   * S-02a：为 barrel/torch/vine 补 16×16 自绘贴图并重新注册（三者由 map.js 的 DECOR 实际使用）；
+   *        grass/puddle/bones/moss 无使用方，继续不注册，渲染层 _drawDetail 走程序化兜底。 */
   var NAMES = ['player', 'monster_chort', 'monster_chort_run', 'boss_demon', 'boss_demon_run',
-    /* M9-1：装饰物与 tile 细节素材（CC0，kenney/0x72；缺失则渲染层程序化兜底） */
-    'chest', 'barrel', 'torch', 'vine', 'grass', 'puddle', 'bones', 'moss',
+    /* M9-1：装饰物素材（S-02a 补齐 barrel/torch/vine；其余装饰仍由渲染层程序化绘制） */
+    'chest', 'barrel', 'torch', 'vine',
     /* P1-1：地板变体与楼梯 */
     'floor_1', 'floor_2', 'floor_3', 'floor_4', 'floor_5', 'floor_6', 'floor_7', 'floor_8',
     'floor_stairs', 'floor_ladder',
@@ -32,7 +33,7 @@
     'wall_outer_top_left', 'wall_outer_top_right',
     'wall_outer_mid_left', 'wall_outer_mid_right',
     'wall_outer_front_left', 'wall_outer_front_right',
-    /* P1-1：装饰贴图（barrel/torch/vine/grass/puddle 无真贴图，保留程序化兜底） */
+    /* P1-1：装饰贴图（crate/skull/wall_goo 有 PNG；无文件的装饰由渲染层程序化绘制） */
     'crate', 'skull', 'wall_goo',
     /* P1-1：骷髅士兵 idle/run 各 4 帧 */
     'skelet_idle_anim_f0', 'skelet_idle_anim_f1', 'skelet_idle_anim_f2', 'skelet_idle_anim_f3',
