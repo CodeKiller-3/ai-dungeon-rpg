@@ -62,12 +62,29 @@
     potion_mana: { id: 'potion_mana', name: '蓝瓶', type: 'consumable', effect: { mp: 40 }, price: 35, sell: 17 }
   };
 
-  /* 商店货架（P2-2 三层重配，每层 6~9 种按楼层解锁递进；每层条目 ≤ modal MAX_VISIBLE=12，无需滚动）
-   * F3 保留 sword_dragon 三档（M8-3 既有验收：稀有装备并排售卖） */
+  /* 商店核心货架（S-01：补 F4/F5，五层逐层解锁；每层 6~9 种，核心货架常驻展示）
+   * 递进口径按"核心货架平均单价"可复算：F1 40.7 → F2 92.2 → F3 236.7 → F4 259.4 → F5 441.9
+   * 只换货架不加快金币产出，保持既有经济节奏；F3 保留 sword_dragon 三档（M8-3 既有验收）
+   * 所有条目 buy.price 严格大于 sell（sell=floor(price/2)），刷新货架无法低买高卖套利 */
   Game.Data.SHOP_STOCK = [
     ['potion_small', 'potion_large', 'knife', 'machete', 'sword_rusty', 'sword_iron', 'armor_leather'],
     ['potion_large', 'potion_mana', 'sword_steel', 'axe_war', 'bow_hunter', 'hammer', 'spear', 'chain_mail', 'robe_mage'],
     ['potion_xl', 'sword_magic', 'staff_fire', 'axe_double', 'sword_anime', 'plate_armor',
-      'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic']
+      'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic'],
+    ['potion_xl', 'potion_mana', 'sword_magic_rare', 'sword_steel_epic',
+      'chain_mail_rare', 'plate_armor_rare', 'robe_mage_rare', 'sword_dragon_rare'],
+    ['potion_xl', 'potion_mana', 'sword_magic_epic', 'sword_dragon_epic',
+      'plate_armor_epic', 'chain_mail_epic', 'robe_mage_epic', 'sword_dragon_rare']
+  ];
+
+  /* S-01：每层轮换池——每次开张（Shop.refresh）按"(楼层×3 + 开张次数) % 池长"确定性滑动取 2 个商品位。
+   * 纯算术、无 Math.random，因此同一层同一次开张货架稳定、重复开张结果可复现；
+   * 轮换位只增加展示多样性，价格仍遵循 price > sell，不构成刷金套利。 */
+  Game.Data.SHOP_ROTATION = [
+    ['sword_bone', 'sword_iron_rare', 'potion_mana'],
+    ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic'],
+    ['bow_elite', 'sword_magic_rare', 'potion_mana'],
+    ['sword_iron_epic', 'armor_leather_epic', 'sword_bone_epic'],
+    ['sword_magic_rare', 'chain_mail_rare', 'potion_large']
   ];
 })();

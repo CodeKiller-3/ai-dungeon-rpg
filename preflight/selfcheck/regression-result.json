@@ -1,0 +1,228 @@
+{
+  "summary": {
+    "at": "2026-11-06T19:43:17",
+    "total": 36,
+    "pass": 36,
+    "fail": 0,
+    "none": 0,
+    "mixed": 0
+  },
+  "rows": [
+    {
+      "page": "verify_m1",
+      "verdict": "PASS",
+      "ms": 3105,
+      "payload": "{\"mapsData\":true,\"initRan\":false,\"gridSize\":null,\"walkable\":0,\"spawnWalkable\":false,\"tileTypes\":{},\"player\":\"1,1\"}"
+    },
+    {
+      "page": "verify_m2",
+      "verdict": "PASS",
+      "ms": 1450,
+      "payload": "{\"start\":true,\"win\":true,\"exp\":10,\"gold\":5,\"inv\":\"{\\\"potion_small\\\":1}\",\"defendTook\":2,\"defendHp\":94,\"ran\":true}"
+    },
+    {
+      "page": "verify_m3",
+      "verdict": "PASS",
+      "ms": 1250,
+      "payload": "{\"buy\":true,\"goldAfterBuy\":490,\"use\":true,\"hpAfterUse\":80,\"invAfterUse\":\"{}\",\"equip\":true,\"atkAfter\":13,\"equipped\":\"sword_bone\",\"sellEquippedBlocked\":true,\"sellOk\":true,\"goldAfterSell\":95,\"stockCount\":9,\"stockNames\":\"pot…"
+    },
+    {
+      "page": "verify_m4",
+      "verdict": "PASS",
+      "ms": 1357,
+      "payload": "{\"activeCount\":12,\"slimeDone\":true,\"goldAfterSlime\":30,\"goldQuestDone\":true,\"goldAfterGoldQ\":80,\"dragonDone\":true,\"goldAfterDragon\":280,\"loadOk\":true,\"goldRestored\":123,\"floorRestored\":1}"
+    },
+    {
+      "page": "verify_m5",
+      "verdict": "PASS",
+      "ms": 1201,
+      "payload": "{\"npcGuide\":true,\"npcWho\":true,\"patrolCount\":0}"
+    },
+    {
+      "page": "verify_m7",
+      "verdict": "PASS",
+      "ms": 1629,
+      "payload": "{\"howlerLoaded\":true,\"audioFn\":true,\"episode\":52,\"successRate\":10,\"rateAbove30\":false,\"agentValid\":true,\"sfxEventOk\":true}"
+    },
+    {
+      "page": "verify_m8_1",
+      "verdict": "PASS",
+      "ms": 1208,
+      "payload": "{\"skillLoaded\":true,\"skillApi\":true,\"skillOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_mp\":true,\"t4_oldsave\":true,\"t5_cast\":true,\"t6_mp\":true,\"t7_cooldown\":true,\"t8_shield\":true,\"t9_command\":true,\"t10_notice\":true,\"t…"
+    },
+    {
+      "page": "verify_m8_2",
+      "verdict": "PASS",
+      "ms": 1300,
+      "payload": "{\"enrageLoaded\":true,\"enrageApi\":true,\"enrageOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_trigger\":true,\"t4_single\":true,\"t5_breath\":true,\"t6_defend\":true,\"t7_normal\":true,\"t8_dataImmutable\":true,\"t9_getState\":true,\"…"
+    },
+    {
+      "page": "verify_m8_3",
+      "verdict": "PASS",
+      "ms": 1195,
+      "payload": "{\"affixLoaded\":true,\"affixApi\":true,\"affixOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_noTiers\":true,\"t4_tiers\":true,\"t5_shop\":true,\"t6_recalc\":true,\"t7_oldFunc\":true,\"t8_repeat\":true}}"
+    },
+    {
+      "page": "verify_m8_4",
+      "verdict": "PASS",
+      "ms": 1256,
+      "payload": "{\"bestiaryLoaded\":true,\"bestiaryApi\":true,\"bestiaryOk\":true,\"err\":null,\"sub\":{\"t2_record\":true,\"t3_battle\":true,\"t4_shop\":true,\"t5_save\":true,\"t6_pages\":true,\"t7_monsterRows\":true,\"t8_itemRows\":true,\"t9_questRow\":true,\"t…"
+    },
+    {
+      "page": "verify_m8_5",
+      "verdict": "PASS",
+      "ms": 1216,
+      "payload": "{\"rankLoaded\":true,\"rankApi\":true,\"rankOk\":true,\"err\":null,\"sub\":{\"t3_write\":true,\"t4_order\":true,\"t5_cap\":true,\"t6_persist\":true,\"t7_victory\":true,\"t8_display\":true,\"t9_repeat\":true}}"
+    },
+    {
+      "page": "verify_m8_6",
+      "verdict": "PASS",
+      "ms": 1272,
+      "payload": "{\"curveLoaded\":true,\"curveApi\":true,\"curveOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_level\":true,\"t4_multi\":true,\"t5_idem\":true,\"t6_table\":true,\"t7_nogrind\":true,\"t8_recalc\":true,\"t9_hudData\":true,\"t9_hudDraw\":true…"
+    },
+    {
+      "page": "verify_m9_1",
+      "verdict": "PASS",
+      "ms": 1428,
+      "payload": "{\"mapDetailLoaded\":true,\"detailApi\":true,\"detailOk\":true,\"err\":null,\"sub\":{\"t2\":true,\"t3\":true,\"t4\":true,\"t5\":true,\"t6\":true,\"t7\":true},\"found\":{\"detailCount\":48,\"decorCount\":13,\"chest\":true}}"
+    },
+    {
+      "page": "verify_m9_2",
+      "verdict": "PASS",
+      "ms": 1386,
+      "payload": "{\"lightLoaded\":true,\"lightApi\":true,\"lightOk\":true,\"err\":null,\"sub\":{\"t3_torchGlow\":true,\"t4_softEdge\":true,\"t5_vignette\":true,\"t6_repeatDraw\":true,\"t7_setRadius\":true},\"found\":{\"torch\":true,\"torchVisible\":true,\"edgeCoun…"
+    },
+    {
+      "page": "verify_m9_3",
+      "verdict": "PASS",
+      "ms": 1226,
+      "payload": "{\"motionLoaded\":true,\"motionApi\":true,\"motionOk\":true,\"err\":null,\"sub\":{\"t2_motionStart\":true,\"t3_motionMid\":true,\"t4_motionEnd\":true,\"t5_motionNull\":true,\"t6_particleSpawn\":true,\"t7_particleExpire\":true,\"t8_particleLimi…"
+    },
+    {
+      "page": "verify_m9_4",
+      "verdict": "PASS",
+      "ms": 1701,
+      "payload": "{\"audioLoaded\":true,\"audioApi\":true,\"audioOk\":true,\"err\":null,\"sub\":{\"t2_bgmExplore\":true,\"t2_bgmBattle\":true,\"t2_bgmVictory\":true,\"t2_bgmStop\":true,\"t2_bgmInvalid\":true,\"t3_muteOn\":true,\"t3_muteOff\":true,\"t4_vol03\":true…"
+    },
+    {
+      "page": "verify_m9_5",
+      "verdict": "PASS",
+      "ms": 2190,
+      "payload": "{\"finLoaded\":true,\"finApi\":true,\"finOk\":true,\"err\":null,\"sub\":{\"t2_dpr2\":true,\"t2_scale\":true,\"t2_dpr1\":true,\"t3_narrow\":true,\"t4_perf\":true,\"t4_avgMs\":1.47,\"t4_leak\":true,\"t5_gameover\":true,\"t6_guide\":true,\"t7_empty\":tr…"
+    },
+    {
+      "page": "verify_p1_1",
+      "verdict": "PASS",
+      "ms": 1749,
+      "payload": "{\"sceneLoaded\":true,\"sceneApi\":true,\"sceneOk\":true,\"sub\":{\"t2_floor\":true,\"t3_wall\":true,\"t4_decor\":true,\"t5_skelet\":true,\"t5b_skeletDraw\":true,\"t6_draw\":true,\"t6_variants\":8,\"t7_missingNull\":true,\"t7_fallback\":true,\"t8_…"
+    },
+    {
+      "page": "verify_p1_2",
+      "verdict": "PASS",
+      "ms": 1522,
+      "payload": "{\"uiLoaded\":true,\"uiApi\":true,\"uiOk\":true,\"sub\":{\"t2_hearts\":true,\"t3_goldIcon\":true,\"t4_mpIcon\":true,\"t5_itemIcon\":true,\"t6_panel\":true,\"t9_idem\":true,\"t7_narrow\":true,\"t8_fallback\":true}}"
+    },
+    {
+      "page": "verify_p1_3",
+      "verdict": "PASS",
+      "ms": 1705,
+      "payload": "{\"animLoaded\":true,\"animApi\":true,\"animOk\":true,\"sub\":{\"t2_playerFrames\":true,\"t3_playerDraw\":true,\"t4_monsterMap\":true,\"t5_battle\":true,\"t7_idem\":true,\"t6_fallback\":true}}"
+    },
+    {
+      "page": "verify_p1p2",
+      "verdict": "PASS",
+      "ms": 1879,
+      "payload": "{\"moveSteps1s\":8,\"dragonsFinalFloor\":1,\"enemiesFinalFloor\":13,\"chestsBefore\":1,\"enemiesBefore\":4,\"downOk\":true,\"hpAfterDown\":30,\"floorAfterDown\":2,\"upOk\":true,\"hpAfterUp\":30,\"mpAfterUp\":5,\"floorAfterUp\":1,\"gridSameAfterR…"
+    },
+    {
+      "page": "verify_p2_1",
+      "verdict": "PASS",
+      "ms": 1775,
+      "payload": "{\"monsterLoaded\":true,\"monsterApi\":true,\"monsterOk\":true,\"sub\":{\"t2_monsterData\":true,\"t3_floorTable\":true,\"t3_strength\":{\"f1\":11.125,\"f2\":20.125,\"f3\":23.75,\"f4\":36.85,\"f5\":44.1},\"t4_animMap\":true,\"t5_drawMap\":true,\"t6_b…"
+    },
+    {
+      "page": "verify_p2_2",
+      "verdict": "PASS",
+      "ms": 1552,
+      "payload": "{\"itemLoaded\":true,\"itemApi\":true,\"itemOk\":true,\"sub\":{\"t2_itemCount\":true,\"t2_count\":42,\"t3_weaponTier\":true,\"t4_shopStock\":true,\"t4_counts\":[7,9,9,8,8],\"t5_useMp\":true,\"t6_itemIcon\":true,\"t7_fallback\":true,\"t8_recalc\":…"
+    },
+    {
+      "page": "verify_p2_3",
+      "verdict": "PASS",
+      "ms": 1508,
+      "payload": "{\"mapLoaded\":true,\"mapApi\":true,\"mapOk\":true,\"sub\":{\"t2_floors\":true,\"t2_sums\":[1,1,1,1,1],\"t3_strength\":true,\"t3_values\":[11.125,20.125,23.75,36.85,44.1],\"t4_monster15\":true,\"t4_counts\":{\"monsters\":18,\"anim\":18},\"t5_dra…"
+    },
+    {
+      "page": "verify_p2_3b",
+      "verdict": "PASS",
+      "ms": 1441,
+      "payload": "{\"patchLoaded\":true,\"patchApi\":true,\"patchOk\":true,\"sub\":{\"t2_dialogue\":true,\"t3_bestiaryScroll\":true,\"t4_bestiaryItems\":true,\"t5_oneDragon\":true,\"t5_counts\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"t6_strengthUp\":true…"
+    },
+    {
+      "page": "verify_p2_4",
+      "verdict": "PASS",
+      "ms": 1977,
+      "payload": "{\"bossLoaded\":true,\"bossApi\":true,\"bossOk\":true,\"sub\":{\"t2_bossData\":true,\"t2_count\":18,\"t3_bossConfig\":true,\"t4_spawnEvery\":true,\"t4_sample\":{\"f2\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"f4\":[1,1,1,1,1,1,1,1,1,1,1,1,…"
+    },
+    {
+      "page": "verify_p2_5",
+      "verdict": "PASS",
+      "ms": 1426,
+      "payload": "{\"questLoaded\":true,\"questApi\":true,\"questOk\":true,\"sub\":{\"t2_questCount\":true,\"t2_count\":12,\"t3_oldQuests\":true,\"t8_initCompat\":true,\"t8_keys\":12,\"t6_collectQuest\":true,\"t6_state\":{\"rZero\":true,\"rBad\":false,\"progressBef…"
+    },
+    {
+      "page": "verify_resize",
+      "verdict": "PASS",
+      "ms": 1438,
+      "payload": "{\"rzLoaded\":true,\"rzApi\":true,\"rzOk\":true,\"err\":null,\"sub\":{\"scaleLadder\":true,\"resizeLayout\":true,\"clickMapping\":true,\"noTextOverflow\":true,\"resizeRepeatable\":true}}"
+    },
+    {
+      "page": "verify_s01_shop",
+      "verdict": "PASS",
+      "ms": 1400,
+      "payload": "{\"shopLoaded\":true,\"shopApi\":true,\"shopOk\":true,\"sub\":{\"t1_shape\":true,\"t2_rows\":true,\"t2_counts\":[7,9,9,8,8],\"t3_floorDiff\":true,\"t3_parts\":{\"diff34\":true,\"a34\":true,\"a45\":true,\"e4\":true,\"e5\":true},\"t3_avg\":{\"f3\":236.67…"
+    },
+    {
+      "page": "verify_s02a",
+      "verdict": "PASS",
+      "ms": 1498,
+      "payload": "{\"decorApi\":true,\"loaded\":true,\"spriteOk\":true,\"pixelOk\":true,\"alphaOk\":true,\"sub\":{\"decorIds\":true,\"barrel\":{\"w\":16,\"h\":16,\"opaque\":152},\"torch\":{\"w\":16,\"h\":16,\"opaque\":56},\"vine\":{\"w\":16,\"h\":16,\"opaque\":76},\"all\":true}…"
+    },
+    {
+      "page": "verify_s3_1",
+      "verdict": "PASS",
+      "ms": 1336,
+      "payload": "{\"rotLoaded\":true,\"fovExists\":true,\"fovOk\":true,\"err\":null}"
+    },
+    {
+      "page": "verify_s3_2",
+      "verdict": "PASS",
+      "ms": 1227,
+      "payload": "{\"hudLoaded\":true,\"hudApi\":true,\"hudOk\":true,\"err\":null}"
+    },
+    {
+      "page": "verify_s3_3",
+      "verdict": "PASS",
+      "ms": 1302,
+      "payload": "{\"modalLoaded\":true,\"modalApi\":true,\"modalOk\":true,\"err\":null}"
+    },
+    {
+      "page": "verify_s3_4",
+      "verdict": "PASS",
+      "ms": 1241,
+      "payload": "{\"fbLoaded\":true,\"fbApi\":true,\"fbOk\":true,\"err\":null,\"sub\":{\"t2\":true,\"t3\":true,\"t4\":true,\"t5\":true,\"t6\":true,\"t7\":true,\"t8\":true}}"
+    },
+    {
+      "page": "verify_selfcheck",
+      "verdict": "PASS",
+      "ms": 2231,
+      "payload": "{\"selfLoaded\":true,\"selfApi\":true,\"selfOk\":true,\"sub\":{\"p1_boot\":true,\"p2_systems\":true,\"p3_floors\":true,\"p3b_noAccum\":true,\"p4_shop\":true,\"p5_battle\":true,\"p6_save\":true,\"p7_npc\":true,\"p7_bagDedupe\":true,\"p8_draw\":true,…"
+    },
+    {
+      "page": "verify_smoke",
+      "verdict": "PASS",
+      "ms": 2137,
+      "payload": "{\"smokeOk\":true,\"errors\":[],\"scene\":\"explore\",\"manualFrame\":true,\"frameError\":null,\"rafFrames\":1,\"rafNote\":\"rAF 帧数仅记录，不参与断言\"}"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s01_shop</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- S-01 验证页：只加载货架/商店/弹窗所需脚本，Map 用测试桩替代（不生成地图）。
+     断言：五层核心货架递进、F3/F4/F5 互不相同、同层同刻稳定、开张确定性轮换、买入价恒高于卖出价。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { shopLoaded: false, shopApi: false, shopOk: false };
+  function finish() {
+    out.shopOk = out.shopLoaded && out.shopApi && out.shopOk;
+    var text = (out.shopOk ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, S = D.SHOP_STOCK, R = D.SHOP_ROTATION, I = D.ITEMS;
+    var Shop = Game.Systems.Shop;
+    out.shopLoaded = !!(D.SHOP_STOCK && D.SHOP_ROTATION && I && Shop);
+    out.shopApi = !!(Shop && typeof Shop.getStock === 'function' && typeof Shop.refresh === 'function' &&
+      Game.Modal && typeof Game.Modal.open === 'function');
+    if (!out.shopLoaded || !out.shopApi) { finish(); return; }
+
+    /* 测试桩：楼层由变量控制，不触发生成/任务/存档；Player 最小字段供买卖使用 */
+    var floor = 1;
+    Game.Systems.Map = { getFloor: function () { return floor; } };
+    Game.Data.Player = Game.Data.Player || {
+      gold: 0, inventory: {}, quests: {}, equipment: { weapon: null, armor: null },
+      level: 1, exp: 0, hp: 100, maxHp: 100, mp: 50, maxMp: 50, atk: 10, def: 5
+    };
+
+    var sub = {}, ok = true;
+    function ids(stock) { return stock.map(function (x) { return x.id; }); }
+    function key(stock) { return ids(stock).slice().sort().join(','); }
+    /* 原始货架是 id 字符串数组，getStock() 返回 {id,item}，两者排序键分开处理 */
+    function keyRow(row) { return row.slice().sort().join(','); }
+    function avgPrice(row) {
+      var t = 0;
+      for (var i = 0; i < row.length; i++) t += I[row[i]].price;
+      return t / row.length;
+    }
+
+    /* t1_shape：5 层核心货架 + 5 层轮换池 */
+    sub.t1_shape = S.length === 5 && R.length === 5;
+    ok = ok && sub.t1_shape;
+
+    /* t2_rows：核心 6~9、id 有效且不重复；轮换池 id 有效 */
+    var t2ok = true, bad = [];
+    for (var f = 0; f < S.length; f++) {
+      if (!(S[f].length >= 6 && S[f].length <= 9)) t2ok = false;
+      var seen = {};
+      for (var i2 = 0; i2 < S[f].length; i2++) {
+        var id2 = S[f][i2];
+        if (!I[id2]) { bad.push(id2); t2ok = false; }
+        if (seen[id2]) t2ok = false;
+        seen[id2] = 1;
+      }
+    }
+    for (var r2 = 0; r2 < R.length; r2++) {
+      for (var j2 = 0; j2 < R[r2].length; j2++) if (!I[R[r2][j2]]) { bad.push(R[r2][j2]); t2ok = false; }
+    }
+    sub.t2_rows = t2ok && bad.length === 0;
+    sub.t2_counts = S.map(function (row) { return row.length; });
+    ok = ok && sub.t2_rows;
+
+    /* t3_floorDiff：F3/F4/F5 核心货架两两不同、平均单价严格递增、深两层含稀有/优秀档 */
+    var a3 = avgPrice(S[2]), a4 = avgPrice(S[3]), a5 = avgPrice(S[4]);
+    var diff34 = keyRow(S[2]) !== keyRow(S[3]) && keyRow(S[3]) !== keyRow(S[4]) && keyRow(S[2]) !== keyRow(S[4]);
+    var hasTier = function (row, suffix) {
+      for (var i = 0; i < row.length; i++) if (row[i].indexOf(suffix) >= 0) return true;
+      return false;
+    };
+    sub.t3_floorDiff = diff34 && a3 < a4 && a4 < a5 && hasTier(S[3], '_epic') && hasTier(S[4], '_epic');
+    sub.t3_parts = { diff34: diff34, a34: a3 < a4, a45: a4 < a5,
+      e4: hasTier(S[3], '_epic'), e5: hasTier(S[4], '_epic') };
+    sub.t3_avg = { f3: Math.round(a3 * 100) / 100, f4: Math.round(a4 * 100) / 100, f5: Math.round(a5 * 100) / 100 };
+    ok = ok && sub.t3_floorDiff;
+
+    /* t4_stable：同一层同一时刻连续读取货架完全一致（不产生漂移） */
+    floor = 3;
+    var s0 = ids(Shop.getStock());
+    var s0b = ids(Shop.getStock());
+    sub.t4_stable = s0.join('|') === s0b.join('|');
+    ok = ok && sub.t4_stable;
+
+    /* t5_refresh：开张轮换生效；换层回来可复现同一序列（无随机） */
+    floor = 1; Shop.getStock();               /* 离开 F3 → 计数归零 */
+    floor = 4; Shop.getStock();               /* 途经 F4，确保换层重置 */
+    floor = 3;
+    var firstOpen = ids(Shop.getStock());      /* 回到 F3 首页（tick=0） */
+    var reproducible = firstOpen.join('|') === s0.join('|');
+    Shop.refresh();                            /* 第一次开张 */
+    var after1 = ids(Shop.getStock());
+    Shop.getStock();                           /* 读两次不应继续变化 */
+    var after1b = ids(Shop.getStock());
+    Shop.refresh();                            /* 第二次开张 */
+    var after2 = ids(Shop.getStock());
+    var changed = after1.join('|') !== firstOpen.join('|') && after2.join('|') !== after1.join('|');
+    var stableWithinOpen = after1.join('|') === after1b.join('|');
+    sub.t5_refresh = reproducible && changed && stableWithinOpen;
+    sub.t5_samples = { first: firstOpen, open1: after1, open2: after2 };
+    ok = ok && sub.t5_refresh;
+
+    /* t6_noArbitrage：全量商品买入价严格大于卖出价；实际低买高卖一次金币必减少 */
+    var arbBad = [];
+    Object.keys(I).forEach(function (k) {
+      if (!(I[k].price > I[k].sell)) arbBad.push(k);
+    });
+    /* 用最贵商品做一次真实买→卖（金币 100000 保证买得起） */
+    var P = Game.Data.Player;
+    P.gold = 100000;
+    var maxId = null, maxPrice = -1;
+    Object.keys(I).forEach(function (k) { if (I[k].price > maxPrice) { maxPrice = I[k].price; maxId = k; } });
+    var g0 = P.gold;
+    var rb = Shop.buy(maxId);
+    var b1 = P.gold;
+    var rs = Shop.sell(maxId);
+    var b2 = P.gold;
+    sub.t6_noArbitrage = arbBad.length === 0 && rb.ok && rs.ok && b1 < g0 && b2 < g0;
+    sub.t6_worstDelta = { buy: b1 - g0, sellThen: b2 - g0, item: maxId };
+    ok = ok && sub.t6_noArbitrage;
+
+    /* t7_maxVisible：任何楼层展示条数 ≤ 面板可视上限 12（不会溢出） */
+    var maxLen = 0, floors = [];
+    for (var ff = 1; ff <= 5; ff++) {
+      floor = ff;
+      var n = Shop.getStock().length;
+      floors.push(n);
+      if (n > maxLen) maxLen = n;
+    }
+    sub.t7_maxVisible = maxLen <= 12;
+    sub.t7_floors = floors;
+    ok = ok && sub.t7_maxVisible;
+
+    /* t8_modalHook：真实入口 Modal.open('shop') 触发一次换货（UI 与逻辑接线正确） */
+    floor = 5;
+    var beforeOpen = key(Shop.getStock());
+    Game.Modal.open('shop');
+    var afterOpen = key(Shop.getStock());
+    var isOpen = Game.Modal.isOpen() && Game.Modal.current() === 'shop';
+    sub.t8_modalHook = isOpen && beforeOpen !== afterOpen;
+    Game.Modal.close();
+    ok = ok && sub.t8_modalHook;
+
+    out.sub = sub;
+    out.shopOk = ok;
+  } catch (e) {
+    out.err = String(e && e.stack || e);
+    out.shopOk = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

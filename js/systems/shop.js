@@ -7,15 +7,59 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
+  /* S-01：确定性换货状态——
+   * tick = 本层已开张次数，(楼层×3 + tick) 取模决定轮换窗口起点；
+   * 换层时 tick 归零，保证"回到同一层首页货架一致"。全程不使用 Math.random。 */
+  var ROT_SLOTS = 2;   /* 每次展示的轮换商品位数量 */
+  var tick = 0;
+  var tickFloor = 0;
+
+  function syncFloor(floor) {
+    if (floor !== tickFloor) { tickFloor = floor; tick = 0; }
+  }
+
+  function rowOf(list, floor) {
+    if (!list || !list.length) return [];
+    return list[Math.min(floor - 1, list.length - 1)] || [];
+  }
+
   Game.Systems.Shop = {
+    /* 货架 = 本层核心货架（常驻）+ 轮换池窗口（2 位，按 tick 滑动）。
+     * 纯函数式读取：不调用 getStock 不会改变 tick，因此同一层同一时刻结果稳定。 */
     getStock: function () {
       var floor = Game.Systems.Map.getFloor();
-      var stock = Game.Data.SHOP_STOCK[Math.min(floor - 1, Game.Data.SHOP_STOCK.length - 1)];
-      var out = [];
-      for (var i = 0; i < stock.length; i++) {
-        out.push({ id: stock[i], item: Game.Data.ITEMS[stock[i]] });
+      syncFloor(floor);
+      var core = rowOf(Game.Data.SHOP_STOCK, floor);
+      var pool = rowOf(Game.Data.SHOP_ROTATION, floor);
+      var out = [], seen = {};
+      var i, id;
+      for (i = 0; i < core.length; i++) {
+        id = core[i];
+        if (seen[id] || !Game.Data.ITEMS[id]) continue;
+        seen[id] = 1;
+        out.push({ id: id, item: Game.Data.ITEMS[id] });
+      }
+      if (pool.length) {
+        var start = (floor * 3 + tick) % pool.length;
+        var added = 0;
+        for (i = 0; i < pool.length && added < ROT_SLOTS; i++) {
+          id = pool[(start + i) % pool.length];
+          if (seen[id] || !Game.Data.ITEMS[id]) continue;
+          seen[id] = 1;
+          out.push({ id: id, item: Game.Data.ITEMS[id] });
+          added++;
+        }
       }
       return out;
+    },
+
+    /* 开张换货：每次打开商店调用一次（Modal.open → 这里），tick 前进 1 格。
+     * 返回新的 tick，便于验证页断言"可复现序列"。 */
+    refresh: function () {
+      var floor = Game.Systems.Map.getFloor();
+      syncFloor(floor);
+      tick++;
+      return tick;
     },
 
     buy: function (id) {

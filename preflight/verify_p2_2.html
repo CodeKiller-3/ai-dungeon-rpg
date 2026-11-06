@@ -146,8 +146,8 @@
       sub.t3_weaponTier = tierOk && armorOk;
       ok = ok && sub.t3_weaponTier;
 
-      /* t4_shopStock：3 层、每层 6~9、id 全部有效、F1 不含 3 层专属、F3 保留 dragon 三档 */
-      var t4ok = (S.length === 3);
+      /* t4_shopStock：S-01 扩到 5 层、每层 6~9、id 全部有效、F1 不含 3 层专属、F3 保留 dragon 三档 */
+      var t4ok = (S.length === 5);
       var stockBad = [], dupBad = [];
       var F3_ONLY = ['sword_magic', 'staff_fire', 'bow_elite', 'axe_double', 'sword_anime',
         'sword_dragon', 'sword_dragon_rare', 'sword_dragon_epic', 'plate_armor'];

@@ -1,0 +1,237 @@
+{
+  "at": "2026-11-06T11:41:51.729Z",
+  "summary": {
+    "PASS": 32,
+    "WARN": 1,
+    "FAIL": 0
+  },
+  "items": [
+    {
+      "level": "WARN",
+      "id": "QF-01",
+      "name": "单文件体积偏大",
+      "detail": "js/core/render.js 46.2KB, js/systems/modal.js 31.6KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
+    },
+    {
+      "level": "PASS",
+      "id": "AS-01",
+      "name": "已注册素材缺文件",
+      "detail": "全部 197 个注册名均有 PNG"
+    },
+    {
+      "level": "PASS",
+      "id": "AS-02",
+      "name": "落盘素材未注册",
+      "detail": "无冗余 PNG"
+    },
+    {
+      "level": "PASS",
+      "id": "AS-03",
+      "name": "装饰物 id 注册",
+      "detail": "4 个装饰物均在 NAMES"
+    },
+    {
+      "level": "PASS",
+      "id": "AS-04",
+      "name": "怪物动画映射覆盖",
+      "detail": "18 条映射，覆盖全部 18 种怪"
+    },
+    {
+      "level": "PASS",
+      "id": "AS-05",
+      "name": "动画帧基名解析",
+      "detail": "26 个帧基名均可解析"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-01",
+      "name": "物品表结构与取值",
+      "detail": "42 条：id/type/price/sell=floor(price/2)/effect 全部合规"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-02",
+      "name": "商店货架逐层覆盖",
+      "detail": "5 层货架与 5 层一一对应，共 41 个条目"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-03",
+      "name": "怪物表结构与掉落引用",
+      "detail": "18 种（Boss 3 种），drops/tiers/color/enrage 全部合规"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-04",
+      "name": "地图配置与难度曲线",
+      "detail": "5 层，概率和=1，Boss 3 层不混表，期望强度 11.125 < 20.125 < 23.75 < 36.85 < 44.1"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-05",
+      "name": "任务表结构与目标引用",
+      "detail": "12 条，type/目标/奖励全合规，主线指向 Boss"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-06",
+      "name": "技能表契约",
+      "detail": "3 个技能，快捷键 4/5/6 唯一，公式为函数"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-07",
+      "name": "反应库结构与去重",
+      "detail": "3 角色 / 240 条，无重复句、无空串"
+    },
+    {
+      "level": "PASS",
+      "id": "DC-08",
+      "name": "反应库 tag 语义",
+      "detail": "三角色共 10 类 tag，含 shop 专属"
+    },
+    {
+      "level": "PASS",
+      "id": "QF-02",
+      "name": "代码总量",
+      "detail": "36 文件 / 384.9 KB（不含 vendor）"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-01",
+      "name": "JS 语法检查",
+      "detail": "36 个文件全部通过 node --check"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-02",
+      "name": "index.html 引用文件存在性",
+      "detail": "36 个引用均可解析"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-03",
+      "name": "孤儿 JS 检测",
+      "detail": "无未加载文件"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-04",
+      "name": "脚本加载序约束（PLAN §4.6）",
+      "detail": "data→vendor→systems→main 且关键依赖先后正确"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-05",
+      "name": "Systems 命名空间完整性",
+      "detail": "12 个系统，无未定义引用"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-06",
+      "name": "数据键消费情况",
+      "detail": "所有 Game.Data.* 均有读取方"
+    },
+    {
+      "level": "PASS",
+      "id": "SC-07",
+      "name": "数据文件沙箱加载",
+      "detail": "8 个数据文件无抛错"
+    },
+    {
+      "level": "PASS",
+      "id": "SE-01",
+      "name": "运行期外部依赖",
+      "detail": "4 个 URL，仅 DeepSeek 官方接口（Key 为空时离线）"
+    },
+    {
+      "level": "PASS",
+      "id": "SE-02",
+      "name": "API Key 未硬编码",
+      "detail": "deepseekKey 为空，离线降级为默认态"
+    },
+    {
+      "level": "PASS",
+      "id": "SE-03",
+      "name": "无 eval / new Function",
+      "detail": ""
+    },
+    {
+      "level": "PASS",
+      "id": "SE-04",
+      "name": "无明文 http / document.write",
+      "detail": ""
+    },
+    {
+      "level": "PASS",
+      "id": "SE-05",
+      "name": "localStorage 键收敛",
+      "detail": "1 个键，均在 save.js 集中管理"
+    },
+    {
+      "level": "PASS",
+      "id": "TX-01",
+      "name": "文案残留 / 调试痕迹",
+      "detail": "无旧楼层文案、无 TODO、无 console.log"
+    },
+    {
+      "level": "PASS",
+      "id": "TX-02",
+      "name": "NPC 命名",
+      "detail": "Game.Data.NPC.name = 地牢守门人"
+    },
+    {
+      "level": "PASS",
+      "id": "UI-01",
+      "name": "DOM id 引用",
+      "detail": "8 处引用全部命中 index.html 的 5 个 id"
+    },
+    {
+      "level": "PASS",
+      "id": "UI-02",
+      "name": "css/style.css",
+      "detail": "1750 字节"
+    },
+    {
+      "level": "PASS",
+      "id": "XC-01",
+      "name": "README 数字一致性",
+      "detail": "未发现与实际数据冲突的条目数声明"
+    },
+    {
+      "level": "PASS",
+      "id": "XC-02",
+      "name": "文档楼层口径",
+      "detail": "2 份文档的 Boss 楼层口径与 bosses 配置一致（ogre_boss@F2, zombie_king@F4, dragon@F5）"
+    }
+  ],
+  "facts": {
+    "floors": 5,
+    "monsters": 18,
+    "bosses": [
+      "dragon",
+      "ogre_boss",
+      "zombie_king"
+    ],
+    "items": 42,
+    "quests": 12,
+    "reactions": 240,
+    "expect": [
+      11.125,
+      20.125,
+      23.75,
+      36.85,
+      44.1
+    ],
+    "stock": [
+      7,
+      9,
+      9,
+      8,
+      8
+    ],
+    "spritesRegistered": 197,
+    "spritesOnDisk": 197,
+    "spritesMissing": []
+  }
+}

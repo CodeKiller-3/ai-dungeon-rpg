@@ -127,6 +127,10 @@
       kind = k;
       sel = 0;
       shopMode = 'buy';
+      /* S-01：每次开张推进一次确定性换货（同级守卫，Shop 未加载时跳过） */
+      if (k === 'shop' && Game.Systems.Shop && typeof Game.Systems.Shop.refresh === 'function') {
+        Game.Systems.Shop.refresh();
+      }
       page = 0; /* M8-4：每次打开 quests 默认回到任务页 */
       qScroll = 0; /* P2-3b：打开面板重置滚动窗口 */
       volDragging = false;

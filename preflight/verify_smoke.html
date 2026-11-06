@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_smoke</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc">
+  <div id="npc-title">地牢守门人 · 按 Esc 离开</div>
+  <div id="npc-log"></div>
+  <input id="npc-input" maxlength="100" placeholder="输入想说的话">
+</div>
+<!-- 冒烟页：加载序与 index.html 完全一致，不设 NO_AUTOSTART（走真实自启动 + rAF 主循环）。
+     捕获 window.onerror / unhandledrejection，跑 1200ms 后断言：无错误、场景进入 explore、
+     主动调用 Main.loop() 恰好执行一整帧（不依赖 rAF，规避 headless 节流的 flaky） -->
+<script>
+window.__SMOKE = { errors: [], frames: 0, scene: '', fps: 0 };
+window.addEventListener('error', function (e) {
+  window.__SMOKE.errors.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__SMOKE.errors.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  function wrap() {
+    if (window.__SMOKE_WRAPPED) return;
+    window.__SMOKE_WRAPPED = true;
+    var raf = window.requestAnimationFrame;
+    window.requestAnimationFrame = function (fn) {
+      return raf.call(window, function (ts) { window.__SMOKE.frames++; return fn(ts); });
+    };
+  }
+  wrap();
+  setTimeout(function () {
+    var S = window.__SMOKE;
+    S.scene = (window.Game && Game.Core && Game.Core.Main) ? Game.Core.Main._scene : 'none';
+    /* 主动驱动一帧：直接调用真实主循环 loop(ts)，不依赖 rAF。
+       headless 合成器会把 rAF 节流到 0~2 帧，原 "frames>=1" 断言因此 flaky。
+       这里用 loop 内部必定写入的 _lastFrame 作为"整帧已执行"的确定性证据
+       （不能用 _frames：它按 1s 窗口清零，跨窗口时无法用自增判等）。
+       errors 仍作独立断言。 */
+    var frameError = null, frameRan = false;
+    try {
+      var M = Game.Core.Main;
+      var beforeTs = M._lastFrame;
+      M.loop(performance.now());
+      frameRan = (M._lastFrame !== beforeTs);
+    } catch (e) {
+      frameError = String((e && e.message) || e);
+    }
+    var ok = S.errors.length === 0 && S.scene === 'explore' && frameError === null && frameRan;
+    var out = {
+      smokeOk: ok, errors: S.errors.slice(0, 8), scene: S.scene,
+      manualFrame: frameRan, frameError: frameError,
+      rafFrames: S.frames, rafNote: 'rAF 帧数仅记录，不参与断言'
+    };
+    var text = (ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }, 1200);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_selfcheck</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc">
+  <div id="npc-title">地牢守门人 · 按 Esc 离开</div>
+  <div id="npc-log"></div>
+  <input id="npc-input" maxlength="100" placeholder="输入想说的话">
+</div>
+<!-- 全面自检页：加载顺序与 index.html 完全同序；main.js 设 NO_AUTOSTART 后由本页显式 boot。
+     覆盖运行时层：启动 / 系统接口 / 五层生成与 Boss 注入 / 商店逐层覆盖 / 18 种怪战斗收敛 /
+     存档往返 / NPC 离线应答 / 地图绘制耗时 / FOV 视野规模 / 弹窗开关 / 重复生成不累积 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<!-- S-02b：反应库（npc.js 消费；缺失时回退关键词表） -->
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { selfLoaded: false, selfApi: false, selfOk: false, sub: {} };
+  var facts = {};
+
+  function finish() {
+    out.selfOk = true;
+    for (var k in out.sub) { if (!out.sub.hasOwnProperty(k)) continue; if (typeof out.sub[k] === 'boolean' && !out.sub[k]) out.selfOk = false; }
+    var text = (out.selfOk ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    out.selfLoaded = !!(window.Game && Game.Core && Game.Systems && Game.Data && Game.Data.Player);
+    out.selfApi = !!(Game.Core.Main && typeof Game.Core.Main.init === 'function' &&
+      Game.Core.Render && typeof Game.Core.Render.drawMap === 'function' &&
+      Game.Systems.Battle && typeof Game.Systems.Battle.start === 'function' &&
+      Game.Systems.Shop && typeof Game.Systems.Shop.getStock === 'function');
+    if (!out.selfLoaded || !out.selfApi) { finish(); return; }
+
+    /* 清空存档，保证 boot 为确定态 */
+    try { localStorage.removeItem('ai_dungeon_rpg_save_v1'); } catch (e) { /* ignore */ }
+    Game.Core.Main.init();
+    var P = Game.Data.Player;
+
+    /* p1_boot：启动不抛错、进入探索场景、地图与玩家就位 */
+    out.sub.p1_boot = !!(Game.Core.Main._scene === 'explore' && Game.Systems.Map.getGrid().length > 0 &&
+      typeof P.x === 'number' && typeof P.y === 'number');
+    facts.scene = Game.Core.Main._scene;
+
+    /* p2_systems：核心系统与关键方法均为函数（Systems 命名空间 + Game 直挂单例） */
+    var NEED = {
+      'Game.Systems.Map': ['generate', 'tileAt', 'changeFloor', 'getFloor', 'getEnemies', 'enemyAt', 'isWalkable'],
+      'Game.Systems.AI': ['getPatrols'],
+      'Game.Systems.NPC': ['ask', 'open', 'close'],
+      'Game.Systems.Audio': ['init', 'play', 'bgmPlay', 'setMuted', 'isMuted'],
+      'Game.Systems.Battle': ['start', 'playerAction', 'getState', 'checkLevelUp', 'expToNext'],
+      'Game.Systems.Inventory': ['add', 'remove', 'list', 'use', 'recalcEquip'],
+      'Game.Systems.Shop': ['getStock', 'buy', 'sell'],
+      'Game.Systems.Quest': ['init', 'progress', 'getActive', 'isDone'],
+      'Game.Systems.Save': ['save', 'load', 'clear'],
+      'Game.Systems.Leaderboard': ['submit'],
+      'Game.Systems.Bestiary': ['record', 'mergeFrom', 'reset'],
+      'Game.Systems.Learner': ['init'],
+      'Game.Skills': ['cast', 'tick', 'resetCooldowns'],
+      'Game.fov': ['update', 'isVisible', 'isExplored', 'reset'],
+      'Game.hud': ['update', 'draw', 'getKills'],
+      'Game.Modal': ['open', 'close', 'isOpen'],
+      'Game.Lighting': ['draw'],
+      'Game.Motion': ['setStep', 'getRenderPos', 'clear'],
+      'Game.Particles': ['spawn', 'count', 'clear'],
+      'Game.Feedback': ['spawn', 'update', 'draw'],
+      'Game.Core.Render': ['drawMap', 'drawPlayer', 'drawHUD', 'drawBattle'],
+      'Game.Core.EventBus': ['on', 'off', 'emit']
+    };
+    var missing = [];
+    for (var path in NEED) {
+      if (!NEED.hasOwnProperty(path)) continue;
+      var NS = path.split('.').reduce(function (o, k) { return o ? o[k] : undefined; }, window);
+      if (!NS) { missing.push(path + ' 不存在'); continue; }
+      for (var i = 0; i < NEED[path].length; i++) {
+        if (typeof NS[NEED[path][i]] !== 'function') missing.push(path + '.' + NEED[path][i]);
+      }
+    }
+    out.sub.p2_systems = missing.length === 0;
+    facts.missingApi = missing;
+
+    /* p3_floors：逐层生成——怪 id 合法、Boss 数符合配置、怪量合理且不累积 */
+    var FLOORS = Game.Data.MAPS.floors;
+    var bossCfg = {};
+    (Game.Data.MAPS.bosses || []).forEach(function (b) { bossCfg[b.floor] = b.id; });
+    var floorFact = [];
+    var p3ok = true;
+    for (var f = 1; f <= FLOORS; f++) {
+      Game.Systems.Map.setFloor(f);
+      Game.Systems.Map.generate();
+      var ens = Game.Systems.Map.getEnemies();
+      var ids = {};
+      var bossCount = 0;
+      var badId = 0;
+      for (var e = 0; e < ens.length; e++) {
+        var mid = ens[e].monsterId;
+        ids[mid] = (ids[mid] || 0) + 1;
+        if (!Game.Data.MONSTERS[mid]) badId++;
+        if (Game.Data.MONSTERS[mid] && Game.Data.MONSTERS[mid].boss) bossCount++;
+      }
+      var rowIds = (Game.Data.MAPS.enemyTable[f - 1] || []).map(function (x) { return x.id; });
+      var tableOk = Object.keys(ids).every(function (k) { return rowIds.indexOf(k) >= 0 || (bossCfg[f] === k); });
+      var bossOk = bossCfg[f] ? bossCount === 1 : bossCount === 0;
+      if (badId || !tableOk || !bossOk || ens.length < 3 || ens.length > 60) p3ok = false;
+      floorFact.push({ f: f, n: ens.length, boss: bossCount, kinds: Object.keys(ids).length });
+    }
+    out.sub.p3_floors = p3ok;
+    facts.floors = floorFact;
+
+    /* p3b 重复生成不累积：同层连续 3 次 generate，敌数应稳定在合理量级 */
+    Game.Systems.Map.setFloor(1);
+    var counts = [];
+    for (var r = 0; r < 3; r++) { Game.Systems.Map.generate(); counts.push(Game.Systems.Map.getEnemies().length); }
+    out.sub.p3b_noAccum = counts.every(function (c) { return c > 0 && c < 60; }) &&
+      (Math.max.apply(null, counts) < Math.min.apply(null, counts) * 2 + 2);
+    facts.regenCounts = counts;
+
+    /* p4_shop：逐层货架非空、条目均存在于 ITEMS、逐层覆盖情况 */
+    var shopFact = [];
+    var p4ok = true;
+    for (var sf = 1; sf <= FLOORS; sf++) {
+      Game.Systems.Map.setFloor(sf);
+      var stock = Game.Systems.Shop.getStock();
+      var ok = stock.length > 0 && stock.every(function (s) { return s.item && s.item.id === s.id; });
+      if (!ok) p4ok = false;
+      shopFact.push({ f: sf, n: stock.length, head: stock.length ? stock[0].id : null });
+    }
+    out.sub.p4_shop = p4ok;
+    facts.shop = shopFact;
+    facts.shopFloorsCovered = Game.Data.SHOP_STOCK.length;
+
+    /* p5_battle：18 种怪各打一场，攻击循环 ≤40 回合，hp 全程有限、胜负态合法 */
+    var monIds = Object.keys(Game.Data.MONSTERS);
+    var battleFact = [];
+    var p5ok = true;
+    for (var mi = 0; mi < monIds.length; mi++) {
+      var id = monIds[mi];
+      P.hp = P.maxHp = 99999; P.atk = 200; P.def = 999; /* 固定强态，避免玩家中途死亡干扰收敛 */
+      var st = Game.Systems.Battle.start(id);
+      var turns = 0;
+      var err = null;
+      try {
+        while (turns < 40 && st && st.monster && st.monster.hp > 0 && !st.dying && !st.over) {
+          Game.Systems.Battle.playerAction('attack');
+          turns++;
+        }
+      } catch (ex) { err = String(ex && ex.message || ex); }
+      var mhp = st && st.monster ? st.monster.hp : null;
+      var finite = (typeof mhp === 'number') && isFinite(mhp);
+      if (err || !finite) p5ok = false;
+      battleFact.push({ id: id, turns: turns, hp: mhp, err: err });
+    }
+    out.sub.p5_battle = p5ok;
+    facts.battle = battleFact;
+    facts.battleMaxTurns = Math.max.apply(null, battleFact.map(function (b) { return b.turns; }));
+
+    /* p6_save：save → load 往返，楼层/金币/等级/背包一致 */
+    P.gold = 123; P.level = 2; P.inventory = { potion_small: 2 };
+    Game.Systems.Map.setFloor(3);
+    var svOk = Game.Systems.Save.save();
+    var loaded = Game.Systems.Save.load();
+    out.sub.p6_save = !!(svOk && loaded && loaded.player && loaded.player.gold === 123 &&
+      loaded.floor === 3 && Game.Systems.Map.getFloor() === 3);
+    facts.saveLoaded = loaded ? { gold: loaded.player.gold, floor: loaded.floor } : null;
+
+    /* p7_npc：离线路径返回非空回复；S-02b 起改为行为断言：
+     * ① 返回句确实出自 Game.Data.REACTIONS（而非旧关键词表）；
+     * ② 同 tag 连抽 8 次不重复（bag 去重生效）。 */
+    var libHas = function (line) {
+      var R = Game.Data.REACTIONS;
+      if (!R || typeof line !== 'string' || !line) return false;
+      for (var r in R) {
+        if (!Object.prototype.hasOwnProperty.call(R, r)) continue;
+        for (var t in R[r]) {
+          if (!Object.prototype.hasOwnProperty.call(R[r], t)) continue;
+          if (R[r][t].indexOf(line) >= 0) return true;
+        }
+      }
+      return false;
+    };
+    var reply = '';
+    try { reply = Game.Systems.NPC.ask('攻略'); } catch (ex2) { reply = ''; }
+    out.sub.p7_npc = typeof reply === 'string' && reply.length > 0;
+    facts.npcReplyLen = reply.length;
+    facts.reactionsLoaded = !!(Game.Data.REACTIONS);
+    facts.npcUsesReactions = libHas(reply);
+
+    var dupes = 0;
+    try {
+      var dseen = [];
+      for (var di = 0; di < 8; di++) {
+        var dline = Game.Systems.NPC.ask('你好');
+        if (dseen.indexOf(dline) >= 0) dupes++;
+        dseen.push(dline);
+      }
+    } catch (ex3) { dupes = 999; }
+    out.sub.p7_bagDedupe = dupes === 0;
+    facts.npcBagDedupe = dupes;
+
+
+    /* p8_draw：drawMap 60 帧平均耗时（ms），不抛错、无 NaN 参数 */
+    Game.Systems.Map.setFloor(5);
+    Game.Systems.Map.generate();
+    P.x = Game.Systems.Map.getSpawn().x;
+    P.y = Game.Systems.Map.getSpawn().y;
+    var grid = Game.Systems.Map.getGrid();
+    var t0 = performance.now();
+    var drawErr = null;
+    for (var d = 0; d < 60; d++) {
+      try { Game.Core.Render.drawMap(grid, P); } catch (ex3) { drawErr = String(ex3 && ex3.message || ex3); break; }
+    }
+    var avgMs = (performance.now() - t0) / 60;
+    out.sub.p8_draw = !drawErr && avgMs < 16;
+    facts.drawAvgMs = Math.round(avgMs * 100) / 100;
+
+    /* p9_fov：视野规模（可见格数量级正确，不为 0 也不为全图） */
+    var isBlocked = function (x, y) { return !Game.Systems.Map.isWalkable(x, y); };
+    Game.fov.update(P.x, P.y, 8, isBlocked);
+    var vis = 0;
+    for (var gy = 0; gy < grid.length; gy++) {
+      for (var gx = 0; gx < (grid[gy] || []).length; gx++) {
+        if (Game.fov.isVisible(gx, gy)) vis++;
+      }
+    }
+    out.sub.p9_fov = vis > 0 && vis < grid.length * (grid[0] ? grid[0].length : 1);
+    facts.fovVisible = vis;
+
+    /* p10_modal：打开 / 查询 / 关闭 不抛错 */
+    var modalOk = false;
+    try {
+      Game.Modal.open('quests');
+      modalOk = Game.Modal.isOpen() === true;
+      Game.Modal.close();
+      modalOk = modalOk && Game.Modal.isOpen() === false;
+    } catch (ex4) { modalOk = false; }
+    out.sub.p10_modal = modalOk;
+
+    /* p11_audio：Audio 静音/音量接口可用且状态可往返 */
+    var audioOk = false;
+    try {
+      Game.Systems.Audio.setMuted(true);
+      audioOk = Game.Systems.Audio.isMuted() === true;
+      Game.Systems.Audio.setMuted(false);
+      audioOk = audioOk && Game.Systems.Audio.isMuted() === false;
+      facts.audioMutedRoundTrip = audioOk;
+    } catch (ex5) { audioOk = false; facts.audioErr = String(ex5 && ex5.message || ex5); }
+    out.sub.p11_audio = audioOk;
+
+    out.facts = facts;
+    finish();
+  } catch (err) {
+    out.error = String(err && err.stack || err);
+    out.selfOk = false;
+    var t = 'FAIL ' + JSON.stringify(out);
+    document.title = t;
+    document.body.appendChild(document.createTextNode(t));
+  }
+})();
+</script>
+</body>
+</html>
