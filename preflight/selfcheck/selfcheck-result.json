@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-06T11:51:26.582Z",
+  "at": "2026-11-06T12:08:07.719Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -10,7 +10,7 @@
       "level": "WARN",
       "id": "QF-01",
       "name": "单文件体积偏大",
-      "detail": "js/core/render.js 46.2KB, js/systems/modal.js 32.1KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
+      "detail": "js/core/render.js 47.6KB, js/systems/modal.js 32.1KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
     },
     {
       "level": "PASS",
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "36 文件 / 389.2 KB（不含 vendor）"
+      "detail": "36 文件 / 401.4 KB（不含 vendor）"
     },
     {
       "level": "PASS",
@@ -124,7 +124,7 @@
       "level": "PASS",
       "id": "SC-05",
       "name": "Systems 命名空间完整性",
-      "detail": "12 个系统，无未定义引用"
+      "detail": "13 个系统，无未定义引用"
     },
     {
       "level": "PASS",

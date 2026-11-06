@@ -326,6 +326,35 @@
       }
     },
 
+    /* S-04：已触发的陷阱——地刺画三根红尖刺，毒气画绿色雾团（触发后永久留在该格） */
+    _drawTrap: function (ctx, id, px, py) {
+      if (id === 'gas') {
+        ctx.fillStyle = 'rgba(132,204,22,0.35)';
+        ctx.beginPath();
+        ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(163,230,53,0.65)';
+        ctx.beginPath();
+        ctx.arc(px + TILE / 2 - 3, py + TILE / 2 + 1, 3, 0, Math.PI * 2);
+        ctx.arc(px + TILE / 2 + 4, py + TILE / 2 - 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+      ctx.fillStyle = '#b5b5c8';
+      var i;
+      for (i = 0; i < 3; i++) {
+        var bx = px + 5 + i * 6;
+        ctx.beginPath();
+        ctx.moveTo(bx, py + TILE - 5);
+        ctx.lineTo(bx + 3, py + 9);
+        ctx.lineTo(bx + 6, py + TILE - 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(160,20,20,0.55)';
+      ctx.fillRect(px + 4, py + TILE - 7, TILE - 9, 2);
+    },
+
     drawMap: function (grid, player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -410,6 +439,11 @@
             if (det) this._drawDetail(ctx, det, px, py, t === 0);
             var dec = Game.Systems.Map.getDecor(x, y);
             if (dec) this._drawDecor(ctx, dec, px, py);
+            /* S-04：已触发的陷阱显现在该格（未触发的不可见，避免剧透）；
+             * 验证页可能用轻量 Map stub（无 getTrap），缺失时跳过 */
+            var tr = (Game.Systems.Map && typeof Game.Systems.Map.getTrap === 'function')
+              ? Game.Systems.Map.getTrap(x, y) : null;
+            if (tr && tr.seen) this._drawTrap(ctx, tr.id, px, py);
           }
           /* S3-1 FOV：已点亮但当前不可见 → 较暗覆盖（记忆效果） */
           if (fovOn && !Game.fov.isVisible(x, y)) {

@@ -13,6 +13,7 @@
   var grid = null;
   var details = null;   /* M9-1：2D 数组，每格细节类型 string|null（纯视觉） */
   var decor = null;     /* M9-1：2D 数组，每格装饰物 id string|null（chest 可拾取） */
+  var traps = null;     /* S-04：2D 数组，每格 {id, seen}|null；seen=true 表示已触发并永久显现 */
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
@@ -153,12 +154,15 @@
   function genDetailsAndDecor(w, h) {
     details = [];
     decor = [];
+    traps = [];
     for (var y = 0; y < h; y++) {
       details[y] = [];
       decor[y] = [];
+      traps[y] = [];
       for (var x = 0; x < w; x++) {
         details[y][x] = null;
         decor[y][x] = null;
+        traps[y][x] = null;
       }
     }
     /* 地板细节：约 25% 概率按权重抽取 */
@@ -203,6 +207,37 @@
     placeDecor('barrel', 3 + f, w, h);
     placeDecor('torch', 2 + f * 2, w, h);
     placeDecor('vine', 2 + f, w, h);
+    placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
+  }
+
+  /* S-04：陷阱放置——每层 3~6 个，只放地板格；
+   * 排除出生点 safeRadius 格内、敌人格、已放宝箱格；F1 只放地刺，F2 起按 gasRate 抽毒气 */
+  function placeTraps(w, h) {
+    var cfgT = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6, safeRadius: 3, gasRate: 0.45 };
+    var count = cfgT.min + Math.floor(Math.random() * (Math.max(cfgT.min, cfgT.max) - cfgT.min + 1));
+    var gasRate = (typeof cfgT.gasRate === 'number') ? cfgT.gasRate : 0.45;
+    var only = (floorIndex === 0) ? (cfgT.firstFloorOnly || 'spike') : null;
+    var placed = 0, tries = 0;
+    while (placed < count && tries < 600) {
+      tries++;
+      var x = 1 + Math.floor(Math.random() * (w - 2));
+      var y = 1 + Math.floor(Math.random() * (h - 2));
+      if (grid[y][x] !== 1) continue;
+      /* 出生点周围不放（含出生点本身），玩家一落地就踩陷阱属于设计缺陷 */
+      var dx = x - spawn.x, dy = y - spawn.y;
+      if (dx * dx + dy * dy <= cfgT.safeRadius * cfgT.safeRadius) continue;
+      if (traps[y][x]) continue;
+      if (decor[y][x] === 'chest') continue;
+      var occupied = false;
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].x === x && enemies[i].y === y) { occupied = true; break; }
+      }
+      if (occupied) continue;
+      var id = only || (Math.random() < gasRate ? 'gas' : 'spike');
+      if (!Game.Data.TRAPS || !Game.Data.TRAPS[id]) continue;
+      traps[y][x] = { id: id, seen: false };
+      placed++;
+    }
   }
 
   function placeDecor(id, count, w, h) {
@@ -243,6 +278,7 @@
         enemies = cached.enemies;
         details = cached.details;
         decor = cached.decor;
+        traps = cached.traps || traps;
         spawn = { x: cached.spawn.x, y: cached.spawn.y };
         if (Game.Systems.AI && typeof Game.Systems.AI.setPatrols === 'function') {
           Game.Systems.AI.setPatrols(cached.patrols);
@@ -265,6 +301,7 @@
         enemies: enemies,
         details: details,
         decor: decor,
+        traps: traps,
         spawn: { x: spawn.x, y: spawn.y },
         patrols: (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
           ? Game.Systems.AI.getPatrols() : []
@@ -333,6 +370,50 @@
       if (!decor || !decor[y]) return null;
       if (x < 0 || y < 0 || x >= decor[0].length || y >= decor.length) return null;
       return decor[y][x] || null;
+    },
+
+    /* S-04：取该格陷阱（{id, seen}），无陷阱返回 null；seen=true 的陷阱仍然返回，供渲染画"已显现"格 */
+    getTrap: function (x, y) {
+      if (!traps || !traps[y]) return null;
+      if (x < 0 || y < 0 || x >= traps[0].length || y >= traps.length) return null;
+      return traps[y][x] || null;
+    },
+
+    /* S-04：踩中陷阱——未触发过的陷阱结算一次后置 seen=true（永久显现且不再伤人）。
+     * 伤害 = 当前 HP 8%（F1 单次 ≤15，其余层 ≤30）；毒气不扣血，改为施加中毒。
+     * 返回 { id, name, dmg, status } 供上层提示；无陷阱/已触发返回 null */
+    triggerTrap: function (x, y) {
+      var tr = this.getTrap(x, y);
+      if (!tr || tr.seen) return null;
+      var def = Game.Data.TRAPS && Game.Data.TRAPS[tr.id];
+      if (!def) { traps[y][x] = null; return null; }
+      tr.seen = true;
+      var p = Game.Data.Player;
+      var res = { id: tr.id, name: def.name, dmg: 0, status: null };
+      if (def.dmgPct > 0) {
+        var cap = (floorIndex === 0 && def.dmgCap1) ? def.dmgCap1 : def.dmgCap30;
+        var d = Math.min(Math.max(1, Math.floor(p.hp * def.dmgPct)), cap);
+        p.hp = Math.max(p.hp - d, 0);
+        res.dmg = d;
+      }
+      if (def.status && Game.Systems.Status && typeof Game.Systems.Status.apply === 'function') {
+        Game.Systems.Status.apply(def.status, def.turns);
+        res.status = def.status;
+      }
+      var msg = '踩到' + def.name + '！';
+      if (res.dmg > 0) msg += ' 受到 ' + res.dmg + ' 伤害';
+      if (res.status) {
+        var sdef = Game.Data.STATUS && Game.Data.STATUS[res.status];
+        msg += '，' + (sdef ? sdef.name : res.status) + ' ' + def.turns + ' 回合';
+      }
+      Game.Core.EventBus.emit('ui:notice', { msg: msg });
+      Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
+      Game.Core.EventBus.emit('trap:triggered', { x: x, y: y, id: tr.id, dmg: res.dmg });
+      if (p.hp <= 0) {
+        Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
+        Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+      }
+      return res;
     },
 
     /* M9-1：拾取宝箱——仅 chest 可拾取，成功后置空并 emit 'decor:taken'

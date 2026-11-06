@@ -211,6 +211,70 @@
     }
   }
 
+  /* S-04：状态效果模块（寄宿在 battle.js，避免新增文件与加载序改动）
+   * 数据：Game.Data.STATUS（bleed/poison，各含 tickDmg）
+   * 状态只作用于玩家；每「回合」（探索走一步 / 战斗行动一次）由调用方 tick 一次 */
+  Game.Systems.Status = {
+    /* 施加/刷新状态：同一状态叠加时取较大剩余回合（不叠层数，避免连续踩毒气无限中毒） */
+    apply: function (id, turns) {
+      var def = Game.Data.STATUS && Game.Data.STATUS[id];
+      if (!def) return false;
+      var p = Game.Data.Player;
+      if (!p.status) p.status = {};
+      var t = (typeof turns === 'number' && turns > 0) ? turns : 1;
+      p.status[id] = Math.max(p.status[id] || 0, t);
+      return true;
+    },
+
+    clear: function (id) {
+      var p = Game.Data.Player;
+      if (p && p.status) delete p.status[id];
+    },
+
+    clearAll: function () {
+      var p = Game.Data.Player;
+      if (p) p.status = {};
+    },
+
+    /* 取当前生效状态快照 [{id,name,turns,color}]，供 HUD/验证页读取 */
+    list: function () {
+      var p = Game.Data.Player;
+      var out = [];
+      if (!p || !p.status) return out;
+      for (var id in p.status) {
+        if (!p.status.hasOwnProperty(id)) continue;
+        var n = p.status[id];
+        if (typeof n !== 'number' || n <= 0) continue;
+        var def = (Game.Data.STATUS && Game.Data.STATUS[id]) || { name: id, color: '#ffffff' };
+        out.push({ id: id, name: def.name, turns: n, tickDmg: def.tickDmg, color: def.color });
+      }
+      return out;
+    },
+
+    /* 回合结算：每个生效状态扣 tickDmg、回合 -1，归零移除；HP 归零走既有 battle:end lose 通道 */
+    tick: function () {
+      var p = Game.Data.Player;
+      var res = [];
+      if (!p || !p.status) return res;
+      for (var id in p.status) {
+        if (!p.status.hasOwnProperty(id)) continue;
+        var left = p.status[id];
+        if (typeof left !== 'number' || left <= 0) { delete p.status[id]; continue; }
+        var def = Game.Data.STATUS && Game.Data.STATUS[id];
+        var dmg = (def && typeof def.tickDmg === 'number') ? def.tickDmg : 0;
+        if (dmg > 0) p.hp = Math.max(p.hp - dmg, 0);
+        left -= 1;
+        if (left > 0) p.status[id] = left; else delete p.status[id];
+        res.push({ id: id, name: (def ? def.name : id), dmg: dmg, left: left });
+      }
+      if (res.length && p.hp <= 0) {
+        Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
+        Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+      }
+      return res;
+    }
+  };
+
   Game.Systems.Battle = {
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
@@ -276,6 +340,14 @@
         }
       }
       state.turn++;
+      /* S-04：回合末结算玩家状态（中毒/流血），扣血与死亡走既有通道 */
+      if (Game.Systems.Status && typeof Game.Systems.Status.tick === 'function') {
+        var stRes = Game.Systems.Status.tick();
+        for (var si = 0; si < stRes.length; si++) {
+          logPush('你因' + stRes[si].name + '损失 ' + stRes[si].dmg + ' 点 HP' +
+            (stRes[si].left > 0 ? '（剩 ' + stRes[si].left + ' 回合）' : '（' + stRes[si].name + '消退）'));
+        }
+      }
       /* M8-1：每行动 1 次，除本次刚释放技能外的冷却 -1（最小 0） */
       if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick(skillId || undefined);
       return state;

@@ -163,6 +163,31 @@
     return x + w + 14;
   }
 
+  /* S-04：状态图标行——画在顶栏正下方，仅在有中毒/流血时出现；
+   * 单个 chip = 彩色边框 + 状态名 + 剩余回合；放不下则截断，不横向溢出 */
+  function drawStatusRow(ctx, list, W, barH) {
+    if (!list || !list.length) return;
+    var x = 8, y = barH + 3, h = 13;
+    ctx.font = '10px monospace';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    for (var i = 0; i < list.length; i++) {
+      var s = list[i];
+      var label = s.name + s.turns;
+      var tw = ctx.measureText(label).width;
+      var w = tw + 10;
+      if (x + w > W - 8) break;
+      ctx.fillStyle = 'rgba(6,6,12,0.82)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = s.color || '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      ctx.fillStyle = s.color || '#ffffff';
+      ctx.fillText(label, x + 5, y + 2);
+      x += w + 4;
+    }
+  }
+
   Game.hud = {
     last: null,
 
@@ -177,6 +202,12 @@
           Game.Systems.Battle && typeof Game.Systems.Battle.expToNext === 'function') {
         next = Game.Systems.Battle.expToNext(lv);
       }
+      /* S-04：状态列表优先取入参，其次从 Status.list() 现算（老调用方不传该字段也能显示） */
+      var st = null;
+      if (stats.status && typeof stats.status.length === 'number') st = stats.status;
+      else if (Game.Systems && Game.Systems.Status && typeof Game.Systems.Status.list === 'function') {
+        st = Game.Systems.Status.list();
+      }
       last = {
         hp: field(stats.hp),
         hpMax: field(stats.hpMax),
@@ -188,7 +219,8 @@
         killTarget: field(stats.killTarget, killTarget),
         level: lv,
         exp: xp,
-        expNext: next
+        expNext: next,
+        status: st || []
       };
       this.last = last;
       return last;
@@ -241,6 +273,8 @@
           drawText(ctx, x, lvText, '#a78bfa');
         }
       }
+      /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏） */
+      drawStatusRow(ctx, s.status, W, barH);
     },
 
     show: function () { visible = true; },

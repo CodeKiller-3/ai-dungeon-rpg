@@ -54,6 +54,8 @@
         if (s.quests) p.quests = s.quests;
         /* S-03：旧档无 upg 字段 → 补空表，不破坏已读档的既有数值 */
         p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};
+        /* S-04：状态效果不入档（读档时清空），避免"读档即中毒"与存档瞬间掉血 */
+        p.status = {};
         /* M8-6：不信任旧档 atk/def/maxHp 持久值——按当前等级成长规则重算（含装备加成），
          * hp 超新上限时钳制（避免旧档错值带入新成长体系） */
         if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {

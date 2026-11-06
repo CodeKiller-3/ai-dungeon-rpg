@@ -18,6 +18,8 @@
     inventory: {}, equipment: { weapon: null, armor: null },
     /* S-03：装备强化等级表 { itemId: 0..5 }；按物品 id 记，换装后旧装备保留强化 */
     upg: {},
+    /* S-04：状态效果 { bleed: 回合, poison: 回合 }；只作用于玩家，回合数归零即移除 */
+    status: {},
     quests: {}
   };
   Game.Data.Player = player;
@@ -100,7 +102,10 @@
       level: player.level,
       exp: player.exp,
       expNext: (Game.Systems.Battle && typeof Game.Systems.Battle.expToNext === 'function')
-        ? Game.Systems.Battle.expToNext(player.level) : 60 * player.level
+        ? Game.Systems.Battle.expToNext(player.level) : 60 * player.level,
+      /* S-04：状态列表交给 HUD 画 chip（无状态为空数组，不占屏） */
+      status: (Game.Systems.Status && typeof Game.Systems.Status.list === 'function')
+        ? Game.Systems.Status.list() : []
     });
   }
 
@@ -265,6 +270,7 @@
       player.inventory = {}; player.equipment = { weapon: null, armor: null };
       player.quests = {};
       player.upg = {}; /* S-03：新局强化清零 */
+      player.status = {}; /* S-04：新局状态清空 */
       if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
       if (Game.Systems && Game.Systems.Save) Game.Systems.Save.clear();
       /* 修复 P2：新局图鉴从空开始，与已清空的存档保持一致 */
@@ -329,6 +335,12 @@
         var nx = player.x + d.dx;
         var ny = player.y + d.dy;
         if (Game.Systems.Map.isWalkable(nx, ny)) {
+          /* S-04：一步 = 一个探索回合——先结算上一回合遗留状态（中毒/流血），再移动；
+           * 状态扣血致死时提前返回（battle:end 通道已弹出结算） */
+          if (Game.Systems.Status && typeof Game.Systems.Status.tick === 'function') {
+            var stStep = Game.Systems.Status.tick();
+            if (stStep.length && player.hp <= 0) { refreshFov(); return; }
+          }
           var fromX = player.x, fromY = player.y;
           player.x = nx;
           player.y = ny;
@@ -351,6 +363,10 @@
               resetPlayer();
             }
           } else {
+            /* S-04：先判陷阱（踩中即结算、该格永久显现），再判遭遇——同格有怪时先吃陷阱伤害 */
+            if (Game.Systems.Map && typeof Game.Systems.Map.triggerTrap === 'function') {
+              Game.Systems.Map.triggerTrap(nx, ny);
+            }
             var e = Game.Systems.Map.enemyAt(nx, ny);
             if (e) {
               Game.Systems.Battle.start(e.monsterId);

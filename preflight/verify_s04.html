@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_s04</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- S-04 验证页：陷阱 + 状态效果
+     断言口径：数据口径 → 五层放置规则（3~6 个 / F1 只地刺 / 避开出生点 3 格）→ 地刺伤害与上限
+     → 触发后永久显现且不再伤人 → 毒气中毒三回合结算 → 状态致死通道 → HUD 状态字段
+     → 状态不入档 → 陷阱绘制函数可调用。只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { s04Loaded: false, s04Api: false, s04Ok: false, sub: {} };
+  function finish() {
+    var pass = out.s04Loaded && out.s04Api && out.s04Ok;
+    var text = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, M = Game.Systems.Map, B = Game.Systems.Battle,
+        St = Game.Systems.Status, Hud = Game.hud, Save = Game.Systems.Save,
+        R = Game.Core && Game.Core.Render;
+    out.s04Loaded = !!(window.Game && D.TRAPS && D.STATUS && D.TRAP_PLACEMENT);
+    out.s04Api = !!(M && typeof M.getTrap === 'function' && typeof M.triggerTrap === 'function' &&
+      B && St && typeof St.apply === 'function' && typeof St.tick === 'function' &&
+      typeof St.list === 'function' && Hud && typeof Hud.update === 'function' &&
+      Save && typeof Save.save === 'function' && typeof Save.load === 'function');
+    if (!out.s04Loaded || !out.s04Api) { finish(); return; }
+
+    var sub = {};
+    out.sub = sub;
+    var ok = true;
+    var P = D.Player;
+
+    /* t2：数据口径（地刺 8%/30/15，毒气只给状态，状态每回合扣血） */
+    var t2 = !!(D.TRAPS.spike.dmgPct === 0.08 && D.TRAPS.spike.dmgCap30 === 30 &&
+      D.TRAPS.spike.dmgCap1 === 15 && D.TRAPS.spike.status === 'bleed' &&
+      D.TRAPS.gas.dmgPct === 0 && D.TRAPS.gas.status === 'poison' && D.TRAPS.gas.turns === 3 &&
+      D.STATUS.bleed.tickDmg === 3 && D.STATUS.poison.tickDmg === 2 &&
+      D.TRAP_PLACEMENT.min === 3 && D.TRAP_PLACEMENT.max === 6 && D.TRAP_PLACEMENT.safeRadius === 3);
+    sub.t2_data = t2;
+    ok = ok && t2;
+
+    /* t3：五层放置规则——数量 3~6、全在地板格、F1 只有地刺、出生点 3 格内为空 */
+    var t3 = true, t3detail = [];
+    M.generate(); /* Map 的 cfg 在首次 generate 时注入，之后才能 changeFloor */
+    for (var f = 1; f <= 5; f++) {
+      if (f > 1) M.changeFloor(1);
+      var grid = M.getGrid();
+      var w = grid[0].length, h = grid.length;
+      var sp = M.getSpawn();
+      var count = 0, nonSpikeF1 = 0, badTile = 0, nearSpawn = 0, kinds = {};
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          var tr = M.getTrap(x, y);
+          if (!tr) continue;
+          count++;
+          kinds[tr.id] = (kinds[tr.id] || 0) + 1;
+          if (grid[y][x] !== 1) badTile++;
+          if (f === 1 && tr.id !== 'spike') nonSpikeF1++;
+          var dx = x - sp.x, dy = y - sp.y;
+          if (dx * dx + dy * dy <= 9) nearSpawn++;
+        }
+      }
+      if (count < 3 || count > 6 || badTile > 0 || nearSpawn > 0) t3 = false;
+      if (f === 1 && nonSpikeF1 > 0) t3 = false;
+      if (f >= 2 && Object.keys(kinds).length < 1) t3 = false;
+      t3detail.push({ f: f, count: count, kinds: kinds });
+    }
+    sub.t3_placement = t3;
+    sub.t3_detail = t3detail;
+    ok = ok && t3;
+
+    /* 定位某层的可触发陷阱（先切到该层，避免复用其它层坐标）；找不到时重新生成该层再找 */
+    function findTrap(floorNo, kind, maxTry) {
+      var tries = maxTry || 1;
+      for (var a = 0; a < tries; a++) {
+        M.setFloor(floorNo);
+        var grid = M.getGrid();
+        for (var yy = 0; yy < grid.length; yy++) {
+          for (var xx = 0; xx < grid[0].length; xx++) {
+            var tr = M.getTrap(xx, yy);
+            if (tr && tr.id === kind && !tr.seen) return { x: xx, y: yy, floor: floorNo };
+          }
+        }
+      }
+      return null;
+    }
+
+    /* t4：地刺单次伤害——HP 100 → 8；非首层上限 30（HP 400 时 8%=32 被钳到 30） */
+    var t4 = true, t4detail = [];
+    P.status = {};
+    M.setFloor(1);
+    P.hp = 100; P.maxHp = 100;
+    var pos1 = findTrap(1, 'spike');
+    var t5 = false;
+    if (!pos1) { t4 = false; }
+    else {
+      var r1 = M.triggerTrap(pos1.x, pos1.y);
+      t4detail.push({ floor: 1, dmg: r1 ? r1.dmg : -1, hp: P.hp });
+      if (!(r1 && r1.dmg === 8 && P.hp === 92)) t4 = false;
+      /* t5 与 t4 同一次进层内完成：setFloor 会清空楼层快照并重新生成，不能跨进层复用坐标 */
+      var hpBefore = P.hp;
+      var again = M.triggerTrap(pos1.x, pos1.y);
+      var trNow = M.getTrap(pos1.x, pos1.y);
+      t5 = !!(again === null && trNow && trNow.seen === true && P.hp === hpBefore);
+    }
+    M.setFloor(2);
+    P.hp = 400; P.maxHp = 400; P.status = {};
+    var pos2 = findTrap(2, 'spike', 12);
+    if (!pos2) { t4 = false; }
+    else {
+      var r2 = M.triggerTrap(pos2.x, pos2.y);
+      t4detail.push({ floor: 2, dmg: r2 ? r2.dmg : -1, hp: P.hp, capped: !!(r2 && r2.dmg === 30) });
+      if (!(r2 && r2.dmg === 30 && P.hp === 370)) t4 = false;
+    }
+    sub.t4_spikeDmg = t4;
+    sub.t4_detail = t4detail;
+    ok = ok && t4;
+
+    /* t5：触发后该格永久显现（seen=true），再次踩同格返回 null 且不再扣血（同层内完成，见 t4 段） */
+    sub.t5_seenOnce = t5;
+    ok = ok && t5;
+
+    /* t6：毒气 → 中毒 3 回合，每回合 -2，第 3 回合后消失 */
+    var t6 = false, t6hp = [];
+    M.setFloor(2);
+    var posG = findTrap(2, 'gas', 12);
+    P.hp = 100; P.maxHp = 100; P.status = {};
+    if (posG) {
+      var rg = M.triggerTrap(posG.x, posG.y);
+      if (rg && rg.status === 'poison' && P.hp === 100 && St.list().length === 1 && St.list()[0].turns === 3) {
+        t6hp.push(P.hp);
+        for (var ti = 0; ti < 3; ti++) { St.tick(); t6hp.push(P.hp); }
+        t6 = (P.hp === 94 && St.list().length === 0);
+      }
+    }
+    sub.t6_poison = t6;
+    sub.t6_hpSeq = t6hp;
+    ok = ok && t6;
+
+    /* t7：状态致死走 battle:end {result:'lose'} 通道 */
+    var t7 = false, loseSeen = false;
+    var offLose = Game.Core.EventBus.on('battle:end', function (e) {
+      if (e && e.result === 'lose') loseSeen = true;
+    });
+    P.hp = 2; P.maxHp = 100; P.status = { poison: 1 };
+    St.tick();
+    t7 = !!(P.hp === 0 && loseSeen);
+    sub.t7_statusDeath = t7;
+    ok = ok && t7;
+
+    /* t8：HUD 状态字段——传入状态时 last.status 反映回合数；清空后为空数组 */
+    Hud.update({ hp: 100, hpMax: 100, mp: 10, mpMax: 50, gold: 0, floor: 1,
+      status: [{ id: 'poison', name: '中毒', turns: 2, color: '#84cc16' }] });
+    var hudOk = !!(Hud.last && Hud.last.status && Hud.last.status.length === 1 &&
+      Hud.last.status[0].turns === 2);
+    P.status = {};
+    Hud.update({ hp: 100, hpMax: 100, mp: 10, mpMax: 50, gold: 0, floor: 1 });
+    hudOk = hudOk && Hud.last.status.length === 0;
+    sub.t8_hudStatus = hudOk;
+    ok = ok && hudOk;
+
+    /* t9：状态不入档——存档 JSON 无 status 字段，读档后 status 为空表 */
+    var t9 = false;
+    try {
+      P.status = { poison: 2 };
+      Save.save();
+      var raw = localStorage.getItem('ai_dungeon_rpg_save_v1');
+      var noStatusKey = !(raw && raw.indexOf('"status"') >= 0);
+      P.status = { poison: 2 };
+      Save.load();
+      t9 = !!(noStatusKey && P.status && Object.keys(P.status).length === 0);
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+    } catch (e9) { t9 = false; }
+    sub.t9_notPersisted = t9;
+    ok = ok && t9;
+
+    /* t10：陷阱绘制可调用（stub ctx，两种陷阱都不抛错） */
+    var t10 = false;
+    try {
+      var stub = {
+        fillStyle: '', strokeStyle: '', lineWidth: 1,
+        fillRect: function () {}, strokeRect: function () {}, beginPath: function () {},
+        arc: function () {}, fill: function () {}, moveTo: function () {},
+        lineTo: function () {}, closePath: function () {}
+      };
+      if (R && typeof R._drawTrap === 'function') {
+        R._drawTrap(stub, 'spike', 0, 0);
+        R._drawTrap(stub, 'gas', 0, 0);
+        t10 = true;
+      }
+    } catch (e10) { t10 = false; }
+    sub.t10_drawApi = t10;
+    ok = ok && t10;
+
+    /* t11：满血踩坑致死安全性——每层最坏 2 个地刺（+2 回合流血）也不足满血的一半，
+     * 即"陷阱无法单独杀死满血玩家"，保证不破"不刷可通关"的下限（伤害口径 = 当前 HP 8%） */
+    var t11 = true, t11detail = [];
+    var HPS = [100, 140, 190, 400];
+    for (var hi = 0; hi < HPS.length; hi++) {
+      var hpBase = HPS[hi];
+      var capNow = (hi === 0 ? D.TRAPS.spike.dmgCap1 : D.TRAPS.spike.dmgCap30);
+      var spike1 = Math.min(Math.max(1, Math.floor(hpBase * D.TRAPS.spike.dmgPct)), capNow);
+      var spike2 = Math.min(Math.max(1, Math.floor((hpBase - spike1) * D.TRAPS.spike.dmgPct)), capNow);
+      var total = spike1 + spike2 + D.TRAPS.spike.turns * D.STATUS.bleed.tickDmg;
+      var safe = total < hpBase / 2;
+      if (!safe) t11 = false;
+      t11detail.push({ hp: hpBase, worstDmg: total, halfHp: hpBase / 2, safe: safe });
+    }
+    sub.t11_noTrapDeath = t11;
+    sub.t11_detail = t11detail;
+    ok = ok && t11;
+
+    P.status = {};
+    P.hp = 100; P.maxHp = 100;
+    M.setFloor(1);
+    out.s04Ok = !!ok;
+  } catch (e) {
+    out.err = String(e && e.message ? e.message : e);
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

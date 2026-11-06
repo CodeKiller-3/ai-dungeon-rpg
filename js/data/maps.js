@@ -68,4 +68,26 @@
     torch:  { id: 'torch',  name: '火把', desc: '照亮周围（静态，M9-2 加光晕）' },
     vine:   { id: 'vine',   name: '藤蔓', desc: '装饰物' }
   };
+
+  /* S-04：陷阱定义——踩中即触发一次，触发后该格永久显现（seen=true）且不再伤人
+   * spike：伤害 = 当前 HP 8%，全层上限 30（F1 单次 ≤15），并附带流血
+   * gas：不直接扣血，施加中毒（3 回合 × -2 HP/回合） */
+  Game.Data.TRAPS = {
+    spike: { id: 'spike', name: '地刺', dmgPct: 0.08, dmgCap30: 30, dmgCap1: 15, status: 'bleed', turns: 2 },
+    gas:   { id: 'gas',   name: '毒气', dmgPct: 0, status: 'poison', turns: 3 }
+  };
+
+  /* S-04：状态效果——只作用于玩家；每「回合」（探索走一步 / 战斗行动一次）结算一次，
+   * tickDmg 直接扣 HP，回合数归零即移除。不写入 ITEMS/MONSTERS，不影响 Boss 狂暴 */
+  Game.Data.STATUS = {
+    bleed:  { id: 'bleed',  name: '流血', tickDmg: 3, color: '#ef4444' },
+    poison: { id: 'poison', name: '中毒', tickDmg: 2, color: '#84cc16' }
+  };
+
+  /* S-04：陷阱放置参数——每层 3~6 个，出生点 3 格内不放，F1 只放地刺 */
+  Game.Data.TRAP_PLACEMENT = {
+    min: 3, max: 6, safeRadius: 3,
+    firstFloorOnly: 'spike',
+    gasRate: 0.45 /* F2 起每个陷阱为毒气的概率 */
+  };
 })();
