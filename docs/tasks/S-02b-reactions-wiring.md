@@ -44,3 +44,10 @@
 | 关键词粗糙 | 靠正则硬判意图，非关键词句落到 idle；属 L1 规则层预期 |
 | 商店场景判定依赖 `Main._scene` | 私有字段；主循环未启动时为空串，按 guard 走 |
 | bag 用 Math.random | 不可复现序列；只断言"不重复"，不断言具体句子 |
+
+## 七、落地口径
+
+- `js/data/reactions.js` 实测 240 条：guard 78 + merchant 84 + guide 78。
+- tag 结构：10 类基础 tag（greeting / idle / kill / kill_boss / hurt / low_hp / gold / pickup_item / death / victory）；merchant 另含 shop 专属 tag（共 11 类）。
+- `js/systems/npc.js` 按 `pickTag` → `pickReaction` 取句，同 role+tag 做 bag 去重；无 Key / 断网 / 请求异常统一降级到 `replyFor()` 的离线规则。
+- 静态自检 SC-03 已为「无未加载文件」，DC-07（结构/去重）与 DC-08（tag 语义）覆盖 reactions 接线。

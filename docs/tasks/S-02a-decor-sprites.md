@@ -40,3 +40,9 @@
 | 自绘风格与 0x72 CC0 精灵不一致 | 16×16 小尺寸 + 限定调色板（暗棕/金属/火焰/藤绿），远看只区分轮廓 |
 | 贴图放大后糊 | 渲染层按整数倍缩放（既有逻辑），不额外缩放 |
 | 装饰物位置与墙体重叠 | 沿用既有 `DECOR` 放置规则，不改 |
+
+## 七、落地口径
+
+- 三张 16×16 自绘 PNG 已入库，实测字节数：`barrel.png` 195 B、`torch.png` 236 B、`vine.png` 220 B。
+- `js/core/sprites.js` 的 `NAMES` 恢复注册 `barrel` / `torch` / `vine` 后，静态自检 AS-01 / AS-03 转 PASS；当前注册 198 / 磁盘 198，全部有对应 PNG。
+- `grass` / `puddle` / `bones` / `moss` 仍不注册（无使用方），渲染层继续走 `_drawDetail` / `_drawDecor` 程序化兜底。
