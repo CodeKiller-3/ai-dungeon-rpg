@@ -19,3 +19,11 @@ desktop.ini
 
 # Trae CN 本地共享产物
 .trae-html-share-packages/
+
+# D-03：本地临时产物（不删除，仅忽略，保持 git status 干净）
+.screenshots/
+preflight/shots_resize/
+自检报告.md
+
+# D-03：D 系列卡的本地截图不入库；不影响已跟踪的 shots/*.png
+preflight/selfcheck/shots/D-0*.png
