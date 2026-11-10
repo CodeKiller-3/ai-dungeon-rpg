@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>C-05 随机策略对照基线</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- C-05 验证页：Q-learning 与"均匀随机策略"同条件对照。
+     加载顺序与主游戏一致（main 最后，不设 NO_AUTOSTART → 启动即生成首图）。
+     本页不修改 js/ 任何文件：随机策略 runner、种子化地图采样、两组评测全部在本页内实现；
+     Q-learning 侧直接复用 js/systems/learner.js 的 init/tick/getStats（不改超参、不改奖励函数）。
+     同条件口径：7 张地图（同一组种子，两组各自用同一种子重新生成并比对网格哈希）、
+     60 步上限、随机起点采样算法与 learner.randomOpen 一致、成功判定=60 步内从随机起点走到金币。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  var M = Game.Systems.Map, L = Game.Systems.Learner;
+  out.loaded = !!(M && L && typeof M.setFloor === 'function' && typeof M.getGrid === 'function' &&
+    typeof L.init === 'function' && typeof L.tick === 'function' && typeof L.getStats === 'function');
+
+  var MAX_STEPS = 60;      /* 与 learner.js 的 maxSteps 同值（C5-2 另做源码级核对） */
+  var TRAIN_STEPS = 3000;  /* 与 verify_m7 / README 既有口径一致 */
+  var SEEDS = [101, 202, 303, 404, 505, 606, 707]; /* 7 张地图，两组共通 */
+  var ACTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+  if (!out.loaded) { out.ok = false; finish(); return; }
+
+  /* ── 种子化随机数（mulberry32）与作用域替换 ───────────── */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function withSeed(seed, fn) {
+    var orig = Math.random;
+    Math.random = mulberry32(seed);
+    try { return fn(); } finally { Math.random = orig; }
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function hashGrid(g) {
+    var rows = [];
+    for (var y = 0; y < g.length; y++) rows.push(g[y].join(''));
+    return fnv1a(rows.join('|'));
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  var LEARNER_SRC = readDoc('../js/systems/learner.js');
+
+  /* 每张图使用全新 learner 模块实例（= 同一份源码、同一组超参，但 ε 从 0.4 起、Q 表为空），
+   * 避免"7 张图顺序训练时 ε 单调衰减到 0.05"带来的顺序效应，保证逐图条件一致。 */
+  function freshLearner() {
+    (0, eval)(LEARNER_SRC + '\n//# sourceURL=learner-fresh.js');
+    return Game.Systems.Learner;
+  }
+
+  function genMap(seed) {
+    return withSeed(seed, function () { return M.setFloor(1); }); /* setFloor 清空楼层快照 → 真正重生成 */
+  }
+
+  /* 与 learner.js 的 randomOpen 完全同算法（300 次尝试、1..w-2 / 1..h-2、grid===1 才取） */
+  function randomOpenLike(grid, rnd) {
+    var h = grid.length, w = grid[0].length;
+    for (var i = 0; i < 300; i++) {
+      var x = 1 + Math.floor(rnd() * (w - 2));
+      var y = 1 + Math.floor(rnd() * (h - 2));
+      if (grid[y][x] === 1) return { x: x, y: y };
+    }
+    return { x: 1, y: 1 };
+  }
+
+  /* 随机策略：每步在 4 个动作里均匀随机；撞墙算一步（与 learner.stepOne 的步数语义一致） */
+  function runRandomBaseline(grid, target, episodes, seed) {
+    var rnd = mulberry32(seed);
+    var h = grid.length, w = grid[0].length;
+    var successes = 0;
+    for (var e = 0; e < episodes; e++) {
+      var a = randomOpenLike(grid, rnd), win = false;
+      for (var step = 1; step <= MAX_STEPS; step++) {
+        var act = Math.floor(rnd() * 4);
+        var nx = a.x + ACTIONS[act][0], ny = a.y + ACTIONS[act][1];
+        if (nx === target.x && ny === target.y) { win = true; break; } /* 与 learner 相同的成功判定 */
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && grid[ny][nx] === 1) a = { x: nx, y: ny };
+      }
+      if (win) successes++;
+    }
+    return { episodes: episodes, successes: successes, rate: episodes ? Math.round(successes * 100 / episodes) : 0 };
+  }
+
+  function medianOf(arr) {
+    var s = arr.slice().sort(function (a, b) { return a - b; });
+    return s[Math.floor(s.length / 2)];
+  }
+
+  var sub = {}, ok = true;
+  try {
+    /* ── 第一组：Q-learning（复用现有训练路径） ─────────── */
+    var qRuns = [], qErr = null;
+    for (var i = 0; i < SEEDS.length; i++) {
+      var seed = SEEDS[i];
+      var policySeed = seed * 7 + 11;
+      try {
+        var g = genMap(seed);
+        var lrn = freshLearner();
+        var res = withSeed(policySeed, function () {
+          lrn.init(g);
+          for (var t = 0; t < TRAIN_STEPS; t++) lrn.tick(1);
+          var st = lrn.getStats();
+          lrn.stop();
+          return st;
+        });
+        qRuns.push({
+          seed: seed, gridHash: hashGrid(g),
+          target: { x: res.target.x, y: res.target.y },
+          episode: res.episode, episodes: res.episode, rate: res.successRate
+        });
+      } catch (e) { qErr = String(e); break; }
+    }
+    if (qErr) throw new Error('Q 组异常：' + qErr);
+
+    /* ── 第二组：随机策略（同种子重生成同一张图，逐图 episode 数与 Q 组相同） ── */
+    var probe = { init: 0, tick: 0, getStats: 0, stop: 0 };
+    var savedLearner = Game.Systems.Learner;
+    Game.Systems.Learner = {
+      init: function () { probe.init++; },
+      tick: function () { probe.tick++; },
+      getStats: function () { probe.getStats++; return {}; },
+      stop: function () { probe.stop++; }
+    };
+    var rRuns = [], sameGrid = [], sameTarget = [], repeatRate = null, repeatRate2 = null;
+    try {
+      for (var j = 0; j < SEEDS.length; j++) {
+        var s2 = SEEDS[j];
+        var g2 = genMap(s2);
+        var q = qRuns[j];
+        sameGrid.push(hashGrid(g2) === q.gridHash);
+        sameTarget.push(g2[q.target.y] && g2[q.target.y][q.target.x] === 1 ? true : false);
+        var rb = runRandomBaseline(g2, q.target, q.episode, s2 * 7 + 11);
+        rRuns.push({ seed: s2, gridHash: hashGrid(g2), episodes: rb.episodes,
+          successes: rb.successes, rate: rb.rate });
+        if (j === 0) {
+          /* C5-3：同种子重跑一次，结果必须完全一致 */
+          var rb2 = runRandomBaseline(g2, q.target, q.episode, s2 * 7 + 11);
+          repeatRate = rb.rate; repeatRate2 = rb2.rate;
+          sub.c53_detail = { first: rb, second: rb2 };
+        }
+      }
+    } finally {
+      Game.Systems.Learner = savedLearner;
+    }
+
+    var qRates = qRuns.map(function (x) { return x.rate; });
+    var rRates = rRuns.map(function (x) { return x.rate; });
+    var qMed = medianOf(qRates), rMed = medianOf(rRates);
+    var qMin = Math.min.apply(null, qRates), qMax = Math.max.apply(null, qRates);
+    var rMin = Math.min.apply(null, rRates), rMax = Math.max.apply(null, rRates);
+
+    /* ── C5-1 harnessValid ─────────────────────────────── */
+    function groupOk(rows) {
+      return rows.length === SEEDS.length && rows.every(function (r) {
+        return r.episodes > 0 && r.rate >= 0 && r.rate <= 100;
+      });
+    }
+    sub.c51_harnessValid = groupOk(qRuns) && groupOk(rRuns) && !qErr;
+    sub.c51_qRuns = qRuns;
+    sub.c51_randomRuns = rRuns;
+    ok = ok && sub.c51_harnessValid;
+
+    /* ── C5-2 sameConditions ───────────────────────────── */
+    var srcHasCap = LEARNER_SRC.indexOf('maxSteps = 60') >= 0;
+    var srcHasWin = LEARNER_SRC.indexOf('nx === target.x && ny === target.y') >= 0;
+    var srcHasStart = LEARNER_SRC.indexOf('1 + Math.floor(Math.random() * (w - 2))') >= 0;
+    sub.c52_sameConditions = sameGrid.length === SEEDS.length &&
+      sameGrid.every(function (v) { return v; }) &&
+      sameTarget.every(function (v) { return v; }) &&
+      srcHasCap && srcHasWin && srcHasStart;
+    sub.c52_how = {
+      maps: '两组对同一 seed 各自 Map.setFloor(1) 重生成，网格 FNV-1a 逐一相同（sameGrid）',
+      seeds: SEEDS,
+      targets: qRuns.map(function (r) { return r.target; }),
+      targetsOnGrid: sameTarget,
+      stepCap: { random: MAX_STEPS, learnerSourceHasMaxSteps60: srcHasCap },
+      winPredicate: { shared: '到达 target 格即成功（60 步内）', learnerSourceHasCheck: srcHasWin },
+      startSampling: { algorithm: '与 learner.randomOpen 相同的 300 次均匀尝试', learnerSourceHasStart: srcHasStart },
+      episodes: '随机组每图 episode 数 = Q 组该图 episode 数'
+    };
+    ok = ok && sub.c52_sameConditions;
+
+    /* ── C5-3 deterministicSeed ────────────────────────── */
+    sub.c53_deterministicSeed = repeatRate !== null && repeatRate === repeatRate2;
+    ok = ok && sub.c53_deterministicSeed;
+
+    /* ── C5-4 noQInBaseline ────────────────────────────── */
+    var probeTotal = probe.init + probe.tick + probe.getStats + probe.stop;
+    sub.c54_noQInBaseline = probeTotal === 0;
+    sub.c54_probe = { init: probe.init, tick: probe.tick, getStats: probe.getStats,
+      stop: probe.stop, total: probeTotal,
+      how: '随机组运行期间把 Game.Systems.Learner 替换为计数桩；Q 表只能由 init 构建，计数为 0 即未构建/未读取' };
+    ok = ok && sub.c54_noQInBaseline;
+
+    /* ── C5-5 numbersRecorded ──────────────────────────── */
+    var readme = readDoc('../README.md');
+    var speech = readDoc('../docs/答辩讲稿.md');
+    var plan = readDoc('../规划-对标补齐.md');
+    var reMed = /Q-learning 中位数\s*(\d+)%\s*vs\s*随机策略中位数\s*(\d+)%/;
+    var reRange = /区间\s*(\d+)%~(\d+)%\s*vs\s*(\d+)%~(\d+)%/;
+    var mR = readme.match(reMed), mS = speech.match(reMed);
+    var rgR = readme.match(reRange), rgS = speech.match(reRange);
+    var docOk = !!mR && !!mS && Number(mR[1]) === qMed && Number(mR[2]) === rMed &&
+      Number(mS[1]) === qMed && Number(mS[2]) === rMed;
+    var rangeOk = !!rgR && !!rgS &&
+      Number(rgR[1]) === qMin && Number(rgR[2]) === qMax &&
+      Number(rgR[3]) === rMin && Number(rgR[4]) === rMax &&
+      Number(rgS[1]) === qMin && Number(rgS[2]) === qMax &&
+      Number(rgS[3]) === rMin && Number(rgS[4]) === rMax;
+    var planOk5 = plan.indexOf('C-05') >= 0 && plan.indexOf('44/44') >= 0 &&
+      plan.indexOf('中位数 ' + qMed + '%') >= 0 && plan.indexOf('中位数 ' + rMed + '%') >= 0;
+    sub.c55_numbersRecorded = docOk && rangeOk && planOk5;
+    sub.c55_numbers = {
+      qRates: qRates, randomRates: rRates,
+      q: { median: qMed, min: qMin, max: qMax },
+      random: { median: rMed, min: rMin, max: rMax },
+      episodesPerMap: qRuns.map(function (r) { return r.episode; }),
+      docs: { readmeMedians: mR ? [Number(mR[1]), Number(mR[2])] : null,
+        speechMedians: mS ? [Number(mS[1]), Number(mS[2])] : null,
+        readmeRange: rgR ? rgR.slice(1).map(Number) : null,
+        speechRange: rgS ? rgS.slice(1).map(Number) : null,
+        planHasC05: plan.indexOf('C-05') >= 0, planHasBaseline: plan.indexOf('44/44') >= 0 }
+    };
+    ok = ok && sub.c55_numbersRecorded;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
