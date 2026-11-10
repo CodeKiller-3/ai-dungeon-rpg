@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T02:31:24.995Z",
+  "at": "2026-11-10T02:42:44.892Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -10,7 +10,7 @@
       "level": "WARN",
       "id": "QF-01",
       "name": "单文件体积偏大",
-      "detail": "js/core/render.js 48.4KB, js/systems/modal.js 32.1KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
+      "detail": "js/core/render.js 48.4KB, js/systems/modal.js 34.1KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
     },
     {
       "level": "PASS",
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "36 文件 / 413.4 KB（不含 vendor）"
+      "detail": "36 文件 / 415.6 KB（不含 vendor）"
     },
     {
       "level": "PASS",

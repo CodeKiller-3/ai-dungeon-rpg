@@ -18,10 +18,11 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
-  var MAX_VISIBLE = 12;   /* 面板最多显示行数（当前数据量远小于此） */
+  var MAX_VISIBLE = 12;   /* 面板最多显示行数（安全阀：单次最多渲染行数，语义不变） */
   var ROW_H = 30;
   var HEADER_H = 46;
   var FOOTER_H = 34;
+  var MARGIN = 16;        /* C-03：面板与逻辑视口上下的最小留白（滚动的判定依据） */
   var MAX_W = 520;
   var W_RATIO = 0.88;    /* 窄窗口时面板宽 ≤ 画布 88% */
 
@@ -57,6 +58,17 @@
     return { w: w, h: h };
   }
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  /* C-03：当前视口可容纳的列表行数 = min(MAX_VISIBLE, 可用高度能放下的行数)。
+   * 可用高度 = 逻辑视口高 - 上下留白 - 页头 - 页尾；至少 1 行（极小视口降级，不出现负高度）。
+   * 1280×800（逻辑 1024×640）下算得 17 行 → 被 MAX_VISIBLE 压回 12，与改动前完全一致；
+   * 逻辑高 ≤ 450 时可用高度不足 12 行，列表转为滚动而不是被视口裁切。 */
+  function visibleRowCount(sz) {
+    var h = (sz && typeof sz.h === 'number') ? sz.h : 0;
+    var byH = Math.floor((h - 2 * MARGIN - HEADER_H - FOOTER_H) / ROW_H);
+    if (!isFinite(byH) || byH < 1) byH = 1;
+    return Math.max(1, Math.min(MAX_VISIBLE, byH));
+  }
 
   function itemDesc(item) {
     if (!item) return '';
@@ -183,8 +195,8 @@
         /* gameover 无列表，战绩在 _drawGameover 现场拉取 */
       } catch (e) { data = []; }
       sel = clamp(sel, 0, Math.max(data.length - 1, 0));
-      /* P2-3b：数据变化后把滚动窗口夹回有效区间（仅 quests 图鉴会 >0） */
-      var maxScroll = Math.max(0, data.length - MAX_VISIBLE);
+      /* P2-3b/C-03：数据变化后把滚动窗口夹回有效区间（列表超出当前可见行数时生效） */
+      var maxScroll = Math.max(0, data.length - visibleRowCount(cssSize()));
       if (qScroll > maxScroll) qScroll = maxScroll;
       if (qScroll < 0) qScroll = 0;
     },
@@ -298,20 +310,45 @@
       this._refresh();
     },
 
-    /* P2-3b：选中行变化后让滚动窗口跟随（仅 quests 图鉴且条目超一屏时生效） */
+    /* P2-3b/C-03：选中行变化后让滚动窗口跟随（列表超出当前可见行数时生效，四类列表统一） */
     _syncScroll: function () {
-      if (kind !== 'quests' || data.length <= MAX_VISIBLE) return;
+      var vr = visibleRowCount(cssSize());
+      if (data.length <= vr) return;
       if (sel < qScroll) qScroll = sel;
-      else if (sel >= qScroll + MAX_VISIBLE) qScroll = sel - MAX_VISIBLE + 1;
-      var maxScroll = Math.max(0, data.length - MAX_VISIBLE);
+      else if (sel >= qScroll + vr) qScroll = sel - vr + 1;
+      var maxScroll = Math.max(0, data.length - vr);
       if (qScroll > maxScroll) qScroll = maxScroll;
       if (qScroll < 0) qScroll = 0;
     },
 
-    /* P2-3b：当前可见窗口（验证/调试读取）：{start, rows, total, sel} */
+    /* P2-3b/C-03：当前可见窗口（验证/调试读取）：{start, rows, total, sel} */
     _visibleRange: function () {
-      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
-      return { start: start, rows: Math.min(data.length - start, MAX_VISIBLE), total: data.length, sel: sel };
+      var vr = visibleRowCount(cssSize());
+      var start = (data.length > vr) ? qScroll : 0;
+      return { start: start, rows: Math.min(Math.max(data.length - start, 0), vr), total: data.length, sel: sel };
+    },
+
+    /* C-03：布局快照（验证/调试读取）——与 draw 使用同一套行数/起点计算，
+     * 返回逻辑视口、可见行数、面板高、完整内容高、是否滚动、面板顶 y 与逐行 y。 */
+    _layout: function () {
+      var sz = cssSize();
+      var vr = visibleRowCount(sz);
+      var start = (data.length > vr) ? qScroll : 0;
+      var rows = Math.min(Math.max(data.length - start, 0), vr);
+      var panelH = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
+        : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
+        : HEADER_H + rows * ROW_H + FOOTER_H;
+      var py = (sz.h - panelH) / 2;
+      var rowYs = [];
+      for (var i = 0; i < rows; i++) rowYs.push(py + HEADER_H + i * ROW_H);
+      return {
+        viewport: sz, visibleRows: vr, start: start, rows: rows,
+        panelH: panelH, contentH: HEADER_H + data.length * ROW_H + FOOTER_H,
+        scrollable: data.length > vr, panelTop: py, panelBottom: py + panelH,
+        firstRowY: rowYs.length ? rowYs[0] : null,
+        lastRowY: rowYs.length ? rowYs[rowYs.length - 1] : null,
+        rowYs: rowYs, total: data.length, sel: sel
+      };
     },
 
     /* M8-4：当前页签（验证/调试读取） */
@@ -417,10 +454,11 @@
       }
       var rowY = rect.y + HEADER_H;
       var rowIdx = Math.floor((y - rowY) / ROW_H);
-      /* P2-3b：点击行按滚动窗口偏移换算为绝对索引（tasks/shop/inventory 的 start 恒为 0） */
-      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
+      /* P2-3b/C-03：点击行按滚动窗口偏移换算为绝对索引（超出可见行数时 start 才非 0） */
+      var vr = visibleRowCount(cssSize());
+      var start = (data.length > vr) ? qScroll : 0;
       var absIdx = rowIdx + start;
-      if (rowIdx >= 0 && rowIdx < MAX_VISIBLE && absIdx >= 0 && absIdx < data.length) {
+      if (rowIdx >= 0 && rowIdx < vr && absIdx >= 0 && absIdx < data.length) {
         sel = absIdx;
         this._confirm();
       }
@@ -557,9 +595,10 @@
       var sz = cssSize();
       var cw = sz.w, ch = sz.h;
 
-      /* P2-3b：图鉴滚动窗口起点；非 quests 图鉴页 start 恒为 0（tasks/shop/inventory 行为不变） */
-      var start = (kind === 'quests' && data.length > MAX_VISIBLE) ? qScroll : 0;
-      var rows = Math.min(data.length - start, MAX_VISIBLE);
+      /* P2-3b/C-03：滚动窗口起点；列表未超出当前可见行数时 start 恒为 0（高视口行为不变） */
+      var vr = visibleRowCount(sz);
+      var start = (data.length > vr) ? qScroll : 0;
+      var rows = Math.min(Math.max(data.length - start, 0), vr);
       var w = Math.min(cw * W_RATIO, MAX_W);
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
       var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
@@ -675,9 +714,10 @@
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
-      /* P2-3b：图鉴滚动时底部显示当前位置 (sel+1)/total（窄屏用短文案避免溢出） */
-      if (kind === 'quests' && data.length > MAX_VISIBLE) {
-        hint = '↑↓ 浏览 · ' + (sel + 1) + '/' + data.length + ' · Tab 切页 · Esc 关闭';
+      /* P2-3b/C-03：列表滚动时底部显示当前位置 (sel+1)/total（窄屏用短文案避免溢出） */
+      if (data.length > visibleRowCount(sz)) {
+        hint = '↑↓ 浏览 · ' + (sel + 1) + '/' + data.length + ' · ' +
+          (kind === 'quests' ? 'Tab 切页 · ' : '') + 'Esc 关闭';
       }
       c.fillText(hint, px + 14, py + h - 12);
     },

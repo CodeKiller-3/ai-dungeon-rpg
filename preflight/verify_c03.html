@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_c03</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- C-03 验证页：只加载 items/config/shop/modal；任务、背包、图鉴数据源用桩，
+     Render 用 {cssW, cssH, _canvas} 桩模拟不同逻辑视口；_layout() 与 draw 共用同一套行数/起点计算。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, api: false, ok: false };
+  function finish() {
+    out.ok = !!(out.loaded && out.api && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  try {
+    var D = Game.Data, I = D.ITEMS;
+    var STOCK = D.SHOP_STOCK, POOL = D.SHOP_ROTATION, SCROLLS = D.SHOP_SCROLLS;
+    var Shop = Game.Systems.Shop, Modal = Game.Modal;
+    out.loaded = !!(I && STOCK && POOL && SCROLLS);
+    out.api = !!(Shop && Modal && typeof Modal._layout === 'function' &&
+      typeof Modal._setPage === 'function' && typeof Modal.getPage === 'function');
+
+    /* 逻辑视口桩：改 cssH 即可切换"视口高度" */
+    var cv = document.getElementById('game');
+    var view = { w: 1024, h: 640 };
+    Game.Core = Game.Core || {};
+    Game.Core.Render = {
+      cssW: 1024, cssH: 640, _canvas: cv, _ctx: null,
+      setH: function (h) { view.h = h; this.cssH = h; return this; }
+    };
+    if (!out.loaded || !out.api) { finish(); return; }
+
+    /* 数据源桩：Map（shop.refresh 取楼层）、Quest/Inventory（列表来源） */
+    var floor = 1;
+    Game.Systems.Map = {
+      getFloor: function () { return floor; },
+      setFloor: function (f) { floor = f; }
+    };
+    var invEntries = [], i;
+    for (i = 0; i < 12; i++) invEntries.push({ id: 'potion_small', count: 1 + i });
+    Game.Systems.Inventory = { list: function () { return invEntries; } };
+    Game.Systems.Quest = {
+      getActive: function () {
+        var a = [];
+        for (var k = 0; k < 12; k++) a.push({ q: { id: 'q' + k, desc: '任务' + k }, progress: 0 });
+        return a;
+      }
+    };
+
+    var sub = {}, ok = true;
+    function ids(st) { return st.map(function (x) { return x.id; }); }
+    function coreOf(f) { return STOCK[f - 1] || []; }
+    function poolOf(f) { return POOL[f - 1] || []; }
+    function coreEquipMin(f) {
+      var m = Infinity, who = '';
+      coreOf(f).forEach(function (id) {
+        var it = I[id];
+        if (it && it.type !== 'consumable' && it.price < m) { m = it.price; who = id; }
+      });
+      return { min: m, id: who };
+    }
+    function pressDown(n) {
+      for (var k = 0; k < n; k++) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', keyCode: 40, which: 40, bubbles: true }));
+      }
+    }
+
+    /* C3-1 poolTierAllFloors：五层装备项 ≥ 该层核心非消耗品最低价 */
+    var tierRows = [], viol = [];
+    for (var f1 = 1; f1 <= 5; f1++) {
+      var cm = coreEquipMin(f1), bad = 0;
+      poolOf(f1).forEach(function (id) {
+        var it = I[id];
+        if (!it) { bad++; return; }
+        if (it.type !== 'consumable' && it.price < cm.min) bad++;
+      });
+      tierRows.push({ floor: f1, coreEquipMin: cm.min, coreMinId: cm.id, bad: bad });
+      if (bad) viol.push(f1);
+    }
+    sub.c31_poolTierAllFloors = viol.length === 0;
+    sub.c31_rows = tierRows;
+
+    /* C3-2 countsUnchanged：核心 7/9/9/8/8、合计 10/12/12/11/11、池长 5、周期 5 */
+    var coreCounts = STOCK.map(function (r) { return r.length; });
+    var totals = [], lens = [], cycles = [];
+    for (var f2 = 1; f2 <= 5; f2++) {
+      floor = f2; Shop.resetPhase();
+      totals.push(Shop.getStock().length);
+      lens.push(poolOf(f2).length);
+      var L = poolOf(f2).length, seq = [], idx;
+      Shop.getStock();
+      for (idx = 0; idx < L + 1; idx++) { Shop.refresh(); seq.push(ids(Shop.getStock()).join('|')); }
+      var period = 0;
+      for (var p = 1; p <= L; p++) {
+        var same = true;
+        for (var q = 0; q + p < seq.length; q++) if (seq[q] !== seq[q + p]) { same = false; break; }
+        if (same) { period = p; break; }
+      }
+      cycles.push(period);
+    }
+    sub.c32_countsUnchanged = coreCounts.join(',') === '7,9,9,8,8' &&
+      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,5,5' &&
+      cycles.join(',') === '5,5,5,5,5';
+    sub.c32_core = coreCounts;
+    sub.c32_totals = totals;
+    sub.c32_lens = lens;
+    sub.c32_cycles = cycles;
+
+    /* C3-3 scrollOnShort：逻辑高 450/420/400，12 行列表可滚动、首行完整、末行可达 */
+    function shortCase(h) {
+      view.h = h; Game.Core.Render.cssH = h;
+      floor = 2; Shop.resetPhase();          /* F2 合计 12 行 */
+      Modal.open('shop');
+      var L0 = Modal._layout();
+      pressDown(11);                         /* 从第 0 行走到第 11 行 */
+      var L1 = Modal._layout();
+      var firstComplete = L0.firstRowY >= L0.panelTop + 46 && (L0.firstRowY + 30) <= L0.panelBottom - 34 + 1;
+      var lastReachable = L1.start + L1.rows - 1 === 11 &&
+        (L1.lastRowY + 30) <= L1.panelBottom - 34 + 1;
+      var inside = L0.panelTop >= 0 && L0.panelBottom <= h;
+      var res = {
+        h: h, visibleRows: L0.visibleRows, rows: L0.rows, panelH: L0.panelH,
+        contentH: L0.contentH, panelTop: L0.panelTop, panelBottom: L0.panelBottom,
+        firstRowY: L0.firstRowY, lastRowYAfterScroll: L1.lastRowY, startAfterScroll: L1.start,
+        scrollable: L0.scrollable, firstComplete: firstComplete,
+        lastReachable: lastReachable, inside: inside
+      };
+      Modal.close();
+      return res;
+    }
+    var short450 = shortCase(450), short420 = shortCase(420), short400 = shortCase(400);
+    function shortOk(r) {
+      return r.scrollable && r.visibleRows < 12 && r.visibleRows >= 1 &&
+        r.inside && r.firstComplete && r.lastReachable;
+    }
+    sub.c33_scrollOnShort = shortOk(short450) && shortOk(short420) && shortOk(short400);
+    sub.c33_cases = [short450, short420, short400];
+
+    /* C3-4 noScrollOnTall：1024×640 下 12 行不滚动，首行 y=146、末行 y=476 */
+    view.h = 640; Game.Core.Render.cssH = 640;
+    floor = 2; Shop.resetPhase();
+    Modal.open('shop');
+    var tall = Modal._layout();
+    Modal.close();
+    sub.c34_noScrollOnTall = tall.scrollable === false && tall.visibleRows === 12 &&
+      tall.rows === 12 && tall.start === 0 && tall.firstRowY === 146 && tall.lastRowY === 476 &&
+      tall.rowYs.length === 12 && tall.rowYs[11] === 476;
+    sub.c34_tall = {
+      scrollable: tall.scrollable, visibleRows: tall.visibleRows, rows: tall.rows,
+      panelH: tall.panelH, panelTop: tall.panelTop, firstRowY: tall.firstRowY,
+      lastRowY: tall.lastRowY, rowYs: tall.rowYs
+    };
+
+    /* C3-5 allModalsCovered：420 逻辑高下 商店/背包/任务/图鉴 四类均不裁切 */
+    view.h = 420; Game.Core.Render.cssH = 420;
+    function coverCase(openFn, h) {
+      openFn();
+      var L = Modal._layout();
+      var inside = L.panelTop >= 0 && L.panelBottom <= h;
+      var rowsFit = L.rows === L.visibleRows || L.rows === L.total;
+      var noClip = inside && rowsFit && (L.lastRowY === null || (L.lastRowY + 30) <= L.panelBottom - 34 + 1);
+      var res = {
+        kind: Modal._kind ? Modal._kind() : '', total: L.total, visibleRows: L.visibleRows,
+        rows: L.rows, panelH: L.panelH, panelTop: L.panelTop, panelBottom: L.panelBottom,
+        scrollable: L.scrollable, inside: inside, noClip: noClip
+      };
+      Modal.close();
+      return res;
+    }
+    var mShop = coverCase(function () { floor = 2; Shop.resetPhase(); Modal.open('shop'); }, 420);
+    var mBag = coverCase(function () { Modal.open('inventory'); }, 420);
+    var mQuest = coverCase(function () { Modal.open('quests'); Modal._setPage(0); }, 420);
+    var mDex = coverCase(function () { Modal.open('quests'); Modal._setPage(2); }, 420);
+    sub.c35_allModalsCovered = mShop.noClip && mBag.noClip && mQuest.noClip && mDex.noClip;
+    sub.c35_cases = [
+      { name: 'shop', info: mShop }, { name: 'inventory', info: mBag },
+      { name: 'quests-page0', info: mQuest }, { name: 'quests-page2', info: mDex }
+    ];
+
+    /* C3-6 noArbitrage：全物品 price > sell；价格校验和 46/9685/4841 */
+    var keys = Object.keys(I), sp = 0, ss = 0, arbBad = [];
+    keys.forEach(function (k) {
+      sp += I[k].price; ss += I[k].sell;
+      if (!(I[k].price > I[k].sell)) arbBad.push(k);
+    });
+    sub.c36_noArbitrage = keys.length === 46 && sp === 9685 && ss === 4841 && arbBad.length === 0 &&
+      I.potion_small.price === 10 && I.sword_iron.price === 60 &&
+      I.chain_mail_rare.price === 240 && I.plate_armor_epic.price === 800;
+    sub.c36_checksum = { count: keys.length, sumPrice: sp, sumSell: ss, bad: arbBad };
+
+    /* C3-7 stableStock：同层同一次开张稳定、换层归零可复现 */
+    floor = 3; Shop.resetPhase();
+    var a1 = ids(Shop.getStock()).join('|');
+    var a2 = ids(Shop.getStock()).join('|');
+    floor = 1; Shop.getStock();
+    floor = 3;
+    var a3 = ids(Shop.getStock()).join('|');
+    sub.c37_stableStock = a1 === a2 && a3 === a1;
+    sub.c37_sample = a1.split('|');
+
+    ok = sub.c31_poolTierAllFloors && sub.c32_countsUnchanged && sub.c33_scrollOnShort &&
+      sub.c34_noScrollOnTall && sub.c35_allModalsCovered && sub.c36_noArbitrage && sub.c37_stableStock;
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
