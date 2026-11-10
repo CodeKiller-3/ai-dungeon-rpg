@@ -1,0 +1,440 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>perf_d12</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc"><div id="npc-title"></div><div id="npc-log"></div><input id="npc-input"></div>
+<!-- D-12 一次性压测采样页（不进 run-all：文件名不是 verify_*）。
+     由 preflight/perf_d12_run.js 通过 CDP 在真实时钟下驱动（不用 --virtual-time-budget，
+     否则 performance.now 会被虚拟时钟接管、测不到真实 CPU 耗时）。
+     加载序与 index.html 完全一致；仅本页内部做插桩（包装 prototype / 函数计时），不改 js/。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var G = window.Game;
+  var M = G.Core.Main;
+  var P = G.Data.Player;
+  var R = { ok: false, phase: 'boot' };
+
+  /* ── 固定种子：地图/战斗/装饰全部可复现，保证改前改后是同一张图、同一条输入序列 ── */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* ── 绘制调用计数：只在本页包装 prototype，js/ 不动 ── */
+  var C = { drawImage: 0, fillRect: 0, fillText: 0, spriteGet: 0, spriteGetFrame: 0 };
+  var Proto = CanvasRenderingContext2D.prototype;
+  var _di = Proto.drawImage, _fr = Proto.fillRect, _ft = Proto.fillText;
+  Proto.drawImage = function () { C.drawImage++; return _di.apply(this, arguments); };
+  Proto.fillRect = function () { C.fillRect++; return _fr.apply(this, arguments); };
+  Proto.fillText = function () { C.fillText++; return _ft.apply(this, arguments); };
+  var S_ = G.Core.Sprites;
+  var _sg = S_.get, _sgf = S_.getFrame;
+  S_.get = function (n) { C.spriteGet++; return _sg.call(this, n); };
+  S_.getFrame = function (n, i) { C.spriteGetFrame++; return _sgf.call(this, n, i); };
+
+  /* ── 分阶段计时：包装顶层绘制入口，求和即为 draw；帧总时长 - draw = update ── */
+  var T = { drawMap: 0, drawPlayer: 0, drawHUD: 0, drawBattle: 0, lighting: 0, particles: 0, hud: 0, nMap: 0, nLight: 0 };
+  function wrap(obj, name, key, nKey) {
+    var f = obj[name];
+    if (typeof f !== 'function') return;
+    obj[name] = function () {
+      var t0 = performance.now();
+      try { return f.apply(this, arguments); }
+      finally {
+        T[key] += performance.now() - t0;
+        if (nKey) T[nKey]++;
+      }
+    };
+  }
+  wrap(G.Core.Render, 'drawMap', 'drawMap', 'nMap');
+  wrap(G.Core.Render, 'drawPlayer', 'drawPlayer');
+  wrap(G.Core.Render, 'drawHUD', 'drawHUD');
+  wrap(G.Core.Render, 'drawBattle', 'drawBattle');
+  wrap(G.Lighting, 'draw', 'lighting', 'nLight');
+  wrap(G.Particles, 'draw', 'particles');
+  if (G.hud) wrap(G.hud, 'draw', 'hud');
+
+  function pct(arr, p) {
+    if (!arr.length) return null;
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    var i = Math.min(a.length - 1, Math.max(0, Math.ceil(p / 100 * a.length) - 1));
+    return Math.round(a[i] * 100) / 100;
+  }
+  function stat(arr) {
+    if (!arr.length) return { p50: null, p95: null, max: null, mean: null, n: 0 };
+    var s = 0;
+    for (var i = 0; i < arr.length; i++) s += arr[i];
+    return {
+      p50: pct(arr, 50), p95: pct(arr, 95),
+      max: Math.round(Math.max.apply(null, arr) * 100) / 100,
+      mean: Math.round(s / arr.length * 100) / 100, n: arr.length
+    };
+  }
+
+  /* ── 键注入：真实 KeyboardEvent，走 Input.bind 同一路径 ── */
+  function down(code) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: code, key: code, bubbles: true }));
+  }
+  function up(code) {
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: code, key: code, bubbles: true }));
+  }
+  var DIRS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+  var DV = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+
+  var FRAME_DT = 1000 / 60;
+  var ts = 0;
+
+  /* ── 帧采样：每帧记录总耗时/各阶段耗时/绘制调用数 ── */
+  var SAMPLES = [];
+  function sampleFrame(fn) {
+    var c0 = { di: C.drawImage, fr: C.fillRect, ft: C.fillText, sg: C.spriteGet, sgf: C.spriteGetFrame };
+    var m0 = T.drawMap, d0 = T.drawPlayer, hd0 = T.drawHUD, b0 = T.drawBattle;
+    var l0 = T.lighting, p0 = T.particles, h0 = T.hud;
+    var w0 = performance.now();
+    fn();
+    var w1 = performance.now();
+    /* Canvas2D 的绘制命令会先进显示列表，真正光栅化发生在提交时；取 1×1 像素强制刷一次，
+       把光栅化成本计入，否则只测到 JS 侧的入队时间（改前改后同口径）。 */
+    var f0 = performance.now();
+    try { G.Core.Render._ctx.getImageData(0, 0, 1, 1); } catch (e) { /* 忽略 */ }
+    var f1 = performance.now();
+    var drawT = (T.drawMap - m0) + (T.drawPlayer - d0) + (T.drawHUD - hd0) + (T.drawBattle - b0);
+    SAMPLES.push({
+      total: w1 - w0,
+      flush: f1 - f0,
+      draw: drawT,
+      update: (w1 - w0) - drawT,
+      mapOnly: T.drawMap - m0,
+      light: T.lighting - l0,
+      particles: T.particles - p0,
+      hud: T.hud - h0,
+      di: C.drawImage - c0.di,
+      fr: C.fillRect - c0.fr,
+      ft: C.fillText - c0.ft,
+      sg: C.spriteGet - c0.sg,
+      sgf: C.spriteGetFrame - c0.sgf,
+      mapCalls: T.nMap - m0,
+      scene: M._scene
+    });
+  }
+  /* 每帧 drawMap 自身的净耗时 = 进入/退出时刻差（含内部 lighting/particles/hud），
+     用上面的差值近似即可；mapOnly 字段在下面对 SAMPLES 做后处理时不再使用。 */
+
+  function boot() {
+    Math.random = mulberry32(20261210);
+    /* 素材基址：preflight/ 下默认 'assets/sprites/' 会 404，这里只改加载入口的默认值 */
+    var load = G.Core.Sprites.load;
+    G.Core.Sprites.load = function () { return load.call(this, '../assets/sprites/'); };
+    M.init();
+    window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    if (M._guideVisible) { M._guideVisible = false; }
+    /* 压测内不允许遭遇战打断帧序列（不改游戏逻辑，只清空本页地图的敌人与巡逻怪）；
+       巡逻怪 tick 成本与帧无关，且 D-11 已覆盖其路径逻辑，这里排除以拿到稳定的绘制样本 */
+    try { G.Systems.Map.getEnemies().length = 0; } catch (e) { /* 忽略 */ }
+    try { G.Systems.AI.setPatrols([]); } catch (e) { /* 忽略 */ }
+    P.hp = 100000; P.maxHp = 100000;
+  }
+
+  function spritesReady() {
+    return !!(G.Core.Sprites.isReady() && G.Core.Sprites.get('floor_1') &&
+      G.Core.Sprites.get('knight_m_idle_anim_f0') && G.Core.Sprites.get('wall_top_mid'));
+  }
+
+  /* ── 场景 A：静止探索（只绘制，无输入）1200 帧 ── */
+  function phaseStatic(n) {
+    for (var i = 0; i < n; i++) {
+      ts += FRAME_DT;
+      sampleFrame(function () { M.loop(ts); });
+    }
+  }
+
+  /* ── 场景 B：真实移动输入 1200 帧（短按/长按混合，与真人按键节奏同量级） ── */
+  function phaseMove(n, rng) {
+    var st = { key: null, left: 0, gap: 0 };
+    for (var i = 0; i < n; i++) {
+      if (st.key) {
+        st.left--;
+        if (st.left <= 0) { up(st.key); st.key = null; st.gap = 5; }
+      } else if (st.gap > 0) {
+        st.gap--;
+      } else {
+        st.key = DIRS[(rng() * 4) | 0];
+        down(st.key);
+        st.left = (rng() < 0.45) ? 2 : 14; /* 2 帧≈33ms 短按 / 14 帧≈233ms 长按 */
+      }
+      ts += FRAME_DT;
+      sampleFrame(function () { M.loop(ts); });
+    }
+    if (st.key) up(st.key);
+    G.Core.Input.clear();
+  }
+
+  /* ── 场景 C：战斗渲染 600 帧 ── */
+  function phaseBattle(n) {
+    G.Systems.Battle.start('slime');
+    M.switchScene('battle');
+    for (var i = 0; i < n; i++) {
+      if (M._scene !== 'battle') {
+        G.Systems.Battle.start('slime');
+        M.switchScene('battle');
+      }
+      if (i % 20 === 0) { down('Digit1'); }
+      if (i % 20 === 2) { up('Digit1'); }
+      ts += FRAME_DT;
+      sampleFrame(function () { M.loop(ts); });
+    }
+    up('Digit1');
+    M.switchScene('explore');
+  }
+
+  /* ── 输入延迟：keydown 时刻（合成帧时钟）→ 该次移动真正生效的那一帧 ──
+     口径：pressTs 落在上一帧与下一帧之间（offset 0..16.7ms），latency = 生效帧 ts - pressTs。
+     短按 = keydown 后 33ms 内 keyup（两次帧循环）；长按 = 持续 40 帧。
+     丢弃（40 帧内从未移动）单独计数——这就是"按了没反应"。 */
+  function phaseLatency(trials, rng) {
+    var keys = {};
+    var out = { tap: [], hold: [], tapDrop: 0, holdDrop: 0, tapSkip: 0, holdSkip: 0 };
+    function runOne(tap) {
+      G.Core.Input.clear();
+      /* 选一个能走的方向（避开墙/楼梯），都走不了就跳过该样本 */
+      var cand = [], i;
+      for (i = 0; i < DIRS.length; i++) {
+        var d = DV[DIRS[i]];
+        var nx = P.x + d[0], ny = P.y + d[1];
+        if (!G.Systems.Map.isWalkable(nx, ny)) continue;
+        var t = G.Systems.Map.tileAt(nx, ny);
+        if (t === 2 || t === 3) continue;
+        cand.push(DIRS[i]);
+      }
+      if (!cand.length) return null;
+      var key = cand[(rng() * cand.length) | 0];
+      var offset = rng() * FRAME_DT;
+      var pressTs = ts + offset;
+      down(key);
+      var sx = P.x, sy = P.y, applied = false, lat = null;
+      for (var f = 0; f < 40; f++) {
+        if (tap && f === 2) up(key);
+        ts += FRAME_DT;
+        M.loop(ts);
+        if (P.x !== sx || P.y !== sy) { applied = true; lat = ts - pressTs; break; }
+      }
+      up(key);
+      G.Core.Input.clear();
+      return { applied: applied, lat: lat };
+    }
+    function settle(rng) {
+      /* 随机停留 0~12 帧：让按键落在 120ms 节流窗口内的相位均匀分布，
+         否则固定停留会每次都落在同一相位，丢掉真实分布 */
+      var n = (rng() * 13) | 0;
+      for (var i = 0; i < n; i++) { ts += FRAME_DT; M.loop(ts); }
+    }
+    for (var k = 0; k < trials; k++) {
+      var tap = (k % 2 === 0);
+      var r = runOne(tap);
+      if (!r) { if (tap) out.tapSkip++; else out.holdSkip++; settle(rng); continue; }
+      if (tap) { if (r.applied) out.tap.push(r.lat); else out.tapDrop++; }
+      else { if (r.applied) out.hold.push(r.lat); else out.holdDrop++; }
+      settle(rng);
+    }
+    return {
+      tapApplied: out.tap.length, tapDrop: out.tapDrop, tapSkip: out.tapSkip,
+      holdApplied: out.hold.length, holdDrop: out.holdDrop, holdSkip: out.holdSkip,
+      tap: stat(out.tap), hold: stat(out.hold), all: stat(out.tap.concat(out.hold))
+    };
+  }
+
+  function summarize() {
+    var f = SAMPLES;
+    function col(k) { return f.map(function (s) { return s[k] || 0; }); }
+    var frame = f.map(function (s) { return s.total + s.flush; });
+    var over50 = frame.filter(function (v) { return v >= 50; }).length;
+    var over16 = frame.filter(function (v) { return v >= 16.7; }).length;
+    return {
+      frames: f.length,
+      total: stat(col('total')), flush: stat(col('flush')), frame: stat(frame),
+      draw: stat(col('draw')), update: stat(col('update')),
+      drawMap: stat(col('mapOnly')), light: stat(col('light')), particles: stat(col('particles')),
+      hud: stat(col('hud')),
+      drawImage: stat(col('di')), fillRect: stat(col('fr')), fillText: stat(col('ft')),
+      spriteGet: stat(col('sg')), spriteGetFrame: stat(col('sgf')),
+      over16: over16, over50: over50,
+      scenes: f.reduce(function (m, s) { m[s.scene] = (m[s.scene] || 0) + 1; return m; }, {})
+    };
+  }
+
+  /* ── 画面指纹：冻结动画时钟、固定种子地图、固定帧序列后对整块画布做 FNV-1a。
+     改前/改后同一页跑出同一哈希 = 视觉输出未变（离屏缓存不引入可见差异）。 ── */
+  function fingerprint() {
+    var R2 = G.Core.Render;
+    var old = R2._animNow;
+    R2._animNow = function () { return 5000; };
+    for (var i = 0; i < 6; i++) { ts += FRAME_DT; M.loop(ts); }
+    var cv = R2._canvas, ctx = R2._ctx;
+    var data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+    var h = 0x811c9dc5;
+    for (var j = 0; j < data.length; j++) {
+      h ^= data[j];
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    R2._animNow = old;
+    return { fnv: ('00000000' + h.toString(16)).slice(-8), w: cv.width, h: cv.height, bytes: data.length };
+  }
+
+  window.__D12 = {
+    run: function () {
+      return new Promise(function (resolve, reject) {
+        boot();
+        var waited = 0;
+        (function waitSprites() {
+          if (spritesReady()) { start(); return; }
+          waited += 100;
+          if (waited > 20000) { reject(new Error('sprites not ready')); return; }
+          setTimeout(waitSprites, 100);
+        })();
+
+        function start() {
+          try {
+            R.env = {
+              dpr: G.Core.Render.dpr, scale: G.Core.Render.scale,
+              cssW: G.Core.Render.cssW, cssH: G.Core.Render.cssH,
+              canvasW: G.Core.Render._canvas.width, canvasH: G.Core.Render._canvas.height,
+              innerW: window.innerWidth, innerH: window.innerHeight,
+              grid: [G.Systems.Map.getGrid()[0].length, G.Systems.Map.getGrid().length]
+            };
+            R.phase = 'fingerprint';
+            R.fingerprint = fingerprint();
+            /* 摘掉光影再取一次指纹：把"静态层离屏缓存"与"暗角预渲染"两个改动分开归因 */
+            var lightKeep = G.Lighting.draw;
+            G.Lighting.draw = function () { };
+            R.fingerprintNoLight = fingerprint();
+            G.Lighting.draw = lightKeep;
+            R.phase = 'latency';
+            R.latency = phaseLatency(400, mulberry32(777));
+            R.phase = 'static';
+            SAMPLES = [];
+            phaseStatic(600);
+            R.static = summarize();
+            /* 后段楼层地图更大（F5 = 37×23），每帧瓦片数约为 F1 的 2.7 倍，单独采样 */
+            G.Systems.Map.setFloor(5);
+            G.Systems.Map.getEnemies().length = 0;
+            try { G.Systems.AI.setPatrols([]); } catch (e) { /* 忽略 */ }
+            var g5 = G.Systems.Map.getGrid();
+            /* 把 F5 整层点亮（explored），只留玩家周围为 visible——这才是真人走完整层后的
+               常态渲染负载：整层记忆瓦片逐格贴图 + 暗覆盖，而不是满屏未探索的黑块。 */
+            var blocked5 = function (x, y) { return G.Systems.Map.tileAt(x, y) === 0; };
+            for (var yy = 0; yy < g5.length; yy += 1) {
+              for (var xx = 0; xx < g5[0].length; xx += 1) G.fov.update(xx, yy, 1, blocked5);
+            }
+            var sp5 = G.Systems.Map.getSpawn();
+            P.x = sp5.x; P.y = sp5.y; P.floor = 5;
+            G.fov.update(P.x, P.y, G.fov.RADIUS || 5, blocked5);
+            var exN = 0, visN = 0;
+            for (var ey = 0; ey < g5.length; ey++) {
+              for (var ex = 0; ex < g5[0].length; ex++) {
+                if (G.fov.isExplored(ex, ey)) exN++;
+                if (G.fov.isVisible(ex, ey)) visN++;
+              }
+            }
+            R.exploredTiles = exN;
+            R.visibleTiles = visN;
+            R.gridTiles = g5.length * g5[0].length;
+            SAMPLES = [];
+            phaseStatic(1200);
+            R.staticBig = summarize();
+            /* 归因 A/B：分别摘掉光影与地图绘制，看光栅化成本归属（仅本页临时替换，随后恢复） */
+            R.phase = 'noLight';
+            var lightDraw = G.Lighting.draw;
+            G.Lighting.draw = function () { };
+            SAMPLES = [];
+            phaseStatic(300);
+            R.noLight = summarize();
+            G.Lighting.draw = lightDraw;
+            R.phase = 'noMap';
+            var mapDraw = G.Core.Render.drawMap;
+            G.Core.Render.drawMap = function () { };
+            SAMPLES = [];
+            phaseStatic(300);
+            R.noMap = summarize();
+            G.Core.Render.drawMap = mapDraw;
+            /* 归因 B：只跳过"渐变填充"（暗角），其它绘制照旧——确认全屏径向渐变的光栅成本 */
+            R.phase = 'noVignette';
+            var fillRectRaw = Proto.fillRect;
+            Proto.fillRect = function (x, y, w, h) {
+              if (this.fillStyle && typeof this.fillStyle === 'object' &&
+                  typeof CanvasGradient !== 'undefined' && this.fillStyle instanceof CanvasGradient &&
+                  w >= 900 && h >= 500) return;
+              return fillRectRaw.apply(this, arguments);
+            };
+            SAMPLES = [];
+            phaseStatic(300);
+            R.noVignette = summarize();
+            Proto.fillRect = fillRectRaw;
+            R.phase = 'move';
+            SAMPLES = [];
+            phaseMove(1200, mulberry32(1234));
+            R.move = summarize();
+            R.phase = 'battle';
+            SAMPLES = [];
+            phaseBattle(600);
+            R.battle = summarize();
+            R.staticRebuilds = G.Core.Render._staticRebuilds || 0;
+            R.ok = true;
+          } catch (e) {
+            R.error = String((e && e.stack) || e);
+          }
+          R.phase = 'done';
+          resolve(R);
+        }
+      });
+    }
+  };
+})();
+</script>
+</body>
+</html>

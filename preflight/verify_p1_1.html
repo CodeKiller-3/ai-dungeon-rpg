@@ -98,6 +98,10 @@
       if (!out.sceneLoaded || !out.sceneApi) { finish(); return; }
 
       R.init(cv);
+      /* D-12：drawMap 改成静态层离屏缓存后，逐格绘制发生在离屏 ctx 上，本页包在主 ctx 上的
+       * 记录器看不到。这里关掉缓存走"直绘"路径——正是重建缓存时用的同一段逐格代码，
+       * 断言口径（选图序列/变体数/两次一致）完全不变。缓存路径的等价性由 verify_d12 b/d 断言。 */
+      R._staticBypass = true;
 
       /* 独立渲染断言：桩掉地图/视野/光照，只测渲染层 */
       Game.Systems = Game.Systems || {};

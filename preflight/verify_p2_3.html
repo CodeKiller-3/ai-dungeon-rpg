@@ -91,6 +91,10 @@
 
       R.init(cv);
       R._animNow = function () { return 4321; };
+      /* D-12：静态层改离屏缓存后，主题 tint / 逐格贴图都画在离屏 ctx 上，本页包在主 ctx 的
+       * 记录器看不到。关缓存走直绘路径（= 重建缓存时的同一段代码），t5/t6 记录口径不变；
+       * 缓存路径与直绘逐像素一致由 verify_d12 b/d 断言。 */
+      R._staticBypass = true;
       Game.fov = undefined;
       Game.Lighting = undefined;
       Game.Particles = undefined;

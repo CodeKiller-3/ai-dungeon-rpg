@@ -86,6 +86,9 @@
 
       R.init(cv);
       R._animNow = function () { return 1234; }; /* 冻结动画时钟，保证幂等断言稳定 */
+      /* D-12：静态层改为离屏缓存后，逐格绘制发生在离屏 ctx 上，本页包在主 ctx 的记录器看不到。
+       * 关缓存走直绘路径（= 重建缓存时的同一段代码），幂等断言口径不变；缓存等价性见 verify_d12。 */
+      R._staticBypass = true;
 
       /* 桩掉地图/视野/光照/HUD（本页只断言角色动画层） */
       Game.Systems = Game.Systems || {};

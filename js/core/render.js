@@ -10,6 +10,18 @@
   var TILE = 24; /* 瓦片像素尺寸 */
   var cam = { x: 0, y: 0 };
 
+  /* D-12：静态图层离屏缓存。
+   * 地板/墙/楼梯/细节/装饰/陷阱/记忆覆盖/主题 tint 都是"只在换步、换层、resize 时变化"
+   * 的内容，原实现每帧按格重画（实测 859 次 drawImage + 865 次 fillRect/帧，占帧 58%）。
+   * 这里把这块一次性画进"屏空间、设备像素"的离屏画布，每帧只做 1 次 1:1 blit；
+   * 因为缓存与主画布同一像素网格、同一 dpr×scale 变换，blit 结果与直绘逐像素一致。
+   * 失效条件：镜头移动 / 换层或换图 / 视口或 DPR 变化 / FOV 或装饰变化（main.js 调 invalidateStatic）。 */
+  var staticCache = {
+    canvas: null, ctx: null, valid: false,
+    grid: null, floor: 0, camX: 0, camY: 0,
+    dpr: 0, scale: 0, cvW: 0, cvH: 0
+  };
+
   /* 自适应缩放（2026-11）：设计基准 960×540，等比缩放系数 scale∈[1,2]，按 0.25 步进取整。
    * 逻辑视口 = 窗口 CSS 尺寸 / scale；所有绘制与命中判定仍用逻辑坐标（像素风 TILE=24 不变），
    * 因此窗口变大时画面整体放大、字体/面板同步放大，且不拉伸（横纵同一系数）。
@@ -147,6 +159,8 @@
         }
       } catch (e) { /* 降级 */ }
       this._applyDpr();
+      /* D-12：视口/DPR 变化 → 静态缓存尺寸与缩放都不再匹配，作废 */
+      staticCache.valid = false;
     },
 
     /* 等比缩放系数：以 960×540 为设计基准，取横纵可容纳比例中较小值（避免任一方向超出），
@@ -381,12 +395,152 @@
       this._applyDpr(); /* M9-5：每帧重置 DPR 变换 */
       var W = this.cssW, H = this.cssH;
       this._updateCam(grid, player);
+      /* P1-1：地板变体带楼层因子（同一格跨层可变化，同层内恒定） */
+      var pf = (player && typeof player.floor === 'number' && player.floor > 0) ? player.floor : 1;
+      /* S3-1 FOV：动态层（敌人/巡逻怪）也要按可见性裁剪 */
+      var fovOn = !!(Game.fov && Game.fov.isVisible);
+      /* D-12：静态层走离屏缓存（命中则 1 次 blit；失效则重建一次）。
+       * _staticBypass 仅供验证页做"缓存 vs 直绘"逐像素比对。 */
+      if (this._staticBypass) {
+        this._drawSceneStatic(ctx, grid, pf, W, H);
+      } else {
+        if (!this._staticValidFor(grid, pf, cv)) this._rebuildStatic(grid, pf, W, H);
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if ('imageSmoothingEnabled' in ctx) ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(staticCache.canvas, 0, 0);
+        ctx.restore();
+      }
+      /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
+      var es = Game.Systems.Map.getEnemies();
+      for (var i = 0; i < es.length; i++) {
+        if (fovOn && !Game.fov.isVisible(es[i].x, es[i].y)) continue; /* S3-1：迷雾外不透视 */
+        var epx = es[i].x * TILE - cam.x + 2;
+        var epy = es[i].y * TILE - cam.y + 2;
+        if (epx > -20 && epy > -20 && epx < W + 20 && epy < H + 20) {
+          var eimg = null;
+          if (this._hasSprites()) {
+            /* P2-1：查 MONSTER_ANIM 表取 idle 帧；未知 id / 帧缺失回退 chort */
+            eimg = monsterFrame(es[i].monsterId, false);
+            if (!eimg) eimg = Game.Core.Sprites.get('monster_chort');
+          }
+          if (eimg) {
+            ctx.fillStyle = 'rgba(234,102,104,0.22)';
+            ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
+            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规 16×16 帧铺满格 */
+            if ((eimg.naturalWidth || 0) > 26) {
+              drawSpriteByHeight(ctx, eimg, epx - 1 + TILE / 2, epy - 1 + TILE - 1, TILE - 3);
+            } else {
+              ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
+            }
+          } else {
+            ctx.fillStyle = '#ea6668';
+            ctx.beginPath();
+            ctx.arc(epx + TILE / 2 - 3, epy + TILE / 2 - 3, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
+      var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
+      for (var j = 0; j < ps.length; j++) {
+        if (fovOn && !Game.fov.isVisible(ps[j].x, ps[j].y)) continue; /* S3-1：迷雾外不透视 */
+        /* M9-3：巡逻怪取插值渲染位置 */
+        var prp = (Game.Motion && Game.Motion.getRenderPos) ? Game.Motion.getRenderPos('patrol_' + j) : null;
+        var prx = prp ? prp.x : ps[j].x;
+        var pry = prp ? prp.y : ps[j].y;
+        var ppx = prx * TILE - cam.x + 2;
+        var ppy = pry * TILE - cam.y + 2;
+        if (ppx > -20 && ppy > -20 && ppx < W + 20 && ppy < H + 20) {
+          var chasing = ps[j].state === 'chase';
+          var pimg = null;
+          if (this._hasSprites()) {
+            /* P2-1：查 MONSTER_ANIM 表按状态取 idle/run 帧；未知 id / 帧缺失回退 chort */
+            pimg = monsterFrame(ps[j].monsterId, chasing);
+            if (!pimg) pimg = Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort');
+          }
+          if (pimg) {
+            if (chasing) {
+              ctx.fillStyle = 'rgba(234,102,104,0.25)';
+              ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
+            }
+            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规帧铺满 */
+            if ((pimg.naturalWidth || 0) > 26) {
+              drawSpriteByHeight(ctx, pimg, ppx - 1 + TILE / 2, ppy - 1 + TILE - 1, TILE - 3);
+            } else {
+              ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
+            }
+            if (chasing) {
+              ctx.fillStyle = '#fff';
+              ctx.font = '9px monospace';
+              ctx.fillText('!', ppx + TILE / 2 - 4, ppy - 3);
+            }
+          } else {
+            ctx.fillStyle = chasing ? '#ea6668' : '#9e9e9e';
+            ctx.fillRect(ppx, ppy, TILE - 4, TILE - 4);
+            if (chasing) {
+              ctx.fillStyle = '#fff';
+              ctx.font = '9px monospace';
+              ctx.fillText('!', ppx + TILE / 2 - 4, ppy + 12);
+            }
+          }
+        }
+      }
+      /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
+      try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
+      /* M9-3：粒子特效层（探索场景命中/死亡粒子），叠在光影之上、HUD 之下 */
+      try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
+      this._drawHud(); /* S3-2 */
+    },
+
+    /* D-12：验证页专用——true 时跳过离屏缓存，逐格直绘（"缓存 vs 直绘"像素比对用） */
+    _staticBypass: false,
+    _staticRebuilds: 0,
+
+    /* D-12：静态层失效（FOV/装饰/陷阱/换层变化时由 main.js 调用） */
+    invalidateStatic: function () {
+      staticCache.valid = false;
+    },
+
+    /* D-12：缓存是否可复用——镜头、图层、视口、DPR/缩放任一变化即失效 */
+    _staticValidFor: function (grid, pf, cv) {
+      var s = staticCache;
+      return !!(s.valid && s.canvas && s.grid === grid && s.floor === pf &&
+        s.camX === cam.x && s.camY === cam.y &&
+        s.dpr === this.dpr && s.scale === this.scale &&
+        s.cvW === cv.width && s.cvH === cv.height);
+    },
+
+    /* D-12：重建静态层——画到与主画布同尺寸、同变换的离屏 canvas（= 原逐格绘制的像素结果） */
+    _rebuildStatic: function (grid, pf, W, H) {
+      var cv = this._canvas;
+      var s = staticCache;
+      if (!s.canvas) {
+        s.canvas = document.createElement('canvas');
+        s.ctx = s.canvas.getContext('2d');
+      }
+      if (s.canvas.width !== cv.width || s.canvas.height !== cv.height) {
+        s.canvas.width = cv.width;
+        s.canvas.height = cv.height;
+      }
+      var c = s.ctx;
+      c.setTransform(this.dpr * this.scale, 0, 0, this.dpr * this.scale, 0, 0);
+      if ('imageSmoothingEnabled' in c) c.imageSmoothingEnabled = false;
+      this._drawSceneStatic(c, grid, pf, W, H);
+      s.grid = grid; s.floor = pf; s.camX = cam.x; s.camY = cam.y;
+      s.dpr = this.dpr; s.scale = this.scale;
+      s.cvW = cv.width; s.cvH = cv.height;
+      s.valid = true;
+      this._staticRebuilds++;
+    },
+
+    /* D-12：静态场景层——原 drawMap 逐格部分原样迁入；直绘与离屏缓存共用这一份代码，
+     * 保证"缓存命中"与"直绘"像素一致。ctx 为目标上下文（主画布或缓存画布）。 */
+    _drawSceneStatic: function (ctx, grid, pf, W, H) {
       ctx.fillStyle = '#14142a';
       ctx.fillRect(0, 0, W, H);
       /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
       var fovOn = !!(Game.fov && Game.fov.isVisible);
-      /* P1-1：地板变体带楼层因子（同一格跨层可变化，同层内恒定） */
-      var pf = (player && typeof player.floor === 'number' && player.floor > 0) ? player.floor : 1;
       for (var y = 0; y < grid.length; y++) {
         for (var x = 0; x < grid[0].length; x++) {
           var t = grid[y][x];
@@ -483,86 +637,6 @@
           ctx.restore();
         }
       }
-      /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
-      var es = Game.Systems.Map.getEnemies();
-      for (var i = 0; i < es.length; i++) {
-        if (fovOn && !Game.fov.isVisible(es[i].x, es[i].y)) continue; /* S3-1：迷雾外不透视 */
-        var epx = es[i].x * TILE - cam.x + 2;
-        var epy = es[i].y * TILE - cam.y + 2;
-        if (epx > -20 && epy > -20 && epx < W + 20 && epy < H + 20) {
-          var eimg = null;
-          if (this._hasSprites()) {
-            /* P2-1：查 MONSTER_ANIM 表取 idle 帧；未知 id / 帧缺失回退 chort */
-            eimg = monsterFrame(es[i].monsterId, false);
-            if (!eimg) eimg = Game.Core.Sprites.get('monster_chort');
-          }
-          if (eimg) {
-            ctx.fillStyle = 'rgba(234,102,104,0.22)';
-            ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
-            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规 16×16 帧铺满格 */
-            if ((eimg.naturalWidth || 0) > 26) {
-              drawSpriteByHeight(ctx, eimg, epx - 1 + TILE / 2, epy - 1 + TILE - 1, TILE - 3);
-            } else {
-              ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
-            }
-          } else {
-            ctx.fillStyle = '#ea6668';
-            ctx.beginPath();
-            ctx.arc(epx + TILE / 2 - 3, epy + TILE / 2 - 3, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-      }
-      /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
-      var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
-      for (var j = 0; j < ps.length; j++) {
-        if (fovOn && !Game.fov.isVisible(ps[j].x, ps[j].y)) continue; /* S3-1：迷雾外不透视 */
-        /* M9-3：巡逻怪取插值渲染位置 */
-        var prp = (Game.Motion && Game.Motion.getRenderPos) ? Game.Motion.getRenderPos('patrol_' + j) : null;
-        var prx = prp ? prp.x : ps[j].x;
-        var pry = prp ? prp.y : ps[j].y;
-        var ppx = prx * TILE - cam.x + 2;
-        var ppy = pry * TILE - cam.y + 2;
-        if (ppx > -20 && ppy > -20 && ppx < W + 20 && ppy < H + 20) {
-          var chasing = ps[j].state === 'chase';
-          var pimg = null;
-          if (this._hasSprites()) {
-            /* P2-1：查 MONSTER_ANIM 表按状态取 idle/run 帧；未知 id / 帧缺失回退 chort */
-            pimg = monsterFrame(ps[j].monsterId, chasing);
-            if (!pimg) pimg = Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort');
-          }
-          if (pimg) {
-            if (chasing) {
-              ctx.fillStyle = 'rgba(234,102,104,0.25)';
-              ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
-            }
-            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规帧铺满 */
-            if ((pimg.naturalWidth || 0) > 26) {
-              drawSpriteByHeight(ctx, pimg, ppx - 1 + TILE / 2, ppy - 1 + TILE - 1, TILE - 3);
-            } else {
-              ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
-            }
-            if (chasing) {
-              ctx.fillStyle = '#fff';
-              ctx.font = '9px monospace';
-              ctx.fillText('!', ppx + TILE / 2 - 4, ppy - 3);
-            }
-          } else {
-            ctx.fillStyle = chasing ? '#ea6668' : '#9e9e9e';
-            ctx.fillRect(ppx, ppy, TILE - 4, TILE - 4);
-            if (chasing) {
-              ctx.fillStyle = '#fff';
-              ctx.font = '9px monospace';
-              ctx.fillText('!', ppx + TILE / 2 - 4, ppy + 12);
-            }
-          }
-        }
-      }
-      /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
-      try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
-      /* M9-3：粒子特效层（探索场景命中/死亡粒子），叠在光影之上、HUD 之下 */
-      try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
-      this._drawHud(); /* S3-2 */
     },
 
     drawPlayer: function (player) {

@@ -31,8 +31,6 @@
   /* ---------- 模块内状态 ---------- */
   var softRadius = SOFT_EDGE_DEFAULT;
   var glowSprite = null;         /* 预渲染的火把光晕离屏画布（每帧 drawImage 复用） */
-  var vignetteGradient = null;   /* 预建的暗角径向渐变（画布尺寸变化时重建） */
-  var lastCanvasSize = { w: 0, h: 0 };
 
   /* ---------- 工具 ---------- */
   function getCtx() {
@@ -84,19 +82,35 @@
     glowSprite = c;
   }
 
-  /* ---------- 预建：暗角径向渐变（画布尺寸变化时重建） ----------
-   * M9-5：渐变坐标使用 CSS 像素（绘制上下文已 setTransform 到 DPR 缩放） */
-  function buildVignette(ctx, cssW, cssH) {
+  /* ---------- 预建：暗角（画布尺寸/DPR/缩放变化时重建） ----------
+   * M9-5：渐变坐标使用 CSS 像素（绘制上下文已 setTransform 到 DPR 缩放）
+   * D-12：原实现每帧全屏重画径向渐变（实测占帧 27%），改为一次性画进离屏 canvas、
+   * 每帧只做 1:1 blit——同一变换、同一设备像素网格，像素结果与直绘完全一致。 */
+  var vignetteCanvas = null;
+  var vignetteKey = '';
+
+  function buildVignette(cssW, cssH) {
+    var cv = getCanvas();
+    var R = Game.Core && Game.Core.Render;
+    var dpr = (R && R.dpr) || 1;
+    var scale = (R && R.scale) || 1;
+    var w = cv ? cv.width : Math.max(1, Math.round(cssW * dpr * scale));
+    var h = cv ? cv.height : Math.max(1, Math.round(cssH * dpr * scale));
+    if (!vignetteCanvas) vignetteCanvas = document.createElement('canvas');
+    vignetteCanvas.width = w;
+    vignetteCanvas.height = h;
+    var g = vignetteCanvas.getContext('2d');
+    g.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     var cx = cssW / 2, cy = cssH / 2;
     var outer = Math.sqrt(cx * cx + cy * cy);   /* 对角线一半，确保四角全覆盖 */
     var inner = outer * 0.45;                   /* 中心 45% 不遮 */
-    var grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+    var grad = g.createRadialGradient(cx, cy, inner, cx, cy, outer);
     grad.addColorStop(0.00, 'rgba(0,0,0,0.00)');
     grad.addColorStop(0.70, 'rgba(0,0,0,' + (VIGNETTE_ALPHA * 0.55).toFixed(3) + ')');
     grad.addColorStop(1.00, 'rgba(0,0,0,' + VIGNETTE_ALPHA.toFixed(3) + ')');
-    vignetteGradient = grad;
-    lastCanvasSize.w = cssW;
-    lastCanvasSize.h = cssH;
+    g.fillStyle = grad;
+    g.fillRect(0, 0, cssW, cssH);
+    vignetteKey = [cssW, cssH, w, h, dpr, scale].join('|');
   }
 
   /* ---------- FOV 软边：可见区边缘 alpha 渐降（纯视觉，不改 isVisible 语义） ----------
@@ -166,15 +180,18 @@
     ctx.restore();
   }
 
-  /* ---------- 暗角 vignette ---------- */
+  /* ---------- 暗角 vignette（D-12：预渲染 + 每帧 1:1 blit） ---------- */
   function drawVignette(ctx) {
     var sz = getCssSize();
-    if (!vignetteGradient || sz.w !== lastCanvasSize.w || sz.h !== lastCanvasSize.h) {
-      buildVignette(ctx, sz.w, sz.h);
-    }
+    var cv = getCanvas();
+    var R = Game.Core && Game.Core.Render;
+    var dpr = (R && R.dpr) || 1;
+    var scale = (R && R.scale) || 1;
+    var key = [sz.w, sz.h, cv ? cv.width : 0, cv ? cv.height : 0, dpr, scale].join('|');
+    if (!vignetteCanvas || vignetteKey !== key) buildVignette(sz.w, sz.h);
     ctx.save();
-    ctx.fillStyle = vignetteGradient;
-    ctx.fillRect(0, 0, sz.w, sz.h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(vignetteCanvas, 0, 0);
     ctx.restore();
   }
 
@@ -183,9 +200,8 @@
     init: function () {
       try {
         buildGlowSprite();
-        var ctx = getCtx();
         var sz = getCssSize();
-        if (ctx && sz.w > 0) buildVignette(ctx, sz.w, sz.h);
+        if (getCanvas() && sz.w > 0) buildVignette(sz.w, sz.h);
       } catch (e) { /* 预建失败不阻断游戏，draw 时会降级 */ }
     },
 

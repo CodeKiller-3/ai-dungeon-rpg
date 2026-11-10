@@ -36,6 +36,12 @@
    * 保持原有"怪物约比玩家慢 4 倍"的相对关系，不改变战斗数值。 */
   var MOVE_INTERVAL = 120;
   var lastStepAt = -1e9; /* 首帧立即可走 */
+  /* D-12：跟手修复——原实现把"节流窗口内的按键"整步丢弃（短按 80% 没反应）。
+   * 现语义：新按下/换方向 → 立即走一格；同一方向按住 → 仍按 MOVE_INTERVAL 连发；
+   * 节流只限制"按住连发"，不再丢任何一次按下。AI 节奏单独用 lastAiAt 维持 120ms，
+   * 不随玩家按键频率变化（怪物相对速度不变）。 */
+  var lastDir = null;
+  var lastAiAt = -1e9;
 
   /* 修复：启动/读档期间禁止 floorChanged 自动写档。
    * 原流程 init 中 Map.generate() 先于 Save.load() 触发 map:floorChanged → Save.save()，
@@ -87,6 +93,11 @@
     Game.fov.update(player.x, player.y, Game.fov.RADIUS || 5, function (x, y) {
       return Game.Systems.Map.tileAt(x, y) === 0;
     });
+    /* D-12：视野变化 = 静态图层（地板/墙/装饰/记忆覆盖）失效，下一帧重建离屏缓存。
+     * 放在这里而不是每帧判断：FOV 只在移动/换层/读档后变化，重建频率与"步"一致（≈8/s）。 */
+    if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+      Game.Core.Render.invalidateStatic();
+    }
   }
 
   /* S3-2 HUD：汇总顶部信息栏数据。M8-1：MP 传真实 mp/maxMp（替换遗留 0/0 占位）；
@@ -296,6 +307,8 @@
         Game.Systems.Bestiary.reset();
       }
       lastStepAt = -1e9; /* 修复 P1：重开后立即响应移动 */
+      lastAiAt = -1e9;
+      lastDir = null;
       try {
         if (Game.Systems && Game.Systems.Map) {
           Game.Systems.Map.setFloor(1);
@@ -332,6 +345,8 @@
 
     /* 探索场景。now 为帧时间戳（ms），loop 传入；验证页可传合成时间做确定性测试 */
     _updateExplore: function (now) {
+      /* D-12：方向键"新按下"边沿每帧消费一次（弹窗/引导期间也消费，避免恢复后误触发） */
+      var dirEdge = (Game.Core.Input.takeDirEdge && Game.Core.Input.takeDirEdge()) || false;
       /* M9-5：首次引导覆盖层显示时暂停游戏输入（dismissGuide 监听任意键关闭） */
       if (this._guideVisible) return;
       /* S3-3：弹窗打开时暂停地图移动输入（弹窗自行处理 Esc/↑↓/Enter/点击） */
@@ -347,13 +362,22 @@
       /* M9-4：Q 打开设置弹窗；K 一键静音（不 return，允许同时移动） */
       if (k['KeyQ']) { delete k['KeyQ']; Game.Modal.open('settings'); return; }
       if (k['KeyK']) { delete k['KeyK']; Game.Systems.Audio.setMuted(!Game.Systems.Audio.isMuted()); }
-      /* 修复 P1：定步长（120ms）处理 AI 与移动；动作键仍即时响应 */
+      /* 修复 P1：定步长（120ms）处理 AI 与移动；动作键仍即时响应。
+       * D-12：新按下/换方向立即生效（见 lastDir），只有"按住同方向"才吃 120ms 节流。 */
       var tNow = (typeof now === 'number') ? now : performance.now();
-      if (tNow - lastStepAt < MOVE_INTERVAL) return;
-      lastStepAt = tNow;
-      /* M5：怪物 AI 先行（感知/追击），再处理玩家移动 */
-      Game.Systems.AI.tick(player);
       var d = Game.Core.Input.direction(k);
+      var dirDown = (d.dx !== 0 || d.dy !== 0);
+      var fresh = dirDown && (dirEdge || !lastDir || d.dx !== lastDir.dx || d.dy !== lastDir.dy);
+      if (!dirDown) lastDir = null;
+      if (!fresh && tNow - lastStepAt < MOVE_INTERVAL) return;
+      lastStepAt = tNow;
+      if (dirDown) lastDir = { dx: d.dx, dy: d.dy };
+      /* M5：怪物 AI 先行（感知/追击），再处理玩家移动。
+       * D-12：AI 仍按固定 120ms 节奏 tick，不受玩家按键频率影响。 */
+      if (tNow - lastAiAt >= MOVE_INTERVAL) {
+        lastAiAt = tNow;
+        Game.Systems.AI.tick(player);
+      }
       if (d.dx !== 0 || d.dy !== 0) {
         var nx = player.x + d.dx;
         var ny = player.y + d.dy;
