@@ -32,6 +32,8 @@
 <script src="../js/systems/audio.js"></script>
 <script src="../js/systems/learner.js"></script>
 <script src="../js/core/main.js"></script>
+<!-- D-05：C5-5 改为数据驱动，解析逻辑与 verify_d05 / selfcheck 共用 preflight/lib/assert-data.js -->
+<script src="lib/assert-data.js"></script>
 <script>
 (function () {
   'use strict';
@@ -238,34 +240,29 @@
       how: '随机组运行期间把 Game.Systems.Learner 替换为计数桩；Q 表只能由 init 构建，计数为 0 即未构建/未读取' };
     ok = ok && sub.c54_noQInBaseline;
 
-    /* ── C5-5 numbersRecorded ──────────────────────────── */
+    /* ── C5-5 numbersRecorded（D-05：数据驱动，不依赖固定句式） ──
+     * 只解析 Q-learning 段落里的全部百分数，与本次实测值比对：
+     *   必须出现 Q 中位数/区间端点（22、9、31）与随机中位数/区间端点（5、2、12），
+     *   不得出现白名单外百分数（允许 17 作为演示页快照值，见 D-02），
+     *   中位数必须落在各自区间内。措辞、连接词、句序变化都不再影响判定。 */
     var readme = readDoc('../README.md');
     var speech = readDoc('../docs/答辩讲稿.md');
     var plan = readDoc('../规划-对标补齐.md');
-    var reMed = /Q-learning 中位数\s*(\d+)%\s*vs\s*随机策略中位数\s*(\d+)%/;
-    var reRange = /区间\s*(\d+)%~(\d+)%\s*vs\s*(\d+)%~(\d+)%/;
-    var mR = readme.match(reMed), mS = speech.match(reMed);
-    var rgR = readme.match(reRange), rgS = speech.match(reRange);
-    var docOk = !!mR && !!mS && Number(mR[1]) === qMed && Number(mR[2]) === rMed &&
-      Number(mS[1]) === qMed && Number(mS[2]) === rMed;
-    var rangeOk = !!rgR && !!rgS &&
-      Number(rgR[1]) === qMin && Number(rgR[2]) === qMax &&
-      Number(rgR[3]) === rMin && Number(rgR[4]) === rMax &&
-      Number(rgS[1]) === qMin && Number(rgS[2]) === qMax &&
-      Number(rgS[3]) === rMin && Number(rgS[4]) === rMax;
+    var c55 = AssertData.checkC55(readme, speech, {
+      qMedian: qMed, qMin: qMin, qMax: qMax,
+      rMedian: rMed, rMin: rMin, rMax: rMax,
+      demoAllow: [17]
+    });
     var planOk5 = plan.indexOf('C-05') >= 0 && plan.indexOf('44/44') >= 0 &&
       plan.indexOf('中位数 ' + qMed + '%') >= 0 && plan.indexOf('中位数 ' + rMed + '%') >= 0;
-    sub.c55_numbersRecorded = docOk && rangeOk && planOk5;
+    sub.c55_numbersRecorded = c55.ok && planOk5;
     sub.c55_numbers = {
       qRates: qRates, randomRates: rRates,
       q: { median: qMed, min: qMin, max: qMax },
       random: { median: rMed, min: rMin, max: rMax },
       episodesPerMap: qRuns.map(function (r) { return r.episode; }),
-      docs: { readmeMedians: mR ? [Number(mR[1]), Number(mR[2])] : null,
-        speechMedians: mS ? [Number(mS[1]), Number(mS[2])] : null,
-        readmeRange: rgR ? rgR.slice(1).map(Number) : null,
-        speechRange: rgS ? rgS.slice(1).map(Number) : null,
-        planHasC05: plan.indexOf('C-05') >= 0, planHasBaseline: plan.indexOf('44/44') >= 0 }
+      parse: c55,
+      planHasC05: plan.indexOf('C-05') >= 0, planHasBaseline: plan.indexOf('44/44') >= 0
     };
     ok = ok && sub.c55_numbersRecorded;
 

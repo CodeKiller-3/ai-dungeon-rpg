@@ -1,0 +1,39 @@
+{
+  "at": "2026-11-10",
+  "note": "D-05 负例/正例的真实运行记录；每次临时改动跑完立即还原，入库内容为原始状态。",
+  "d52": {
+    "cmd": "README 临时改为「物品 47 条」后：node preflight/selfcheck/selfcheck.js",
+    "line": "[FAIL] XC-01 README 物品条目数 — 声明值 47 ≠ 实际 48（解析到 [47]，实际 48）",
+    "summary": "{\"total\":33,\"PASS\":31,\"WARN\":1,\"FAIL\":1}",
+    "exit": 1
+  },
+  "d53": {
+    "cmd": "README Q 句改写为「Q 侧中位成功率 22%（最低 9%、最高 31%），随机策略为 5%（2%~12%）」后：verify_c05.html",
+    "verdict": "PASS",
+    "c55": true,
+    "readmePercents": [17, 22, 9, 31, 5, 2, 12]
+  },
+  "d54": {
+    "cmd": "把上面的 22 改成 23 后：verify_c05.html",
+    "verdict": "FAIL",
+    "reasons": ["readme 缺少实测值 22", "readme 出现白名单外百分数 23"],
+    "readmePercents": [17, 23, 9, 31, 5, 2, 12]
+  },
+  "d55": {
+    "cmd": "恢复 22 后插入「（另有 45% 样本未收敛）」：verify_c05.html",
+    "verdict": "FAIL",
+    "reasons": ["readme 出现白名单外百分数 45"],
+    "readmePercents": [17, 22, 9, 31, 5, 2, 12, 45]
+  },
+  "d56": {
+    "cmd1": "git check-ignore -v preflight/selfcheck/shots/D-01-game.png",
+    "exit1": 0,
+    "out1": ".gitignore:29:preflight/selfcheck/shots/D-01*.png\tpreflight/selfcheck/shots/D-01-game.png",
+    "cmd2": "git check-ignore -v preflight/selfcheck/shots/D-01b-game.png",
+    "exit2": 0,
+    "out2": ".gitignore:29:preflight/selfcheck/shots/D-01*.png\tpreflight/selfcheck/shots/D-01b-game.png",
+    "cmd3": "git check-ignore -v preflight/selfcheck/shots/D-03-test.png",
+    "exit3": 1,
+    "out3": ""
+  }
+}

@@ -10,6 +10,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const cp = require('child_process');
+/* D-05：物品条目数解析抽到 preflight/lib/assert-data.js，与 verify_d05 共用同一实现，
+ * 支持「物品全表 48 件」「物品 48 条」等写法，不再用会截断多位数的贪婪正则。 */
+const AssertData = require('../lib/assert-data.js');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const R = [];
@@ -416,7 +419,6 @@ const readme = exists('README.md') ? read('README.md') : '';
 const claims = [];
 [[/(\d+)\s*种怪物|怪物.{0,6}(\d+)\s*种/, monIds.length, '怪物'],
  [/任务.{0,8}(\d+)\s*条|(\d+)\s*条任务/, QUESTS.length, '任务'],
- [/物品.{0,8}(\d+)\s*条|(\d+)\s*条物品/, itemIds.length, '物品'],
  [/(\d+)\s*层/, floors, '楼层']].forEach(([re, actual, label]) => {
   const m = readme.match(re);
   if (m) {
@@ -424,8 +426,14 @@ const claims = [];
     if (num !== actual) claims.push(label + ' README 写 ' + num + '，实际 ' + actual);
   }
 });
-claims.length ? WARN('XC-01', 'README 数字与实际不符', claims.join(' | '))
-  : PASS('XC-01', 'README 数字一致性', '未发现与实际数据冲突的条目数声明');
+const itemCheck = AssertData.checkItemCount(readme, itemIds.length);
+if (!itemCheck.ok) {
+  FAIL('XC-01', 'README 物品条目数', itemCheck.reason + '（解析到 ' + JSON.stringify(itemCheck.parsed) + '，实际 ' + itemIds.length + '）');
+} else if (claims.length) {
+  WARN('XC-01', 'README 数字与实际不符', claims.join(' | '));
+} else {
+  PASS('XC-01', 'README 数字一致性', '物品 ' + itemIds.length + ' 件与 README 一致（解析到 ' + JSON.stringify(itemCheck.parsed) + '）；未发现与实际数据冲突的条目数声明');
+}
 
 /* ── 16b. 文档楼层口径：README / 答辩讲稿里的「第 N 层巨龙」须等于 Boss 实际楼层 ── */
 const DOCS = ['README.md', 'docs/答辩讲稿.md'];

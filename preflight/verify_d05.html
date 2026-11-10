@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d05</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-05 验证页：断言工具修复后"既能放行措辞变化、又能抓住数据篡改"。
+     直接加载 preflight/lib/assert-data.js —— 与 selfcheck.js / verify_c05.html 共用同一实现，
+     不是复制一份逻辑来测自己。负例证据来自 selfcheck/d05-evidence.json（真实运行记录）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="lib/assert-data.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  var A = window.AssertData;
+  var ITEMS = (window.Game && Game.Data && Game.Data.ITEMS) || null;
+  out.loaded = !!(A && ITEMS && typeof A.checkItemCount === 'function' && typeof A.checkC55 === 'function');
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+  if (!out.loaded) { out.err = 'AssertData / Game.Data.ITEMS 未就绪'; finish(); return; }
+
+  var sub = {}, ok = true;
+  try {
+    var N = Object.keys(ITEMS).length;
+    var readme = readDoc('../README.md');
+    var speech = readDoc('../docs/答辩讲稿.md');
+    var gitignore = readDoc('../.gitignore');
+    var ev = readJson('selfcheck/d05-evidence.json');
+    var reg = readJson('selfcheck/regression-result.json');
+    var sc = readJson('selfcheck/selfcheck-result.json');
+
+    /* ── D5-1 两种写法都放行 ─────────────────────────── */
+    var ph1 = '· 物品全表 ' + N + ' 件（含 4 档强化卷轴）';
+    var ph2 = '· 物品 ' + N + ' 条（含 4 档强化卷轴）';
+    var r1 = A.checkItemCount(ph1, N), r2 = A.checkItemCount(ph2, N);
+    var rReal = A.checkItemCount(readme, N);
+    sub.d51_xc01BothPhrasings = r1.ok && r2.ok && rReal.ok &&
+      r1.parsed.join() === String(N) && r2.parsed.join() === String(N);
+    sub.d51_cases = [
+      { text: ph1, parsed: r1.parsed, ok: r1.ok },
+      { text: ph2, parsed: r2.parsed, ok: r2.ok },
+      { text: 'README.md 实际文本', parsed: rReal.parsed, ok: rReal.ok }
+    ];
+    ok = ok && sub.d51_xc01BothPhrasings;
+
+    /* ── D5-2 写错数字必须抓 ─────────────────────────── */
+    var w1 = A.checkItemCount('· 物品全表 ' + (N - 1) + ' 件', N);
+    var w2 = A.checkItemCount('· 物品 ' + (N - 1) + ' 条', N);
+    var evD52 = ev && ev.d52 ? ev.d52 : null;
+    sub.d52_xc01CatchesWrongNumber = !w1.ok && !w2.ok && !!evD52 &&
+      evD52.line.indexOf('[FAIL] XC-01') >= 0 && evD52.exit === 1;
+    /* 负例结果用 pass 字段而非 ok：run-all.ps1 以 payload 内 '"ok":false' 判 MIXED，
+       负例的 false 是"预期被抓到"，不应触发整页 MIXED */
+    sub.d52_cases = [
+      { text: '物品全表 ' + (N - 1) + ' 件', pass: w1.ok, reason: w1.reason },
+      { text: '物品 ' + (N - 1) + ' 条', pass: w2.ok, reason: w2.reason }
+    ];
+    sub.d52_endToEnd = evD52;
+    ok = ok && sub.d52_xc01CatchesWrongNumber;
+
+    /* ── D5-3 换句式仍 PASS ──────────────────────────── */
+    var rewordedReadme = 'Q-learning 强化学习演示。Q 侧中位成功率 22%（最低 9%、最高 31%），' +
+      '随机策略为 5%（2%~12%）；演示页实时训练快照 17%。';
+    var rewordedSpeech = '**4. Q-learning 寻宝鼠**\n- Q 的中位数是 22%，区间从 9% 到 31%；' +
+      '随机策略中位数 5%，区间从 2% 到 12%；演示页 17%。\n\n## 四、下一节\n';
+    var rw = A.checkC55(rewordedReadme, rewordedSpeech);
+    var real = A.checkC55(readme, speech, { demoAllow: [17] });
+    var evD53 = ev && ev.d53 ? ev.d53 : null;
+    sub.d53_c55ParsesNumbers = rw.ok && real.ok && !!evD53 &&
+      evD53.verdict === 'PASS' && evD53.c55 === true;
+    sub.d53_reworded = { ok: rw.ok, reasons: rw.reasons, readme: rw.readme, speech: rw.speech };
+    sub.d53_real = { ok: real.ok, reasons: real.reasons };
+    sub.d53_endToEnd = evD53;
+    ok = ok && sub.d53_c55ParsesNumbers;
+
+    /* ── D5-4 改数字必须抓 ───────────────────────────── */
+    var tampered = A.checkC55(rewordedReadme.replace('22%', '23%'), rewordedSpeech);
+    var evD54 = ev && ev.d54 ? ev.d54 : null;
+    sub.d54_c55CatchesWrongNumber = !tampered.ok && !!evD54 && evD54.verdict === 'FAIL' &&
+      evD54.reasons.join('|').indexOf('23') >= 0;
+    sub.d54_case = { pass: tampered.ok, reasons: tampered.reasons, parsed: tampered.readme };
+    sub.d54_endToEnd = evD54;
+    ok = ok && sub.d54_c55CatchesWrongNumber;
+
+    /* ── D5-5 白名单外百分数必须抓 ───────────────────── */
+    var extra = A.checkC55(rewordedReadme + '（另有 45% 样本未收敛）', rewordedSpeech);
+    var evD55 = ev && ev.d55 ? ev.d55 : null;
+    sub.d55_c55Whitelist = !extra.ok && extra.readme.extra.indexOf(45) >= 0 && !!evD55 &&
+      evD55.verdict === 'FAIL' && evD55.reasons.join('|').indexOf('45') >= 0;
+    sub.d55_case = { pass: extra.ok, reasons: extra.reasons, extra: extra.readme.extra };
+    sub.d55_endToEnd = evD55;
+    ok = ok && sub.d55_c55Whitelist;
+
+    /* ── D5-6 .gitignore 收窄 ────────────────────────── */
+    var hasOldRule = gitignore.indexOf('D-0*.png') >= 0;
+    var hasNewRule = gitignore.indexOf('D-01*.png') >= 0;
+    var evD56 = ev && ev.d56 ? ev.d56 : null;
+    var gitOk = !!evD56 && evD56.exit1 === 0 && evD56.exit2 === 0 && evD56.exit3 === 1;
+    sub.d56_gitignoreNarrowed = !hasOldRule && hasNewRule && gitOk;
+    sub.d56_rule = { oldRulePresent: hasOldRule, newRulePresent: hasNewRule };
+    sub.d56_commands = evD56 ? [
+      { cmd: evD56.cmd1, exit: evD56.exit1, out: evD56.out1 },
+      { cmd: evD56.cmd2, exit: evD56.exit2, out: evD56.out2 },
+      { cmd: evD56.cmd3, exit: evD56.exit3, out: evD56.out3 }
+    ] : null;
+    ok = ok && sub.d56_gitignoreNarrowed;
+
+    /* ── D5-7 回归与静态自检无退化 ─────────────────────
+     * 说明：run-all 在本页运行结束后才写 regression-result.json，本页读到的是上一轮结果，
+     * 因此不能直接要求"上一轮里本页也是 PASS"（自指死锁）。这里改为：
+     * 上一轮 rows 必须含 46 页，且除本页外的 45 页全部 PASS —— 其余页无回归即成立；
+     * 46/46 的整页汇总由 run-all 自己打印核对（本卡回报中给出）。 */
+    var rs = reg && reg.summary ? reg.summary : null;
+    var rows = reg && reg.rows ? reg.rows : null;
+    var ss = sc && sc.summary ? sc.summary : null;
+    var others = rows ? rows.filter(function (r) { return r.page !== 'verify_d05'; }) : [];
+    var regOk = !!rows && rows.length === 46 && others.length === 45 &&
+      others.every(function (r) { return r.verdict === 'PASS'; });
+    var scOk = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0;
+    sub.d57_noRegression = regOk && scOk;
+    sub.d57_regression = rs;
+    sub.d57_otherRows = others.length + '/45 PASS';
+    sub.d57_selfcheck = ss;
+    ok = ok && sub.d57_noRegression;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

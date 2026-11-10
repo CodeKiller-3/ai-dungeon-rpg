@@ -25,5 +25,5 @@ desktop.ini
 preflight/shots_resize/
 自检报告.md
 
-# D-03：D 系列卡的本地截图不入库；不影响已跟踪的 shots/*.png
-preflight/selfcheck/shots/D-0*.png
+# D-05：证据截图一律入库；仅忽略 D-01 / D-01b 两张早期交接截图
+preflight/selfcheck/shots/D-01*.png
