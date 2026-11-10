@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d02</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-02 验证页：纯文档核对，不启动游戏循环、不加载 main.js。
+     读取 js/data/maps.js 的运行时数据复算 S-04/S-05 数值；
+     同步 XHR 读 README / 答辩讲稿 / 规划文档 / 卡片文本做 D2-1~D2-6。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  var D = (window.Game && Game.Data) || {};
+  var T = D.TRAPS, S = D.STATUS, TP = D.TRAP_PLACEMENT, RM = D.ROOMS, DEC = D.DECOR;
+  out.loaded = !!(T && S && TP && RM && DEC && DEC.room_chest);
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function median(a) {
+    var s = a.slice().sort(function (p, q) { return p - q; });
+    var n = s.length;
+    if (!n) return null;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  }
+  function excerpt(txt, key, span) {
+    var i = txt.indexOf(key);
+    if (i < 0) return '';
+    var a = Math.max(0, i - (span || 90)), b = Math.min(txt.length, i + (span || 90));
+    return txt.slice(a, b).replace(/\s+/g, ' ');
+  }
+  function hasAll(txt, arr) {
+    return arr.every(function (k) { return txt.indexOf(k) >= 0; });
+  }
+
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+  if (!out.loaded) { out.err = 'Game.Data.TRAPS/STATUS/TRAP_PLACEMENT/ROOMS/DECOR 未就绪'; finish(); return; }
+
+  var sub = {}, ok = true;
+  try {
+    var readme = readDoc('../README.md');
+    var script = readDoc('../docs/答辩讲稿.md');
+    var plan = readDoc('../规划-对标补齐.md');
+    var card = readDoc('../docs/tasks/D-02-readme-features.md');
+    var mapJs = readDoc('../js/systems/map.js');
+    var battleJs = readDoc('../js/systems/battle.js');
+    var hudJs = readDoc('../js/systems/hud.js');
+    var renderJs = readDoc('../js/core/render.js');
+    var itemsJs = readDoc('../js/data/items.js');
+
+    /* ── D2-1 trapsAndRoomsListed ──────────────────────── */
+    var expect = [
+      { label: '陷阱数量', token: TP.min + '~' + TP.max },
+      { label: '出生点安全半径', token: TP.safeRadius + ' 格' },
+      { label: '毒气概率', token: Math.round(TP.gasRate * 100) + '%' },
+      { label: '地刺扣血比例', token: Math.round(T.spike.dmgPct * 100) + '%' },
+      { label: '地刺 F1 上限', token: '≤' + T.spike.dmgCap1 },
+      { label: '地刺深层上限', token: '≤' + T.spike.dmgCap30 },
+      { label: '流血回合', token: T.spike.turns + ' 回合' },
+      { label: '中毒回合', token: T.gas.turns + ' 回合' },
+      { label: '流血每回合伤害', token: S.bleed.tickDmg + ' HP' },
+      { label: '中毒每回合伤害', token: S.poison.tickDmg + ' HP' },
+      { label: '密室宽', token: RM.minW + '~' + RM.maxW },
+      { label: '密室高', token: RM.minH + '~' + RM.maxH },
+      { label: '密室宝箱金币倍率', token: RM.roomChestGoldMul + ' 倍' }
+    ];
+    var missNums = expect.filter(function (e) { return readme.indexOf(e.token) < 0; })
+      .map(function (e) { return e.label + '（缺 ' + e.token + '）'; });
+    var impl = [
+      { file: 'js/systems/map.js', tokens: ['placeTraps', 'triggerTrap', 'getTrap', 'placeSpecialRoom', 'furnishRooms'], text: mapJs },
+      { file: 'js/systems/battle.js', tokens: ['Game.Systems.Status'], text: battleJs },
+      { file: 'js/systems/hud.js', tokens: ['drawStatusRow'], text: hudJs },
+      { file: 'js/core/render.js', tokens: ['room_chest'], text: renderJs }
+    ];
+    var implRows = impl.map(function (r) {
+      var miss = r.tokens.filter(function (t) { return r.text.indexOf(t) < 0; });
+      return { file: r.file, tokens: r.tokens, miss: miss, ok: !!r.text.length && miss.length === 0 };
+    });
+    var implOk = implRows.every(function (r) { return r.ok; });
+    var bullets = readme.indexOf('陷阱与状态') >= 0 && readme.indexOf('特殊房间') >= 0;
+    sub.d21_trapsAndRoomsListed = bullets && missNums.length === 0 && implOk;
+    sub.d21_bullets = bullets;
+    sub.d21_missingNumbers = missNums;
+    sub.d21_impl = implRows;
+    ok = ok && sub.d21_trapsAndRoomsListed;
+
+    /* ── D2-2 rlTwoProtocols ───────────────────────────── */
+    var demoCond = ['演示页', '单张地图', '顺序训练'];
+    var offCond = ['7 张固定种子地图', '每图独立 learner 实例', '60 步上限'];
+    var valCond = ['中位数 22%', '中位数 5%', '88 轮', '17%'];
+    var twoRows = [
+      { doc: 'README.md', demo: hasAll(readme, demoCond), offline: hasAll(readme, offCond), values: hasAll(readme, valCond) },
+      { doc: 'docs/答辩讲稿.md', demo: hasAll(script, demoCond), offline: hasAll(script, offCond), values: hasAll(script, valCond) }
+    ];
+    sub.d22_rlTwoProtocols = readme.length > 0 && script.length > 0 && twoRows.every(function (r) {
+      return r.demo && r.offline && r.values;
+    });
+    sub.d22_rows = twoRows;
+    ok = ok && sub.d22_rlTwoProtocols;
+
+    /* ── D2-3 notComparableStated ──────────────────────── */
+    function notComparable(txt) {
+      return txt.indexOf('不可比') >= 0 && txt.indexOf('不是同一协议') >= 0 &&
+        /(不得表述为|不能表述为|不表述为)/.test(txt) && txt.indexOf('提升') >= 0;
+    }
+    sub.d23_notComparableStated = notComparable(readme) && notComparable(script);
+    sub.d23_excerpts = {
+      readme: excerpt(readme, '不可比', 160),
+      script: excerpt(script, '不可比', 160)
+    };
+    ok = ok && sub.d23_notComparableStated;
+
+    /* ── D2-4 numbersMatchMeasured ─────────────────────── */
+    var Q_RAW = [28, 22, 18, 9, 24, 13, 31];       /* C-05 verify_c05.html 逐图原始值 */
+    var R_RAW = [8, 3, 4, 6, 12, 2, 5];
+    var qMed = median(Q_RAW), rMed = median(R_RAW);
+    var qRange = Math.min.apply(null, Q_RAW) + '%~' + Math.max.apply(null, Q_RAW) + '%';
+    var rRange = Math.min.apply(null, R_RAW) + '%~' + Math.max.apply(null, R_RAW) + '%';
+    var DEMO = { episode: 88, rate: 17 };          /* 本卡实机截图同一运行的读数 */
+    var numChecks = [
+      { label: 'Q 中位数', token: '中位数 ' + qMed + '%', from: 'Q 原始值 ' + Q_RAW.join('/') },
+      { label: '随机中位数', token: '中位数 ' + rMed + '%', from: '随机原始值 ' + R_RAW.join('/') },
+      { label: 'Q 区间', token: qRange, from: 'Q 原始值 min/max' },
+      { label: '随机区间', token: rRange, from: '随机原始值 min/max' },
+      { label: '演示页轮次', token: DEMO.episode + ' 轮', from: '实机截图 shots/D02-learner-demo.png' },
+      { label: '演示页成功率', token: DEMO.rate + '%', from: '实机截图同一次运行读数' }
+    ];
+    var numRows = numChecks.map(function (c) {
+      return { label: c.label, token: c.token, from: c.from,
+        readme: readme.indexOf(c.token) >= 0, script: script.indexOf(c.token) >= 0 };
+    });
+    var numsOk = numRows.every(function (r) { return r.readme && r.script; });
+
+    /* Q-learning 段落内百分数白名单 */
+    var ALLOW = {};
+    [qMed, rMed, Math.min.apply(null, Q_RAW), Math.max.apply(null, Q_RAW),
+      Math.min.apply(null, R_RAW), Math.max.apply(null, R_RAW), DEMO.rate]
+      .forEach(function (v) { ALLOW[String(v)] = true; });
+    function pctIn(txt, seg) {
+      var re = /(\d+(?:\.\d+)?)\s*%/g, m, bad = [];
+      while ((m = re.exec(seg)) !== null) if (!ALLOW[m[1]]) bad.push(m[1] + '%');
+      return bad;
+    }
+    var readmeQ = readme.split('\n').filter(function (l) { return l.indexOf('Q-learning 强化学习') >= 0; }).join('\n');
+    var si = script.indexOf('**4. Q-learning 寻宝鼠**');
+    var sj = script.indexOf('\n## ', si + 1);
+    var scriptQ = si >= 0 ? script.slice(si, sj > 0 ? sj : si + 1200) : '';
+    var badReadme = pctIn(readme, readmeQ);
+    var badScript = pctIn(script, scriptQ);
+    sub.d24_numbersMatchMeasured = numsOk && readmeQ.length > 0 && scriptQ.length > 0 &&
+      badReadme.length === 0 && badScript.length === 0;
+    sub.d24_recomputed = { qMedian: qMed, rMedian: rMed, qRange: qRange, rRange: rRange,
+      demoEpisode: DEMO.episode, demoRate: DEMO.rate };
+    sub.d24_rows = numRows;
+    sub.d24_percentWhitelist = Object.keys(ALLOW);
+    sub.d24_unexpectedPercents = { readme: badReadme, script: badScript };
+    ok = ok && sub.d24_numbersMatchMeasured;
+
+    /* ── D2-5 noStaleNumbers ───────────────────────────── */
+    var stale = ['2%~26%', '中位数 9%'];
+    var staleRows = [
+      { doc: 'README.md', hits: stale.filter(function (s) { return readme.indexOf(s) >= 0; }) },
+      { doc: 'docs/答辩讲稿.md', hits: stale.filter(function (s) { return script.indexOf(s) >= 0; }) }
+    ];
+    sub.d25_noStaleNumbers = staleRows.every(function (r) { return r.hits.length === 0; });
+    sub.d25_rows = staleRows;
+    sub.d25_note = '规划-对标补齐.md 属历史记录，保留旧口径说明，不纳入本断言（planLen=' + plan.length + '）';
+    ok = ok && sub.d25_noStaleNumbers;
+
+    /* ── D2-6 noUnimplementedClaims ────────────────────── */
+    var idRows = [
+      { id: 'spike', ok: !!(T && T.spike) },
+      { id: 'gas', ok: !!(T && T.gas) },
+      { id: 'bleed', ok: !!(S && S.bleed) },
+      { id: 'poison', ok: !!(S && S.poison) },
+      { id: 'room_chest', ok: !!(DEC && DEC.room_chest) },
+      { id: 'scroll_upgrade', ok: itemsJs.indexOf('scroll_upgrade:') >= 0 }
+    ];
+    var mapRows = [
+      { claim: '陷阱与状态 - 陷阱放置/触发', evidence: 'js/systems/map.js placeTraps / triggerTrap' },
+      { claim: '陷阱与状态 - 伤害与状态数据', evidence: 'js/data/maps.js Game.Data.TRAPS / STATUS / TRAP_PLACEMENT' },
+      { claim: '陷阱与状态 - 状态结算与 HUD', evidence: 'js/systems/battle.js Game.Systems.Status + js/systems/hud.js drawStatusRow' },
+      { claim: '特殊房间 - 生成与陈设', evidence: 'js/systems/map.js placeSpecialRoom / furnishRooms' },
+      { claim: '特殊房间 - 密室宝箱厚赏', evidence: 'js/systems/map.js takeDecor(rich) + js/data/maps.js ROOMS.roomChestGoldMul' },
+      { claim: '特殊房间 - 绘制与拾取', evidence: 'js/core/render.js room_chest + js/core/main.js takeDecor 调用' }
+    ];
+    var forbidden = ['陷阱合成', '陷阱升级', '传送陷阱', '密室Boss', '房间商店', '陷阱拆除'];
+    var hitForbidden = forbidden.filter(function (w) { return readme.indexOf(w) >= 0; });
+    sub.d26_noUnimplementedClaims = idRows.every(function (r) { return r.ok; }) && hitForbidden.length === 0;
+    sub.d26_ids = idRows;
+    sub.d26_map = mapRows;
+    sub.d26_forbiddenHits = hitForbidden;
+    ok = ok && sub.d26_noUnimplementedClaims;
+
+    sub.cardLen = card.length;
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
