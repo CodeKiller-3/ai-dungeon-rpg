@@ -1,0 +1,189 @@
+{
+  "source": "preflight/diag_d11.html（一次性诊断页，修复前运行，未提交）",
+  "injected_fault": "Main.start() 启动的 rAF 帧内，Game.Core.Render.drawHUD 注入一次 throw new Error(\"diag-injected-draw-fault\")",
+  "diag": {
+    "seeds": [
+      11,
+      23,
+      37,
+      41,
+      53,
+      67,
+      79
+    ],
+    "steps": 6286,
+    "frames": 6286,
+    "errors": [],
+    "hist": {
+      "lt16": 6135,
+      "lt33": 2,
+      "lt50": 0,
+      "lt100": 27,
+      "lt250": 120,
+      "ge250": 2
+    },
+    "maxFrameMs": 269.3999999910593,
+    "maxFrameAt": {
+      "scene": "explore",
+      "floor": 2,
+      "step": 762
+    },
+    "over100": 122,
+    "gen": {
+      "seed11": {
+        "floorMs": [
+          1.1,
+          4.5,
+          2.1,
+          0.5,
+          0.5
+        ]
+      },
+      "seed23": {
+        "floorMs": [
+          0.6,
+          0.9,
+          0.5,
+          0.5,
+          0.6
+        ]
+      },
+      "seed37": {
+        "floorMs": [
+          0.2,
+          0.5,
+          0.7,
+          0.3,
+          0.5
+        ]
+      },
+      "seed41": {
+        "floorMs": [
+          0.1,
+          0.5,
+          0.2,
+          0.6,
+          0.2
+        ]
+      },
+      "seed53": {
+        "floorMs": [
+          0.2,
+          0.3,
+          0.2,
+          0.3,
+          0.3
+        ]
+      },
+      "seed67": {
+        "floorMs": [
+          0.2,
+          0.3,
+          0.4,
+          0.3,
+          0.3
+        ]
+      },
+      "seed79": {
+        "floorMs": [
+          0.1,
+          0.6,
+          1.1,
+          0.5,
+          2.4
+        ]
+      }
+    },
+    "battles": 21,
+    "deaths": 14,
+    "modals": 56,
+    "floors": 28,
+    "chain": {
+      "framesAfterFirstThrow": 1,
+      "framesInNext400ms": 0,
+      "chainAlive": false,
+      "lastError": null
+    },
+    "totalMs": 23444,
+    "slow": [
+      {
+        "ms": 139.3,
+        "scene": "explore",
+        "floor": 1,
+        "step": 50
+      },
+      {
+        "ms": 129.3,
+        "scene": "explore",
+        "floor": 1,
+        "step": 97
+      },
+      {
+        "ms": 115.8,
+        "scene": "explore",
+        "floor": 1,
+        "step": 144
+      },
+      {
+        "ms": 103.5,
+        "scene": "explore",
+        "floor": 2,
+        "step": 188
+      },
+      {
+        "ms": 190.5,
+        "scene": "explore",
+        "floor": 2,
+        "step": 284
+      },
+      {
+        "ms": 117.4,
+        "scene": "explore",
+        "floor": 2,
+        "step": 322
+      },
+      {
+        "ms": 103.3,
+        "scene": "explore",
+        "floor": 3,
+        "step": 399
+      },
+      {
+        "ms": 133.1,
+        "scene": "explore",
+        "floor": 3,
+        "step": 463
+      },
+      {
+        "ms": 157.3,
+        "scene": "battle",
+        "floor": 3,
+        "step": 503
+      },
+      {
+        "ms": 207.4,
+        "scene": "explore",
+        "floor": 1,
+        "step": 557
+      },
+      {
+        "ms": 128.8,
+        "scene": "explore",
+        "floor": 2,
+        "step": 599
+      },
+      {
+        "ms": 124.8,
+        "scene": "explore",
+        "floor": 2,
+        "step": 638
+      }
+    ]
+  },
+  "bom_hero": "239,187,191",
+  "fnv": {
+    "method": "FNV-1a over Get-PageVerdict body (CRLF->LF)",
+    "value": "d1f2c95f",
+    "len": 785
+  }
+}

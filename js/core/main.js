@@ -216,7 +216,25 @@
     start: function () {
       var self = this;
       requestAnimationFrame(function loop(ts) {
-        self.loop(ts);
+        /* D-11：单帧异常不得打断 rAF 链。
+           旧实现把 requestAnimationFrame(loop) 放在 self.loop(ts) 之后，任意一帧
+           抛错（绘制/更新/子模块）都会让下一帧永远不再注册——画面定格、输入全失效，
+           只能刷新，正是真人反馈的“卡死”。这里捕获并记录后无条件续帧；
+           正常路径（无异常）行为与耗时不变。 */
+        try {
+          self.loop(ts);
+        } catch (e) {
+          self._errorCount = (self._errorCount || 0) + 1;
+          self._lastError = {
+            msg: String((e && e.message) || e),
+            stack: String((e && e.stack) || ''),
+            scene: self._scene,
+            at: Date.now()
+          };
+          if (self._errorCount === 1 && window.console && typeof console.error === 'function') {
+            console.error('[Main.loop] 帧内异常已捕获，游戏继续运行：', e);
+          }
+        }
         requestAnimationFrame(loop);
       });
     },

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>verify_d11</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc"><div id="npc-title"></div><div id="npc-log"></div><input id="npc-input"></div>
+<!-- D-11 验证页：Main.loop 单帧异常不再打断 rAF 链。
+     诊断证据来自一次性 preflight/diag_d11.html（修复前跑 7 个种子、6286 步、21 场战斗），
+     已固化到 selfcheck/d11-evidence.json；真实 rAF 在 headless 下会被节流，不能作为链路证据，
+     因此本页改用可控假 rAF 做 A/B：旧写法在注入异常后停在第 1 次调用，现写法持续调度。 -->
+<script src="lib/meta.js"></script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var mainSrc = readDoc('../js/core/main.js');
+  var runall = readDoc('selfcheck/run-all.ps1');
+  var ev = readJson('selfcheck/d11-evidence.json');
+  out.loaded = mainSrc.length > 0 && runall.length > 0 && !!ev;
+
+  var sub = {}, ok = true;
+  try {
+    /* ── d11_1 源码：start() 在 try/catch 内调 loop，catch 后无条件续帧 ── */
+    var guarded = /try\s*\{\s*self\.loop\(ts\);\s*\}\s*catch\s*\(e\)\s*\{[\s\S]{0,600}self\._errorCount/.test(mainSrc) &&
+      /\}\s*requestAnimationFrame\(loop\);/.test(mainSrc) &&
+      mainSrc.indexOf('self._lastError') >= 0;
+    sub.d11_1_sourceGuarded = guarded;
+    sub.d11_1_notes = {
+      tryBeforeLoop: mainSrc.indexOf('try {\n          self.loop(ts);') >= 0,
+      reregisterAfterCatch: mainSrc.indexOf('}\n        requestAnimationFrame(loop);') >= 0
+    };
+    ok = ok && guarded;
+
+    /* ── d11_2 压测证据：7 种子 / ≥3000 步 / 0 自然异常 / 帧耗时上限 ── */
+    var d = ev.diag || {};
+    var seeds = d.seeds || [];
+    var gens = d.gen || {};
+    var genOk = seeds.length === 7 && seeds.every(function (s) {
+      var ms = (gens['seed' + s] && gens['seed' + s].floorMs) || [];
+      return ms.length === 5 && ms.every(function (v) { return v <= 50; });
+    });
+    sub.d11_2_stress = {
+      seeds: seeds.length, steps: d.steps, errors: (d.errors || []).length,
+      battles: d.battles, modals: d.modals, floors: d.floors,
+      maxFrameMs: d.maxFrameMs, over100: d.over100
+    };
+    sub.d11_2_stressOk = seeds.length === 7 && d.steps >= 3000 &&
+      (d.errors || []).length === 0 && d.battles >= 20 && d.modals >= 28 &&
+      d.floors >= 20 && genOk && d.maxFrameMs > 0 && d.maxFrameMs <= 15000;
+    ok = ok && sub.d11_2_stressOk;
+
+    /* ── d11_3 受保护文件口径未变（BOM / Get-PageVerdict 哈希）── */
+    sub.d11_3_bom = ev.bom_hero;
+    sub.d11_3_fnv = ev.fnv;
+    sub.d11_3_protected = ev.bom_hero === '239,187,191' &&
+      ev.fnv && ev.fnv.value === 'd1f2c95f' && ev.fnv.len === 785;
+    ok = ok && sub.d11_3_protected;
+
+    /* ── d11_4 / d11_5 假 rAF A/B：同一注入异常，旧写法停，现写法续 ── */
+    var M = window.Game && Game.Core && Game.Core.Main;
+    var R = window.Game && Game.Core && Game.Core.Render;
+    if (!M || !R) throw new Error('Main/Render 未就绪');
+
+    M.init();
+    window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    var realRaf = window.requestAnimationFrame;
+    var queue = [];
+    window.requestAnimationFrame = function (cb) { queue.push(cb); return queue.length; };
+    function pump(n) {
+      var ran = 0;
+      for (var i = 0; i < n; i++) {
+        var cb = queue.shift();
+        if (!cb) break;
+        /* 浏览器会在 rAF 回调抛错后吞掉异常；这里等价处理，避免旧写法复刻把测试脚本打断 */
+        try { cb(performance.now()); } catch (e) { /* 旧写法：续帧语句永远执行不到 */ }
+        ran++;
+      }
+      return ran;
+    }
+
+    /* 旧写法复刻（修复前 js/core/main.js#L216-222 的结构） */
+    var oldCalls = 0;
+    (function oldStart(self) {
+      window.requestAnimationFrame(function loop(ts) {
+        self.loop(ts);
+        window.requestAnimationFrame(loop);
+      });
+    })({ loop: function () { oldCalls++; throw new Error('d11-injected-old'); } });
+    pump(5);
+    sub.d11_4_oldStops = { callsAfter5Pumps: oldCalls, stalled: oldCalls === 1 };
+    ok = ok && oldCalls === 1;
+
+    /* 现写法：注入一次 drawHUD 异常，应被捕获且 rAF 链继续 */
+    var origDraw = R.drawHUD, thrown = 0;
+    R.drawHUD = function () {
+      thrown++;
+      if (thrown === 1) throw new Error('d11-injected-draw-fault');
+      return origDraw.apply(this, arguments);
+    };
+    var frames0 = M._frames;
+    M.start();
+    var pumped = pump(30);
+    var frames1 = M._frames;
+    R.drawHUD = origDraw;
+    var errCount = M._errorCount || 0;
+    var lastMsg = (M._lastError && M._lastError.msg) || null;
+    var beforeRestore = M._frames;
+    pump(5);
+    var afterRestore = M._frames;
+    window.requestAnimationFrame = realRaf;
+
+    sub.d11_5_live = {
+      pumped: pumped, framesAdvanced: frames1 - frames0,
+      errorCount: errCount, lastError: lastMsg,
+      framesAfterRestore: afterRestore - beforeRestore,
+      scene: M._scene, modalOpen: Game.Modal.isOpen()
+    };
+    sub.d11_5_chainAlive = pumped === 30 && (frames1 - frames0) === 30 &&
+      errCount === 1 && lastMsg === 'd11-injected-draw-fault' &&
+      (afterRestore - beforeRestore) === 5 && M._scene === 'explore' && !Game.Modal.isOpen();
+    ok = ok && sub.d11_5_chainAlive;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

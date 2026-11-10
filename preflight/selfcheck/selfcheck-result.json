@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T05:14:34.382Z",
+  "at": "2026-11-10T08:13:11.689Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "36 文件 / 417.4 KB（不含 vendor）"
+      "detail": "36 文件 / 418.3 KB（不含 vendor）"
     },
     {
       "level": "PASS",
