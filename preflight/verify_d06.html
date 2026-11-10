@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
 <title>verify_d06</title>
 </head>
 <body>
@@ -9,6 +10,7 @@
 <!-- D-06 验证页：run-all.ps1 的裁决只认独立裁决行，不扫 payload 字段。
      证据 selfcheck/d06-evidence.json 由同一脚本的 -VerdictFile 模式对临时样例真实运行后记录；
      本页同时核对 run-all.ps1 源码口径与 verify_d05.html 的字段回退。 -->
+<script src="lib/meta.js"></script>
 <script>
 (function () {
   'use strict';
@@ -88,12 +90,12 @@
     ok = ok && sub.d64_d05Reverted;
 
     /* ── D6-5 全量回归 47/47（套件已随 D-07 增至 48 页）──
-     * run-all 在本页结束后才写 JSON，本页读到的是上一轮；且 D-05/D-06/D-07 三张
-     * "读回归结果"的元页面互为输入，只排除自身仍会互相污染成死锁。
-     * 因此统一排除三张元页面，校验其余全部实质页面 PASS（整页汇总以 run-all 打印为准）。 */
-    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1 };
+     * run-all 在本页结束后才写 JSON，本页读到的是上一轮；元页面（自证断言读上一轮
+     * 回归结果的页面）互为输入，只排除自身仍会互相污染成死锁。
+     * 排除集合不再写死文件名，改由 <meta name="preflight-meta"> 标记声明、
+     * run-all 扫描后写入行内 meta 字段，本页只消费标记。 */
     var rows = (reg && reg.rows) || [];
-    var others = rows.filter(function (r) { return !META[r.page]; });
+    var others = PreflightMeta.substantive(rows);
     var d65ok = rows.length >= 46 && others.length >= 45 &&
       others.every(function (r) { return r.verdict === 'PASS'; });
     sub.d65_fullRun = d65ok;

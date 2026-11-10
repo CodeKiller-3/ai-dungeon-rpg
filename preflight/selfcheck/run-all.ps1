@@ -90,9 +90,17 @@ foreach ($t in $targets) {
   $payload = $r.payload
   if ($verdict -eq 'FAIL' -or $verdict -eq 'NONE') { $fail++ }
 
+  # ── 元页面身份（D-09）──────────────────────────────────────────
+  # 页面 <head> 内的 <meta name="preflight-meta" content="1"> 表示：该页的自证断言
+  # 读取上一轮回归结果，因此不参与其它元页面的自证集合。这里扫 preflight/ 下每个
+  # 页面的头部源码得出身份，写入行内 meta 字段；验证页只消费该字段，不再维护文件名清单。
+  $head = @(Get-Content -LiteralPath $t.FullName -TotalCount 20 -Encoding utf8)
+  $isMeta = (($head -join "`n") -match 'name="preflight-meta"')
+
   $rows += [pscustomobject]@{
     page    = $t.BaseName
     verdict = $verdict
+    meta    = $isMeta
     ms      = [int]$sw.ElapsedMilliseconds
     payload = if ($payload.Length -gt 220) { $payload.Substring(0, 220) + '…' } else { $payload }
   }

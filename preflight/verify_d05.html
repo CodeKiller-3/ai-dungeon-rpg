@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
 <title>verify_d05</title>
 </head>
 <body>
@@ -12,6 +13,7 @@
 <script src="../js/core/eventBus.js"></script>
 <script src="../js/data/items.js"></script>
 <script src="lib/assert-data.js"></script>
+<script src="lib/meta.js"></script>
 <script>
 (function () {
   'use strict';
@@ -135,7 +137,7 @@
     var rs = reg && reg.summary ? reg.summary : null;
     var rows = reg && reg.rows ? reg.rows : null;
     var ss = sc && sc.summary ? sc.summary : null;
-    var others = rows ? rows.filter(function (r) { return ['verify_d05', 'verify_d06', 'verify_d07'].indexOf(r.page) < 0; }) : [];
+    var others = rows ? PreflightMeta.substantive(rows) : [];
     var regOk = !!rows && rows.length >= 46 && others.length >= 45 &&
       others.every(function (r) { return r.verdict === 'PASS'; });
     var scOk = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0;

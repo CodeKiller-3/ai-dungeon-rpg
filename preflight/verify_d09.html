@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>verify_d09</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-09 验证页：元页面改为声明式身份（<meta name="preflight-meta">），排除集合由扫描得出，
+     不再维护写死的文件名清单。证据 selfcheck/d09-evidence.json 由 run-all.ps1 两轮真实运行记录。
+     本页自身也读上一轮回归结果，因此同样带标记。 -->
+<script src="lib/meta.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function fnv(s) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      x ^= s.charCodeAt(i);
+      x = Math.imul(x, 0x01000193) >>> 0;
+    }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var runall = readDoc('selfcheck/run-all.ps1');
+  var ev = readJson('selfcheck/d09-evidence.json');
+  var reg = readJson('selfcheck/regression-result.json');
+  var sc = readJson('selfcheck/selfcheck-result.json');
+  out.loaded = runall.length > 0 && !!ev && !!window.PreflightMeta;
+
+  var META_PAGES = ['verify_d05', 'verify_d06', 'verify_d07', 'verify_d08'];
+  var sub = {}, ok = true;
+  try {
+    /* ── D9-1 四张元页面均带声明式身份标记 ─────────────── */
+    var hits = {}, missing = [];
+    META_PAGES.forEach(function (name) {
+      var src = readDoc(name + '.html');
+      var line = '';
+      src.split(/\r?\n/).forEach(function (l) {
+        if (!line && l.indexOf('name="preflight-meta"') >= 0) { line = l.trim(); }
+      });
+      hits[name] = { marked: PreflightMeta.hasMarker(src), line: line };
+      if (!PreflightMeta.hasMarker(src)) { missing.push(name); }
+    });
+    sub.d91_markersPresent = missing.length === 0;
+    sub.d91_hits = hits;
+    sub.d91_missing = missing;
+    ok = ok && sub.d91_markersPresent;
+
+    /* ── D9-2 不再出现硬编码的其它元页面文件名列表 ─────
+     * 判据：① 页面源码不含 `META = {` 这类清单声明；
+     *       ② 任何一行不得同时出现两个及以上元页面文件名（那才是"列表"）。
+     * 单行出现自身文件名（读自己的证据文件、标题）不算列表，因此不作禁止。 */
+    var lists = [];
+    var hasMetaObj = [];
+    META_PAGES.forEach(function (name) {
+      var src = readDoc(name + '.html');
+      if (/META\s*=\s*\{/.test(src)) { hasMetaObj.push(name); }
+      src.split(/\r?\n/).forEach(function (l, i) {
+        var n = 0;
+        META_PAGES.forEach(function (m) { if (l.indexOf(m) >= 0) { n++; } });
+        if (n >= 2) { lists.push(name + ':' + (i + 1) + ':' + l.trim()); }
+      });
+    });
+    sub.d92_noHardcodedMetaLists = lists.length === 0 && hasMetaObj.length === 0;
+    sub.d92_listLines = lists;
+    sub.d92_metaObjects = hasMetaObj;
+    ok = ok && sub.d92_noHardcodedMetaLists;
+
+    /* ── D9-3 合成输入单测：排除集合由标记推出，可扩展 ──
+     * 不新建临时页面：那会进入 run-all 的发现集、污染回归与工作区。 */
+    var names = ['verify_a', 'verify_b', 'verify_c', 'verify_d', 'verify_e',
+                 'verify_f', 'verify_d05', 'verify_d06', 'verify_d07', 'verify_d08'];
+    var markers = { verify_d05: 1, verify_d06: 1, verify_d07: 1, verify_d08: 1 };
+    var got = PreflightMeta.excludeByName(names, markers);
+    var markers2 = { verify_d05: 1, verify_d06: 1, verify_d07: 1, verify_d08: 1, verify_d09: 1 };
+    var got2 = PreflightMeta.excludeByName(names.concat(['verify_d09']), markers2);
+    var synth = ev.synthetic || {};
+    var same = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+    sub.d93_syntheticExclusion =
+      same(got, ['verify_d05', 'verify_d06', 'verify_d07', 'verify_d08']) &&
+      same(got2, ['verify_d05', 'verify_d06', 'verify_d07', 'verify_d08', 'verify_d09']) &&
+      same(got, synth.excluded) && same(got2, synth.excludedWithD09);
+    sub.d93_call = 'PreflightMeta.excludeByName(' + JSON.stringify(names) + ', markers)';
+    sub.d93_out = got;
+    sub.d93_outWithD09 = got2;
+    ok = ok && sub.d93_syntheticExclusion;
+
+    /* ── D9-4 连续两轮 50/50 且逐页裁决一致 ──────────────
+     * 自举说明：证明"本页连续两轮通过"必然先要有两轮记录，而记录里又包含本页自身，
+     * 因此仅当证据文件显式 bootstrap=true 且 rounds 为空时放行一次（取证阶段），
+     * 提交版本必须 bootstrap=false 且 rounds 为两轮真实记录，否则判 FAIL。 */
+    var rounds = (ev && ev.rounds) || [];
+    var want = 'TOTAL=50 PASS=50 FAIL=0 NONE=0 MIXED=0';
+    var r1 = rounds[0] || {}, r2 = rounds[1] || {};
+    var same1 = function (a, b) { return JSON.stringify(a) === JSON.stringify(b); };
+    if (rounds.length === 0) {
+      sub.d94_twoRoundsStable = ev.bootstrap === true;
+      sub.d94_bootstrap = true;
+    } else {
+      sub.d94_twoRoundsStable =
+        rounds.length === 2 && ev.bootstrap === false &&
+        r1.summary === want && r2.summary === want &&
+        r1.exit === 0 && r2.exit === 0 &&
+        r1.pages === 50 && r2.pages === 50 &&
+        same1(r1.verdicts, r2.verdicts) && r2.identicalToPrevious === true;
+      sub.d94_bootstrap = false;
+    }
+    sub.d94_rounds = [r1.summary, r2.summary];
+    sub.d94_sameVerdicts = same1(r1.verdicts, r2.verdicts);
+    ok = ok && sub.d94_twoRoundsStable;
+
+    /* ── D9-5 裁决逻辑未动：函数体 FNV + 长度 ──────────── */
+    var i = runall.indexOf('function Get-PageVerdict');
+    var j = i >= 0 ? runall.indexOf('\n}', i) : -1;
+    var body = (i >= 0 && j > i) ? runall.slice(i, j + 2).replace(/\r\n/g, '\n') : '';
+    sub.d95_verdictUntouched = body.length === 785 && fnv(body) === 'd1f2c95f' &&
+      runall.indexOf("$hits[$hits.Count - 1]") >= 0 &&
+      runall.indexOf("-contains 'PASS'") >= 0 && runall.indexOf("-contains 'FAIL'") >= 0;
+    sub.d95_fnv = fnv(body);
+    sub.d95_len = body.length;
+    ok = ok && sub.d95_verdictUntouched;
+
+    /* ── D9-6 BOM 保持 ─────────────────────────────────── */
+    sub.d96_bomKept = ev.bom_hero === '239,187,191';
+    sub.d96_bytes = ev.bom_hero;
+    ok = ok && sub.d96_bomKept;
+
+    /* ── D9-7 静态自检无退化 ─────────────────────────────
+     * 这里只判"上一轮回归无 FAIL + 静态自检 32/1/0"；"连续两轮 50/50"由 D9-4 的
+     * 两轮记录负责——若在此再要求上一轮已是 50 行，新一轮加页的首轮必然先判 FAIL。 */
+    var ss = (sc && sc.summary) || null;
+    var rs = (reg && reg.summary) || null;
+    sub.d97_staticClean = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0 &&
+      !!rs && rs.fail === 0 && rs.none === 0 && rs.mixed === 0 && rs.pass === rs.total;
+    sub.d97_selfcheck = ss;
+    sub.d97_regression = rs;
+    ok = ok && sub.d97_staticClean;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

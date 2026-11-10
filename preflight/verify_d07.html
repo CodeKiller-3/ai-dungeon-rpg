@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
 <title>verify_d07</title>
 </head>
 <body>
@@ -9,6 +10,7 @@
 <!-- D-07 验证页：FR-08 道具合成的范围裁决（未排期），只查文档口径，不涉及运行时代码。
      D7-2 的 grep 口径：README / 讲稿中不得出现"合成=已实现"类表述；
      音效处的"Web Audio 合成"属于音频合成，不算道具合成。 -->
+<script src="lib/meta.js"></script>
 <script>
 (function () {
   'use strict';
@@ -113,12 +115,12 @@
     ok = ok && sub.d74_noOtherReqTouched;
 
     /* ── D7-5 回归与静态自检无退化 ─────────────────────
-     * run-all 在本页结束后写 JSON，本页读到上一轮；D-05/D-06/D-07 三张元页面
-     * 互为输入，单独排除自身会互相污染成死锁，故统一排除三张元页面，
-     * 要求其余实质页面全 PASS（整页汇总以 run-all 打印为准）。 */
-    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1 };
+     * run-all 在本页结束后写 JSON，本页读到上一轮；元页面（自证断言读上一轮
+     * 回归结果的页面）互为输入，单独排除自身会互相污染成死锁。
+     * 排除集合不再写死文件名，改由 <meta name="preflight-meta"> 标记声明、
+     * run-all 扫描后写入行内 meta 字段，本页只消费标记。 */
     var rows = (reg && reg.rows) || [];
-    var others = rows.filter(function (r) { return !META[r.page]; });
+    var others = PreflightMeta.substantive(rows);
     var regOk = rows.length >= 46 && others.length >= 45 &&
       others.every(function (r) { return r.verdict === 'PASS'; });
     var ss = (sc && sc.summary) || null;

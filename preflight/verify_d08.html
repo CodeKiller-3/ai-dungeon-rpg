@@ -2,12 +2,14 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
 <title>verify_d08</title>
 </head>
 <body>
 <canvas id="game" width="400" height="300"></canvas>
 <!-- D-08 验证页：run-all.ps1 的汇总计数改为 @(...).Count，单条场景不再打印空白。
      证据 selfcheck/d08-evidence.json 由同一脚本 -VerdictFile -ShowSummary 模式对临时样例真实运行后记录。 -->
+<script src="lib/meta.js"></script>
 <script>
 (function () {
   'use strict';
@@ -95,11 +97,12 @@
     ok = ok && sub.d86_bomKept;
 
     /* ── D8-7 回归与静态自检无退化 ─────────────────────
-     * run-all 在本页结束后写 JSON，本页读到上一轮；三张元页面（D-05/06/07）与
-     * 本页同为"读回归结果"的页面，统一排除，只校验其余实质页面全 PASS。 */
-    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1, verify_d08: 1 };
+     * run-all 在本页结束后写 JSON，本页读到上一轮；元页面（自证断言读上一轮
+     * 回归结果的页面）互为输入，统一排除，只校验其余实质页面全 PASS。
+     * 排除集合不再写死文件名，改由 <meta name="preflight-meta"> 标记声明、
+     * run-all 扫描后写入行内 meta 字段，本页只消费标记。 */
     var rows = (reg && reg.rows) || [];
-    var others = rows.filter(function (r) { return !META[r.page]; });
+    var others = PreflightMeta.substantive(rows);
     var regOk = rows.length >= 46 && others.length >= 45 &&
       others.every(function (r) { return r.verdict === 'PASS'; });
     var ss = (sc && sc.summary) || null;
