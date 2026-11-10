@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_c03b</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- C-03b 验证页：只加载 items/config/shop（Map 用桩）；断言轮换池不售更深层核心货、
+     档位、条数、价格校验和、货架稳定性、池集合互异、文档口径一致。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, api: false, ok: false };
+
+  function finish() {
+    out.ok = !!(out.loaded && out.api && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var D = (window.Game && Game.Data) || {};
+  var I = D.ITEMS, STOCK = D.SHOP_STOCK, POOL = D.SHOP_ROTATION, SCROLLS = D.SHOP_SCROLLS;
+  var Shop = window.Game && Game.Systems && Game.Systems.Shop;
+  out.loaded = !!(I && STOCK && POOL && SCROLLS && Shop);
+  out.api = !!(Shop && typeof Shop.getStock === 'function' &&
+    typeof Shop.refresh === 'function' && typeof Shop.resetPhase === 'function');
+  if (!out.loaded || !out.api) { out.ok = false; finish(); return; }
+
+  var floor = 1;
+  Game.Systems.Map = {
+    getFloor: function () { return floor; },
+    setFloor: function (f) { floor = f; }
+  };
+
+  function ids(st) { return st.map(function (x) { return x.id; }); }
+  function coreOf(f) { return STOCK[f - 1] || []; }
+  function poolOf(f) { return POOL[f - 1] || []; }
+  function isEquip(id) { return !!(I[id] && I[id].type !== 'consumable'); }
+  function deeperCore(f) {
+    var acc = [];
+    for (var g = f + 1; g <= 5; g++) acc = acc.concat(coreOf(g));
+    return acc;
+  }
+  function coreEquipMin(f) {
+    var m = Infinity, who = '';
+    coreOf(f).forEach(function (id) {
+      if (isEquip(id) && I[id].price < m) { m = I[id].price; who = id; }
+    });
+    return { min: m, id: who };
+  }
+  function sameIds(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+
+  var sub = {}, ok = true;
+
+  try {
+    /* C3b-1 noDeeperCoreInPool：装备项与更深层核心零交集 */
+    var violRows = [];
+    for (var f1 = 1; f1 <= 5; f1++) {
+      var deep = deeperCore(f1);
+      var viol = poolOf(f1).filter(function (id) {
+        return isEquip(id) && deep.indexOf(id) >= 0;
+      });
+      violRows.push({ floor: f1, viol: viol });
+      if (viol.length) ok = false;
+    }
+    sub.c3b1_noDeeperCoreInPool = violRows.every(function (r) { return r.viol.length === 0; });
+    sub.c3b1_rows = violRows;
+    ok = ok && sub.c3b1_noDeeperCoreInPool;
+
+    /* C3b-2 tierStillOk：池内装备 ≥ 该层核心非消耗品最低价 */
+    var tierRows = [];
+    for (var f2 = 1; f2 <= 5; f2++) {
+      var cm = coreEquipMin(f2);
+      var bad = poolOf(f2).filter(function (id) {
+        return isEquip(id) && I[id].price < cm.min;
+      });
+      tierRows.push({ floor: f2, coreMin: cm.min, coreMinId: cm.id, bad: bad });
+      if (bad.length) ok = false;
+    }
+    sub.c3b2_tierStillOk = tierRows.every(function (r) {
+      return r.bad.length === 0 && [20, 85, 150, 240, 300][r.floor - 1] === r.coreMin;
+    });
+    sub.c3b2_rows = tierRows;
+    ok = ok && sub.c3b2_tierStillOk;
+
+    /* C3b-3 countsUnchanged：核心/合计/池长/周期 */
+    var coreCounts = STOCK.map(function (r) { return r.length; });
+    var lens = [], cycles = [], totals = [];
+    for (var f3 = 1; f3 <= 5; f3++) {
+      floor = f3; Shop.resetPhase();
+      var L = poolOf(f3).length, seq = [], idx;
+      var maxTotal = Shop.getStock().length;
+      seq.push(ids(Shop.getStock()).join('|'));
+      for (idx = 0; idx < L; idx++) {
+        Shop.refresh();
+        var st = Shop.getStock();
+        seq.push(ids(st).join('|'));
+        if (st.length > maxTotal) maxTotal = st.length;
+      }
+      var period = 0;
+      for (var p = 1; p <= L; p++) {
+        var same = true;
+        for (var q = 0; q + p < seq.length; q++) if (seq[q] !== seq[q + p]) { same = false; break; }
+        if (same) { period = p; break; }
+      }
+      lens.push(L); cycles.push(period); totals.push(maxTotal);
+    }
+    sub.c3b3_countsUnchanged = coreCounts.join(',') === '7,9,9,8,8' &&
+      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,4,5' &&
+      cycles.join(',') === '5,5,5,4,5';
+    sub.c3b3_core = coreCounts;
+    sub.c3b3_totals = totals;
+    sub.c3b3_lens = lens;
+    sub.c3b3_cycles = cycles;
+    ok = ok && sub.c3b3_countsUnchanged;
+
+    /* C3b-4 pricesIntact：46 件、Σprice/Σsell、price>sell、逐项哈希 */
+    function fnv1a(str) {
+      var x = 0x811c9dc5;
+      for (var i = 0; i < str.length; i++) {
+        x ^= str.charCodeAt(i);
+        x = (x * 0x01000193) >>> 0;
+      }
+      return ('00000000' + x.toString(16)).slice(-8);
+    }
+    var allIds = Object.keys(I).sort();
+    var sumPrice = 0, sumSell = 0, priceBad = [];
+    allIds.forEach(function (id) {
+      sumPrice += I[id].price;
+      sumSell += I[id].sell;
+      if (!(I[id].price > I[id].sell)) priceBad.push(id);
+    });
+    var sig = allIds.map(function (id) {
+      return id + ':' + I[id].price + ':' + I[id].sell;
+    }).join(';');
+    var sigHash = fnv1a(sig);
+    sub.c3b4_pricesIntact = allIds.length === 46 && sumPrice === 9685 && sumSell === 4841 &&
+      priceBad.length === 0 && sigHash === '9a01bb60';
+    sub.c3b4_checksum = { count: allIds.length, sumPrice: sumPrice, sumSell: sumSell,
+      priceBad: priceBad, fnv: sigHash, hashOf: 'sorted id:price:sell joined by ;' };
+    ok = ok && sub.c3b4_pricesIntact;
+
+    /* C3b-5 stableStock：同次开张稳定 / 周期闭环 / 换层归零 */
+    var stableRows = [];
+    for (var f5 = 1; f5 <= 5; f5++) {
+      floor = f5; Shop.resetPhase();
+      var a = ids(Shop.getStock());
+      var b = ids(Shop.getStock());
+      var sameTick = sameIds(a, b);
+      var L5 = poolOf(f5).length;
+      for (var r5 = 0; r5 < L5; r5++) Shop.refresh();
+      var wrapped = sameIds(ids(Shop.getStock()), a);
+      floor = (f5 % 5) + 1; Shop.resetPhase();
+      floor = f5; Shop.resetPhase();
+      var afterSwitch = sameIds(ids(Shop.getStock()), a);
+      var pass5 = sameTick && wrapped && afterSwitch;
+      stableRows.push({ floor: f5, sameTick: sameTick, wrapped: wrapped,
+        afterSwitch: afterSwitch, pass: pass5 });
+      if (!pass5) ok = false;
+    }
+    sub.c3b5_stableStock = stableRows.every(function (r) { return r.pass; });
+    sub.c3b5_rows = stableRows;
+    ok = ok && sub.c3b5_stableStock;
+
+    /* C3b-6 poolIdsDistinct：五层池集合两两不同 */
+    var keys = POOL.map(function (row) { return row.slice().sort().join('|'); });
+    var distinct = true;
+    for (var m1 = 0; m1 < keys.length; m1++) {
+      for (var m2 = m1 + 1; m2 < keys.length; m2++) if (keys[m1] === keys[m2]) distinct = false;
+    }
+    sub.c3b6_poolIdsDistinct = distinct && POOL.length === 5;
+    ok = ok && sub.c3b6_poolIdsDistinct;
+
+    /* C3b-7 specDeclared：卡/规划写清 F4 池长 4 原因；README 不再写"每层 5 项" */
+    var card = readDoc('../docs/tasks/C-03b-pool-tier-strict.md');
+    var plan = readDoc('../规划-对标补齐.md');
+    var readme = readDoc('../README.md');
+    var cardOk = card.indexOf('F4') >= 0 && card.indexOf('池长 4') >= 0 && card.indexOf('候选不足') >= 0;
+    var planOk = plan.indexOf('F4') >= 0 && plan.indexOf('池长 4') >= 0 && plan.indexOf('已知缺口') >= 0;
+    var readmeOk = readme.length > 0 && readme.indexOf('每层 5 项') < 0 && readme.indexOf('F4 为 4 项') >= 0;
+    sub.c3b7_specDeclared = cardOk && planOk && readmeOk;
+    sub.c3b7_docs = { cardLen: card.length, planLen: plan.length, readmeLen: readme.length,
+      cardOk: cardOk, planOk: planOk, readmeOk: readmeOk };
+    ok = ok && sub.c3b7_specDeclared;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String(e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

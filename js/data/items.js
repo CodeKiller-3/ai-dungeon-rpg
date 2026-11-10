@@ -90,13 +90,23 @@
    * C-02：每层由 3 项扩到 5 项（周期 3 次开张 → 5 次），原 3 项全部保留；
    * 新增项按同层核心档位挑选，不与该层核心货架重复（保证合计条数 10/12/12/11/11 不变）；
    * C-03：档位口径五层全覆盖——每个装备项单价 ≥ 该层核心非消耗品最低价
-   * （F1 20 / F2 85 / F3 150 / F4 240 / F5 300），原 F3 的 bow_elite(140) 已换成 chain_mail_rare(240)；
-   * 消耗品不受该条约束（F1~F3 保留 potion_mana 补给），但 F4/F5 不放消耗品。 */
+   * （F1 20 / F2 85 / F3 150 / F4 240 / F5 300）；
+   * 消耗品不受该条约束（F1~F3 保留 potion_mana 补给），但 F4/F5 不放消耗品。
+   * C-03b：新增通用规则——某层轮换池的装备项不得出现在更深层核心货架中
+   * （否则等于提前售卖深层核心货，"逐层更强"被抹平）。按此规则重排：
+   *   F2 移除 chain_mail_rare/robe_mage_rare（F4 核心），换 bow_elite/armor_leather_rare；
+   *   F3 移除 chain_mail_rare/sword_magic_rare/plate_armor_rare（F4 核心）与 chain_mail_epic（F5 核心），
+   *      换 sword_bone_epic/sword_iron_epic/armor_leather_epic/sword_steel_rare；
+   *   F4 移除 chain_mail_epic/robe_mage_epic（F5 核心），换 sword_anime。
+   * F4 池长降为 4（妥协）：满足"≥240 且不在 F5 核心且不与 F4 核心重复"的装备全集仅 4 件
+   * （sword_bone_epic/sword_iron_epic/armor_leather_epic/sword_anime），不足 5 件；候选不足的
+   * 根因是物品总量，恢复 5 件需先扩充物品表（见规划-对标补齐.md 已知缺口）。
+   * 池长因此为 [5,5,5,4,5]，周期随池长。 */
   Game.Data.SHOP_ROTATION = [
     ['sword_bone', 'sword_iron_rare', 'potion_mana', 'sword_bone_rare', 'armor_leather_rare'],
-    ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic', 'chain_mail_rare', 'robe_mage_rare'],
-    ['chain_mail_rare', 'sword_magic_rare', 'potion_mana', 'plate_armor_rare', 'chain_mail_epic'],
-    ['sword_iron_epic', 'armor_leather_epic', 'sword_bone_epic', 'chain_mail_epic', 'robe_mage_epic'],
+    ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic', 'bow_elite', 'armor_leather_rare'],
+    ['sword_bone_epic', 'sword_iron_epic', 'potion_mana', 'armor_leather_epic', 'sword_steel_rare'],
+    ['sword_bone_epic', 'sword_iron_epic', 'armor_leather_epic', 'sword_anime'],
     ['sword_magic_rare', 'robe_mage_rare', 'sword_steel_epic', 'plate_armor_rare', 'armor_leather_epic']
   ];
 

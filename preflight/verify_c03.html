@@ -92,7 +92,8 @@
     sub.c31_poolTierAllFloors = viol.length === 0;
     sub.c31_rows = tierRows;
 
-    /* C3-2 countsUnchanged：核心 7/9/9/8/8、合计 10/12/12/11/11、池长 5、周期 5 */
+    /* C3-2 countsUnchanged：核心 7/9/9/8/8、合计 10/12/12/11/11、池长/周期 5,5,5,4,5
+     * （C-03b 规格变更：F4 合格装备仅 4 件，池长降为 4，周期随池长） */
     var coreCounts = STOCK.map(function (r) { return r.length; });
     var totals = [], lens = [], cycles = [];
     for (var f2 = 1; f2 <= 5; f2++) {
@@ -111,8 +112,8 @@
       cycles.push(period);
     }
     sub.c32_countsUnchanged = coreCounts.join(',') === '7,9,9,8,8' &&
-      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,5,5' &&
-      cycles.join(',') === '5,5,5,5,5';
+      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,4,5' &&
+      cycles.join(',') === '5,5,5,4,5';
     sub.c32_core = coreCounts;
     sub.c32_totals = totals;
     sub.c32_lens = lens;
