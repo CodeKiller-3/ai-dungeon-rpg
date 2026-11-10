@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d10</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="npc">
+  <div id="npc-title">地牢守门人 · 按 Esc 离开</div>
+  <div id="npc-log"></div>
+  <input id="npc-input" maxlength="100" placeholder="输入想说的话">
+</div>
+<!-- D-10 验证页：三局脚本化 E2E（脚本驱动，不等于真人试玩）。
+     只验三件事：① 三局无 JS 错误 ② 无 >15s 无响应间隔 ③ 结算后能用键盘回主界面。
+     加载序与 index.html 完全一致；设 NO_AUTOSTART 后由本页主动调用 Main.init() 与 Main.loop()，
+     不依赖 rAF（headless 会节流 rAF，间隔口径因此用 performance.now() 的驱动步差值）。
+     不新增任何游戏钩子：进战斗用 ai:encounter 同款入口 Battle.start + switchScene('battle')。 -->
+<script>
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+window.__E2E = { errors: [] };
+window.addEventListener('error', function (e) {
+  window.__E2E.errors.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__E2E.errors.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var RES = { loaded: false, runs: [], ok: false };
+  var errors = window.__E2E.errors;
+
+  function emit(ok, obj) {
+    var text = (ok ? 'PASS ' : 'FAIL ') + JSON.stringify(obj);
+    document.body.appendChild(document.createTextNode('\n' + text + '\n'));
+    return text;
+  }
+
+  try {
+    var M = window.Game && Game.Core && Game.Core.Main;
+    var P = window.Game && Game.Data && Game.Data.Player;
+    RES.loaded = !!(M && P && Game.Systems.Battle && Game.Systems.Save && Game.Modal);
+    if (!RES.loaded) throw new Error('核心模块缺失（Main/Player/Battle/Save/Modal）');
+
+    M.init();
+    /* 首次引导覆盖层会暂停探索输入：用真实 click 事件关闭（Main 公开的 dismiss 路径），
+       再断言已关闭，避免后续 B/Esc 键被拦截。 */
+    window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    var guideDismissed = (M._guideVisible === false);
+
+    /* 一局：restart 起局 → 探索按键 → 战斗到 gameover → 键盘回主界面。
+       maxGapMs = 相邻两次驱动步起点的 performance.now() 差值（本卡口径，见 docs/tasks/D-10-e2e.md）。 */
+    function runOnce(n) {
+      var r = { run: n, errors: 0, maxGapMs: null, backToTitle: false };
+      var errStart = errors.length;
+      var wallStart = performance.now();
+      var lastMark = wallStart, maxGap = 0, maxStep = 0, steps = 0;
+      var vts = performance.now(); /* 合成帧时间：只用于 Main.loop 的帧参数，便于定步长驱动 */
+
+      function step() {
+        var t0 = performance.now();
+        var gap = t0 - lastMark;
+        if (gap > maxGap) maxGap = gap;
+        lastMark = t0;
+        steps++;
+        vts += 200;
+        try { M.loop(vts); }
+        catch (e) { errors.push('loop@run' + n + ': ' + ((e && e.message) || e)); }
+        var d = performance.now() - t0;
+        if (d > maxStep) maxStep = d;
+      }
+      function press(code) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true }));
+        step();
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true }));
+      }
+
+      M.restart();
+      r.freshState = P.hp === 100 && P.maxHp === 100 && P.mp === 50 &&
+        P.gold === 0 && P.level === 1 && P.exp === 0 &&
+        Object.keys(P.inventory || {}).length === 0 &&
+        Object.keys(P.status || {}).length === 0 &&
+        M._scene === 'explore' && Game.Modal.isOpen() === false;
+
+      /* 探索输入响应（真实键盘事件 → Input.bind → 主循环） */
+      press('KeyB');
+      r.inventoryOpened = Game.Modal.isOpen() && Game.Modal.current() === 'inventory';
+      press('Escape');
+      r.inventoryClosed = !Game.Modal.isOpen() && M._scene === 'explore';
+
+      /* 进入战斗：与 ai:encounter 相同入口，不改 js/ */
+      Game.Systems.Battle.start('dragon');
+      M.switchScene('battle');
+      step();
+
+      /* 地牢巨龙 atk18 vs 玩家 def5 → 每回合 13 伤害；玩家 atk10 vs 巨龙 def8 → 每击 2 伤害，
+         故必为玩家死亡结算，方向确定。 */
+      var guard = 0;
+      while (!Game.Modal.isOpen() && guard < 40) { press('Digit1'); guard++; }
+      step(); /* 让 gameover 面板被绘制一帧 */
+      r.settlement = Game.Modal.isOpen() && Game.Modal.current() === 'gameover';
+      r.hpAtSettlement = P.hp;
+
+      /* 结算页上按 Enter（Modal 的 gameover 分支：Enter/R/空格 → Main.restart） */
+      press('Enter');
+      r.backToTitle = !Game.Modal.isOpen() && M._scene === 'explore';
+      r.restartedFresh = P.hp === 100 && P.gold === 0 && P.level === 1 && P.exp === 0;
+
+      r.steps = steps;
+      r.maxStepMs = Math.round(maxStep * 100) / 100;
+      r.maxGapMs = Math.round(maxGap * 100) / 100;
+      r.runMs = Math.round(performance.now() - wallStart);
+      r.errors = errors.length - errStart;
+      r.ok = r.freshState && r.inventoryOpened && r.inventoryClosed &&
+        r.settlement && r.hpAtSettlement === 0 &&
+        r.backToTitle && r.restartedFresh &&
+        r.errors === 0 && r.maxGapMs <= 15000 && r.steps >= 10;
+      return r;
+    }
+
+    for (var n = 1; n <= 3; n++) {
+      var r = runOnce(n);
+      RES.runs.push(r);
+      emit(r.ok, r);
+    }
+
+    var allBack = RES.runs.every(function (x) { return x.backToTitle === true; });
+    var maxGap = 0;
+    RES.runs.forEach(function (x) { if (x.maxGapMs > maxGap) maxGap = x.maxGapMs; });
+    RES.ok = RES.loaded && guideDismissed && RES.runs.length === 3 &&
+      RES.runs.every(function (x) { return x.ok === true; }) &&
+      allBack && maxGap <= 15000 && errors.length === 0;
+
+    var summary = {
+      e2e: RES.ok, runs: RES.runs.length,
+      errors: errors.length, maxGapMs: maxGap,
+      allBackToTitle: allBack, guideDismissed: guideDismissed,
+      perRun: RES.runs.map(function (x) {
+        return { run: x.run, errors: x.errors, maxGapMs: x.maxGapMs, backToTitle: x.backToTitle };
+      })
+    };
+    document.title = emit(RES.ok, summary);
+
+    /* 裁决已输出后再启动常规 rAF 主循环：仅为让页面在 headless 截图/人工查看时
+       有真实绘制帧（加载后的 window resize 会清空 canvas，无循环则不重绘）。
+       不参与任何断言，也不影响上面的三局驱动结果。 */
+    try { M.loop(performance.now()); } catch (e2) { /* 忽略：仅绘制 */ }
+    try { M.start(); } catch (e3) { /* 忽略：仅绘制 */ }
+  } catch (e) {
+    RES.err = String((e && e.stack) || e);
+    RES.ok = false;
+    document.title = emit(false, { e2e: false, loaded: RES.loaded, err: RES.err, runs: RES.runs });
+  }
+})();
+</script>
+</body>
+</html>
