@@ -106,18 +106,18 @@
       sub.t3_bestiaryScroll = t3ok;
       ok = ok && t3ok;
 
-      /* t4_bestiaryItems：物品图鉴 46 条，sel 移到 45 后可见窗口包含第 46 条（data[45]） */
+      /* t4_bestiaryItems：物品图鉴 48 条（C-04 新增 2 件），sel 移到 47 后可见窗口包含末条（data[47]） */
       var t4ok = true;
       var r4 = M._visibleRange();
-      if (!(r4.total === 46 && r4.start === 0 && r4.sel === 0)) t4ok = false;
-      for (var i4 = 0; i4 < 45; i4++) pressKey('ArrowDown');
+      if (!(r4.total === 48 && r4.start === 0 && r4.sel === 0)) t4ok = false;
+      for (var i4 = 0; i4 < 47; i4++) pressKey('ArrowDown');
       var r5 = M._visibleRange();
-      if (!(r5.sel === 45 && r5.total === 46 && r5.start + r5.rows > 45 && r5.start <= 45)) t4ok = false;
-      /* 渲染末页窗口并确认第 46 条（scroll_upgrade_4 / 龙纹强化卷轴）实际出现在行文本中 */
+      if (!(r5.sel === 47 && r5.total === 48 && r5.start + r5.rows > 47 && r5.start <= 47)) t4ok = false;
+      /* 渲染末页窗口并确认第 48 条（scroll_upgrade_4 / 龙纹强化卷轴）实际出现在行文本中 */
       texts = [];
       var draw4 = true;
       try { M.draw(); } catch (e) { draw4 = false; }
-      var lastItemVisible = hasText('龙纹强化卷轴'); /* data[45] = scroll_upgrade_4（S-03 后插入序最后一个） */
+      var lastItemVisible = hasText('龙纹强化卷轴'); /* 末条仍为 scroll_upgrade_4（C-04 新物品插在其前） */
       t4ok = t4ok && draw4 && lastItemVisible;
       M.close();
       sub.t4_bestiaryItems = t4ok;

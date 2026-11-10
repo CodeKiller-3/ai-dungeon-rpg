@@ -124,15 +124,16 @@
       lens.push(L); cycles.push(period); totals.push(maxTotal);
     }
     sub.c3b3_countsUnchanged = coreCounts.join(',') === '7,9,9,8,8' &&
-      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,4,5' &&
-      cycles.join(',') === '5,5,5,4,5';
+      totals.join(',') === '10,12,12,11,11' && lens.join(',') === '5,5,5,5,5' &&
+      cycles.join(',') === '5,5,5,5,5';
     sub.c3b3_core = coreCounts;
     sub.c3b3_totals = totals;
     sub.c3b3_lens = lens;
     sub.c3b3_cycles = cycles;
     ok = ok && sub.c3b3_countsUnchanged;
 
-    /* C3b-4 pricesIntact：46 件、Σprice/Σsell、price>sell、逐项哈希 */
+    /* C3b-4 pricesIntact：全表现状校验和 48 件 / Σprice 10165 / Σsell 5081（C-04 新增 2 件后）
+     * 注：「既有 46 件逐项不变」由 verify_c04 的 C4-6（显式 46 件列表 + 原哈希 9a01bb60）负责 */
     function fnv1a(str) {
       var x = 0x811c9dc5;
       for (var i = 0; i < str.length; i++) {
@@ -152,8 +153,8 @@
       return id + ':' + I[id].price + ':' + I[id].sell;
     }).join(';');
     var sigHash = fnv1a(sig);
-    sub.c3b4_pricesIntact = allIds.length === 46 && sumPrice === 9685 && sumSell === 4841 &&
-      priceBad.length === 0 && sigHash === '9a01bb60';
+    sub.c3b4_pricesIntact = allIds.length === 48 && sumPrice === 10165 && sumSell === 5081 &&
+      priceBad.length === 0 && sigHash === '3a40735c';
     sub.c3b4_checksum = { count: allIds.length, sumPrice: sumPrice, sumSell: sumSell,
       priceBad: priceBad, fnv: sigHash, hashOf: 'sorted id:price:sell joined by ;' };
     ok = ok && sub.c3b4_pricesIntact;
@@ -189,13 +190,13 @@
     sub.c3b6_poolIdsDistinct = distinct && POOL.length === 5;
     ok = ok && sub.c3b6_poolIdsDistinct;
 
-    /* C3b-7 specDeclared：卡/规划写清 F4 池长 4 原因；README 不再写"每层 5 项" */
+    /* C3b-7 specDeclared：本卡仍记录 F4 池长 4 的成因；该缺口由 C-04 闭合，README 已改回五层各 5 项 */
     var card = readDoc('../docs/tasks/C-03b-pool-tier-strict.md');
     var plan = readDoc('../规划-对标补齐.md');
     var readme = readDoc('../README.md');
     var cardOk = card.indexOf('F4') >= 0 && card.indexOf('池长 4') >= 0 && card.indexOf('候选不足') >= 0;
-    var planOk = plan.indexOf('F4') >= 0 && plan.indexOf('池长 4') >= 0 && plan.indexOf('已知缺口') >= 0;
-    var readmeOk = readme.length > 0 && readme.indexOf('每层 5 项') < 0 && readme.indexOf('F4 为 4 项') >= 0;
+    var planOk = plan.indexOf('C-03b') >= 0 && plan.indexOf('C-04') >= 0 && plan.indexOf('已闭合') >= 0;
+    var readmeOk = readme.length > 0 && readme.indexOf('F4 为 4 项') < 0 && readme.indexOf('F1~F5 各 5 项') >= 0;
     sub.c3b7_specDeclared = cardOk && planOk && readmeOk;
     sub.c3b7_docs = { cardLen: card.length, planLen: plan.length, readmeLen: readme.length,
       cardOk: cardOk, planOk: planOk, readmeOk: readmeOk };

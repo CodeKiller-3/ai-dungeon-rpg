@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-10T03:09:21.090Z",
+  "at": "2026-11-10T03:25:20.385Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -46,7 +46,7 @@
       "level": "PASS",
       "id": "DC-01",
       "name": "物品表结构与取值",
-      "detail": "46 条：id/type/price/sell=floor(price/2)/effect 全部合规"
+      "detail": "48 条：id/type/price/sell=floor(price/2)/effect 全部合规"
     },
     {
       "level": "PASS",
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "36 文件 / 416.5 KB（不含 vendor）"
+      "detail": "36 文件 / 417.4 KB（不含 vendor）"
     },
     {
       "level": "PASS",
@@ -213,7 +213,7 @@
       "ogre_boss",
       "zombie_king"
     ],
-    "items": 46,
+    "items": 48,
     "quests": 12,
     "reactions": 240,
     "expect": [

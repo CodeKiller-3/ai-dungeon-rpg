@@ -57,6 +57,15 @@
     plate_armor_epic: { id: 'plate_armor_epic', name: '稀有板甲', type: 'armor', effect: { def: 16, maxHp: 10 }, price: 800, sell: 400 },
     robe_mage_rare: { id: 'robe_mage_rare', name: '优秀法袍', type: 'armor', effect: { def: 6, maxHp: 10 }, price: 300, sell: 150 },
     robe_mage_epic: { id: 'robe_mage_epic', name: '稀有法袍', type: 'armor', effect: { def: 8, maxHp: 20 }, price: 600, sell: 300 },
+
+    /* C-04：物品扩充——补 2 件 240 档装备，用于恢复 F4 轮换池为 5 件（纯新增，既有条目不删不改）。
+     * 平衡约束：240~320 区间既有上限为 atk 12（sword_anime/sword_dragon_rare/sword_magic_rare）、
+     * def 8（chain_mail_rare）、maxHp 10（sword_bone_epic/robe_mage_rare 等）；
+     * 新增项 atk9 / def5+maxHp10 均不超过上限，只复用 atk/def/maxHp 三个既有键，不引入新机制。
+     * 与同价位既有项构成"攻高/带血"互换，不严格支配任何既有装备；不在 F4/F5 核心货架。 */
+    sword_knight: { id: 'sword_knight', name: '骑士长剑', type: 'weapon', effect: { atk: 9 }, price: 240, sell: 120 },
+    armor_scale: { id: 'armor_scale', name: '鳞甲', type: 'armor', effect: { def: 5, maxHp: 10 }, price: 240, sell: 120 },
+
     /* 药水：特大血瓶（hp150）+ 蓝瓶（mp40，需 Inventory.use 支持 effect.mp） */
     potion_xl: { id: 'potion_xl', name: '特大血瓶', type: 'consumable', effect: { hp: 150 }, price: 80, sell: 40 },
     potion_mana: { id: 'potion_mana', name: '蓝瓶', type: 'consumable', effect: { mp: 40 }, price: 35, sell: 17 },
@@ -98,15 +107,15 @@
    *   F3 移除 chain_mail_rare/sword_magic_rare/plate_armor_rare（F4 核心）与 chain_mail_epic（F5 核心），
    *      换 sword_bone_epic/sword_iron_epic/armor_leather_epic/sword_steel_rare；
    *   F4 移除 chain_mail_epic/robe_mage_epic（F5 核心），换 sword_anime。
-   * F4 池长降为 4（妥协）：满足"≥240 且不在 F5 核心且不与 F4 核心重复"的装备全集仅 4 件
-   * （sword_bone_epic/sword_iron_epic/armor_leather_epic/sword_anime），不足 5 件；候选不足的
-   * 根因是物品总量，恢复 5 件需先扩充物品表（见规划-对标补齐.md 已知缺口）。
-   * 池长因此为 [5,5,5,4,5]，周期随池长。 */
+   * C-04：物品表补 2 件 240 档装备（sword_knight / armor_scale）后，F4 合格候选 4 → 6 件，
+   * 池长恢复 5：保留 sword_bone_epic / armor_leather_epic / sword_anime 并加入两件新增装备；
+   * 移除与 sword_bone_epic 数值完全重复的 sword_iron_epic（它仍保留在 F2/F3 池）。
+   * 五层池长因此回到 [5,5,5,5,5]、周期 [5,5,5,5,5]。 */
   Game.Data.SHOP_ROTATION = [
     ['sword_bone', 'sword_iron_rare', 'potion_mana', 'sword_bone_rare', 'armor_leather_rare'],
     ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic', 'bow_elite', 'armor_leather_rare'],
     ['sword_bone_epic', 'sword_iron_epic', 'potion_mana', 'armor_leather_epic', 'sword_steel_rare'],
-    ['sword_bone_epic', 'sword_iron_epic', 'armor_leather_epic', 'sword_anime'],
+    ['sword_bone_epic', 'armor_leather_epic', 'sword_anime', 'sword_knight', 'armor_scale'],
     ['sword_magic_rare', 'robe_mage_rare', 'sword_steel_epic', 'plate_armor_rare', 'armor_leather_epic']
   ];
 

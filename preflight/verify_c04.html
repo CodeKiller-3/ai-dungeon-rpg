@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_c04</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- C-04 验证页：只加载 items/config/shop（Map 用桩）。
+     断言新增装备合法性、F4 池恢复 5 件、五层越层/档位/条数/价格校验和/池集合互异/稳定换货/文档一致。
+     C4-6 只对「既有 46 件」按显式 id 列表计算，新增 2 件单列输出。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, api: false, ok: false };
+
+  var D = (window.Game && Game.Data) || {};
+  var I = D.ITEMS, STOCK = D.SHOP_STOCK, POOL = D.SHOP_ROTATION, SCROLLS = D.SHOP_SCROLLS;
+  var Shop = window.Game && Game.Systems && Game.Systems.Shop;
+  out.loaded = !!(I && STOCK && POOL && SCROLLS && Shop);
+  out.api = !!(Shop && typeof Shop.getStock === 'function' &&
+    typeof Shop.refresh === 'function' && typeof Shop.resetPhase === 'function');
+
+  function finish() {
+    out.ok = !!(out.loaded && out.api && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+  if (!out.loaded || !out.api) { out.ok = false; finish(); return; }
+
+  var floor = 1;
+  Game.Systems.Map = {
+    getFloor: function () { return floor; },
+    setFloor: function (f) { floor = f; }
+  };
+
+  /* C-03b 之前的既有 46 件（本卡只新增、不改动；C4-6 据此复算原校验和） */
+  var ROOT46 = ('potion_small,potion_large,sword_bone,sword_dragon,armor_leather,' +
+    'sword_bone_rare,sword_bone_epic,sword_dragon_rare,sword_dragon_epic,' +
+    'armor_leather_rare,armor_leather_epic,sword_rusty,knife,machete,sword_iron,' +
+    'sword_steel,axe_war,bow_hunter,hammer,spear,sword_magic,staff_fire,bow_elite,' +
+    'axe_double,sword_anime,sword_iron_rare,sword_iron_epic,sword_steel_rare,' +
+    'sword_steel_epic,sword_magic_rare,sword_magic_epic,chain_mail,plate_armor,' +
+    'robe_mage,chain_mail_rare,chain_mail_epic,plate_armor_rare,plate_armor_epic,' +
+    'robe_mage_rare,robe_mage_epic,potion_xl,potion_mana,' +
+    'scroll_upgrade,scroll_upgrade_2,scroll_upgrade_3,scroll_upgrade_4').split(',');
+  var NEW = ['sword_knight', 'armor_scale'];
+  var BAND = [240, 320]; /* 同价位对比区间 */
+
+  function ids(st) { return st.map(function (x) { return x.id; }); }
+  function coreOf(f) { return STOCK[f - 1] || []; }
+  function poolOf(f) { return POOL[f - 1] || []; }
+  function isEquip(id) { return !!(I[id] && I[id].type !== 'consumable'); }
+  function deeperCore(f) {
+    var acc = [];
+    for (var g = f + 1; g <= 5; g++) acc = acc.concat(coreOf(g));
+    return acc;
+  }
+  function coreEquipMin(f) {
+    var m = Infinity, who = '';
+    coreOf(f).forEach(function (id) {
+      if (isEquip(id) && I[id].price < m) { m = I[id].price; who = id; }
+    });
+    return { min: m, id: who };
+  }
+  function sameIds(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) {
+      x ^= str.charCodeAt(i);
+      x = (x * 0x01000193) >>> 0;
+    }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function checksum(list) {
+    var sorted = list.slice().sort();
+    var sp = 0, ss = 0, bad = [];
+    sorted.forEach(function (id) {
+      sp += I[id].price; ss += I[id].sell;
+      if (!(I[id].price > I[id].sell)) bad.push(id);
+    });
+    var sig = sorted.map(function (id) {
+      return id + ':' + I[id].price + ':' + I[id].sell;
+    }).join(';');
+    return { count: sorted.length, sumPrice: sp, sumSell: ss, priceBad: bad, hash: fnv1a(sig) };
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+
+  var sub = {}, ok = true;
+  try {
+    /* ── C4-1 newItemsValid ─────────────────────────────── */
+    var VALID_EFFECT = { atk: 1, def: 1, maxHp: 1, hp: 1, mp: 1 };
+    /* 同价位（240~320）既有装备的 effect 上限——由数据实测，不手填 */
+    var ceil = { atk: 0, def: 0, maxHp: 0, who: {} };
+    Object.keys(I).forEach(function (id) {
+      var it = I[id];
+      if (NEW.indexOf(id) >= 0 || it.type === 'consumable') return;
+      if (it.price < BAND[0] || it.price > BAND[1]) return;
+      ['atk', 'def', 'maxHp'].forEach(function (k) {
+        var v = it.effect[k] || 0;
+        if (v > ceil[k]) { ceil[k] = v; ceil.who[k] = id; }
+      });
+    });
+    var newRows = [], newBad = [];
+    NEW.forEach(function (id) {
+      var it = I[id], row = { id: id, exists: !!it };
+      if (!it) { newBad.push(id + ' 缺失'); newRows.push(row); return; }
+      row.name = it.name; row.type = it.type; row.price = it.price;
+      row.sell = it.sell; row.effect = it.effect;
+      if (it.type !== 'weapon' && it.type !== 'armor') newBad.push(id + ' type 非 weapon/armor');
+      if (!(it.price >= 240)) newBad.push(id + ' price<240');
+      if (!(it.price > it.sell)) newBad.push(id + ' price<=sell');
+      if (it.sell !== Math.floor(it.price / 2)) newBad.push(id + ' sell≠floor(price/2)');
+      if (ROOT46.indexOf(id) >= 0) newBad.push(id + ' 与既有 46 件 id 冲突');
+      if (coreOf(4).indexOf(id) >= 0) newBad.push(id + ' 在 F4 核心货架');
+      if (coreOf(5).indexOf(id) >= 0) newBad.push(id + ' 在 F5 核心货架');
+      Object.keys(it.effect).forEach(function (k) {
+        if (!VALID_EFFECT[k]) newBad.push(id + ' effect 含未注册键 ' + k);
+      });
+      ['atk', 'def', 'maxHp'].forEach(function (k) {
+        if ((it.effect[k] || 0) > ceil[k]) newBad.push(id + '.' + k + ' 超同价位上限 ' + ceil[k]);
+      });
+      row.ceilOk = newBad.filter(function (b) { return b.indexOf(id) === 0; }).length === 0;
+      newRows.push(row);
+    });
+    /* 新增 2 件必须都真实存在于物品表里（防止"只写断言不写数据"） */
+    var newCount = NEW.filter(function (id) { return !!I[id]; }).length;
+    sub.c41_newItemsValid = newBad.length === 0 && newCount === NEW.length;
+    sub.c41_rows = newRows;
+    sub.c41_ceil = { band: BAND, atk: ceil.atk, atkWho: ceil.who.atk,
+      def: ceil.def, defWho: ceil.who.def, maxHp: ceil.maxHp, maxHpWho: ceil.who.maxHp };
+    sub.c41_bad = newBad;
+    ok = ok && sub.c41_newItemsValid;
+
+    /* ── C4-2 poolRestored：池长/周期 [5,5,5,5,5] ───────── */
+    var lens = [], cycles = [], totals = [];
+    for (var f2 = 1; f2 <= 5; f2++) {
+      floor = f2; Shop.resetPhase();
+      var L = poolOf(f2).length, seq = [], idx;
+      totals.push(Shop.getStock().length);
+      seq.push(ids(Shop.getStock()).join('|'));
+      for (idx = 0; idx < L; idx++) {
+        Shop.refresh();
+        seq.push(ids(Shop.getStock()).join('|'));
+        if (Shop.getStock().length > totals[f2 - 1]) totals[f2 - 1] = Shop.getStock().length;
+      }
+      var period = 0;
+      for (var p = 1; p <= L; p++) {
+        var same = true;
+        for (var q = 0; q + p < seq.length; q++) if (seq[q] !== seq[q + p]) { same = false; break; }
+        if (same) { period = p; break; }
+      }
+      lens.push(L); cycles.push(period);
+    }
+    sub.c42_poolRestored = lens.join(',') === '5,5,5,5,5' && cycles.join(',') === '5,5,5,5,5';
+    sub.c42_lens = lens;
+    sub.c42_cycles = cycles;
+    ok = ok && sub.c42_poolRestored;
+
+    /* ── C4-3 noDeeperCoreInPool（C3b-1 口径） ──────────── */
+    var violRows = [];
+    for (var f3 = 1; f3 <= 5; f3++) {
+      var deep = deeperCore(f3);
+      var viol = poolOf(f3).filter(function (id) {
+        return isEquip(id) && deep.indexOf(id) >= 0;
+      });
+      violRows.push({ floor: f3, viol: viol });
+      if (viol.length) ok = false;
+    }
+    sub.c43_noDeeperCoreInPool = violRows.every(function (r) { return r.viol.length === 0; });
+    sub.c43_rows = violRows;
+    ok = ok && sub.c43_noDeeperCoreInPool;
+
+    /* ── C4-4 tierStillOk：20/85/150/240/300 ───────────── */
+    var TIER = [20, 85, 150, 240, 300];
+    var tierRows = [];
+    for (var f4 = 1; f4 <= 5; f4++) {
+      var cm = coreEquipMin(f4);
+      var bad4 = poolOf(f4).filter(function (id) {
+        return isEquip(id) && I[id].price < cm.min;
+      });
+      tierRows.push({ floor: f4, coreMin: cm.min, coreMinId: cm.id, bad: bad4 });
+      if (bad4.length) ok = false;
+    }
+    sub.c44_tierStillOk = tierRows.every(function (r) {
+      return r.bad.length === 0 && TIER[r.floor - 1] === r.coreMin;
+    });
+    sub.c44_rows = tierRows;
+    ok = ok && sub.c44_tierStillOk;
+
+    /* ── C4-5 countsUnchanged：核心/合计 ───────────────── */
+    var coreCounts = STOCK.map(function (r) { return r.length; });
+    sub.c45_countsUnchanged = coreCounts.join(',') === '7,9,9,8,8' &&
+      totals.join(',') === '10,12,12,11,11';
+    sub.c45_core = coreCounts;
+    sub.c45_totals = totals;
+    ok = ok && sub.c45_countsUnchanged;
+
+    /* ── C4-6 pricesIntactAndExtended：既有 46 件不变 ──── */
+    var rootMissing = ROOT46.filter(function (id) { return !I[id]; });
+    var rootSum = checksum(ROOT46);
+    var newSum = checksum(NEW);
+    sub.c46_pricesIntactAndExtended = rootMissing.length === 0 &&
+      rootSum.count === 46 && rootSum.sumPrice === 9685 && rootSum.sumSell === 4841 &&
+      rootSum.priceBad.length === 0 && rootSum.hash === '9a01bb60' &&
+      newSum.count === 2 && newSum.sumPrice === 480 && newSum.sumSell === 240;
+    sub.c46_root = { count: rootSum.count, sumPrice: rootSum.sumPrice,
+      sumSell: rootSum.sumSell, priceBad: rootSum.priceBad, fnv: rootSum.hash,
+      missing: rootMissing, hashOf: 'sorted id:price:sell of existing 46, joined by ;' };
+    sub.c46_new = { count: newSum.count, sumPrice: newSum.sumPrice,
+      sumSell: newSum.sumSell, priceBad: newSum.priceBad, fnv: newSum.hash };
+    ok = ok && sub.c46_pricesIntactAndExtended;
+
+    /* ── C4-7 poolIdsDistinct ──────────────────────────── */
+    var keys7 = POOL.map(function (row) { return row.slice().sort().join('|'); });
+    var distinct = POOL.length === 5;
+    for (var m1 = 0; m1 < keys7.length; m1++) {
+      for (var m2 = m1 + 1; m2 < keys7.length; m2++) if (keys7[m1] === keys7[m2]) distinct = false;
+    }
+    sub.c47_poolIdsDistinct = distinct;
+    ok = ok && sub.c47_poolIdsDistinct;
+
+    /* ── C4-8 stableStock ──────────────────────────────── */
+    var stableRows = [];
+    for (var f8 = 1; f8 <= 5; f8++) {
+      floor = f8; Shop.resetPhase();
+      var a = ids(Shop.getStock());
+      var sameTick = sameIds(a, ids(Shop.getStock()));
+      var L8 = poolOf(f8).length;
+      for (var r8 = 0; r8 < L8; r8++) Shop.refresh();
+      var wrapped = sameIds(ids(Shop.getStock()), a);
+      floor = (f8 % 5) + 1; Shop.resetPhase();
+      floor = f8; Shop.resetPhase();
+      var afterSwitch = sameIds(ids(Shop.getStock()), a);
+      var pass8 = sameTick && wrapped && afterSwitch;
+      stableRows.push({ floor: f8, sameTick: sameTick, wrapped: wrapped,
+        afterSwitch: afterSwitch, pass: pass8 });
+      if (!pass8) ok = false;
+    }
+    sub.c48_stableStock = stableRows.every(function (r) { return r.pass; });
+    sub.c48_rows = stableRows;
+    ok = ok && sub.c48_stableStock;
+
+    /* ── C4-9 docsConsistent ───────────────────────────── */
+    var card = readDoc('../docs/tasks/C-04-item-expansion.md');
+    var plan = readDoc('../规划-对标补齐.md');
+    var readme = readDoc('../README.md');
+    var itemCount = Object.keys(I).length;
+    var cardOk = card.indexOf('C4-1') >= 0 && card.indexOf('sword_knight') >= 0 &&
+      card.indexOf('armor_scale') >= 0;
+    var planOk = plan.indexOf('C-04') >= 0 && plan.indexOf('10165') >= 0 &&
+      plan.indexOf('5081') >= 0 && plan.indexOf('43/43') >= 0 && plan.indexOf('已闭合') >= 0;
+    var readmeNoStale = readme.length > 0 && readme.indexOf('F4 为 4 项') < 0 &&
+      readme.indexOf('F4 为 4 次') < 0 && readme.indexOf('F1~F5 各 5 项') >= 0;
+    var readmeCountOk = true, readmeCount = null;
+    var mc = readme.match(/物品全表\s*(\d+)\s*件/);
+    if (mc) { readmeCount = Number(mc[1]); readmeCountOk = (readmeCount === itemCount); }
+    sub.c49_docsConsistent = cardOk && planOk && readmeNoStale && readmeCountOk;
+    sub.c49_docs = { itemCount: itemCount, cardLen: card.length, planLen: plan.length,
+      readmeLen: readme.length, cardOk: cardOk, planOk: planOk,
+      readmeNoStale: readmeNoStale, readmeCount: readmeCount, readmeCountOk: readmeCountOk };
+    ok = ok && sub.c49_docsConsistent;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
