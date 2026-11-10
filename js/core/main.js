@@ -284,6 +284,11 @@
           resetPlayer();
         }
       } catch (e) { /* Map 缺失时仅重置 Player（验证页场景） */ }
+      /* C-02：新局商店相位归零（只归零不推进；换层归零仍由 Shop.syncFloor 负责）。
+       * 放在 Map.setFloor(1) 之后，保证 tickFloor 对齐新局首层。 */
+      if (Game.Systems && Game.Systems.Shop && typeof Game.Systems.Shop.resetPhase === 'function') {
+        Game.Systems.Shop.resetPhase();
+      }
       refreshFov(); /* S3-1：重新开始后刷新视野 */
       if (Game.Modal) Game.Modal.close();
       this.switchScene('explore');

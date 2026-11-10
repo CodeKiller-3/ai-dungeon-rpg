@@ -9,7 +9,8 @@
 
   /* S-01：确定性换货状态——
    * tick = 本层已开张次数，(楼层×3 + tick) 取模决定轮换窗口起点；
-   * 换层时 tick 归零，保证"回到同一层首页货架一致"。全程不使用 Math.random。 */
+   * 换层时 tick 归零，保证"回到同一层首页货架一致"。全程不使用 Math.random。
+   * C-02：新局由 resetPhase() 显式归零（restart 调用），避免新局沿用上一局相位。 */
   var ROT_SLOTS = 2;   /* 每次展示的轮换商品位数量 */
   var tick = 0;
   var tickFloor = 0;
@@ -64,6 +65,16 @@
       var floor = Game.Systems.Map.getFloor();
       syncFloor(floor);
       tick++;
+      return tick;
+    },
+
+    /* C-02：新局相位归零——只重置计数并把楼层对齐当前层，不推进 tick。
+     * 与 refresh() 语义相反：refresh 每开张推进 1 位，这里只回到首相位。
+     * 换层归零仍由 syncFloor 负责；两者都归零时不重复推进（此处不含 tick++）。 */
+    resetPhase: function () {
+      tick = 0;
+      tickFloor = (Game.Systems.Map && typeof Game.Systems.Map.getFloor === 'function')
+        ? Game.Systems.Map.getFloor() : 0;
       return tick;
     },
 

@@ -86,13 +86,17 @@
 
   /* S-01：每层轮换池——每次开张（Shop.refresh）按"(楼层×3 + 开张次数) % 池长"确定性滑动取 2 个商品位。
    * 纯算术、无 Math.random，因此同一层同一次开张货架稳定、重复开张结果可复现；
-   * 轮换位只增加展示多样性，价格仍遵循 price > sell，不构成刷金套利。 */
+   * 轮换位只增加展示多样性，价格仍遵循 price > sell，不构成刷金套利。
+   * C-02：每层由 3 项扩到 5 项（周期 3 次开张 → 5 次），原 3 项全部保留；
+   * 新增项按同层核心档位挑选，不与该层核心货架重复（保证合计条数 10/12/12/11/11 不变）；
+   * F4/F5 只放装备类，且单价不低于该层核心装备最低价（F4 240 / F5 300），
+   * 原先 F5 池里的低价消耗品 potion_large 已移出。 */
   Game.Data.SHOP_ROTATION = [
-    ['sword_bone', 'sword_iron_rare', 'potion_mana'],
-    ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic'],
-    ['bow_elite', 'sword_magic_rare', 'potion_mana'],
-    ['sword_iron_epic', 'armor_leather_epic', 'sword_bone_epic'],
-    ['sword_magic_rare', 'chain_mail_rare', 'potion_large']
+    ['sword_bone', 'sword_iron_rare', 'potion_mana', 'sword_bone_rare', 'armor_leather_rare'],
+    ['sword_steel_rare', 'sword_iron_epic', 'armor_leather_epic', 'chain_mail_rare', 'robe_mage_rare'],
+    ['bow_elite', 'sword_magic_rare', 'potion_mana', 'plate_armor_rare', 'chain_mail_epic'],
+    ['sword_iron_epic', 'armor_leather_epic', 'sword_bone_epic', 'chain_mail_epic', 'robe_mage_epic'],
+    ['sword_magic_rare', 'robe_mage_rare', 'sword_steel_epic', 'plate_armor_rare', 'armor_leather_epic']
   ];
 
   /* S-03：每层固定 1 张强化卷轴（单独货位，不并入核心货架，
