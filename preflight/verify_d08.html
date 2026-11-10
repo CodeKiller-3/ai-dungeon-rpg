@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d08</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-08 验证页：run-all.ps1 的汇总计数改为 @(...).Count，单条场景不再打印空白。
+     证据 selfcheck/d08-evidence.json 由同一脚本 -VerdictFile -ShowSummary 模式对临时样例真实运行后记录。 -->
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function fnv(s) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      x ^= s.charCodeAt(i);
+      x = Math.imul(x, 0x01000193) >>> 0;
+    }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var runall = readDoc('selfcheck/run-all.ps1');
+  var ev = readJson('selfcheck/d08-evidence.json');
+  var reg = readJson('selfcheck/regression-result.json');
+  var sc = readJson('selfcheck/selfcheck-result.json');
+  out.loaded = runall.length > 0 && !!ev;
+
+  var LINE = /^TOTAL=\d+ PASS=\d+ FAIL=\d+ NONE=\d+ MIXED=\d+$/;
+  var sub = {}, ok = true;
+  try {
+    /* ── D8-1 ~ D8-3 单条场景计数为 1 ─────────────────── */
+    var d81 = ev.d81 || null, d82 = ev.d82 || null, d83 = ev.d83 || null;
+    sub.d81_failOne = !!d81 && d81.output === 'TOTAL=1 PASS=0 FAIL=1 NONE=0 MIXED=0' && d81.exit === 1;
+    sub.d82_noneOne = !!d82 && d82.output === 'TOTAL=1 PASS=0 FAIL=0 NONE=1 MIXED=0';
+    sub.d83_mixedOne = !!d83 && d83.output === 'TOTAL=1 PASS=0 FAIL=0 NONE=0 MIXED=1';
+    sub.d81_output = d81 ? d81.output : null;
+    sub.d82_output = d82 ? d82.output : null;
+    sub.d83_output = d83 ? d83.output : null;
+    ok = ok && sub.d81_failOne && sub.d82_noneOne && sub.d83_mixedOne;
+
+    /* ── D8-4 汇总格式未变 ────────────────────────────── */
+    var d84 = ev.d84 || null;
+    var tplA = 'TOTAL=$($summary.total) PASS=$($summary.pass) FAIL=$($summary.fail) NONE=$($summary.none) MIXED=$($summary.mixed)';
+    var tplB = 'TOTAL=$($s.total) PASS=$($s.pass) FAIL=$($s.fail) NONE=$($s.none) MIXED=$($s.mixed)';
+    sub.d84_formatUnchanged = !!d84 && LINE.test(d84.line) &&
+      runall.indexOf(tplA) >= 0 && runall.indexOf(tplB) >= 0;
+    sub.d84_line = d84 ? d84.line : null;
+    ok = ok && sub.d84_formatUnchanged;
+
+    /* ── D8-5 裁决逻辑未改（函数体 FNV 与落卡前一致）──── */
+    var i = runall.indexOf('function Get-PageVerdict');
+    var j = i >= 0 ? runall.indexOf('\n}', i) : -1;
+    var body = (i >= 0 && j > i) ? runall.slice(i, j + 2).replace(/\r\n/g, '\n') : '';
+    var h = body ? fnv(body) : '';
+    var d85 = ev.d85 || null;
+    var srcRules = runall.indexOf('$hits[$hits.Count - 1]') >= 0 &&
+      runall.indexOf("$names -contains 'PASS'") >= 0 &&
+      runall.indexOf("$names -contains 'FAIL'") >= 0 &&
+      runall.indexOf("$hits.Count -eq 0") >= 0 &&
+      runall.indexOf('"ok"\\s*:\\s*false') < 0;
+    sub.d85_verdictLogicIntact = !!d85 && body.length > 0 &&
+      h === d85.fnv_before && h === d85.fnv_after && body.length === d85.len && srcRules;
+    sub.d85_hash = { method: d85 ? d85.method : null, before: d85 ? d85.fnv_before : null,
+      after: d85 ? d85.fnv_after : null, computed: h, len: body.length };
+    ok = ok && sub.d85_verdictLogicIntact;
+
+    /* ── D8-6 BOM 保持 ────────────────────────────────── */
+    /* 注：XHR 的 responseText 会按 UTF-8 解码并去掉 BOM，页面内拿不到首字节，
+       因此以落卡后用 PowerShell 实地读取的首三字节证据为准。 */
+    var d86 = ev.d86 || null;
+    sub.d86_bomKept = !!d86 && d86.bom_bytes === '239,187,191' &&
+      d86.cmd.indexOf('ReadAllBytes') >= 0;
+    sub.d86_bytes = d86 ? d86.bom_bytes : null;
+    ok = ok && sub.d86_bomKept;
+
+    /* ── D8-7 回归与静态自检无退化 ─────────────────────
+     * run-all 在本页结束后写 JSON，本页读到上一轮；三张元页面（D-05/06/07）与
+     * 本页同为"读回归结果"的页面，统一排除，只校验其余实质页面全 PASS。 */
+    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1, verify_d08: 1 };
+    var rows = (reg && reg.rows) || [];
+    var others = rows.filter(function (r) { return !META[r.page]; });
+    var regOk = rows.length >= 46 && others.length >= 45 &&
+      others.every(function (r) { return r.verdict === 'PASS'; });
+    var ss = (sc && sc.summary) || null;
+    var scOk = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0;
+    sub.d87_noRegression = regOk && scOk;
+    sub.d87_rows = { total: rows.length, others: others.length + '/PASS' };
+    sub.d87_selfcheck = ss;
+    ok = ok && sub.d87_noRegression;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

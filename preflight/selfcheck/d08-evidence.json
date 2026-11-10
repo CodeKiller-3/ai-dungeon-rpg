@@ -1,0 +1,39 @@
+{
+  "at": "2026-11-10",
+  "note": "D-08 单条计数取证：用 run-all.ps1 的 -VerdictFile + -ShowSummary 模式（只解析、不起浏览器）喂临时样例文件，跑完即删；样例按 --dump-dom 的多行结构书写（裁决行独占一行），临时目录 $env:TEMP\\d08_samples 已删除。",
+  "d81": {
+    "case": "恰好 1 条 FAIL",
+    "sample": "<body>FAIL {\"case\":\"onlyFail\",\"ok\":false}</body>",
+    "cmd": "powershell -File preflight/selfcheck/run-all.ps1 -VerdictFile <tmp>/only_fail.html -ShowSummary",
+    "output": "TOTAL=1 PASS=0 FAIL=1 NONE=0 MIXED=0",
+    "exit": 1
+  },
+  "d82": {
+    "case": "恰好 1 条 NONE（无裁决行）",
+    "sample": "<body><div id=\"result\">RUNNING</div></body>（无 PASS/FAIL 裁决行）",
+    "cmd": "powershell -File preflight/selfcheck/run-all.ps1 -VerdictFile <tmp>/no_verdict.html -ShowSummary",
+    "output": "TOTAL=1 PASS=0 FAIL=0 NONE=1 MIXED=0",
+    "exit": 0
+  },
+  "d83": {
+    "case": "恰好 1 条 MIXED（同页先 PASS 后 FAIL）",
+    "sample": "<body>PASS {\"phase\":\"first\",\"ok\":true}\\r\\nFAIL {\"phase\":\"second\",\"ok\":false}</body>",
+    "cmd": "powershell -File preflight/selfcheck/run-all.ps1 -VerdictFile <tmp>/pass_then_fail.html -ShowSummary",
+    "output": "TOTAL=1 PASS=0 FAIL=0 NONE=0 MIXED=1",
+    "exit": 0
+  },
+  "d84": {
+    "line": "TOTAL=49 PASS=49 FAIL=0 NONE=0 MIXED=0",
+    "format": "TOTAL= / PASS= / FAIL= / NONE= / MIXED= 顺序与分隔符未变；计数来源统一为 Get-RegressionSummary，五处全部 @(...).Count"
+  },
+  "d85": {
+    "method": "截取 run-all.ps1 中 function Get-PageVerdict { … } 函数体（至首个行首右大括号，含该大括号，CRLF 归一为 LF），算 FNV-1a 32 位；与落卡前 HEAD 版本比对",
+    "fnv_before": "d1f2c95f",
+    "fnv_after": "d1f2c95f",
+    "len": 785
+  },
+  "d86": {
+    "bom_bytes": "239,187,191",
+    "cmd": "([IO.File]::ReadAllBytes('preflight\\selfcheck\\run-all.ps1'))[0..2] -join ','"
+  }
+}

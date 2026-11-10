@@ -3,7 +3,7 @@
 # 覆盖：preflight/verify_*.html 全部页面（含 verify_selfcheck 运行时自检、verify_smoke 主循环冒烟）
 # 输出：逐页 PASS/FAIL 表 + preflight/selfcheck/regression-result.json；exit code = FAIL 页数
 
-param([int]$Budget = 3500, [string]$VerdictFile = '')
+param([int]$Budget = 3500, [string[]]$VerdictFile = @(), [switch]$ShowSummary)
 
 # ── 裁决解析（D-06）──────────────────────────────────────────────
 # 逐页裁决只认页面输出中的**独立裁决行**：行首（允许带 HTML 标签前缀）为 "PASS {json}" / "FAIL {json}"。
@@ -25,10 +25,36 @@ function Get-PageVerdict {
   return [pscustomobject]@{ verdict = $verdict; payload = $(if ($pm.Success) { $pm.Groups[1].Value } else { '' }) }
 }
 
+# ── 汇总计数（D-08）──────────────────────────────────────────────
+# PowerShell 中 `(... | Where-Object {...}).Count` 在结果恰好 1 条时拿到的是单个对象，
+# .Count 取不到值 → 打印为空白（"一页失败"看起来像"零失败"）。所有计数一律用 @(...) 强制数组。
+function Get-RegressionSummary {
+  param($Rows)
+  [pscustomobject]@{
+    at    = (Get-Date).ToString('s')
+    total = @($Rows).Count
+    pass  = @($Rows | Where-Object { $_.verdict -eq 'PASS' }).Count
+    fail  = @($Rows | Where-Object { $_.verdict -eq 'FAIL' }).Count
+    none  = @($Rows | Where-Object { $_.verdict -eq 'NONE' }).Count
+    mixed = @($Rows | Where-Object { $_.verdict -eq 'MIXED' }).Count
+  }
+}
+
 # D6-1/D6-2/D6-3 用：对给定文本文件跑一次裁决解析（不启动浏览器），输出裁决行供取证
-if ($VerdictFile) {
-  $txt = Get-Content -LiteralPath $VerdictFile -Raw -Encoding utf8
-  "VERDICT=$((Get-PageVerdict -Text $txt).verdict)"
+# D8-1~D8-3 用：加 -ShowSummary 时按同一套汇总函数打印汇总行并以 FAIL 数退出，用于单条场景取证
+if ($VerdictFile.Count -gt 0) {
+  $vrRows = @()
+  foreach ($vf in $VerdictFile) {
+    $txt = Get-Content -LiteralPath $vf -Raw -Encoding utf8
+    $r = Get-PageVerdict -Text $txt
+    $vrRows += [pscustomobject]@{ page = [IO.Path]::GetFileNameWithoutExtension($vf); verdict = $r.verdict; payload = $r.payload }
+  }
+  if ($ShowSummary) {
+    $s = Get-RegressionSummary -Rows $vrRows
+    "TOTAL=$($s.total) PASS=$($s.pass) FAIL=$($s.fail) NONE=$($s.none) MIXED=$($s.mixed)"
+    exit $s.fail
+  }
+  "VERDICT=$($vrRows[$vrRows.Count - 1].verdict)"
   exit 0
 }
 
@@ -75,14 +101,10 @@ foreach ($t in $targets) {
 }
 
 $rows | Format-Table -AutoSize -Wrap | Out-String -Width 260
-$summary = [pscustomobject]@{
-  at      = (Get-Date).ToString('s')
-  total   = $rows.Count
-  pass    = ($rows | Where-Object { $_.verdict -eq 'PASS' }).Count
-  fail    = ($rows | Where-Object { $_.verdict -eq 'FAIL' }).Count
-  none    = ($rows | Where-Object { $_.verdict -eq 'NONE' }).Count
-  mixed   = ($rows | Where-Object { $_.verdict -eq 'MIXED' }).Count
-}
+# 取值变量必须写作 $summary（D6-6/D8-4 按此模板字符串比对）；因此本脚本的开关参数不能用
+# [switch]$Summary —— PowerShell 变量名不分大小写，会与 $summary 撞名，赋值时触发
+# SwitchParameter 类型转换异常、汇总行整行空白（D-08 实测）。开关统一叫 -ShowSummary。
+$summary = Get-RegressionSummary -Rows $rows
 "TOTAL=$($summary.total) PASS=$($summary.pass) FAIL=$($summary.fail) NONE=$($summary.none) MIXED=$($summary.mixed)"
 $jsonPath = Join-Path $PSScriptRoot 'regression-result.json'
 @{ summary = $summary; rows = $rows } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jsonPath -Encoding utf8
