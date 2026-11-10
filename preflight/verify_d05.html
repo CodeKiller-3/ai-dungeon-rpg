@@ -71,11 +71,11 @@
     var evD52 = ev && ev.d52 ? ev.d52 : null;
     sub.d52_xc01CatchesWrongNumber = !w1.ok && !w2.ok && !!evD52 &&
       evD52.line.indexOf('[FAIL] XC-01') >= 0 && evD52.exit === 1;
-    /* 负例结果用 pass 字段而非 ok：run-all.ps1 以 payload 内 '"ok":false' 判 MIXED，
-       负例的 false 是"预期被抓到"，不应触发整页 MIXED */
+    /* 负例结果保留 ok:false 原语义：D-06 后 run-all 只认裁决行，不再扫 payload 字段，
+       因此合法的 false 不会再把整页误判为 MIXED */
     sub.d52_cases = [
-      { text: '物品全表 ' + (N - 1) + ' 件', pass: w1.ok, reason: w1.reason },
-      { text: '物品 ' + (N - 1) + ' 条', pass: w2.ok, reason: w2.reason }
+      { text: '物品全表 ' + (N - 1) + ' 件', ok: w1.ok, reason: w1.reason },
+      { text: '物品 ' + (N - 1) + ' 条', ok: w2.ok, reason: w2.reason }
     ];
     sub.d52_endToEnd = evD52;
     ok = ok && sub.d52_xc01CatchesWrongNumber;
@@ -100,7 +100,7 @@
     var evD54 = ev && ev.d54 ? ev.d54 : null;
     sub.d54_c55CatchesWrongNumber = !tampered.ok && !!evD54 && evD54.verdict === 'FAIL' &&
       evD54.reasons.join('|').indexOf('23') >= 0;
-    sub.d54_case = { pass: tampered.ok, reasons: tampered.reasons, parsed: tampered.readme };
+    sub.d54_case = { ok: tampered.ok, reasons: tampered.reasons, parsed: tampered.readme };
     sub.d54_endToEnd = evD54;
     ok = ok && sub.d54_c55CatchesWrongNumber;
 
@@ -109,7 +109,7 @@
     var evD55 = ev && ev.d55 ? ev.d55 : null;
     sub.d55_c55Whitelist = !extra.ok && extra.readme.extra.indexOf(45) >= 0 && !!evD55 &&
       evD55.verdict === 'FAIL' && evD55.reasons.join('|').indexOf('45') >= 0;
-    sub.d55_case = { pass: extra.ok, reasons: extra.reasons, extra: extra.readme.extra };
+    sub.d55_case = { ok: extra.ok, reasons: extra.reasons, extra: extra.readme.extra };
     sub.d55_endToEnd = evD55;
     ok = ok && sub.d55_c55Whitelist;
 

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d06</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-06 验证页：run-all.ps1 的裁决只认独立裁决行，不扫 payload 字段。
+     证据 selfcheck/d06-evidence.json 由同一脚本的 -VerdictFile 模式对临时样例真实运行后记录；
+     本页同时核对 run-all.ps1 源码口径与 verify_d05.html 的字段回退。 -->
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var runall = readDoc('selfcheck/run-all.ps1');
+  var d05 = readDoc('verify_d05.html');
+  var ev = readJson('selfcheck/d06-evidence.json');
+  var ev5 = readJson('selfcheck/d05-evidence.json');
+  var reg = readJson('selfcheck/regression-result.json');
+  out.loaded = runall.length > 0 && d05.length > 0 && !!ev;
+
+  var sub = {}, ok = true;
+  try {
+    /* ── D6-1 裁决取最后一条；PASS+FAIL 才 MIXED ───────── */
+    var cs = (ev.d61 && ev.d61.cases) || [];
+    var map = {};
+    cs.forEach(function (c) { map[c.name] = c; });
+    var d61ok = cs.length === 3 &&
+      !!map.only_pass && map.only_pass.verdict === 'PASS' && map.only_pass.output === 'VERDICT=PASS' &&
+      !!map.only_fail && map.only_fail.verdict === 'FAIL' && map.only_fail.output === 'VERDICT=FAIL' &&
+      !!map.pass_then_fail && map.pass_then_fail.verdict === 'MIXED' && map.pass_then_fail.output === 'VERDICT=MIXED';
+    var srcLast = runall.indexOf('$hits[$hits.Count - 1]') >= 0;
+    var srcMixed = runall.indexOf("$names -contains 'PASS'") >= 0 && runall.indexOf("$names -contains 'FAIL'") >= 0;
+    sub.d61_verdictFromLastLine = d61ok && srcLast && srcMixed;
+    sub.d61_cases = cs;
+    ok = ok && sub.d61_verdictFromLastLine;
+
+    /* ── D6-2 payload 里的 false 不再影响裁决 ──────────── */
+    var d62 = ev.d62 || null;
+    var srcNoScan = runall.indexOf('"ok"\\s*:\\s*false') < 0 && runall.indexOf('-match \'"ok"') < 0;
+    sub.d62_payloadFalseIgnored = !!d62 && d62.verdict === 'PASS' && d62.output === 'VERDICT=PASS' &&
+      d62.sample.indexOf('"ok":false') >= 0 && srcNoScan;
+    sub.d62_sample = d62;
+    ok = ok && sub.d62_payloadFalseIgnored;
+
+    /* ── D6-3 无裁决行判 NONE ─────────────────────────── */
+    var d63 = ev.d63 || null;
+    var srcNone = runall.indexOf('$hits.Count -eq 0') >= 0 && runall.indexOf("'NONE'") >= 0;
+    sub.d63_noVerdictIsNone = !!d63 && d63.verdict === 'NONE' && d63.output === 'VERDICT=NONE' && srcNone;
+    sub.d63_sample = d63;
+    ok = ok && sub.d63_noVerdictIsNone;
+
+    /* ── D6-4 verify_d05 字段已回退，负例仍成立 ───────── */
+    var hasOkFields = d05.indexOf('ok: w1.ok') >= 0 && d05.indexOf('ok: tampered.ok') >= 0 &&
+      d05.indexOf('ok: extra.ok') >= 0;
+    var noPassFields = d05.indexOf('pass: w1.ok') < 0 && d05.indexOf('pass: tampered.ok') < 0 &&
+      d05.indexOf('pass: extra.ok') < 0;
+    var negs = !!ev5 && ev5.d52.exit === 1 && ev5.d52.line.indexOf('[FAIL] XC-01') >= 0 &&
+      ev5.d54.verdict === 'FAIL' && ev5.d54.reasons.join('|').indexOf('23') >= 0 &&
+      ev5.d55.verdict === 'FAIL' && ev5.d55.reasons.join('|').indexOf('45') >= 0;
+    var rows = (reg && reg.rows) || [];
+    var d05row = rows.filter(function (r) { return r.page === 'verify_d05'; })[0] || null;
+    var d05pass = !!d05row && d05row.verdict === 'PASS';
+    sub.d64_d05Reverted = hasOkFields && noPassFields && negs && d05pass;
+    sub.d64_fields = { okFields: hasOkFields, noPassFields: noPassFields, negatives: negs,
+      d05Verdict: d05row ? d05row.verdict : null };
+    ok = ok && sub.d64_d05Reverted;
+
+    /* ── D6-5 全量回归 47/47 ───────────────────────────
+     * run-all 在本页结束后才写 JSON，本页读到的是上一轮：允许两态——
+     * 已含本页则要求 47 行、其余 46 页全 PASS；尚未含本页则要求 46 行全 PASS。 */
+    var hasSelf = rows.some(function (r) { return r.page === 'verify_d06'; });
+    var others = rows.filter(function (r) { return r.page !== 'verify_d06'; });
+    var expectRows = hasSelf ? 47 : 46;
+    var d65ok = rows.length === expectRows &&
+      others.length === (hasSelf ? expectRows - 1 : expectRows) &&
+      others.every(function (r) { return r.verdict === 'PASS'; });
+    sub.d65_fullRun = d65ok;
+    sub.d65_rows = { total: rows.length, others: others.length + '/PASS', hasSelf: hasSelf,
+      summary: reg ? reg.summary : null };
+    ok = ok && sub.d65_fullRun;
+
+    /* ── D6-6 汇总格式未变 ────────────────────────────── */
+    var sm = (reg && reg.summary) || null;
+    var keys = sm ? Object.keys(sm).sort().join(',') : '';
+    var d66 = ev.d66 || null;
+    var lineOk = !!d66 && /^TOTAL=\d+ PASS=\d+ FAIL=\d+ NONE=\d+ MIXED=\d+$/.test(d66.line);
+    var printTpl = 'TOTAL=$($summary.total) PASS=$($summary.pass) FAIL=$($summary.fail) NONE=$($summary.none) MIXED=$($summary.mixed)';
+    var d66ok = !!sm && keys === 'at,fail,mixed,none,pass,total' && sm.total === rows.length &&
+      sm.pass === rows.filter(function (r) { return r.verdict === 'PASS'; }).length &&
+      lineOk && runall.indexOf(printTpl) >= 0;
+    sub.d66_summaryFormat = d66ok;
+    sub.d66_line = d66 ? d66.line : null;
+    sub.d66_keys = keys;
+    ok = ok && sub.d66_summaryFormat;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

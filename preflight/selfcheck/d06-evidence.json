@@ -1,0 +1,43 @@
+{
+  "at": "2026-11-10",
+  "note": "D-06 裁决逻辑的真实运行记录：同一脚本的 -VerdictFile 模式对临时样例跑 Get-PageVerdict，样例文件用后已删除。",
+  "d61": {
+    "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File preflight/selfcheck/run-all.ps1 -VerdictFile <tmp>",
+    "cases": [
+      {
+        "name": "only_pass",
+        "sample": "<title>PASS {\"case\":\"onlyPass\"}</title> ... PASS {\"case\":\"onlyPass\",\"ok\":true}",
+        "output": "VERDICT=PASS",
+        "verdict": "PASS"
+      },
+      {
+        "name": "only_fail",
+        "sample": "<title>FAIL {\"case\":\"onlyFail\"}</title> ... FAIL {\"case\":\"onlyFail\",\"ok\":false}",
+        "output": "VERDICT=FAIL",
+        "verdict": "FAIL"
+      },
+      {
+        "name": "pass_then_fail",
+        "sample": "<title>FAIL {...}</title> / PASS {...\"phase\":\"first\"} / FAIL {...\"phase\":\"second\"}",
+        "output": "VERDICT=MIXED",
+        "verdict": "MIXED"
+      }
+    ]
+  },
+  "d62": {
+    "name": "payload_false",
+    "sample": "PASS {\"loaded\":true,\"ok\":true,\"sub\":{\"d52_cases\":[{\"ok\":false},{\"ok\":false}],\"d54_case\":{\"ok\":false},\"d55_case\":{\"ok\":false}}}",
+    "output": "VERDICT=PASS",
+    "verdict": "PASS"
+  },
+  "d63": {
+    "name": "no_verdict",
+    "sample": "<title>verify_xxx</title><body><div id=\"result\">RUNNING</div></body>",
+    "output": "VERDICT=NONE",
+    "verdict": "NONE"
+  },
+  "d66": {
+    "line": "TOTAL=46 PASS=46 FAIL=0 NONE=0 MIXED=0",
+    "note": "D-05 收尾次全量回归的原样汇总行，仅用于证明格式未变；47/47 的汇总见 D-06 回报。"
+  }
+}
