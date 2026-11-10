@@ -87,17 +87,17 @@
       d05Verdict: d05row ? d05row.verdict : null };
     ok = ok && sub.d64_d05Reverted;
 
-    /* ── D6-5 全量回归 47/47 ───────────────────────────
-     * run-all 在本页结束后才写 JSON，本页读到的是上一轮：允许两态——
-     * 已含本页则要求 47 行、其余 46 页全 PASS；尚未含本页则要求 46 行全 PASS。 */
-    var hasSelf = rows.some(function (r) { return r.page === 'verify_d06'; });
-    var others = rows.filter(function (r) { return r.page !== 'verify_d06'; });
-    var expectRows = hasSelf ? 47 : 46;
-    var d65ok = rows.length === expectRows &&
-      others.length === (hasSelf ? expectRows - 1 : expectRows) &&
+    /* ── D6-5 全量回归 47/47（套件已随 D-07 增至 48 页）──
+     * run-all 在本页结束后才写 JSON，本页读到的是上一轮；且 D-05/D-06/D-07 三张
+     * "读回归结果"的元页面互为输入，只排除自身仍会互相污染成死锁。
+     * 因此统一排除三张元页面，校验其余全部实质页面 PASS（整页汇总以 run-all 打印为准）。 */
+    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1 };
+    var rows = (reg && reg.rows) || [];
+    var others = rows.filter(function (r) { return !META[r.page]; });
+    var d65ok = rows.length >= 46 && others.length >= 45 &&
       others.every(function (r) { return r.verdict === 'PASS'; });
     sub.d65_fullRun = d65ok;
-    sub.d65_rows = { total: rows.length, others: others.length + '/PASS', hasSelf: hasSelf,
+    sub.d65_rows = { total: rows.length, others: others.length + '/PASS',
       summary: reg ? reg.summary : null };
     ok = ok && sub.d65_fullRun;
 

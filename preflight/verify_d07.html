@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d07</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-07 验证页：FR-08 道具合成的范围裁决（未排期），只查文档口径，不涉及运行时代码。
+     D7-2 的 grep 口径：README / 讲稿中不得出现"合成=已实现"类表述；
+     音效处的"Web Audio 合成"属于音频合成，不算道具合成。 -->
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function lines(t) { return String(t).split(/\r?\n/); }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var plan = readDoc('../PLAN.md');
+  var readme = readDoc('../README.md');
+  var speech = readDoc('../docs/答辩讲稿.md');
+  var scope = readDoc('../规划-对标补齐.md');
+  var reg = readJson('selfcheck/regression-result.json');
+  var sc = readJson('selfcheck/selfcheck-result.json');
+  out.loaded = plan.length > 0 && readme.length > 0 && speech.length > 0 && scope.length > 0;
+
+  var sub = {}, ok = true;
+  try {
+    /* ── D7-1 FR-08 原文保留 + 其后有未排期标注 ───────── */
+    var fr08Row = '| FR-08 | 道具合成 | 配方合成更高级物品 | P2 |';
+    var iRow = plan.indexOf(fr08Row);
+    var iNote = plan.indexOf('**FR-08 状态：未排期');
+    var note = iNote >= 0 ? plan.slice(iNote, iNote + 200) : '';
+    sub.d71_f08Marked = iRow >= 0 && iNote > iRow &&
+      note.indexOf('未排期') >= 0 && note.indexOf('规划-对标补齐.md') >= 0 && note.indexOf('D-07') >= 0;
+    sub.d71_row = iRow >= 0;
+    sub.d71_note = note;
+    ok = ok && sub.d71_f08Marked;
+
+    /* ── D7-2 无"合成已实现"宣传 ─────────────────────── */
+    var craftWord = /(道具合成|合成装备|合成物品|炼金|配方)/;
+    var claimRe = /(已实现|支持|可用|可操作|提供)[^。\n]{0,10}(合成|配方)|(合成|配方)[^。\n]{0,10}(已实现|可用|可操作)/;
+    var bad = [];
+    [{ name: 'README.md', t: readme }, { name: '答辩讲稿.md', t: speech }].forEach(function (d) {
+      lines(d.t).forEach(function (ln, i) {
+        if (craftWord.test(ln) || claimRe.test(ln)) bad.push({ doc: d.name, line: i + 1, text: ln.trim() });
+      });
+    });
+    var audioOnly = true, audioHits = [];
+    lines(readme).forEach(function (ln, i) {
+      if (ln.indexOf('合成') >= 0) {
+        audioHits.push({ line: i + 1, text: ln.trim() });
+        if (!/Web Audio|程序化音效|BGM|音效/.test(ln)) audioOnly = false;
+      }
+    });
+    sub.d72_noCraftImplementationClaim = bad.length === 0 && audioOnly;
+    sub.d72_grep = { crafting_claims: bad, audio_synthesis_lines: audioHits };
+    ok = ok && sub.d72_noCraftImplementationClaim;
+
+    /* ── D7-3 裁决与前置已记录 ───────────────────────── */
+    var iSec = scope.indexOf('### D-07');
+    var sec = iSec >= 0 ? scope.slice(iSec, iSec + 2000) : '';
+    var threeReasons = ['配方', '材料', '价格', '验收面'].every(function (k) { return sec.indexOf(k) >= 0; });
+    var fourPre = ['配方数据结构', '材料来源', 'UI 入口', '平衡基线'].every(function (k) { return sec.indexOf(k) >= 0; });
+    sub.d73_scopeRecorded = iSec >= 0 && sec.indexOf('未排期') >= 0 && threeReasons && fourPre;
+    sub.d73_checks = { section: iSec >= 0, threeReasons: threeReasons, fourPrereqs: fourPre };
+    ok = ok && sub.d73_scopeRecorded;
+
+    /* ── D7-4 其余 FR 条目未被改动 ─────────────────────
+     * 比对方式：用同一正则抽取 PLAN 的 FR 表行（编号 + 功能列），
+     * 与本卡落卡前抄录的金标文本逐一相等；编号集合必须是 FR-01..FR-16 且不重复。 */
+    var GOLD = {
+      'FR-01': '地图探索', 'FR-02': '角色移动', 'FR-03': '回合制战斗', 'FR-04': '属性成长',
+      'FR-05': '道具掉落', 'FR-06': '背包管理', 'FR-07': '装备系统', 'FR-08': '道具合成',
+      'FR-09': '商店交易', 'FR-10': '任务系统', 'FR-11': 'NPC 对话', 'FR-12': '本地存档',
+      'FR-13': '音效', 'FR-14': 'UI/HUD', 'FR-15': '敌人 AI', 'FR-16': 'AI 对话'
+    };
+    /* 只取 §2.2 需求表那一段：PLAN 后面的验收矩阵同样以 | FR-xx | 开头，不能混入 */
+    var iFr = plan.indexOf('### 2.2 功能需求（FR）');
+    var iNfr = plan.indexOf('### 2.3 非功能需求（NFR）');
+    var frText = (iFr >= 0 && iNfr > iFr) ? plan.slice(iFr, iNfr) : plan;
+    var found = {}, dup = [], rowRe = /^\|\s*(FR-\d{2})\s*\|\s*([^|]+?)\s*\|/gm, m;
+    while ((m = rowRe.exec(frText)) !== null) {
+      if (found[m[1]]) dup.push(m[1]);
+      found[m[1]] = m[2];
+    }
+    var ids = Object.keys(GOLD), diffs = [];
+    ids.forEach(function (id) {
+      if (found[id] !== GOLD[id]) diffs.push({ id: id, expect: GOLD[id], actual: found[id] || null });
+    });
+    sub.d74_noOtherReqTouched = diffs.length === 0 && dup.length === 0 && Object.keys(found).length === ids.length;
+    sub.d74_method = '在 §2.2 段内用 /^\\|\\s*(FR-\\d{2})\\s*\\|\\s*([^|]+?)\\s*\\|/gm 抽取 FR 表行，与落卡前金标（16 条功能列文本）逐一比对（排除后文验收矩阵的同形行）';
+    sub.d74_diffs = diffs;
+    sub.d74_dups = dup;
+    ok = ok && sub.d74_noOtherReqTouched;
+
+    /* ── D7-5 回归与静态自检无退化 ─────────────────────
+     * run-all 在本页结束后写 JSON，本页读到上一轮；D-05/D-06/D-07 三张元页面
+     * 互为输入，单独排除自身会互相污染成死锁，故统一排除三张元页面，
+     * 要求其余实质页面全 PASS（整页汇总以 run-all 打印为准）。 */
+    var META = { verify_d05: 1, verify_d06: 1, verify_d07: 1 };
+    var rows = (reg && reg.rows) || [];
+    var others = rows.filter(function (r) { return !META[r.page]; });
+    var regOk = rows.length >= 46 && others.length >= 45 &&
+      others.every(function (r) { return r.verdict === 'PASS'; });
+    var ss = (sc && sc.summary) || null;
+    var scOk = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0;
+    sub.d75_noRegression = regOk && scOk;
+    sub.d75_rows = { total: rows.length, others: others.length + '/PASS' };
+    sub.d75_selfcheck = ss;
+    ok = ok && sub.d75_noRegression;
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
