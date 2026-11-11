@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-21 shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = Game.Core.Main, R = Game.Core.Render, S = Game.Core.Sprites;
+  var B = Game.Systems.Battle, Fx = Game.Systems.Fx;
+
+  /* 素材基路径：本页在 preflight/ 下，默认 'assets/sprites/' 会 404 */
+  var origLoad = S.load;
+  S.load = function () { return origLoad.call(this, '../assets/sprites/'); };
+
+  try {
+    M.init();
+    M.closeGuide();
+    /* 冻结主循环：rAF 链继续跑，但 loop 变空函数 → 画布不再被每帧重绘，
+     * 截图抓到的一定是我们合成好的那一帧（headless 下连续重绘会让合成时机不稳） */
+    M.loop = function () {};
+    M.switchScene('battle');
+    B.start('goblin');
+    B.playerAction('attack');
+
+    /* 冻结动画帧：_animNow 可注入时钟（render.js:277）。
+     * 'knight_m_hit' 的字符码和 1269 % 4 = 1，取 now=100 → floor(100/250)=0 → 帧序号 1 */
+    R._animNow = function () { return 100; };
+    var st = B.getState();
+    st.playerActionAt = (Fx && Fx.clockNow ? Fx.clockNow() : performance.now()) - 50; /* 仍处于 320ms 动作窗口内 */
+    st.monster.hp = Math.max(1, Math.round(st.monster.maxHp * 0.55));
+
+    function drawIns() {
+      var cv = document.getElementById('game');
+      var c2 = cv.getContext('2d');
+      /* 右下角 8 倍放大实拍：就是渲染层刚取的这一帧，不是另画的 */
+      var f = S.getFrame('knight_m_hit', 1);
+      var opaque = -1;
+      if (!f) return opaque;
+      var tmp = document.createElement('canvas');
+      tmp.width = f.naturalWidth; tmp.height = f.naturalHeight;
+      var t2 = tmp.getContext('2d');
+      t2.drawImage(f, 0, 0);
+      var d = t2.getImageData(0, 0, tmp.width, tmp.height).data;
+      opaque = 0;
+      for (var i = 3; i < d.length; i += 4) if (d[i] > 0) opaque++;
+      var s = 8, w = f.naturalWidth * s, h = f.naturalHeight * s;
+      /* 用逻辑坐标（cssW/cssH）：canvas 后备分辨率受 devicePixelRatio 放大，ctx 自带缩放 */
+      var CW = R.cssW || cv.width, CH = R.cssH || cv.height;
+      var ox = CW - w - 28, oy = CH - h - 40;
+      c2.save();
+      c2.imageSmoothingEnabled = false;
+      c2.fillStyle = 'rgba(8,10,18,0.92)';
+      c2.fillRect(ox - 10, oy - 26, w + 20, h + 36);
+      c2.strokeStyle = '#3a4a66';
+      c2.strokeRect(ox - 10.5, oy - 26.5, w + 21, h + 37);
+      c2.drawImage(f, ox, oy, w, h);
+      c2.fillStyle = '#8fd0ff';
+      c2.font = '12px Consolas,monospace';
+      c2.fillText('f1 ×8 · ' + opaque + ' px', ox - 8, oy - 10);
+      c2.restore();
+      return opaque;
+    }
+
+    /* 主循环每帧都会重画战斗界面：包住 drawBattle，保证"每一帧都在受击窗口 + 都带放大镜"，
+     * 这样无论截图落在哪一帧，画面都是 f1 而不是随动作窗口过期退回待机帧 */
+    var origDraw = R.drawBattle;
+    R.drawBattle = function (s) {
+      var st2 = s || st;
+      st2.playerActionAt = (Fx && Fx.clockNow ? Fx.clockNow() : performance.now()) - 50;
+      origDraw.call(R, st2);
+      try { window.__ins = drawIns(); } catch (e) { window.__ins = 'ERR ' + (e && e.message); }
+    };
+
+    function once() {
+      /* 画布已冻结；再叠一层 <img> 兜底（headless 对 canvas 的合成时机偶发不稳） */
+      var cv = document.getElementById('game');
+      var img = new Image();
+      img.src = cv.toDataURL('image/png');
+      img.style.cssText = 'position:fixed;left:0;top:0;width:' + cv.width + 'px;height:' + cv.height + 'px';
+      document.body.appendChild(img);
+      document.title = 'SHOT scene=' + M._scene + ' idx=1 hitReady=' + (!!S.getFrame('knight_m_hit', 1)) +
+        ' ins=' + window.__ins + ' dpr=' + (R.dpr || '-') + ' css=' + R.cssW + 'x' + R.cssH +
+        ' px=' + cv.width + 'x' + cv.height + ' data=' + img.src.length;
+    }
+
+    /* 等 Sprites 全部加载完再画（否则走色块兜底） */
+    (function wait(n) {
+      if (!S.isReady() && n < 400) return setTimeout(function () { wait(n + 1); }, 10);
+      try { R.drawBattle(st); once(); } catch (e) { document.title = 'SHOT_ERR ' + (e && e.message); }
+    })(0);
+  } catch (e) {
+    document.title = 'SHOT_ERR ' + (e && e.message);
+  }
+})();
+</script>
+</body>
+</html>

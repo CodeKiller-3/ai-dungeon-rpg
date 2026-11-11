@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-21 验证页：素材完整性（空帧 / 尺寸 / 编号 / NAMES / 调色板）
+     像素真值全部在页内解码（Image → canvas → getImageData），不信任任何预生成结论。
+     磁盘文件清单（用于"多文件"方向）来自 preflight/selfcheck/d21-audit.json（Node readdir 产物）；
+     该文件由 preflight/selfcheck/d21_audit.js 生成，浏览器无法自行列目录（见文档缺口）。
+     需要 --allow-file-access-from-files 才能 getImageData（run-all.ps1 已带该参数）。 -->
+<title>D-21 素材完整性审计</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-21 · 素材完整性（198 张 PNG / 空帧 / 尺寸 / 编号 / NAMES / 调色板）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="cv" width="16" height="16"></canvas>
+
+<script src="lib/assetcheck.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var AC = window.AssetCheck;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function src(path) {
+    var x = new XMLHttpRequest();
+    x.open('GET', path, false); x.send(null);
+    return x.responseText || '';
+  }
+  function uniq(a) { var s = {}, o = []; a.forEach(function (v) { if (!s[v]) { s[v] = 1; o.push(v); } }); return o; }
+
+  var jsSrc = src('../js/core/sprites.js');
+  var auditText = src('selfcheck/d21-audit.json');
+
+  var namesBlock = jsSrc.slice(jsSrc.indexOf('var NAMES ='), jsSrc.indexOf('];', jsSrc.indexOf('var NAMES =')));
+  var names = (namesBlock.match(/'([a-z0-9_]+)'/g) || []).map(function (s) { return s.slice(1, -1); });
+
+  /* FRAME_SETS：从源码解析（不手抄，避免与实现脱节） */
+  var fsBlock = jsSrc.slice(jsSrc.indexOf('var FRAME_SETS ='), jsSrc.indexOf('};', jsSrc.indexOf('var FRAME_SETS =')));
+  var frameSets = {};
+  (fsBlock.match(/[a-z0-9_]+:\s*\[[^\]]*\]/g) || []).forEach(function (row) {
+    var k = row.slice(0, row.indexOf(':')).trim();
+    frameSets[k] = (row.match(/'[a-z0-9_]+'/g) || []).map(function (s) { return s.slice(1, -1); });
+  });
+
+  var audit = null;
+  try { audit = JSON.parse(auditText); } catch (e) { audit = null; }
+  var diskFiles = audit ? (audit.files || []).map(function (f) { return f.name.replace(/\.png$/i, ''); }) : [];
+  var palette = audit ? (audit.palette || []) : [];
+
+  /* ── 逐张加载 + 页内解码 ── */
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  function loadOne(name) {
+    return new Promise(function (resolve) {
+      var im = new Image();
+      im.onload = function () {
+        try {
+          cv.width = im.width; cv.height = im.height;
+          ctx.clearRect(0, 0, im.width, im.height);
+          ctx.drawImage(im, 0, 0);
+          var data = ctx.getImageData(0, 0, im.width, im.height);
+          resolve({ name: name, ok: true, stat: AC.statsFromImageData(name, data) });
+        } catch (e) {
+          resolve({ name: name, ok: false, err: String(e && e.message || e) });
+        }
+      };
+      im.onerror = function () { resolve({ name: name, ok: false, err: 'load error' }); };
+      im.src = '../assets/sprites/' + name + '.png';
+    });
+  }
+
+  Promise.all(names.map(loadOne)).then(function (list) {
+    try {
+      var failed = list.filter(function (x) { return !x.ok; });
+      var stats = list.filter(function (x) { return x.ok; }).map(function (x) { return x.stat; });
+      var byName = {};
+      stats.forEach(function (s) { byName[s.name] = s; });
+
+      /* ══ A1. 全部注册素材可加载且可读像素 ══ */
+      rec('A1_allRegisteredLoadable', failed.length === 0 && stats.length === names.length,
+        '注册 ' + names.length + ' 个 → 成功解码 ' + stats.length + '，失败 ' + failed.length +
+        (failed.length ? '（' + failed.slice(0, 5).map(function (x) { return x.name + ':' + x.err; }).join('; ') + '）' : ''));
+
+      /* ══ A2. 0 个空帧（不透明像素 = 0）══ */
+      var empty = AC.emptyFrames(stats);
+      rec('A2_noEmptyFrames', empty.length === 0,
+        '不透明像素为 0 的帧：' + (empty.length ? JSON.stringify(empty) : '无') + '（共 ' + stats.length + ' 张）');
+
+      /* A2 负例：把一张真实帧的 alpha 全部清 0，检测器必须报出来 */
+      var victim = byName['knight_m_hit_anim_f1'] || stats[0];
+      cv.width = victim.w; cv.height = victim.h;
+      ctx.clearRect(0, 0, victim.w, victim.h);
+      var cleared = AC.statsFromImageData(victim.name, ctx.getImageData(0, 0, victim.w, victim.h));
+      var clearHit = AC.emptyFrames([cleared, stats[0]]);
+      /* 再从磁盘真实解码一张（证明"清空文件"这条路会被抓） */
+      rec('A2n_negativeClearedFrameFails', clearHit.length === 1 && clearHit[0] === cleared.name,
+        '把 ' + victim.name + ' 的像素清空后：emptyFrames → ' + JSON.stringify(clearHit) + '（必须命中，否则检查器是假的）');
+
+      /* ══ A3. 帧组尺寸一致 ══ */
+      var dimsBad = AC.dimsMismatch(stats);
+      rec('A3_groupDimsConsistent', dimsBad.length === 0,
+        '同组尺寸不一致的帧组：' + (dimsBad.length ? JSON.stringify(dimsBad) : '无') +
+        '（' + Object.keys(stats.reduce(function (m, s) { m[AC.groupOf(s.name).group] = 1; return m; }, {})).length + ' 个帧组）');
+
+      /* A3 负例：同组塞入不同尺寸 */
+      var dimsNeg = AC.dimsMismatch([
+        { name: 'zz_anim_f0', w: 16, h: 28, opaque: 10, colors: [] },
+        { name: 'zz_anim_f1', w: 16, h: 16, opaque: 10, colors: [] }
+      ]);
+      rec('A3n_negativeDimsFails', dimsNeg.length === 1 && dimsNeg[0].group === 'zz_anim',
+        '人造 16×28 / 16×16 同组 → ' + JSON.stringify(dimsNeg) + '（必须报 1 组）');
+
+      /* ══ A4. 帧组编号连续（从 0 起、不缺号、不重号）══ */
+      var idxBad = AC.indexIssues(stats);
+      var setBad = [];
+      Object.keys(frameSets).forEach(function (k) {
+        var set = frameSets[k];
+        var miss = [];
+        for (var i = 0; i < set.length; i++) if (!byName[set[i]]) miss.push(set[i]);
+        if (set.length !== 4 || miss.length) setBad.push({ set: k, len: set.length, miss: miss });
+      });
+      rec('A4_groupIndexContinuous', idxBad.length === 0 && setBad.length === 0,
+        '编号异常帧组：' + (idxBad.length ? JSON.stringify(idxBad) : '无') +
+        '；FRAME_SETS ' + Object.keys(frameSets).length + ' 组全部 4 帧可解析=' + (setBad.length === 0) +
+        (setBad.length ? '（' + JSON.stringify(setBad.slice(0, 3)) + '）' : ''));
+
+      /* A4 负例：缺 f2 */
+      var idxNeg = AC.indexIssues([
+        { name: 'zz_anim_f0', w: 16, h: 16, opaque: 1, colors: [] },
+        { name: 'zz_anim_f1', w: 16, h: 16, opaque: 1, colors: [] },
+        { name: 'zz_anim_f3', w: 16, h: 16, opaque: 1, colors: [] }
+      ]);
+      rec('A4n_negativeGapFails', idxNeg.length === 1 && JSON.stringify(idxNeg[0].missing) === '[2]',
+        '人造 f0/f1/f3（缺 f2）→ ' + JSON.stringify(idxNeg) + '（必须报 missing [2]）');
+
+      /* ══ A5. NAMES ↔ 文件一一对应 ══ */
+      var diff = AC.namesDiff(names, diskFiles);
+      var oneToOne = diff.missingFiles.length === 0 && diff.extraFiles.length === 0 &&
+        diff.dupNames.length === 0 && diskFiles.length === names.length &&
+        audit && audit.names && audit.names.count === names.length;
+      rec('A5_namesFilesOneToOne', oneToOne,
+        '注册 ' + names.length + ' / 磁盘 ' + diskFiles.length + ' / 缺文件 ' + diff.missingFiles.length +
+        ' / 多文件 ' + diff.extraFiles.length + ' / 重名 ' + diff.dupNames.length +
+        '；审计产物自报 names.count=' + (audit && audit.names ? audit.names.count : 'n/a'));
+
+      /* A5 负例：缺一个注册 / 多一个文件 */
+      var d1 = AC.namesDiff(['a', 'b'], ['a']);
+      var d2 = AC.namesDiff(['a'], ['a', 'c']);
+      rec('A5n_negativeNamesFails',
+        d1.missingFiles.length === 1 && d1.missingFiles[0] === 'b' && d2.extraFiles.length === 1 && d2.extraFiles[0] === 'c',
+        '人造：注册[a,b]/磁盘[a] → 缺 ' + JSON.stringify(d1.missingFiles) +
+        '；注册[a]/磁盘[a,c] → 多 ' + JSON.stringify(d2.extraFiles));
+
+      /* ══ A6. 近乎空帧（≤5 不透明像素）══ */
+      var near = AC.nearEmptyFrames(stats, 5);
+      rec('A6_noNearEmptyFrames', near.length === 0,
+        '不透明像素 ≤5 的帧：' + (near.length ? JSON.stringify(near) : '无'));
+
+      /* ══ A7. 调色板：60 色，且无越界颜色 ══ */
+      var palBad = palette.length ? AC.paletteViolations(stats, palette) : [];
+      var colorTotal = uniq(stats.reduce(function (a, s) { return a.concat(s.colors || []); }, [])).length;
+      rec('A7_paletteWithin60', palette.length === 60 && palBad.length === 0 && colorTotal === 60,
+        '调色板 ' + palette.length + ' 色（来源：全量 198 张不透明像素 RGB 去重，见 d21-audit.json）；' +
+        '页内实测并集 ' + colorTotal + ' 色；越界颜色 ' + (palBad.length ? JSON.stringify(palBad) : '无'));
+
+      /* ══ A8. 被修的那一帧：有像素、与同组 f0 同尺寸同调色板 ══ */
+      var f0 = byName['knight_m_hit_anim_f0'], f1 = byName['knight_m_hit_anim_f1'];
+      var sameColors = f0 && f1 && JSON.stringify(uniq(f1.colors).sort()) === JSON.stringify(uniq(f0.colors).sort());
+      rec('A8_fixedFrameDerivedFromSameGroup',
+        !!f1 && f1.opaque > 0 && !!f0 && f1.w === f0.w && f1.h === f0.h && sameColors,
+        'f1 不透明 ' + (f1 ? f1.opaque : '-') + ' px（原 0）；与 f0 同尺寸=' +
+        (f0 && f1 ? (f1.w === f0.w && f1.h === f0.h) : '-') + '、颜色集合完全相同=' + sameColors +
+        '（' + (f1 ? f1.colors.join(' ') : '-') + '）');
+
+      /* ══ B1. 骑士受击整组 4 帧都可绘（动画循环不再闪空）══ */
+      var hit = frameSets['knight_m_hit'] || [];
+      var hitRows = hit.map(function (n) { return { name: n, opaque: byName[n] ? byName[n].opaque : -1 }; });
+      rec('B1_knightHitCycleNoBlank', hit.length === 4 && hitRows.every(function (r) { return r.opaque > 0; }),
+        'knight_m_hit 循环：' + hitRows.map(function (r) { return r.name.replace('knight_m_hit_anim_', '') + '=' + r.opaque; }).join(' / ') +
+        '（渲染侧 animIndex 取模 4，任一阵列为 0 即为闪空）');
+
+      /* ══ A9. 审计产物与页内实测一致（防"产物过期"假绿）══ */
+      var sameEmpty = audit && JSON.stringify(audit.empty) === JSON.stringify(empty);
+      var sameStatus = audit && audit.total === stats.length && sameEmpty;
+      rec('A9_auditArtifactMatchesLive', !!sameStatus,
+        '审计产物：total=' + (audit ? audit.total : 'n/a') + '、empty=' + (audit ? JSON.stringify(audit.empty) : 'n/a') +
+        '；页内实测：total=' + stats.length + '、empty=' + JSON.stringify(empty) + '（不一致说明产物过期，需重跑 d21_audit.js）');
+
+    } catch (e) {
+      out.ok = false;
+      out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
+    }
+    finish();
+  });
+
+  function finish() {
+    var keys = Object.keys(out.sub);
+    var bad = keys.filter(function (k) { return !out.sub[k].ok; });
+    document.getElementById('result').textContent =
+      (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out) + '\n\n' +
+      keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+    document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: bad });
+  }
+})();
+</script>
+</body>
+</html>

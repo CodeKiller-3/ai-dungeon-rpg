@@ -1,0 +1,5984 @@
+﻿{
+  "at": "2026-11-11T12:25:41.500Z",
+  "total": 198,
+  "paletteSize": 60,
+  "palette": [
+    "#221510",
+    "#222222",
+    "#243f4c",
+    "#2a2a3a",
+    "#2b2929",
+    "#302c2b",
+    "#314152",
+    "#323e4f",
+    "#333333",
+    "#38607c",
+    "#3b3332",
+    "#3c2410",
+    "#3d734f",
+    "#3e5442",
+    "#414859",
+    "#417089",
+    "#483b3a",
+    "#4ba747",
+    "#503012",
+    "#550f0a",
+    "#55a894",
+    "#5698cc",
+    "#5956bd",
+    "#5c7a56",
+    "#5f2d56",
+    "#62232f",
+    "#72d6ce",
+    "#775c55",
+    "#79b85a",
+    "#7a4a1e",
+    "#8a503e",
+    "#8f4029",
+    "#94693e",
+    "#97da3f",
+    "#9b1a0a",
+    "#9ba0a8",
+    "#9f294e",
+    "#a6702e",
+    "#aa8d7a",
+    "#b58049",
+    "#b6cbcf",
+    "#c56025",
+    "#cae6f5",
+    "#d3bfa9",
+    "#d44e52",
+    "#da4e38",
+    "#dc3c3c",
+    "#dc4a7b",
+    "#e2552b",
+    "#e2b694",
+    "#ee8a2e",
+    "#ee8e2e",
+    "#f78697",
+    "#f7a83b",
+    "#facb3e",
+    "#fccba3",
+    "#fdf7ed",
+    "#ffd24a",
+    "#ffe066",
+    "#ffe98c"
+  ],
+  "empty": [
+    "knight_m_hit_anim_f1.png"
+  ],
+  "nearEmpty": [],
+  "dimsBad": [],
+  "indexBad": [],
+  "names": {
+    "count": 198,
+    "missingFiles": [],
+    "extraFiles": [],
+    "dupNames": []
+  },
+  "files": [
+    {
+      "name": "angel_idle_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 121,
+      "full": 121,
+      "semi": 0,
+      "colorCount": 9,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#72d6ce",
+        "#cae6f5",
+        "#e2b694",
+        "#ee8e2e",
+        "#facb3e",
+        "#fccba3",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        4,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "angel_idle_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 120,
+      "full": 120,
+      "semi": 0,
+      "colorCount": 9,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#72d6ce",
+        "#cae6f5",
+        "#e2b694",
+        "#ee8e2e",
+        "#facb3e",
+        "#fccba3",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        4,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "angel_idle_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 112,
+      "full": 112,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#cae6f5",
+        "#e2b694",
+        "#ee8e2e",
+        "#facb3e",
+        "#fccba3",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        6,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "angel_idle_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 113,
+      "full": 113,
+      "semi": 0,
+      "colorCount": 9,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#72d6ce",
+        "#cae6f5",
+        "#e2b694",
+        "#ee8e2e",
+        "#facb3e",
+        "#fccba3",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        5,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "barrel.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 152,
+      "full": 152,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#221510",
+        "#9ba0a8",
+        "#b58049"
+      ],
+      "bbox": [
+        2,
+        1,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "big_demon_idle_anim_f0.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 455,
+      "full": 455,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        5,
+        6,
+        27,
+        35
+      ]
+    },
+    {
+      "name": "big_demon_idle_anim_f1.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 461,
+      "full": 461,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        5,
+        26,
+        35
+      ]
+    },
+    {
+      "name": "big_demon_idle_anim_f2.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 445,
+      "full": 445,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        5,
+        5,
+        26,
+        35
+      ]
+    },
+    {
+      "name": "big_demon_idle_anim_f3.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 483,
+      "full": 483,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        8,
+        28,
+        35
+      ]
+    },
+    {
+      "name": "big_demon_run_anim_f0.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 420,
+      "full": 420,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        25,
+        33
+      ]
+    },
+    {
+      "name": "big_demon_run_anim_f1.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 452,
+      "full": 452,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        25,
+        31
+      ]
+    },
+    {
+      "name": "big_demon_run_anim_f2.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 470,
+      "full": 470,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        2,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "big_demon_run_anim_f3.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 459,
+      "full": 459,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        26,
+        35
+      ]
+    },
+    {
+      "name": "big_zombie_idle_anim_f0.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 411,
+      "full": 411,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#333333",
+        "#483b3a",
+        "#4ba747",
+        "#775c55",
+        "#97da3f",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        7,
+        9,
+        24,
+        35
+      ]
+    },
+    {
+      "name": "big_zombie_idle_anim_f1.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 377,
+      "full": 377,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#333333",
+        "#483b3a",
+        "#4ba747",
+        "#775c55",
+        "#97da3f",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        7,
+        9,
+        24,
+        35
+      ]
+    },
+    {
+      "name": "big_zombie_idle_anim_f2.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 370,
+      "full": 370,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#333333",
+        "#483b3a",
+        "#4ba747",
+        "#775c55",
+        "#97da3f",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        6,
+        11,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "big_zombie_idle_anim_f3.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 381,
+      "full": 381,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#333333",
+        "#483b3a",
+        "#4ba747",
+        "#775c55",
+        "#97da3f",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        7,
+        12,
+        24,
+        35
+      ]
+    },
+    {
+      "name": "boss_demon.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 455,
+      "full": 455,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        5,
+        6,
+        27,
+        35
+      ]
+    },
+    {
+      "name": "boss_demon_run.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 420,
+      "full": 420,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        25,
+        33
+      ]
+    },
+    {
+      "name": "button_blue_down.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 116,
+      "full": 116,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#5698cc"
+      ],
+      "bbox": [
+        2,
+        4,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "button_blue_up.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 136,
+      "full": 136,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#243f4c",
+        "#417089",
+        "#5698cc"
+      ],
+      "bbox": [
+        2,
+        2,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "button_red_down.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 116,
+      "full": 116,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#9f294e",
+        "#da4e38"
+      ],
+      "bbox": [
+        2,
+        4,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "button_red_up.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 136,
+      "full": 136,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38"
+      ],
+      "bbox": [
+        2,
+        2,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "chest.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 212,
+      "full": 212,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8e2e",
+        "#facb3e"
+      ],
+      "bbox": [
+        0,
+        2,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "coin.png",
+      "w": 6,
+      "h": 7,
+      "opaque": 30,
+      "full": 30,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#ee8e2e",
+        "#facb3e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        5,
+        6
+      ]
+    },
+    {
+      "name": "crate.png",
+      "w": 16,
+      "h": 24,
+      "opaque": 280,
+      "full": 280,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#62232f",
+        "#8f4029",
+        "#ee8e2e"
+      ],
+      "bbox": [
+        1,
+        3,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "flask_big_blue.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 88,
+      "full": 88,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#5956bd",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        3,
+        12,
+        13
+      ]
+    },
+    {
+      "name": "flask_big_green.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 88,
+      "full": 88,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#4ba747",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        3,
+        12,
+        13
+      ]
+    },
+    {
+      "name": "flask_big_red.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 88,
+      "full": 88,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        3,
+        12,
+        13
+      ]
+    },
+    {
+      "name": "flask_blue.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 70,
+      "full": 70,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#5956bd",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        11,
+        13
+      ]
+    },
+    {
+      "name": "flask_green.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 70,
+      "full": 70,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#4ba747",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        11,
+        13
+      ]
+    },
+    {
+      "name": "flask_red.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 70,
+      "full": 70,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        11,
+        13
+      ]
+    },
+    {
+      "name": "flask_yellow.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 70,
+      "full": 70,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#8f4029",
+        "#b6cbcf",
+        "#c56025",
+        "#ee8e2e",
+        "#facb3e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        11,
+        13
+      ]
+    },
+    {
+      "name": "floor_1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_4.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_5.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_6.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_7.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_8.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_ladder.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#62232f",
+        "#775c55",
+        "#8f4029",
+        "#c56025"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "floor_stairs.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#2b2929",
+        "#302c2b",
+        "#3b3332",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "goblin_idle_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 89,
+      "full": 89,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "goblin_idle_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 83,
+      "full": 83,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        7,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "goblin_idle_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 75,
+      "full": 75,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "goblin_idle_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 83,
+      "full": 83,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        7,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "goblin_run_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 84,
+      "full": 84,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        5,
+        13,
+        14
+      ]
+    },
+    {
+      "name": "goblin_run_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 88,
+      "full": 88,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        4,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "goblin_run_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 88,
+      "full": 88,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        5,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "goblin_run_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 82,
+      "full": 82,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#3e5442",
+        "#5c7a56",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_idle_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 98,
+      "full": 98,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        4,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_idle_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 92,
+      "full": 92,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        5,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_idle_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 84,
+      "full": 84,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_idle_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 92,
+      "full": 92,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        5,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_run_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 93,
+      "full": 93,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        13,
+        14
+      ]
+    },
+    {
+      "name": "imp_run_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 97,
+      "full": 97,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        2,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "imp_run_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 97,
+      "full": 97,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "imp_run_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 97,
+      "full": 97,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#62232f",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        3,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "knight_m_hit_anim_f0.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 205,
+      "full": 205,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        1,
+        14,
+        23
+      ]
+    },
+    {
+      "name": "knight_m_hit_anim_f1.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 0,
+      "full": 0,
+      "semi": 0,
+      "colorCount": 0,
+      "colors": [],
+      "bbox": null
+    },
+    {
+      "name": "knight_m_hit_anim_f2.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 95,
+      "full": 95,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        5,
+        10,
+        26
+      ]
+    },
+    {
+      "name": "knight_m_hit_anim_f3.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 128,
+      "full": 128,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        8,
+        13,
+        26
+      ]
+    },
+    {
+      "name": "knight_m_idle_anim_f0.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 195,
+      "full": 195,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        8,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "knight_m_idle_anim_f1.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 195,
+      "full": 195,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        8,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "knight_m_idle_anim_f2.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 193,
+      "full": 193,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        8,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "knight_m_idle_anim_f3.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 191,
+      "full": 191,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        9,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "knight_m_run_anim_f0.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 193,
+      "full": 193,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        7,
+        14,
+        26
+      ]
+    },
+    {
+      "name": "knight_m_run_anim_f1.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 195,
+      "full": 195,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        6,
+        14,
+        25
+      ]
+    },
+    {
+      "name": "knight_m_run_anim_f2.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 201,
+      "full": 201,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        6,
+        14,
+        26
+      ]
+    },
+    {
+      "name": "knight_m_run_anim_f3.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 195,
+      "full": 195,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#da4e38",
+        "#ee8e2e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        6,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "masked_orc_idle_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 160,
+      "full": 160,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        7,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "masked_orc_idle_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 156,
+      "full": 156,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "masked_orc_idle_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 150,
+      "full": 150,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        9,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "masked_orc_idle_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 156,
+      "full": 156,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "masked_orc_run_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 158,
+      "full": 158,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        6,
+        14,
+        21
+      ]
+    },
+    {
+      "name": "masked_orc_run_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 167,
+      "full": 167,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        5,
+        14,
+        20
+      ]
+    },
+    {
+      "name": "masked_orc_run_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 165,
+      "full": 165,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        6,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "masked_orc_run_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 155,
+      "full": 155,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        7,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "monster_chort.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 156,
+      "full": 156,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        5,
+        13,
+        22
+      ]
+    },
+    {
+      "name": "monster_chort_run.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 166,
+      "full": 166,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        2,
+        13,
+        21
+      ]
+    },
+    {
+      "name": "necromancer_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 180,
+      "full": 180,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#5f2d56",
+        "#9f294e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        8,
+        13,
+        22
+      ]
+    },
+    {
+      "name": "necromancer_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 196,
+      "full": 196,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#5f2d56",
+        "#9f294e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        6,
+        13,
+        22
+      ]
+    },
+    {
+      "name": "necromancer_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 192,
+      "full": 192,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#5f2d56",
+        "#9f294e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        7,
+        13,
+        22
+      ]
+    },
+    {
+      "name": "necromancer_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 176,
+      "full": 176,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#5f2d56",
+        "#9f294e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        9,
+        13,
+        22
+      ]
+    },
+    {
+      "name": "ogre_idle_anim_f0.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 446,
+      "full": 446,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        10,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_idle_anim_f1.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 448,
+      "full": 448,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        10,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_idle_anim_f2.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 450,
+      "full": 450,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        5,
+        11,
+        26,
+        35
+      ]
+    },
+    {
+      "name": "ogre_idle_anim_f3.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 434,
+      "full": 434,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        11,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_run_anim_f0.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 446,
+      "full": 446,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        10,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_run_anim_f1.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 444,
+      "full": 444,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        9,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_run_anim_f2.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 456,
+      "full": 456,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        6,
+        8,
+        25,
+        35
+      ]
+    },
+    {
+      "name": "ogre_run_anim_f3.png",
+      "w": 32,
+      "h": 36,
+      "opaque": 472,
+      "full": 472,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        5,
+        10,
+        26,
+        35
+      ]
+    },
+    {
+      "name": "orc_shaman_idle_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 143,
+      "full": 143,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_shaman_idle_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 139,
+      "full": 139,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        9,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_shaman_idle_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 133,
+      "full": 133,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        10,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_shaman_idle_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 139,
+      "full": 139,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        9,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_shaman_run_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 141,
+      "full": 141,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        7,
+        14,
+        21
+      ]
+    },
+    {
+      "name": "orc_shaman_run_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 150,
+      "full": 150,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        6,
+        14,
+        20
+      ]
+    },
+    {
+      "name": "orc_shaman_run_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 148,
+      "full": 148,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        7,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_shaman_run_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 138,
+      "full": 138,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_idle_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 153,
+      "full": 153,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        7,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_idle_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 149,
+      "full": 149,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_idle_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 143,
+      "full": 143,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        9,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_idle_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 149,
+      "full": 149,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        8,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_run_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 151,
+      "full": 151,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        6,
+        14,
+        21
+      ]
+    },
+    {
+      "name": "orc_warrior_run_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 160,
+      "full": 160,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        5,
+        14,
+        20
+      ]
+    },
+    {
+      "name": "orc_warrior_run_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 158,
+      "full": 158,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        6,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "orc_warrior_run_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 148,
+      "full": 148,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#62232f",
+        "#8f4029",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        4,
+        7,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "player.png",
+      "w": 16,
+      "h": 28,
+      "opaque": 195,
+      "full": 195,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#dc4a7b",
+        "#f78697",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        8,
+        14,
+        27
+      ]
+    },
+    {
+      "name": "pumpkin_dude_idle_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 207,
+      "full": 207,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "pumpkin_dude_idle_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 204,
+      "full": 204,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "pumpkin_dude_idle_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 203,
+      "full": 203,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        0,
+        5,
+        15,
+        22
+      ]
+    },
+    {
+      "name": "pumpkin_dude_idle_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 201,
+      "full": 201,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        4,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "pumpkin_dude_run_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 203,
+      "full": 203,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        21
+      ]
+    },
+    {
+      "name": "pumpkin_dude_run_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 214,
+      "full": 214,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
+        20
+      ]
+    },
+    {
+      "name": "pumpkin_dude_run_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 213,
+      "full": 213,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
+        22
+      ]
+    },
+    {
+      "name": "pumpkin_dude_run_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 208,
+      "full": 208,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#3d734f",
+        "#4ba747",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#ee8a2e"
+      ],
+      "bbox": [
+        0,
+        3,
+        15,
+        22
+      ]
+    },
+    {
+      "name": "room_chest.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 100,
+      "full": 100,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#3c2410",
+        "#503012",
+        "#7a4a1e",
+        "#a6702e",
+        "#dc3c3c",
+        "#ffd24a",
+        "#ffe98c"
+      ],
+      "bbox": [
+        3,
+        5,
+        12,
+        14
+      ]
+    },
+    {
+      "name": "skelet_idle_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 122,
+      "full": 122,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        2,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "skelet_idle_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 114,
+      "full": 114,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        4,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "skelet_idle_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 110,
+      "full": 110,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        5,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "skelet_idle_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 118,
+      "full": 118,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        3,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "skelet_run_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 119,
+      "full": 119,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        1,
+        12,
+        14
+      ]
+    },
+    {
+      "name": "skelet_run_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 119,
+      "full": 119,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        0,
+        12,
+        12
+      ]
+    },
+    {
+      "name": "skelet_run_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 118,
+      "full": 118,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        0,
+        12,
+        14
+      ]
+    },
+    {
+      "name": "skelet_run_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 110,
+      "full": 110,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        2,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "skull.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 33,
+      "full": 33,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        5,
+        7,
+        10,
+        12
+      ]
+    },
+    {
+      "name": "tiny_slug_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 119,
+      "full": 119,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#323e4f",
+        "#3d734f",
+        "#483b3a",
+        "#4ba747",
+        "#62232f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        3,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "tiny_slug_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 110,
+      "full": 110,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#323e4f",
+        "#3d734f",
+        "#483b3a",
+        "#4ba747",
+        "#62232f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        5,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "tiny_slug_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 112,
+      "full": 112,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#323e4f",
+        "#3d734f",
+        "#483b3a",
+        "#4ba747",
+        "#62232f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        4,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "tiny_slug_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 117,
+      "full": 117,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#323e4f",
+        "#3d734f",
+        "#483b3a",
+        "#4ba747",
+        "#62232f",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        3,
+        13,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_idle_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 86,
+      "full": 86,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        6,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_idle_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        7,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_idle_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 72,
+      "full": 72,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        8,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_idle_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        7,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_run_anim_f0.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        5,
+        12,
+        14
+      ]
+    },
+    {
+      "name": "tiny_zombie_run_anim_f1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 85,
+      "full": 85,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        3,
+        4,
+        13,
+        13
+      ]
+    },
+    {
+      "name": "tiny_zombie_run_anim_f2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 84,
+      "full": 84,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        5,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "tiny_zombie_run_anim_f3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 79,
+      "full": 79,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        4,
+        6,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "torch.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 56,
+      "full": 56,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#221510",
+        "#94693e",
+        "#e2552b",
+        "#f7a83b",
+        "#ffe066"
+      ],
+      "bbox": [
+        4,
+        0,
+        9,
+        13
+      ]
+    },
+    {
+      "name": "ui_heart_empty.png",
+      "w": 13,
+      "h": 12,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#2a2a3a",
+        "#483b3a",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        12,
+        11
+      ]
+    },
+    {
+      "name": "ui_heart_full.png",
+      "w": 13,
+      "h": 12,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#2a2a3a",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        12,
+        11
+      ]
+    },
+    {
+      "name": "ui_heart_half.png",
+      "w": 13,
+      "h": 12,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#2a2a3a",
+        "#483b3a",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        12,
+        11
+      ]
+    },
+    {
+      "name": "vine.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 76,
+      "full": 76,
+      "semi": 0,
+      "colorCount": 1,
+      "colors": [
+        "#79b85a"
+      ],
+      "bbox": [
+        2,
+        0,
+        12,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_bottom_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 124,
+      "full": 124,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_bottom_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 124,
+      "full": 124,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_top_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 60,
+      "full": 60,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        1,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_edge_top_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 64,
+      "full": 64,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_goo.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#483b3a",
+        "#4ba747",
+        "#775c55",
+        "#97da3f"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_mid.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_front_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        11,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_front_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        4,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_mid_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        11,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_mid_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 80,
+      "full": 80,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        4,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_top_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 20,
+      "full": 20,
+      "semi": 0,
+      "colorCount": 2,
+      "colors": [
+        "#222222",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        11,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_outer_top_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 20,
+      "full": 20,
+      "semi": 0,
+      "colorCount": 2,
+      "colors": [
+        "#222222",
+        "#aa8d7a"
+      ],
+      "bbox": [
+        0,
+        12,
+        4,
+        15
+      ]
+    },
+    {
+      "name": "wall_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 256,
+      "full": 256,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#775c55"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_top_left.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 64,
+      "full": 64,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_top_mid.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 64,
+      "full": 64,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "wall_top_right.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 64,
+      "full": 64,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#aa8d7a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        12,
+        15,
+        15
+      ]
+    },
+    {
+      "name": "weapon_anime_sword.png",
+      "w": 12,
+      "h": 30,
+      "opaque": 222,
+      "full": 222,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#38607c",
+        "#55a894",
+        "#72d6ce",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        11,
+        29
+      ]
+    },
+    {
+      "name": "weapon_axe.png",
+      "w": 9,
+      "h": 21,
+      "opaque": 119,
+      "full": 119,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        8,
+        20
+      ]
+    },
+    {
+      "name": "weapon_baton_with_spikes.png",
+      "w": 10,
+      "h": 22,
+      "opaque": 138,
+      "full": 138,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        21
+      ]
+    },
+    {
+      "name": "weapon_big_hammer.png",
+      "w": 10,
+      "h": 37,
+      "opaque": 178,
+      "full": 178,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        36
+      ]
+    },
+    {
+      "name": "weapon_bow.png",
+      "w": 14,
+      "h": 26,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#550f0a",
+        "#8f4029",
+        "#9b1a0a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        7,
+        0,
+        13,
+        25
+      ]
+    },
+    {
+      "name": "weapon_bow_2.png",
+      "w": 14,
+      "h": 26,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#550f0a",
+        "#8f4029",
+        "#9b1a0a",
+        "#d3bfa9"
+      ],
+      "bbox": [
+        0,
+        0,
+        13,
+        25
+      ]
+    },
+    {
+      "name": "weapon_cleaver.png",
+      "w": 9,
+      "h": 19,
+      "opaque": 128,
+      "full": 128,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        7,
+        18
+      ]
+    },
+    {
+      "name": "weapon_double_axe.png",
+      "w": 16,
+      "h": 24,
+      "opaque": 200,
+      "full": 200,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        15,
+        23
+      ]
+    },
+    {
+      "name": "weapon_duel_sword.png",
+      "w": 9,
+      "h": 30,
+      "opaque": 144,
+      "full": 144,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        8,
+        29
+      ]
+    },
+    {
+      "name": "weapon_golden_sword.png",
+      "w": 10,
+      "h": 22,
+      "opaque": 128,
+      "full": 128,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#4ba747",
+        "#97da3f",
+        "#ee8e2e",
+        "#facb3e"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        21
+      ]
+    },
+    {
+      "name": "weapon_green_magic_staff.png",
+      "w": 8,
+      "h": 30,
+      "opaque": 138,
+      "full": 138,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#8f4029",
+        "#97da3f",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        7,
+        29
+      ]
+    },
+    {
+      "name": "weapon_hammer.png",
+      "w": 10,
+      "h": 24,
+      "opaque": 126,
+      "full": 126,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        23
+      ]
+    },
+    {
+      "name": "weapon_katana.png",
+      "w": 6,
+      "h": 29,
+      "opaque": 115,
+      "full": 115,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#38607c",
+        "#55a894",
+        "#72d6ce",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        5,
+        28
+      ]
+    },
+    {
+      "name": "weapon_knife.png",
+      "w": 6,
+      "h": 13,
+      "opaque": 55,
+      "full": 55,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#417089",
+        "#72d6ce",
+        "#8a503e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        5,
+        12
+      ]
+    },
+    {
+      "name": "weapon_knight_sword.png",
+      "w": 10,
+      "h": 29,
+      "opaque": 162,
+      "full": 162,
+      "semi": 0,
+      "colorCount": 3,
+      "colors": [
+        "#222222",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        28
+      ]
+    },
+    {
+      "name": "weapon_lavish_sword.png",
+      "w": 10,
+      "h": 30,
+      "opaque": 174,
+      "full": 174,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#4ba747",
+        "#97da3f",
+        "#ee8e2e",
+        "#facb3e"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        29
+      ]
+    },
+    {
+      "name": "weapon_mace.png",
+      "w": 10,
+      "h": 24,
+      "opaque": 142,
+      "full": 142,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        23
+      ]
+    },
+    {
+      "name": "weapon_machete.png",
+      "w": 5,
+      "h": 22,
+      "opaque": 95,
+      "full": 95,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#b6cbcf",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        4,
+        21
+      ]
+    },
+    {
+      "name": "weapon_red_gem_sword.png",
+      "w": 10,
+      "h": 21,
+      "opaque": 122,
+      "full": 122,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#d44e52",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        20
+      ]
+    },
+    {
+      "name": "weapon_red_magic_staff.png",
+      "w": 8,
+      "h": 30,
+      "opaque": 132,
+      "full": 132,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#8f4029",
+        "#c56025",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        7,
+        29
+      ]
+    },
+    {
+      "name": "weapon_regular_sword.png",
+      "w": 10,
+      "h": 21,
+      "opaque": 118,
+      "full": 118,
+      "semi": 0,
+      "colorCount": 4,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        20
+      ]
+    },
+    {
+      "name": "weapon_rusty_sword.png",
+      "w": 10,
+      "h": 21,
+      "opaque": 118,
+      "full": 118,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#55a894",
+        "#72d6ce",
+        "#775c55",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        20
+      ]
+    },
+    {
+      "name": "weapon_saw_sword.png",
+      "w": 10,
+      "h": 25,
+      "opaque": 146,
+      "full": 146,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#38607c",
+        "#55a894",
+        "#72d6ce",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        24
+      ]
+    },
+    {
+      "name": "weapon_spear.png",
+      "w": 6,
+      "h": 30,
+      "opaque": 132,
+      "full": 132,
+      "semi": 0,
+      "colorCount": 7,
+      "colors": [
+        "#222222",
+        "#8f4029",
+        "#9f294e",
+        "#b6cbcf",
+        "#c56025",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        5,
+        29
+      ]
+    },
+    {
+      "name": "weapon_throwing_axe.png",
+      "w": 10,
+      "h": 14,
+      "opaque": 94,
+      "full": 94,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        9,
+        13
+      ]
+    },
+    {
+      "name": "weapon_waraxe.png",
+      "w": 12,
+      "h": 23,
+      "opaque": 152,
+      "full": 152,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#55a894",
+        "#72d6ce",
+        "#8f4029",
+        "#c56025",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        0,
+        0,
+        11,
+        22
+      ]
+    },
+    {
+      "name": "wogol_idle_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 128,
+      "full": 128,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        7,
+        12,
+        22
+      ]
+    },
+    {
+      "name": "wogol_idle_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 120,
+      "full": 120,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        8,
+        12,
+        22
+      ]
+    },
+    {
+      "name": "wogol_idle_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 104,
+      "full": 104,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        11,
+        12,
+        22
+      ]
+    },
+    {
+      "name": "wogol_idle_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 114,
+      "full": 114,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        9,
+        12,
+        22
+      ]
+    },
+    {
+      "name": "wogol_run_anim_f0.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 120,
+      "full": 120,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        7,
+        12,
+        21
+      ]
+    },
+    {
+      "name": "wogol_run_anim_f1.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 132,
+      "full": 132,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        2,
+        5,
+        13,
+        20
+      ]
+    },
+    {
+      "name": "wogol_run_anim_f2.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 129,
+      "full": 129,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        6,
+        12,
+        22
+      ]
+    },
+    {
+      "name": "wogol_run_anim_f3.png",
+      "w": 16,
+      "h": 23,
+      "opaque": 107,
+      "full": 107,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#5f2d56",
+        "#9f294e",
+        "#da4e38",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        3,
+        9,
+        12,
+        22
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "group": "angel_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "angel_idle_anim_f0",
+        "angel_idle_anim_f1",
+        "angel_idle_anim_f2",
+        "angel_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "barrel",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "barrel"
+      ]
+    },
+    {
+      "group": "big_demon_idle_anim",
+      "frames": 4,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "big_demon_idle_anim_f0",
+        "big_demon_idle_anim_f1",
+        "big_demon_idle_anim_f2",
+        "big_demon_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "big_demon_run_anim",
+      "frames": 4,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "big_demon_run_anim_f0",
+        "big_demon_run_anim_f1",
+        "big_demon_run_anim_f2",
+        "big_demon_run_anim_f3"
+      ]
+    },
+    {
+      "group": "big_zombie_idle_anim",
+      "frames": 4,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "big_zombie_idle_anim_f0",
+        "big_zombie_idle_anim_f1",
+        "big_zombie_idle_anim_f2",
+        "big_zombie_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "boss_demon",
+      "frames": 1,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "boss_demon"
+      ]
+    },
+    {
+      "group": "boss_demon_run",
+      "frames": 1,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "boss_demon_run"
+      ]
+    },
+    {
+      "group": "button_blue_down",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "button_blue_down"
+      ]
+    },
+    {
+      "group": "button_blue_up",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "button_blue_up"
+      ]
+    },
+    {
+      "group": "button_red_down",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "button_red_down"
+      ]
+    },
+    {
+      "group": "button_red_up",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "button_red_up"
+      ]
+    },
+    {
+      "group": "chest",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "chest"
+      ]
+    },
+    {
+      "group": "coin",
+      "frames": 1,
+      "dims": [
+        "6x7"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "coin"
+      ]
+    },
+    {
+      "group": "crate",
+      "frames": 1,
+      "dims": [
+        "16x24"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "crate"
+      ]
+    },
+    {
+      "group": "flask_big_blue",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_big_blue"
+      ]
+    },
+    {
+      "group": "flask_big_green",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_big_green"
+      ]
+    },
+    {
+      "group": "flask_big_red",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_big_red"
+      ]
+    },
+    {
+      "group": "flask_blue",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_blue"
+      ]
+    },
+    {
+      "group": "flask_green",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_green"
+      ]
+    },
+    {
+      "group": "flask_red",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_red"
+      ]
+    },
+    {
+      "group": "flask_yellow",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "flask_yellow"
+      ]
+    },
+    {
+      "group": "floor_1",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_1"
+      ]
+    },
+    {
+      "group": "floor_2",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_2"
+      ]
+    },
+    {
+      "group": "floor_3",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_3"
+      ]
+    },
+    {
+      "group": "floor_4",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_4"
+      ]
+    },
+    {
+      "group": "floor_5",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_5"
+      ]
+    },
+    {
+      "group": "floor_6",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_6"
+      ]
+    },
+    {
+      "group": "floor_7",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_7"
+      ]
+    },
+    {
+      "group": "floor_8",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_8"
+      ]
+    },
+    {
+      "group": "floor_ladder",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_ladder"
+      ]
+    },
+    {
+      "group": "floor_stairs",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "floor_stairs"
+      ]
+    },
+    {
+      "group": "goblin_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "goblin_idle_anim_f0",
+        "goblin_idle_anim_f1",
+        "goblin_idle_anim_f2",
+        "goblin_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "goblin_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "goblin_run_anim_f0",
+        "goblin_run_anim_f1",
+        "goblin_run_anim_f2",
+        "goblin_run_anim_f3"
+      ]
+    },
+    {
+      "group": "imp_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "imp_idle_anim_f0",
+        "imp_idle_anim_f1",
+        "imp_idle_anim_f2",
+        "imp_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "imp_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "imp_run_anim_f0",
+        "imp_run_anim_f1",
+        "imp_run_anim_f2",
+        "imp_run_anim_f3"
+      ]
+    },
+    {
+      "group": "knight_m_hit_anim",
+      "frames": 4,
+      "dims": [
+        "16x28"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "knight_m_hit_anim_f0",
+        "knight_m_hit_anim_f1",
+        "knight_m_hit_anim_f2",
+        "knight_m_hit_anim_f3"
+      ]
+    },
+    {
+      "group": "knight_m_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x28"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "knight_m_idle_anim_f0",
+        "knight_m_idle_anim_f1",
+        "knight_m_idle_anim_f2",
+        "knight_m_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "knight_m_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x28"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "knight_m_run_anim_f0",
+        "knight_m_run_anim_f1",
+        "knight_m_run_anim_f2",
+        "knight_m_run_anim_f3"
+      ]
+    },
+    {
+      "group": "masked_orc_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "masked_orc_idle_anim_f0",
+        "masked_orc_idle_anim_f1",
+        "masked_orc_idle_anim_f2",
+        "masked_orc_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "masked_orc_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "masked_orc_run_anim_f0",
+        "masked_orc_run_anim_f1",
+        "masked_orc_run_anim_f2",
+        "masked_orc_run_anim_f3"
+      ]
+    },
+    {
+      "group": "monster_chort",
+      "frames": 1,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "monster_chort"
+      ]
+    },
+    {
+      "group": "monster_chort_run",
+      "frames": 1,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "monster_chort_run"
+      ]
+    },
+    {
+      "group": "necromancer_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "necromancer_anim_f0",
+        "necromancer_anim_f1",
+        "necromancer_anim_f2",
+        "necromancer_anim_f3"
+      ]
+    },
+    {
+      "group": "ogre_idle_anim",
+      "frames": 4,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "ogre_idle_anim_f0",
+        "ogre_idle_anim_f1",
+        "ogre_idle_anim_f2",
+        "ogre_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "ogre_run_anim",
+      "frames": 4,
+      "dims": [
+        "32x36"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "ogre_run_anim_f0",
+        "ogre_run_anim_f1",
+        "ogre_run_anim_f2",
+        "ogre_run_anim_f3"
+      ]
+    },
+    {
+      "group": "orc_shaman_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "orc_shaman_idle_anim_f0",
+        "orc_shaman_idle_anim_f1",
+        "orc_shaman_idle_anim_f2",
+        "orc_shaman_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "orc_shaman_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "orc_shaman_run_anim_f0",
+        "orc_shaman_run_anim_f1",
+        "orc_shaman_run_anim_f2",
+        "orc_shaman_run_anim_f3"
+      ]
+    },
+    {
+      "group": "orc_warrior_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "orc_warrior_idle_anim_f0",
+        "orc_warrior_idle_anim_f1",
+        "orc_warrior_idle_anim_f2",
+        "orc_warrior_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "orc_warrior_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "orc_warrior_run_anim_f0",
+        "orc_warrior_run_anim_f1",
+        "orc_warrior_run_anim_f2",
+        "orc_warrior_run_anim_f3"
+      ]
+    },
+    {
+      "group": "player",
+      "frames": 1,
+      "dims": [
+        "16x28"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "player"
+      ]
+    },
+    {
+      "group": "pumpkin_dude_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "pumpkin_dude_idle_anim_f0",
+        "pumpkin_dude_idle_anim_f1",
+        "pumpkin_dude_idle_anim_f2",
+        "pumpkin_dude_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "pumpkin_dude_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "pumpkin_dude_run_anim_f0",
+        "pumpkin_dude_run_anim_f1",
+        "pumpkin_dude_run_anim_f2",
+        "pumpkin_dude_run_anim_f3"
+      ]
+    },
+    {
+      "group": "room_chest",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "room_chest"
+      ]
+    },
+    {
+      "group": "skelet_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "skelet_idle_anim_f0",
+        "skelet_idle_anim_f1",
+        "skelet_idle_anim_f2",
+        "skelet_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "skelet_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "skelet_run_anim_f0",
+        "skelet_run_anim_f1",
+        "skelet_run_anim_f2",
+        "skelet_run_anim_f3"
+      ]
+    },
+    {
+      "group": "skull",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "skull"
+      ]
+    },
+    {
+      "group": "tiny_slug_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "tiny_slug_anim_f0",
+        "tiny_slug_anim_f1",
+        "tiny_slug_anim_f2",
+        "tiny_slug_anim_f3"
+      ]
+    },
+    {
+      "group": "tiny_zombie_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "tiny_zombie_idle_anim_f0",
+        "tiny_zombie_idle_anim_f1",
+        "tiny_zombie_idle_anim_f2",
+        "tiny_zombie_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "tiny_zombie_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "tiny_zombie_run_anim_f0",
+        "tiny_zombie_run_anim_f1",
+        "tiny_zombie_run_anim_f2",
+        "tiny_zombie_run_anim_f3"
+      ]
+    },
+    {
+      "group": "torch",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "torch"
+      ]
+    },
+    {
+      "group": "ui_heart_empty",
+      "frames": 1,
+      "dims": [
+        "13x12"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "ui_heart_empty"
+      ]
+    },
+    {
+      "group": "ui_heart_full",
+      "frames": 1,
+      "dims": [
+        "13x12"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "ui_heart_full"
+      ]
+    },
+    {
+      "group": "ui_heart_half",
+      "frames": 1,
+      "dims": [
+        "13x12"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "ui_heart_half"
+      ]
+    },
+    {
+      "group": "vine",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "vine"
+      ]
+    },
+    {
+      "group": "wall_edge_bottom_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_bottom_left"
+      ]
+    },
+    {
+      "group": "wall_edge_bottom_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_bottom_right"
+      ]
+    },
+    {
+      "group": "wall_edge_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_left"
+      ]
+    },
+    {
+      "group": "wall_edge_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_right"
+      ]
+    },
+    {
+      "group": "wall_edge_top_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_top_left"
+      ]
+    },
+    {
+      "group": "wall_edge_top_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_edge_top_right"
+      ]
+    },
+    {
+      "group": "wall_goo",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_goo"
+      ]
+    },
+    {
+      "group": "wall_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_left"
+      ]
+    },
+    {
+      "group": "wall_mid",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_mid"
+      ]
+    },
+    {
+      "group": "wall_outer_front_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_front_left"
+      ]
+    },
+    {
+      "group": "wall_outer_front_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_front_right"
+      ]
+    },
+    {
+      "group": "wall_outer_mid_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_mid_left"
+      ]
+    },
+    {
+      "group": "wall_outer_mid_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_mid_right"
+      ]
+    },
+    {
+      "group": "wall_outer_top_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_top_left"
+      ]
+    },
+    {
+      "group": "wall_outer_top_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_outer_top_right"
+      ]
+    },
+    {
+      "group": "wall_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_right"
+      ]
+    },
+    {
+      "group": "wall_top_left",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_top_left"
+      ]
+    },
+    {
+      "group": "wall_top_mid",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_top_mid"
+      ]
+    },
+    {
+      "group": "wall_top_right",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wall_top_right"
+      ]
+    },
+    {
+      "group": "weapon_anime_sword",
+      "frames": 1,
+      "dims": [
+        "12x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_anime_sword"
+      ]
+    },
+    {
+      "group": "weapon_axe",
+      "frames": 1,
+      "dims": [
+        "9x21"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_axe"
+      ]
+    },
+    {
+      "group": "weapon_baton_with_spikes",
+      "frames": 1,
+      "dims": [
+        "10x22"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_baton_with_spikes"
+      ]
+    },
+    {
+      "group": "weapon_big_hammer",
+      "frames": 1,
+      "dims": [
+        "10x37"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_big_hammer"
+      ]
+    },
+    {
+      "group": "weapon_bow",
+      "frames": 1,
+      "dims": [
+        "14x26"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_bow"
+      ]
+    },
+    {
+      "group": "weapon_bow_2",
+      "frames": 1,
+      "dims": [
+        "14x26"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_bow_2"
+      ]
+    },
+    {
+      "group": "weapon_cleaver",
+      "frames": 1,
+      "dims": [
+        "9x19"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_cleaver"
+      ]
+    },
+    {
+      "group": "weapon_double_axe",
+      "frames": 1,
+      "dims": [
+        "16x24"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_double_axe"
+      ]
+    },
+    {
+      "group": "weapon_duel_sword",
+      "frames": 1,
+      "dims": [
+        "9x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_duel_sword"
+      ]
+    },
+    {
+      "group": "weapon_golden_sword",
+      "frames": 1,
+      "dims": [
+        "10x22"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_golden_sword"
+      ]
+    },
+    {
+      "group": "weapon_green_magic_staff",
+      "frames": 1,
+      "dims": [
+        "8x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_green_magic_staff"
+      ]
+    },
+    {
+      "group": "weapon_hammer",
+      "frames": 1,
+      "dims": [
+        "10x24"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_hammer"
+      ]
+    },
+    {
+      "group": "weapon_katana",
+      "frames": 1,
+      "dims": [
+        "6x29"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_katana"
+      ]
+    },
+    {
+      "group": "weapon_knife",
+      "frames": 1,
+      "dims": [
+        "6x13"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_knife"
+      ]
+    },
+    {
+      "group": "weapon_knight_sword",
+      "frames": 1,
+      "dims": [
+        "10x29"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_knight_sword"
+      ]
+    },
+    {
+      "group": "weapon_lavish_sword",
+      "frames": 1,
+      "dims": [
+        "10x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_lavish_sword"
+      ]
+    },
+    {
+      "group": "weapon_mace",
+      "frames": 1,
+      "dims": [
+        "10x24"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_mace"
+      ]
+    },
+    {
+      "group": "weapon_machete",
+      "frames": 1,
+      "dims": [
+        "5x22"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_machete"
+      ]
+    },
+    {
+      "group": "weapon_red_gem_sword",
+      "frames": 1,
+      "dims": [
+        "10x21"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_red_gem_sword"
+      ]
+    },
+    {
+      "group": "weapon_red_magic_staff",
+      "frames": 1,
+      "dims": [
+        "8x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_red_magic_staff"
+      ]
+    },
+    {
+      "group": "weapon_regular_sword",
+      "frames": 1,
+      "dims": [
+        "10x21"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_regular_sword"
+      ]
+    },
+    {
+      "group": "weapon_rusty_sword",
+      "frames": 1,
+      "dims": [
+        "10x21"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_rusty_sword"
+      ]
+    },
+    {
+      "group": "weapon_saw_sword",
+      "frames": 1,
+      "dims": [
+        "10x25"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_saw_sword"
+      ]
+    },
+    {
+      "group": "weapon_spear",
+      "frames": 1,
+      "dims": [
+        "6x30"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_spear"
+      ]
+    },
+    {
+      "group": "weapon_throwing_axe",
+      "frames": 1,
+      "dims": [
+        "10x14"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_throwing_axe"
+      ]
+    },
+    {
+      "group": "weapon_waraxe",
+      "frames": 1,
+      "dims": [
+        "12x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "weapon_waraxe"
+      ]
+    },
+    {
+      "group": "wogol_idle_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wogol_idle_anim_f0",
+        "wogol_idle_anim_f1",
+        "wogol_idle_anim_f2",
+        "wogol_idle_anim_f3"
+      ]
+    },
+    {
+      "group": "wogol_run_anim",
+      "frames": 4,
+      "dims": [
+        "16x23"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "wogol_run_anim_f0",
+        "wogol_run_anim_f1",
+        "wogol_run_anim_f2",
+        "wogol_run_anim_f3"
+      ]
+    }
+  ]
+}
