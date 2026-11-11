@@ -104,7 +104,10 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = '12px monospace';
-    var bottom = H - BOTTOM_GAP;
+    /* D-19：战斗场景的指令图例在 H-30，提示条按探索场景的 BOTTOM_GAP 会压住图例；
+     * 只在战斗场景上移 26px（生命周期/去重/配色等语义全部不变）。 */
+    var inBattle = Game.Core.Main && Game.Core.Main._scene === 'battle';
+    var bottom = H - (inBattle ? BOTTOM_GAP + 26 : BOTTOM_GAP);
     for (var i = items.length - 1; i >= 0; i--) {
       var e = items[i];
       var a = alphaOf(e, t);

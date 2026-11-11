@@ -280,6 +280,9 @@
     var p = Game.Data.Player;
     var m = state.monster;
     var ed = m.enrage;
+    /* D-19：无论伤害是否被护盾吃满，都登记一次「怪物反击发生」——用药/防御等
+     * 非伤害行动的"该被反击就被反击"要靠这条事件证明，不能靠 monster-hit 是否出现。 */
+    pushEvent('monster-attack');
     /* M8-2：狂暴后每回合 chance 概率用烈焰吐息替代普攻（伤害 = round(狂暴atk × dmgMul)） */
     var useBreath = !!(state.enraged && ed && ed.skill && Math.random() < ed.skill.chance);
     state.monsterActionAt = performance.now(); /* M9-3：怪物攻击前摇帧 */
@@ -307,6 +310,55 @@
       logPush('你被击败了…');
       Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
       Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+    }
+  }
+
+  /* D-19：战斗内用药——候选严格限定为「消耗品 + 非卷轴 + 带 hp/mp 回复」。
+   * 卷轴（S-03 强化）与装备不能在战斗中使用：前者作用于装备、属战斗外养成动作，
+   * 后者不是消耗品；两者的判定都直接读 items.js 的 type/scroll 字段，不新造分类。
+   * 选瓶口径（全部读 items.js 的 effect，不新造数值）：
+   *   ① 先补 HP，HP 已满才补 MP；
+   *   ② 同类里优先「够补满缺口且回复量最小」的那瓶（避免拿大药补小口）；
+   *   ③ 没有一瓶够补满 → 用回复量最大的（先活下来）。
+   * 返回 { id, item, gain, key } 或 null。 */
+  function combatPotions(key) {
+    var inv = (Game.Data.Player && Game.Data.Player.inventory) || {};
+    var out = [];
+    for (var id in inv) {
+      if (!Object.prototype.hasOwnProperty.call(inv, id) || inv[id] <= 0) continue;
+      var it = Game.Data.ITEMS && Game.Data.ITEMS[id];
+      if (!it || it.type !== 'consumable' || it.scroll === true) continue;
+      var gain = (it.effect && it.effect[key]) || 0;
+      if (gain > 0) out.push({ id: id, item: it, gain: gain, key: key });
+    }
+    return out;
+  }
+
+  function pickBattlePotion() {
+    var p = Game.Data.Player;
+    var needHp = (p.maxHp || 0) - (p.hp || 0);
+    var needMp = (p.maxMp || 0) - (p.mp || 0);
+    function choose(list, need) {
+      if (!list.length) return null;
+      var best = null;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].gain >= need && (!best || list[i].gain < best.gain)) best = list[i];
+      }
+      if (best) return best;
+      for (var j = 0; j < list.length; j++) {
+        if (!best || list[j].gain > best.gain) best = list[j];
+      }
+      return best;
+    }
+    if (needHp > 0) { var h = choose(combatPotions('hp'), needHp); if (h) return h; }
+    if (needMp > 0) { var m = choose(combatPotions('mp'), needMp); if (m) return m; }
+    return null;
+  }
+
+  /* D-19：战斗内提示统一走 D-14 的 ui:notice（notice.js 是唯一订阅方），不另造通道 */
+  function notice(msg, ok) {
+    if (Game.Core && Game.Core.EventBus && typeof Game.Core.EventBus.emit === 'function') {
+      Game.Core.EventBus.emit('ui:notice', { msg: msg, ok: ok === true });
     }
   }
 
@@ -431,6 +483,22 @@
        * 保证"一次行动 = 一个回合"，不会把两次玩家行动压到同一时间轴。 */
       if (state.pending) runMonsterSegment(state.pending.due);
       if (state.dying || Game.Data.Player.hp <= 0) return state;
+      /* D-19：用药先判可用性——不可用时不占回合、不上输入锁、不消耗（提示走 ui:notice）。
+       * 判定放在回合起拍之前，避免"按了没用的键"也被算成一次行动。 */
+      if (cmd === 'item' && !pickBattlePotion()) {
+        var pc = Game.Data.Player;
+        var why;
+        if ((pc.hp || 0) >= (pc.maxHp || 0) && (pc.mp || 0) >= (pc.maxMp || 0)) {
+          why = '生命与魔法都已满，不需要用药';
+        } else if (!combatPotions('hp').length && !combatPotions('mp').length) {
+          why = '背包里没有可用的药剂（卷轴与装备不能在战斗中使用）';
+        } else {
+          why = '没有适合当前状态的药剂';
+        }
+        logPush(why);
+        notice(why, false);
+        return state;
+      }
       /* D-16：回合起拍——登记时间轴（顺序/时长断言读 turnRec 与 events） */
       state.roundNo = (state.turn | 0) + 1;
       state.phase = 'player';
@@ -474,6 +542,27 @@
         Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
         logPush('你进入防御姿态，本回合减伤 50%');
         scheduleMonster(t0);
+      } else if (cmd === 'item') {
+        /* D-19：用药 = 一个回合行动。数值全部由 Inventory.use 按 items.js 的 effect 结算，
+         * 这里只负责"消耗一瓶 + 记事件 + 让怪物照常反击"，不写第二套回复逻辑。 */
+        var pIt = Game.Data.Player;
+        var sel = pickBattlePotion();
+        var before = { hp: pIt.hp, mp: pIt.mp };
+        var useRes = Game.Systems.Inventory.use(sel.id);
+        if (!useRes.ok) {   /* 兜底：probe 已排除；真出现也不吞回合、不锁输入 */
+          logPush(useRes.msg);
+          notice(useRes.msg, false);
+          state.phase = 'idle';
+          state.lockUntil = 0;
+          state.turnRec = null;
+          return state;
+        }
+        var dHp = Math.max(0, pIt.hp - before.hp);
+        var dMp = Math.max(0, pIt.mp - before.mp);
+        pushEvent('player-item', { itemId: sel.id, hp: dHp, mp: dMp });
+        logPush(useRes.msg);
+        notice(useRes.msg, true);
+        scheduleMonster(t0);   /* 与攻击/防御同一时序：怪物段照常反击 */
       } else if (cmd === 'run') {
         if (Math.random() < 0.5) {
           Game.Core.EventBus.emit('audio:play', { sfx: 'run' });

@@ -290,7 +290,7 @@
       actions: 0, keys: 0, loops: 0, crashes: 0, simSec: 0, wallMs: 0,
       floorNow: 1, floorActions: 0, floors: [],
       battles: 0, kills: 0, goblinKills: 0, traps: 0,
-      potions: 0, equips: 0, blockedSteps: 0, noDir: 0, modalStuck: 0,
+      potions: 0, battlePotions: 0, equips: 0, blockedSteps: 0, noDir: 0, modalStuck: 0,
       shopVisits: 0, shopBuys: 0, shopSpent: 0, shopFail: 0, shopVisitedFloor: 0,
       noShop: false,
       startPos: '', endPos: '',
@@ -322,12 +322,21 @@
     var st = B.getState();
     if (!st || !st.monster) { frame(STEP); return; }
     var code = 'Digit1';
-    /* 低血 + 有 MP → 先套盾（每场一次），否则平砍；不逃、不用火球（保守可解释策略） */
-    if (!rec.shieldOn && P.hp <= P.maxHp * 0.25 && P.mp >= 10) { code = 'Digit6'; rec.shieldOn = true; }
+    var potionsBefore = healPotions().length;
+    var useItem = false;
+    /* D-19：低血且有回血药 → 战斗中按 7 用药（与探索补药同一 45% 阈值，未放宽）。
+     * 真人行为：血量见底时先嗑药再继续打，而不是站着被补掉。 */
+    if (P.hp <= Math.floor(P.maxHp * 0.45) && potionsBefore > 0) {
+      code = 'Digit7';
+      useItem = true;
+    }
+    /* 低血 + 有 MP + 本场没套过盾 → 套盾（每场一次），否则平砍；不逃、不用火球（保守可解释策略） */
+    else if (!rec.shieldOn && P.hp <= P.maxHp * 0.25 && P.mp >= 10) { code = 'Digit6'; rec.shieldOn = true; }
     rec.actions++;
     press(code, STEP);
     var n = 0;
     while (n < 30 && Game.Core.Main._scene === 'battle' && B.isInputLocked()) { frame(STEP); n++; }
+    if (useItem && healPotions().length < potionsBefore) rec.battlePotions++;
   }
 
   function exploreAct(rec) {
@@ -592,6 +601,7 @@
     var simSec = [], actions = [];
     var goblinRuns = 0, goblinKills = 0;
     var shopVisits = 0, shopBuys = 0, shopSpent = 0, shopRuns = 0, shopFails = 0, crashes = 0;
+    var potionsOut = 0, battlePotions = 0;
     for (var i = 0; i < runs.length; i++) {
       var r = runs[i];
       shopVisits += r.shopVisits || 0;
@@ -599,6 +609,8 @@
       shopSpent += r.shopSpent || 0;
       shopFails += r.shopFail || 0;
       crashes += r.crashes || 0;
+      potionsOut += r.potions || 0;
+      battlePotions += r.battlePotions || 0;
       if ((r.shopVisits || 0) > 0) shopRuns++;
       if (r.outcome === 'win') win++;
       else if (r.outcome === 'dead') dead++;
@@ -653,6 +665,7 @@
       floorStats: floors,
       shop: { visits: shopVisits, buys: shopBuys, spent: shopSpent,
         runsWithVisit: shopRuns, openFail: shopFails },
+      potions: { outside: potionsOut, inside: battlePotions },
       crashes: crashes,
       goblinQuest: {
         questId: 'kill_goblins', need: 5,

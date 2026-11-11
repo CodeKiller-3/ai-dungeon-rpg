@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-19：本页读取 preflight/selfcheck/d19-report.json（bot 重测产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-19 战斗内用药</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-19 · 战斗内用药（7 键）/ 回合代价 / 提示通道 / 时间轴不变</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player;
+
+  /* 本页不跑 Main.init()，但 A/G 两组要走真实键盘路径 —— 必须显式绑定 Input
+   * （Main.init 里同样只做这一件事，见 main.js:257），否则 dispatchEvent 无人接收。 */
+  Game.Core.Input.bind();
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* ── 测试时钟（同 D-16）：把回合时间轴放到可控整数毫秒上 ───────── */
+  var T = 100000;
+  B._setClock(function () { return T; });
+  function step(ms) { T += ms; B.tick(); }
+
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); }
+
+  function evOf(tl, kind) {
+    var list = (tl && tl.events) || [], hit = null;
+    for (var i = 0; i < list.length; i++) if (list[i].kind === kind) hit = list[i];
+    return hit;
+  }
+  function countOf(tl, kind) { return ((tl && tl.events) || []).filter(function (e) { return e.kind === kind; }).length; }
+
+  /* 提示通道订阅：D-14 的 ui:notice 是唯一出口，本页只观测不注入 */
+  var notices = [];
+  Game.Core.EventBus.on('ui:notice', function (p) { notices.push(p || {}); });
+  function lastNotice() { return notices.length ? notices[notices.length - 1] : null; }
+  function clearNotices() { notices.length = 0; }
+
+  function resetPlayer(hp, maxHp, mp, maxMp, inv) {
+    P.hp = hp; P.maxHp = maxHp; P.mp = mp; P.maxMp = maxMp;
+    P.inventory = inv || {};
+    P.def = 0;
+    P.equipment = P.equipment || {};
+    P.upg = {};
+  }
+
+  try {
+    /* ══ A. 按键路由：7 → item（真实 KeyboardEvent → Input → main → battle）══ */
+    T = 900000;
+    resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    M._scene = 'battle';
+    var hpA = P.hp;
+    kd('Digit7'); M._updateBattle(); ku('Digit7');
+    rec('A1_key7RoutedThroughMain', P.hp === Math.min(hpA + 30, P.maxHp) && !P.inventory.potion_small,
+      'KeyboardEvent Digit7 → Input → Main._updateBattle → Battle.playerAction：HP ' + hpA + '→' + P.hp +
+      '、小血瓶 ' + (P.inventory.potion_small || 0) + ' 瓶');
+
+    /* 4/5/6 仍是技能（本卡不改键位）：4 必须仍然放火球而不是用药 */
+    T = 910000;
+    resetPlayer(100, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    M._scene = 'battle';
+    var mp0 = P.mp, mhp0 = B.getState().monster.hp;
+    kd('Digit4'); M._updateBattle(); ku('Digit4');
+    rec('A2_key4StillCastsSkill', P.mp === mp0 - 12 && B.getState().monster.hp < mhp0 && !!P.inventory.potion_small,
+      'Digit4 仍走 skill:fireball：MP ' + mp0 + '→' + P.mp + '（-12）、怪物 HP ' + mhp0 + '→' +
+      B.getState().monster.hp + '、药剂未被消耗');
+
+    /* ══ B. 回血 + 消耗一瓶 ═════════════════════════════════════ */
+    T = 200000;
+    resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    var cntBefore = P.inventory.potion_small || 0;
+    B.playerAction('item');
+    rec('B1_healsAndConsumesOne', P.hp === 70 && (P.inventory.potion_small || 0) === cntBefore - 1,
+      'HP 40→' + P.hp + '（+30，取 items.js effect.hp）、小血瓶 ' + cntBefore + '→' +
+      (P.inventory.potion_small || 0));
+
+    /* ══ C. 一个回合 + 怪物照常反击（不许变成免费行动）═══════════ */
+    T = 300000;
+    resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    B.getState().monster.atk = 40;
+    var turn0 = B.getState().turn;
+    B.playerAction('item');
+    var hpAfterDrink = P.hp;
+    for (var i = 0; i < 300; i++) step(1);
+    var tlC = B.getTimeline();
+    var itemEv = evOf(tlC, 'player-item'), matkEv = evOf(tlC, 'monster-attack');
+    var hpAfterTurn = P.hp;
+    var turn1 = B.getState().turn;
+    rec('C1_takesATurnAndMonsterCounters',
+      !!itemEv && !!matkEv && matkEv.at >= itemEv.at + B.timeline().seg1 &&
+      hpAfterTurn < hpAfterDrink && turn1 === turn0 + 1,
+      'player-item at=' + (itemEv ? itemEv.at : '-') + ' → monster-attack at=' +
+      (matkEv ? matkEv.at : '-') + '（间隔 ' + ((itemEv && matkEv) ? matkEv.at - itemEv.at : '-') +
+      'ms ≥ seg1=' + B.timeline().seg1 + '）；HP 喝药后 ' + hpAfterDrink + ' → 回合末 ' + hpAfterTurn +
+      '（被反击）；回合 ' + turn0 + '→' + turn1);
+
+    /* ══ D. 时间轴预算不变（单回合仍 180ms 上下，锁 ≤160ms）══════ */
+    var recD = tlC.rec || {};
+    rec('D1_sameTimelineBudget',
+      recD.planMs === 180 && recD.presentMs >= 170 && recD.presentMs <= 240 &&
+      recD.lockMs > 0 && recD.lockMs <= 160,
+      '计划 ' + recD.planMs + 'ms；实测表现 ' + recD.presentMs + 'ms（170~240）、输入锁 ' +
+      recD.lockMs + 'ms（≤160）；与 D-16 同一套 TL，无第二套时序');
+
+    /* 单时间轴：一次用药只产生一个 pending、一个 turnRec */
+    T = 350000;
+    resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    B.playerAction('item');
+    var stD = B.getState();
+    var pendOk = !!stD.pending && (stD.pending.due - T) === B.timeline().seg1;
+    var evs = (stD.events || []).filter(function (e) { return e.kind === 'player-item'; });
+    rec('D2_singlePendingNotSecondTimeline', pendOk && evs.length === 1 && !!stD.turnRec,
+      'pending.due-t0=' + (stD.pending ? stD.pending.due - T : '-') + 'ms（=seg1）、player-item 事件 ' +
+      evs.length + ' 条、turnRec=' + !!stD.turnRec);
+
+    /* ══ E. 三种拒绝：满血 / 无药 / 不可用类型 ══════════════════ */
+    T = 400000;
+    resetPlayer(100, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    clearNotices();
+    var tE0 = B.getState().turn;
+    B.playerAction('item');
+    var nE = lastNotice();
+    rec('E1_fullHpNoticeNoConsume',
+      !!nE && nE.ok === false && /已满/.test(nE.msg || '') && (P.inventory.potion_small || 0) === 1 &&
+      B.getState().turn === tE0 && !B.isInputLocked(),
+      '提示「' + (nE ? nE.msg : '-') + '」ok=' + (nE ? nE.ok : '-') + '；药 ' +
+      (P.inventory.potion_small || 0) + ' 瓶未扣、回合 ' + tE0 + '→' + B.getState().turn +
+      '、未上锁=' + !B.isInputLocked());
+
+    T = 410000;
+    resetPlayer(40, 100, 50, 50, {});
+    B.start('slime');
+    clearNotices();
+    var tE1 = B.getState().turn;
+    B.playerAction('item');
+    var nE1 = lastNotice();
+    rec('E2_noPotionNoticeNoConsume',
+      !!nE1 && nE1.ok === false && /没有可用/.test(nE1.msg || '') && B.getState().turn === tE1 &&
+      !B.isInputLocked(),
+      '提示「' + (nE1 ? nE1.msg : '-') + '」；回合 ' + tE1 + '→' + B.getState().turn + '（未消耗）');
+
+    T = 420000;
+    resetPlayer(40, 100, 50, 50, { scroll_upgrade: 1 });
+    B.start('slime');
+    clearNotices();
+    var tE2 = B.getState().turn;
+    B.playerAction('item');
+    var nE2 = lastNotice();
+    var upgAfter = JSON.stringify(P.upg || {});
+    rec('E3_scrollNotUsableInBattle',
+      !!nE2 && nE2.ok === false && /卷轴/.test(nE2.msg || '') && (P.inventory.scroll_upgrade || 0) === 1 &&
+      upgAfter === '{}' && B.getState().turn === tE2,
+      '提示「' + (nE2 ? nE2.msg : '-') + '」；卷轴未扣=' + ((P.inventory.scroll_upgrade || 0) === 1) +
+      '、强化等级未变=' + upgAfter + '、回合未消耗');
+
+    /* ══ F. 选瓶口径：够补满的最小瓶优先；都不够时用最大的 ═════ */
+    T = 500000;
+    resetPlayer(80, 100, 50, 50, { potion_small: 1, potion_large: 1 });
+    B.start('slime');
+    B.playerAction('item');
+    var pickSmall = (P.hp === 100) && (P.inventory.potion_small || 0) === 0 && (P.inventory.potion_large || 0) === 1;
+
+    T = 510000;
+    resetPlayer(10, 100, 50, 50, { potion_small: 1, potion_large: 1 });
+    B.start('slime');
+    B.playerAction('item');
+    var pickLarge = (P.hp === 90) && (P.inventory.potion_large || 0) === 0 && (P.inventory.potion_small || 0) === 1;
+    rec('F1_pickSmallestSufficient', pickSmall && pickLarge,
+      '缺口 20：选小瓶（30）→ HP 100、大瓶保留=' + pickSmall +
+      '；缺口 90：无瓶够补满 → 选大瓶（80）→ HP ' + 90 + '、小瓶保留=' + pickLarge);
+
+    /* 蓝瓶：HP 满、MP 不满时可用（治疗药与魔法药都允许） */
+    T = 520000;
+    resetPlayer(100, 100, 10, 50, { potion_mana: 1 });
+    B.start('slime');
+    B.playerAction('item');
+    rec('F2_manaPotionAllowed', P.mp === 50 && !P.inventory.potion_mana,
+      'MP 10→' + P.mp + '（+40）、蓝瓶 ' + (P.inventory.potion_mana || 0) + '（HP 已满仍可用蓝瓶）');
+
+    /* ══ G. 输入锁：按 7 不立即生效，但被缓冲、解锁后执行一次 ═══ */
+    T = 600000;
+    resetPlayer(100, 100, 50, 50, { potion_small: 1, potion_large: 1 });
+    B.start('dragon');
+    var stG = B.getState();
+    stG.monster.hp = 9999; stG.monster.maxHp = 9999; stG.monster.atk = 0;
+    /* 先用攻击进入锁定窗口（HP 满，不触发喝药） */
+    B.playerAction('attack');
+    P.hp = 50;
+    var lockedNow = B.isInputLocked();
+    kd('Digit7'); M._updateBattle(); ku('Digit7');
+    var bufNow = B.getState().buffered;
+    var potionDuringLock = (P.inventory.potion_small || 0) + (P.inventory.potion_large || 0);
+    step(60);
+    var stillBuf = B.getState().buffered;
+    var potionStillLocked = (P.inventory.potion_small || 0) + (P.inventory.potion_large || 0);
+    var turnG0 = B.getState().turn;
+    for (var g = 0; g < 240; g++) step(1);
+    var potionAfter = (P.inventory.potion_small || 0) + (P.inventory.potion_large || 0);
+    var turnG1 = B.getState().turn;
+    rec('G1_bufferedThenExecutedOnce',
+      lockedNow && bufNow === 'item' && stillBuf === 'item' &&
+      potionDuringLock === 2 && potionStillLocked === 2 &&
+      potionAfter === 1 && turnG1 === turnG0 + 1,
+      '锁内缓冲=' + bufNow + '（60ms 后仍在=' + stillBuf + '）；锁内药数 ' + potionDuringLock +
+      '→' + potionStillLocked + '（未执行）；解锁后 ' + potionAfter + '（-1，恰好一次）、回合 ' +
+      turnG0 + '→' + turnG1);
+
+    /* ══ H. 负例：把用药做成"免费行动"（不触发怪物反击）════════ */
+    function runItem(freeAction) {
+      T = 700000;
+      resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+      B.start('slime');
+      B.getState().monster.atk = 40;
+      B.playerAction('item');
+      var st = B.getState();
+      if (freeAction) st.pending = null;      /* 缺陷注入：用药不排怪物段 = 免费行动 */
+      var afterDrink = P.hp;
+      for (var i = 0; i < 300; i++) step(1);
+      var tl = B.getTimeline();
+      var it = evOf(tl, 'player-item'), ma = evOf(tl, 'monster-attack');
+      return {
+        countered: !!(it && ma && ma.at >= it.at + B.timeline().seg1) && P.hp < afterDrink,
+        hp: P.hp, at: it ? it.at : null, mat: ma ? ma.at : null
+      };
+    }
+    var real = runItem(false), free = runItem(true);
+    rec('H1_negativeFreeActionFails', real.countered === true && free.countered === false,
+      '正常：被反击=' + real.countered + '（HP→' + real.hp + '，monster-attack at=' + real.mat +
+      '）；注入"免费行动"后：被反击=' + free.countered + '（HP→' + free.hp + '，monster-attack=' +
+      free.mat + '）——C1/H1 必须为 false，否则抓不到回归');
+
+    /* ══ I. 提示通道确实复用 ui:notice（成功 ok=true）══════════ */
+    T = 800000;
+    resetPlayer(40, 100, 50, 50, { potion_small: 1 });
+    B.start('slime');
+    clearNotices();
+    B.playerAction('item');
+    var okNotice = lastNotice();
+    rec('I1_noticeChannelReused', !!okNotice && okNotice.ok === true && /回复/.test(okNotice.msg || ''),
+      '用药成功提示「' + (okNotice ? okNotice.msg : '-') + '」ok=' +
+      (okNotice ? okNotice.ok : '-') + '（与 D-14 同一 ui:notice 通道）');
+
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  document.getElementById('result').textContent =
+    (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out) + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+})();
+</script>
+</body>
+</html>

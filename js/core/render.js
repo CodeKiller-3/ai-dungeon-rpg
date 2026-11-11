@@ -924,7 +924,7 @@
         ctx.textAlign = 'center';
         ctx.font = '15px monospace';
         ctx.fillStyle = '#7f8399';
-        ctx.fillText('选择行动：攻击 / 防御 / 逃跑 / 技能', CX, 300);
+        ctx.fillText('选择行动：攻击 / 防御 / 逃跑 / 技能 / 用药', CX, 300);
         ctx.restore();
       }
       /* 战报（最近 3 行） */
@@ -996,7 +996,7 @@
         ctx.textAlign = 'center';
         ctx.fillStyle = '#9bbbf4';
         ctx.font = '13px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   F 特效', CX, H - 30);
+        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药   F 特效', CX, H - 30);
         ctx.restore();
       }
       /* S3-4：战斗视觉反馈（伤害飘字），绘制于战斗内容之上、HUD 之下 */

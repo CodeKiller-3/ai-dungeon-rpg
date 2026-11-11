@@ -542,6 +542,9 @@
       else if (k['Digit4'] || k['Numpad4']) { delete k['Digit4']; delete k['Numpad4']; cmd = 'skill:fireball'; }
       else if (k['Digit5'] || k['Numpad5']) { delete k['Digit5']; delete k['Numpad5']; cmd = 'skill:dash'; }
       else if (k['Digit6'] || k['Numpad6']) { delete k['Digit6']; delete k['Numpad6']; cmd = 'skill:shield'; }
+      /* D-19：7 = 战斗内用药。卡面建议用 4，但 4/5/6 已被三个技能占用（M8-1），
+       * 改键会直接破坏既有战斗操作，故取同序列的下一个空闲数字键 7。 */
+      else if (k['Digit7'] || k['Numpad7']) { delete k['Digit7']; delete k['Numpad7']; cmd = 'item'; }
       if (!cmd) return;
       if (B && typeof B.isInputLocked === 'function' && B.isInputLocked()) {
         B.bufferCommand(cmd);   /* 只缓冲一条，解锁后执行一次 */
