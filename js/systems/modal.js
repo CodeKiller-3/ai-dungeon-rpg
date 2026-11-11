@@ -626,7 +626,9 @@
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
       var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
         : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
-        : HEADER_H + rows * ROW_H + FOOTER_H;
+        /* D-27：空列表也保留 1 行高度，避免"空态提示"与底部操作提示叠在同一条线上
+         * （新档背包为空是首屏常态，页头又加了装备摘要，必须让空态有独立一行） */
+        : HEADER_H + Math.max(rows, 1) * ROW_H + FOOTER_H;
       var px = (cw - w) / 2;
       var py = (ch - h) / 2;
       rect = { x: px, y: py, w: w, h: h };
@@ -675,6 +677,16 @@
         c.fillStyle = '#ffcf6e';
         c.font = '13px monospace';
         c.fillText('金币: ' + (p ? p.gold : 0), px + w - 90, py + 30);
+      }
+
+      /* D-27：背包页头装备摘要——让"已装备"在界面上看得见（新档起手就有匕首，
+       * 但背包为空，不能只显示"背包空空如也"）。文本由 equipSummary() 统一生成，
+       * 后续 UI 重做时替换/扩写该函数即可，绘制这里只负责排版与截断。 */
+      if (kind === 'inventory') {
+        c.fillStyle = '#9fb6cf';
+        c.font = '11px monospace';
+        var sumMaxW = Math.max(0, w - 84 - 100);
+        c.fillText(this._fitRow(c, this.equipSummary(), sumMaxW), px + 84, py + 30);
       }
 
       /* M9-4：设置面板专用渲染（音量滑块/静音开关/操作说明） */
@@ -745,9 +757,28 @@
       c.fillText(hint, px + 14, py + h - 12);
     },
 
+    /* D-27：背包页头装备摘要（独立小函数，后续 UI 重做时替换/扩写它即可）。
+     * 只读 Player.equipment + ITEMS + upg：没有护甲就写"无"，不留占位符；
+     * 数值按"基础 + 强化加成"计算，与 Inventory.recalcEquip 的口径一致。 */
+    equipSummary: function () {
+      var p = Game.Data.Player || {};
+      var IT = Game.Data.ITEMS || {};
+      var eq = p.equipment || {};
+      var upg = p.upg || {};
+      function itemText(id, field) {
+        if (!id) return '无';
+        var it = IT[id];
+        if (!it) return id;
+        var base = (it.effect && it.effect[field]) ? it.effect[field] : 0;
+        var n = Math.min(Math.max(upg[id] || 0, 0), 5);
+        var v = base + (base ? Math.ceil(base * n * 0.1) : 0);
+        return it.name + '（' + (field === 'atk' ? '攻击+' : '防御+') + v + '）';
+      }
+      return '已装备：' + itemText(eq.weapon, 'atk') + ' · 护甲：' + itemText(eq.armor, 'def');
+    },
+
     /* 自适应：单行文本超宽时按实际字宽截断并加省略号（调用前已设好字体） */
-    _fitRow: function (c, text, maxW) {
-      var str = String(text);
+    _fitRow: function (c, text, maxW) {      var str = String(text);
       if (!c || c.measureText(str).width <= maxW) return str;
       var ell = '…';
       while (str.length > 0 && c.measureText(str + ell).width > maxW) {

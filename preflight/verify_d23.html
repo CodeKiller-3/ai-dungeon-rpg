@@ -224,10 +224,25 @@
       '局数 ' + mine.length + '；D-19 参考缺失 ' + (refMiss.join(',') || '0') +
       '；胜负不一致 ' + (outMis.join(',') || '0') + '；逐局 ' + lines.join(' '));
 
-    rec('B2_sameActionsFloorCauseAsD19',
-      mine.length === 10 && refMiss.length === 0 && actMis.length === 0 && flrMis.length === 0 && cauMis.length === 0,
-      '动作数不一致 ' + (actMis.join(',') || '0') + '；死亡层不一致 ' + (flrMis.join(',') || '0') +
-      '；死因不一致 ' + (cauMis.join(',') || '0') + '（采集只读，不改判定/顺序/随机数）');
+    /* D-27 规格变更：起手匕首改变了初始条件，动作数/死亡层与 D-19 必然漂移（胜负与死因仍应一致）。
+     * 本条不再声称"与 D-19 逐局相同"，改为验证"同种子二次采集逐局完全一致"（纯观测、可复现），
+     * 并把与 D-19 的动作数/死亡层偏差如实打印。 */
+    var res2 = Bot.batch(seeds, { maxActions: 2500 });
+    var mine2 = (res2 && res2.runs) || [];
+    var diff2 = [];
+    for (var n2 = 0; n2 < mine.length && n2 < mine2.length; n2++) {
+      var x1 = mine[n2], x2 = mine2[n2];
+      if (x1.seed !== x2.seed || x1.actions !== x2.actions ||
+          (x1.deathFloor || 0) !== (x2.deathFloor || 0) ||
+          (x1.deathCause || '') !== (x2.deathCause || '')) {
+        diff2.push(x1.seed);
+      }
+    }
+    rec('B2_sameSeedRepeatableNotD19',
+      mine.length === 10 && mine2.length === 10 && diff2.length === 0 && cauMis.length === 0,
+      '同种子二次采集不一致 ' + (diff2.join(',') || '0') + '；死因与 D-19 不一致 ' +
+      (cauMis.join(',') || '0') + '；与 D-19 动作数偏差（D-27 起手匕首导致，如实记录）' +
+      (actMis.join(',') || '0') + '；死亡层偏差 ' + (flrMis.join(',') || '0'));
 
     /* ══ C. 空值安全：拿不到就 null，不抛错、不丢键 ══════════════ */
     var stC = B.getState();

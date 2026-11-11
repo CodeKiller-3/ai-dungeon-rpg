@@ -62,7 +62,9 @@
         if (typeof s.exp === 'number') p.exp = s.exp;
         if (typeof s.level === 'number') p.level = s.level;
         if (s.inventory) p.inventory = s.inventory;
-        if (s.equipment) p.equipment = s.equipment;
+        /* D-27：旧档不补发起手武器——缺 equipment 字段的极老档明确落回"无装备"，
+         * 不能继承新档初值（否则等于给老玩家凭空发刀，且在降级路径上有重复发放风险）。 */
+        p.equipment = s.equipment || { weapon: null, armor: null };
         if (s.quests) p.quests = s.quests;
         /* S-03：旧档无 upg 字段 → 补空表，不破坏已读档的既有数值 */
         p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};

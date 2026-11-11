@@ -24,6 +24,21 @@
   };
   Game.Data.Player = player;
 
+  /* D-27：起手武器——只给最弱的一把匕首（+1 攻击），不发护甲。
+   * 只在新开档（无存档）与 restart() 两处发放；读档路径不调用，
+   * 因此旧档 equipment.weapon 为 null 时不会凭空补发（不新增字段、不改存档键名）。
+   * 发完立刻 recalcEquip，保证"装备栏"与"atk"从第一帧起一致（L1：10 → 11）。 */
+  var START_WEAPON = 'knife';
+  function giveStartingGear() {
+    player.equipment = { weapon: START_WEAPON, armor: null };
+    if (Game.Systems && Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
+      Game.Systems.Inventory.recalcEquip();
+    } else {
+      /* Inventory 未加载（极简验证页场景）：按 L1 基础值 + 匕首 1 点手算 */
+      player.atk = 10 + (Game.Data.ITEMS[START_WEAPON].effect.atk || 0);
+    }
+  }
+
   /* UI 状态（背包/商店/任务） */
   var ui = { list: [], sel: 0, shopMode: 'buy' };
 
@@ -270,8 +285,9 @@
       Game.Systems.Map.generate();
       Game.Systems.Quest.init();
       resetPlayer();
-      /* 读档：有存档则恢复进度 */
+      /* 读档：有存档则恢复进度；D-27 起手武器只发给"真正的新档"，旧档读入不补发 */
       var loaded = Game.Systems.Save.load();
+      if (!loaded) giveStartingGear();
       booting = false; /* 启动/读档完成，恢复 floorChanged 自动写档 */
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
       syncHud();    /* S3-2：初始顶部 HUD 数据 */
@@ -370,7 +386,7 @@
       player.mp = 50; player.maxMp = 50; /* M8-1：新档 MP 满 */
       player.atk = 10; player.def = 5;
       player.gold = 0; player.exp = 0; player.level = 1;
-      player.inventory = {}; player.equipment = { weapon: null, armor: null };
+      player.inventory = {}; giveStartingGear(); /* D-27：新局起手匕首（与 init 的无档路径同一函数） */
       player.quests = {};
       player.upg = {}; /* S-03：新局强化清零 */
       player.status = {}; /* S-04：新局状态清空 */

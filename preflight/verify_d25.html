@@ -255,13 +255,15 @@
       '删行后 ' + without.length + ' 行、检测器命中=' + (negLine ? '是' : '否') +
       '、判定=' + negOk + '（原 ' + all.length + ' 行判定=' + equipLineOk(all) + '）');
 
-    /* ══ A7. 不许写当前不成立的话（起手有武器等） ═══════════════ */
+    /* ══ A7. 不许写当前不成立的话（起手有武器等） ═══════════════
+     * D-27 规格变更：起手确实有最弱的匕首（+1），但护甲仍为空、也没有更强的起手装备；
+     * 引导页文案仍不得宣称"起手有武器/护甲"（文案事实与产品事实分开断言）。 */
     var combined = all.join('\n');
     var FORBID = ['起手', '开局', '自带', '初始武器', '初始装备', '默认装备'];
     var hits = FORBID.filter(function (w) { return combined.indexOf(w) >= 0; });
-    rec('A7_noFalseStartingGearClaim', hits.length === 0 && freshGear.w === null && freshGear.a === null,
+    rec('A7_startingGearIsOnlyKnife', hits.length === 0 && freshGear.w === 'knife' && freshGear.a === null,
       '禁词命中 ' + JSON.stringify(hits) + '；新档实测 weapon=' + freshGear.w + '、armor=' + freshGear.a +
-      '（与"捡到或买到后才有得装"一致）');
+      '（D-27：起手只有最弱的匕首，无护甲；文案不宣称起手装备）');
 
   } catch (e) {
     rec('X0_exception', false, String(e && (e.stack || e.message) || e));

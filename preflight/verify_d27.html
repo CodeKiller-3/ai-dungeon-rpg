@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-27 起手匕首</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-27 · 起手匕首：新档/重开一致、旧档不补发、真实伤害与回合数、存档结构未变</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player,
+      I = Game.Systems.Inventory, IT = Game.Data.ITEMS, Save = Game.Systems.Save;
+  var KEY = 'ai_dungeon_rpg_save_v1';
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  /* 只读快照：装备槽 + 属性 + 背包键数 */
+  function snap() {
+    return {
+      inv: Object.keys(P.inventory || {}).length,
+      weapon: P.equipment ? P.equipment.weapon : 'NO_EQ',
+      armor: P.equipment ? P.equipment.armor : 'NO_EQ',
+      atk: P.atk, def: P.def
+    };
+  }
+  function isStarting(s) {
+    return s.inv === 0 && s.weapon === 'knife' && s.armor === null && s.atk === 11 && s.def === 5;
+  }
+  function clearSave() {
+    try { localStorage.removeItem(KEY); } catch (e) { /* 存储禁用降级 */ }
+  }
+  function writeSave(playerObj, extra) {
+    var data = { saveVersion: 2, savedAt: '2026-11-11T00:00:00.000Z', floor: 1,
+      player: playerObj, bestiary: { monsters: {}, items: {} } };
+    if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) data[k] = extra[k];
+    try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
+  }
+  function dmgOf(atk, def) { return Math.max(atk - def, 1); }
+
+  try {
+    Game.Core.Input.bind();
+
+    /* ══ A1. 无存档 → init 发放起手匕首（atk 10 → 11） ═══════════ */
+    clearSave();
+    M.init();
+    M.closeGuide();
+    var fresh = snap();
+    rec('A1_initNewGameGivesKnife', isStarting(fresh),
+      '无存档 init 后：背包键数=' + fresh.inv + '、weapon=' + fresh.weapon +
+      '、armor=' + fresh.armor + '、atk=' + fresh.atk + '、def=' + fresh.def);
+
+    /* ══ A2. restart() 同样发放（两条初始化路径一致） ════════════ */
+    M.restart();
+    var restarted = snap();
+    rec('A2_restartAlsoGivesKnife', isStarting(restarted),
+      'restart 后：weapon=' + restarted.weapon + '、armor=' + restarted.armor +
+      '、atk=' + restarted.atk + '、def=' + restarted.def + '；与 init 快照一致=' +
+      (JSON.stringify(fresh) === JSON.stringify(restarted)));
+
+    /* ══ A3. atk 增量确实来自匕首（清空 → 10，装回 → 11） ═══════ */
+    P.equipment = { weapon: null, armor: null }; I.recalcEquip();
+    var bareAtk = P.atk;
+    P.equipment = { weapon: 'knife', armor: null }; I.recalcEquip();
+    var knifeAtk = P.atk;
+    rec('A3_atkDeltaIsOneFromKnife', bareAtk === 10 && knifeAtk === 11 &&
+      knifeAtk - bareAtk === (IT.knife.effect.atk || 0),
+      '赤手 atk=' + bareAtk + '、装匕首 atk=' + knifeAtk + '，增量=' + (knifeAtk - bareAtk) +
+      '（匕首 effect.atk=' + IT.knife.effect.atk + '）');
+
+    /* ══ A4. 旧档（有 equipment、weapon=null）读入不补发 ════════ */
+    var oldOk = writeSave({
+      hp: 100, maxHp: 100, mp: 50, maxMp: 50, atk: 10, def: 5,
+      gold: 0, exp: 0, level: 1,
+      inventory: { knife: 1 }, equipment: { weapon: null, armor: null },
+      quests: {}, upg: {}
+    });
+    var loadedOld = Save.load();
+    var afterOld = snap();
+    rec('A4_oldSaveNoBackfill', oldOk && !!loadedOld && afterOld.weapon === null &&
+      afterOld.armor === null && afterOld.atk === 10 && afterOld.inv === 1,
+      '旧档（equipment.weapon=null、背包已有匕首 x1）读入后：weapon=' + afterOld.weapon +
+      '、armor=' + afterOld.armor + '、atk=' + afterOld.atk + '、背包键数=' + afterOld.inv +
+      '（不自动装备、不补发；atk 仍按 10 计算）');
+
+    /* ══ A5. 极老档（无 equipment 字段）同样落回无装备 ═══════════ */
+    writeSave({ hp: 80, maxHp: 100, mp: 50, maxMp: 50, gold: 10, exp: 0, level: 1, inventory: {} });
+    var loadedAncient = Save.load();
+    var afterAncient = snap();
+    rec('A5_ancientSaveNoInherit', !!loadedAncient && afterAncient.weapon === null &&
+      afterAncient.armor === null && afterAncient.atk === 10,
+      '无 equipment 字段的旧档读入后：weapon=' + afterAncient.weapon +
+      '、armor=' + afterAncient.armor + '、atk=' + afterAncient.atk +
+      '（不继承新档初值，避免凭空发刀）');
+
+    /* ══ A6. 真实战斗：F2 食人魔击杀回合数下降 ═══════════════════ */
+    clearSave();
+    M.restart();
+    P.level = 1; P.upg = {};
+    B.start('ogre');
+    var stMon = B.getState().monster;
+    var monName = (Game.Data.MONSTERS.ogre && Game.Data.MONSTERS.ogre.name) || '食人魔';
+    var monHp = stMon.hp, monDef = stMon.def;
+    var hp0 = stMon.hp;
+    B.playerAction('attack');
+    var armedHit = hp0 - B.getState().monster.hp;
+    var armedAtk = P.atk;
+
+    P.equipment = { weapon: null, armor: null }; I.recalcEquip();
+    B.start('ogre');
+    var hp1 = B.getState().monster.hp;
+    B.playerAction('attack');
+    var bareHit = hp1 - B.getState().monster.hp;
+    var bareAtk2 = P.atk;
+
+    var metaAtk = (Game.Data.MONSTERS.ogre && Game.Data.MONSTERS.ogre.atk) || 0;
+    var roundsArmed = Math.ceil(monHp / armedHit);
+    var roundsBare = Math.ceil(monHp / bareHit);
+    rec('A6_ogreRoundsDrop', armedHit === dmgOf(armedAtk, monDef) &&
+      bareHit === dmgOf(bareAtk2, monDef) && armedHit > bareHit &&
+      roundsArmed === Math.ceil(monHp / armedHit) && roundsArmed < roundsBare,
+      monName + '(def' + monDef + ', hp' + monHp + ')：起手匕首 atk=' + armedAtk + ' → 每回合 ' +
+      armedHit + '，击杀 ' + roundsArmed + ' 回合；赤手 atk=' + bareAtk2 + ' → 每回合 ' +
+      bareHit + '，击杀 ' + roundsBare + ' 回合（max(atk-def,1) 复算；怪 atk=' + metaAtk + '）');
+
+    /* ══ A7. 范围最小：不给护甲、背包无护甲、匕首数值未改 ═══════ */
+    var noArmorInBag = true;
+    for (var id in P.inventory) {
+      if (Object.prototype.hasOwnProperty.call(P.inventory, id) && IT[id] && IT[id].type === 'armor') {
+        noArmorInBag = false;
+      }
+    }
+    rec('A7_scopeOnlyWeakestKnife', P.equipment.armor === null && noArmorInBag &&
+      IT.knife.type === 'weapon' && IT.knife.effect.atk === 1 && IT.knife.price === 20,
+      '新档 armor=' + P.equipment.armor + '、背包含护甲=' + !noArmorInBag +
+      '；匕首 type=' + IT.knife.type + '、atk=' + IT.knife.effect.atk + '、price=' + IT.knife.price +
+      '（商店/掉落数值未动）');
+
+    /* ══ A8. 负例：拿掉起手武器，同一判定必须 FAIL ═══════════════ */
+    clearSave();
+    M.restart();
+    var neg = snap();
+    P.equipment = { weapon: null, armor: null }; I.recalcEquip();
+    var noGear = snap();
+    rec('A8_negativeNoWeaponFails', isStarting(neg) === true && isStarting(noGear) === false,
+      '新档判定=' + isStarting(neg) + '；拿掉匕首后 weapon=' + noGear.weapon +
+      '、atk=' + noGear.atk + ' → 判定=' + isStarting(noGear) + '（必须 false）');
+
+    /* ══ A9. 存档结构未变：键名/顶层键/player 键集合与 D-23 一致 ═ */
+    clearSave();
+    M.restart();
+    Save.save();
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { raw = null; }
+    var TOP = ['saveVersion', 'savedAt', 'floor', 'player', 'bestiary', 'map'];
+    var PLAYER = ['hp', 'maxHp', 'mp', 'maxMp', 'atk', 'def', 'gold', 'exp', 'level',
+      'inventory', 'equipment', 'quests', 'upg'];
+    var topKeys = raw ? Object.keys(raw).sort().join(',') : '';
+    var pKeys = raw && raw.player ? Object.keys(raw.player).sort().join(',') : '';
+    var keyOk = raw && raw.player && raw.player.equipment &&
+      raw.player.equipment.weapon === 'knife' &&
+      topKeys === TOP.slice().sort().join(',') && pKeys === PLAYER.slice().sort().join(',');
+    rec('A9_saveShapeUnchanged', !!keyOk,
+      '存档键名仍单键=' + (function () {
+        var n = 0;
+        try { for (var i = 0; i < localStorage.length; i++) if (localStorage.key(i).indexOf('ai_dungeon') === 0) n++; } catch (e) { return '?'; }
+        return n;
+      })() + '；顶层键 [' + topKeys + ']；player 键 [' + pKeys + ']；equipment.weapon=' +
+      (raw && raw.player && raw.player.equipment ? raw.player.equipment.weapon : '-'));
+
+    /* ══ A10. 按 B 打开背包，页头能读到"已装备"（新档起手匕首） ═══ */
+    var sink = [];
+    var fake = (function () {
+      var o = {}, noop = function () {};
+      var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+        'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'arc', 'rect', 'roundRect',
+        'setTransform', 'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+      for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+      o.createLinearGradient = function () { return { addColorStop: noop }; };
+      o.createRadialGradient = o.createLinearGradient;
+      o.createPattern = function () { return {}; };
+      o.measureText = function (t) { return { width: String(t).length * 7 }; };
+      o.fillText = function (t) { sink.push(String(t)); };
+      o.strokeText = o.fillText;
+      o.getImageData = function () { return { data: [] }; };
+      return o;
+    })();
+    function drawBag() {
+      var R = Game.Core.Render, real = R._ctx;
+      Game.Modal.open('inventory');
+      try { R._ctx = fake; Game.Modal.draw(); } finally { R._ctx = real; Game.Modal.close(); }
+    }
+    function bagHasEquip() {
+      var t = sink.join('\n');
+      return t.indexOf('已装备：匕首（攻击+1）') >= 0 && t.indexOf('护甲：无') >= 0;
+    }
+    clearSave(); M.restart();
+    sink.length = 0; drawBag();
+    var bagShows = bagHasEquip();
+    var bagText = sink.filter(function (s) { return /已装备|护甲/.test(s); }).join(' | ');
+    rec('A10_bagHeaderShowsEquipped', bagShows,
+      '背包面板页头实绘「' + (bagText || '无') + '」；同时含「已装备：匕首（攻击+1）」与「护甲：无」=' + bagShows);
+
+    /* 负例：把 equipSummary 短路为空 → 同一检测必须 FAIL */
+    var oldSum = Game.Modal.equipSummary;
+    Game.Modal.equipSummary = function () { return ''; };
+    sink.length = 0; drawBag();
+    var bagShows2 = bagHasEquip();
+    Game.Modal.equipSummary = oldSum;
+    rec('A11_negativeNoSummaryFails', bagShows === true && bagShows2 === false,
+      '删掉摘要行后检测=' + bagShows2 + '（必须 false）；恢复函数后=' + oldSum.call(Game.Modal).slice(0, 24));
+
+    /* 收尾：清掉本页写入的存档，避免污染后续页面 */
+    clearSave();
+
+  } catch (e) {
+    rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  document.getElementById('result').textContent =
+    (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed }) + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+})();
+</script>
+</body>
+</html>

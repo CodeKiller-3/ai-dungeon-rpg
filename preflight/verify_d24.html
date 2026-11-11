@@ -82,8 +82,11 @@
       armor: P.equipment ? P.equipment.armor : 'NO_EQ',
       atk: P.atk, def: P.def };
   }
-  function isEmptyNewGame(s) {
-    return s.invCount === 0 && s.weapon === null && s.armor === null && s.atk === 10 && s.def === 5;
+  /* D-27 规格变更：新档从"无装备"变为"起手匕首（+1 攻击）、无护甲"。
+   * D-24 当时断言 weapon=null / atk=10 是那时的事实；起手武器落地后该期望必须翻转，
+   * 否则产品行为与断言自相矛盾。判定形状不变，只改期望值（与 D-25 对 C2 的处理同法）。 */
+  function isStartingNewGame(s) {
+    return s.invCount === 0 && s.weapon === 'knife' && s.armor === null && s.atk === 11 && s.def === 5;
   }
   /* 归因断言：bot 装得上且死时没有"更好的装备留在包里" */
   function equipEvidenceOk(s) {
@@ -185,20 +188,20 @@
     M.closeGuide();
     M.restart();
 
-    /* ══ A. 问题 1：新档到底有没有武器/护甲 ══════════════════════ */
+    /* ══ A. 问题 1：新档到底有没有武器/护甲（D-27 起有起手匕首） ══ */
     var fresh = freshEquipState();
-    rec('A1_newGameHasNoGear', isEmptyNewGame(fresh),
+    rec('A1_newGameStartsWithKnife', isStartingNewGame(fresh),
       'M.init()→M.restart() 后：背包键数=' + fresh.invCount + '、weapon=' + fresh.weapon +
       '、armor=' + fresh.armor + '、atk=' + fresh.atk + '、def=' + fresh.def +
-      '（main.js:12-24 / restart:373 的同一空结构）');
+      '（D-27 起手匕首 +1 攻击；与 init 无档路径、restart 同一函数发放）');
 
-    /* 负例：给一把武器后，同一判定必须 FAIL */
-    P.equipment = { weapon: 'knife', armor: null };
-    var negFresh = freshEquipState();
+    /* 负例：把起手武器拿掉后，同一判定必须 FAIL */
     P.equipment = { weapon: null, armor: null };
-    rec('A2_negativeGearBreaksNewGameCheck', isEmptyNewGame(negFresh) === false,
-      '塞入 knife 后 weapon=' + negFresh.weapon + ' → 判定=' +
-      (isEmptyNewGame(negFresh) ? 'PASS（漏检！）' : 'FAIL（符合预期）'));
+    var negFresh = freshEquipState();
+    P.equipment = { weapon: 'knife', armor: null }; I.recalcEquip();
+    rec('A2_negativeNoWeaponBreaksStartingCheck', isStartingNewGame(negFresh) === false,
+      '拿掉起手武器后 weapon=' + negFresh.weapon + ' → 判定=' +
+      (isStartingNewGame(negFresh) ? 'PASS（漏检！）' : 'FAIL（符合预期）'));
 
     /* ══ D. 问题 4：赤手 vs F1 武器，单回合伤害（真实攻击测量）══ */
     var f2 = [
@@ -250,20 +253,23 @@
     try {
       R._ctx = fakeCtx(sink);
       P.inventory = { knife: 1 };
+      /* D-27：新档起手匕首，页头摘要应显示"已装备：匕首（攻击+1） · 护甲：无" */
+      P.equipment = { weapon: 'knife', armor: null }; I.recalcEquip();
       Modal.open('inventory');
       Modal.draw();
       Modal.close();
     } catch (e) { drawErr = String(e); }
     R._ctx = realCtx;
-    var hintLine = null, rowLine = null;
+    var hintLine = null, rowLine = null, sumLine = null;
     for (var s2 = 0; s2 < sink.length; s2++) {
       if (/使用\/装备/.test(sink[s2])) hintLine = sink[s2];
-      if (/匕首/.test(sink[s2])) rowLine = sink[s2];
+      if (/匕首/.test(sink[s2]) && /攻击\+1/.test(sink[s2])) rowLine = sink[s2];
+      if (/已装备：/.test(sink[s2])) sumLine = sink[s2];
     }
-    rec('C1_inventoryPanelShowsEquipHint', !drawErr && !!hintLine && !!rowLine && srcHint,
+    rec('C1_inventoryPanelShowsEquipHint', !drawErr && !!hintLine && !!rowLine && srcHint && !!sumLine,
       drawErr ? '绘制抛错：' + drawErr :
         '背包面板实绘提示「' + (hintLine || '无') + '」；行文案「' + (rowLine || '无') +
-        '」；源码双处含提示=' + srcHint);
+        '」；页头摘要「' + (sumLine || '无') + '」；源码双处含提示=' + srcHint);
 
     var guideLines = (R.guideLines && R.guideLines()) || [];
     var guideTeaches = guideTeachesEquip(guideLines);
@@ -302,10 +308,11 @@
       '；局终仍留在包里的升级装 ' + live.runsWithUnequipped +
       ' 局（0 表示不存在"买了/捡了但没走装备指令"）');
 
-    rec('B3_reproducesD23BareHands', live.noW === 34 && live.noA === 36 && live.deaths === 50 &&
-      live.equipBuys === 2,
-      '50 局死亡 ' + live.deaths + '：死时无武器 ' + live.noW + '、无护甲 ' + live.noA +
-      '（D-23 记录 34/36）；期间买到装备 ' + live.equipBuys + ' 件（不是 26 件）');
+    /* D-27 规格变更：起手匕首后"死时无武器"应从 D-23 的 34 局归零。
+     * noA / equipBuys 仍如实打印实测值（不锁具体数）：死亡层与购买节奏会随起手装备变化。 */
+    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.deaths === 50,
+      '50 局死亡 ' + live.deaths + '：死时无武器 ' + live.noW + '（D-23 基线 34）、无护甲 ' + live.noA +
+      '（D-23 基线 36）、期间买到装备 ' + live.equipBuys + ' 件（D-23 基线 2）');
 
     /* 负例：禁用装备步骤后，B1 的判定必须变 FAIL */
     var neg = probeEquip([1007, 1010, 1014], true);

@@ -93,9 +93,26 @@
     var extra = names(p).filter(function (n) { return !listed[n] || n === SELF; });
     var dup = names(p).length !== uniq(names(p)).length;
     return {
-      ok: missing.length === 0 && extra.length === 0 && !dup,
-      d: '基线 ' + b.pages.length + ' 页（含本页）；产物 ' + p.pages.length + ' 页；缺 ' +
-        (missing.join(',') || '0') + '；多出/越界 ' + (extra.join(',') || '0') + '；重复=' + dup
+      ok: extra.length === 0 && !dup,
+      missing: missing,
+      d: '基线 ' + b.pages.length + ' 页；产物 ' + p.pages.length + ' 页；幽灵/越界（必须 0）' +
+        (extra.join(',') || '0') + '；重复=' + dup + '；未纳入线上核验 ' + (missing.join(',') || '0')
+    };
+  }
+
+  /* D-27：基线会增长，d26 产物是"66a2381 的 67 页快照"。允许产物不覆盖之后新增的页，
+   * 但新增页必须全部排在 d26 生成时最后一页（verify_d25）之后——
+   * 中间插页/删页仍算产物与基线错位，必须 FAIL。 */
+  function chkTailOnly(p, b) {
+    if (!p || !b) return { ok: false, d: '产物/基线缺失' };
+    var anchor = b.pages.indexOf('verify_d25');
+    var mine = asSet(names(p));
+    var missing = b.pages.filter(function (n) { return n !== SELF && !mine[n]; });
+    var bad = missing.filter(function (n) { return b.pages.indexOf(n) < anchor; });
+    return {
+      ok: anchor >= 0 && bad.length === 0,
+      d: '未纳入页 ' + (missing.join(',') || '0') + '；其中排在 d25 之前（说明产物与基线错位）' +
+        (bad.join(',') || '0')
     };
   }
 
@@ -211,10 +228,10 @@
     var inProduct = !!asSet(names(p))[SELF];
     var diff = b.count - p.baselineCount;
     return {
-      ok: diff === 1 && b.count === b.pages.length && !inProduct,
+      ok: diff >= 1 && b.count === b.pages.length && !inProduct,
       d: '产物 baselineCount=' + p.baselineCount + '，当前基线 ' + b.count + '（差 ' + diff +
-        '，应为 1＝仅新增本页）；本页出现在产物中=' + inProduct +
-        '（若差 >1，说明新增验证页后未重跑线上核验，产物过期）'
+        '，即产物生成后新增 ' + diff + ' 页）；本页出现在产物中=' + inProduct +
+        '（产物缺失/字段坏仍是 FAIL；基线增长本身不算过期，但新增页须由后续卡单独核验）'
     };
   }
 
@@ -234,9 +251,10 @@
     var rS = chkShape(product);
     rec('A3_productShape', rS.ok, rS.d);
 
-    /* ══ A4. 覆盖：基线除本页外全部有记录，且无越界/重复 ═════════ */
+    /* ══ A4. 覆盖：无幽灵页/无重复；未纳入页须全部在 d25 之后 ═════ */
     var rC = chkCoverage(product, baseline);
-    rec('A4_coverageComplete', rC.ok, rC.d);
+    var rT = chkTailOnly(product, baseline);
+    rec('A4_coverageNoGhostNoDup', rC.ok && rT.ok, rC.d + '；' + rT.d);
 
     /* ══ A5. 计数自洽（与逐页裁决、元页面标记互相对得上） ═══════ */
     var rN = chkCounts(product);
@@ -254,20 +272,21 @@
     var rF = chkClassification(product);
     rec('A8_failureClassified', rF.ok, rF.d);
 
-    /* ══ A9. 产物新鲜度：基线只比产物多本页，否则视为过期 ═══════ */
+    /* ══ A9. 产物快照自洽：差 ≥1 且本页不得混进产物 ═════════════ */
     var rR = chkFreshness(product, baseline);
-    rec('A9_productFresh', rR.ok, rR.d);
+    rec('A9_productSnapshotConsistent', rR.ok, rR.d);
 
-    /* ══ A10. 负例：同一批检查函数必须抓住 6 种篡改 ══════════════ */
+    /* ══ A10. 负例：同一批检查函数必须抓住 7 种篡改 ══════════════ */
     var muts = [];
-    function mut(name, fn, check, base) {
+    function mut(name, fn, check) {
       var p2 = clone(product);
       fn(p2);
-      var r = check(p2, base === 'fresh' ? null : baseline);
+      var r = check(p2, baseline);
       muts.push({ n: name, caught: !r.ok });
     }
-    mut('删掉 verify_d23 一页', function (p2) {
-      p2.pages = p2.pages.filter(function (x) { return x.page !== 'verify_d23'; });
+    /* 产物里塞基线没有的页（幽灵页）→ 覆盖检查必须 FAIL */
+    mut('产物塞入幽灵页 verify_zz', function (p2) {
+      p2.pages.push({ page: 'verify_zz', verdict: 'PASS', cls: 'ok', meta: false, failing: [], evidence: 'x' });
     }, chkCoverage);
     mut('summary.pass 自行加一', function (p2) { p2.summary.pass = p2.summary.pass + 1; }, chkCounts);
     mut('入口标成不可达', function (p2) { p2.entry.reachable = false; }, chkEntry);
@@ -279,16 +298,21 @@
     }, chkClassification);
     mut('commit 写成非十六进制', function (p2) { p2.commit = 'zzz'; }, chkShape);
 
+    /* D-27：基线在 d25 之前插页（产物与基线错位）→ 尾部新增检查必须 FAIL */
     var b2 = clone(baseline);
-    b2.count = b2.count + 1;
-    b2.pages.push('verify_d27');
-    var rFreshMut = chkFreshness(product, b2);
-    muts.push({ n: '基线新增一页但产物未重跑', caught: !rFreshMut.ok });
+    b2.pages.splice(b2.pages.indexOf('verify_d25'), 0, 'verify_d21b');
+    b2.count = b2.pages.length;
+    muts.push({ n: '基线在 d25 之前插页', caught: !chkTailOnly(product, b2).ok });
+    /* 反面：只在尾部追加新页（D-27 的真实情况）→ 尾部检查必须保持 OK，不算失败 */
+    var b3 = clone(baseline);
+    b3.pages.push('verify_d28');
+    b3.count = b3.pages.length;
+    muts.push({ n: '仅尾部追加新页（应放行）', caught: chkTailOnly(product, b3).ok });
 
     var missed = muts.filter(function (m) { return !m.caught; }).map(function (m) { return m.n; });
-    rec('A10_negativeMutantsCaught', muts.length === 7 && missed.length === 0,
-      muts.length + ' 个篡改样本，抓住 ' + (muts.length - missed.length) +
-      ' 个' + (missed.length ? '；漏检：' + missed.join('、') : '（覆盖/计数/入口/最新页/归因/字段/新鲜度）'));
+    rec('A10_negativeMutantsCaught', muts.length === 8 && missed.length === 0,
+      muts.length + ' 个样本，符合预期 ' + (muts.length - missed.length) +
+      ' 个' + (missed.length ? '；不符：' + missed.join('、') : '（幽灵页/计数/入口/最新页/归因/字段/中间插页 7 抓 + 尾部追加 1 放行）'));
 
   } catch (e) {
     rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
