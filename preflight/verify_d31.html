@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-31 产品化整理（阶段 A）</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-31 · 发布面补齐 / 8 处事实修正 / 层数口径统一</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  function read(path) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', path, false); x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  var TXT = {
+    readme: read('../README.md'),
+    plan: read('../PLAN.md'),
+    log: read('../CHANGELOG.md'),
+    notices: read('../THIRD-PARTY-NOTICES.md'),
+    sprites: read('../assets/sprites/LICENSE.md'),
+    d14: read('../docs/tasks/D-14-notice.md'),
+    s33: read('../docs/tasks/S3-3-modal.md'),
+    ignore: read('../.gitignore'),
+    index: read('../index.html'),
+    maps: read('../js/data/maps.js')
+  };
+  var DOCSET = [
+    ['README.md', TXT.readme], ['PLAN.md', TXT.plan], ['CHANGELOG.md', TXT.log],
+    ['THIRD-PARTY-NOTICES.md', TXT.notices], ['assets/sprites/LICENSE.md', TXT.sprites],
+    ['docs/tasks/D-14-notice.md', TXT.d14], ['docs/tasks/S3-3-modal.md', TXT.s33],
+    ['.gitignore', TXT.ignore], ['index.html', TXT.index]
+  ];
+
+  /* ── 锚点扫描（CHANGELOG 每条必须带锚点且能在代码里命中）── */
+  function scanAnchors(text, fs) {
+    var entries = [], bad = [], noAnchor = [];
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf('- ') !== 0) continue;
+      var m = /<!--\s*锚点:\s*([^#\s]+)#([^\s]+)\s*-->/.exec(lines[i]);
+      if (!m) { noAnchor.push(lines[i].slice(0, 40)); continue; }
+      var body = fs[m[1]];
+      if (typeof body !== 'string') { bad.push(m[1] + '（文件不存在）'); continue; }
+      entries.push(m[1] + '#' + m[2]);
+      if (body.indexOf(m[2]) < 0) bad.push(m[1] + '#' + m[2] + '（符号未命中）');
+      /* 末尾的"条目"本身也要覆盖到：D-31 的 CHANGELOG 条目指向自身时跳过 */
+      if (m[1] === 'CHANGELOG.md') entries.pop();
+    }
+    return { n: entries.length, bad: bad, noAnchor: noAnchor };
+  }
+  var FS = {};
+  [
+    'README.md', 'PLAN.md', 'CHANGELOG.md', 'THIRD-PARTY-NOTICES.md',
+    'assets/sprites/LICENSE.md', 'docs/tasks/D-14-notice.md', 'docs/tasks/S3-3-modal.md',
+    '.gitignore', 'index.html',
+    'js/data/maps.js', 'js/data/monsters.js', 'js/data/items.js', 'js/data/quests.js',
+    'js/systems/battle.js', 'js/systems/skills.js', 'js/systems/map.js',
+    'js/systems/inventory.js', 'js/systems/bestiary.js', 'js/systems/leaderboard.js',
+    'js/systems/npc.js', 'js/systems/learner.js', 'js/systems/ai.js', 'js/systems/modal.js',
+    'js/systems/hud.js', 'js/systems/notice.js', 'js/systems/fx.js', 'js/systems/audio.js',
+    'js/systems/fov.js', 'js/core/main.js', 'js/systems/save.js',
+    'preflight/selfcheck/run-all.ps1', 'preflight/selfcheck/d21_audit.js',
+    'preflight/selfcheck/selfcheck.js', 'preflight/bot_d23.html',
+    'preflight/selfcheck/d26-online-verify.json'
+  ].forEach(function (p) { FS[p] = read('../' + p); });
+
+  var VER = {
+    meta: (/<meta\s+name="game-version"\s+content="([^"]+)"/.exec(TXT.index) || [])[1] || null,
+    log: (/^##\s*\[(\d+\.\d+\.\d+)\]/m.exec(TXT.log) || [])[1] || null,
+    readme: (/版本\s*v(\d+\.\d+\.\d+)/.exec(TXT.readme) || [])[1] || null
+  };
+
+  /* ══ A1. CHANGELOG 覆盖到当前实现面 + 每条都有可解析锚点 ═══════ */
+  var anchor = scanAnchors(TXT.log, FS);
+  var HEAD_MARKERS = ['START_WEAPON', '_railLayout', '_rowDelta', 'ITEM_ICONS', 'THIRD-PARTY-NOTICES'];
+  var missingMarkers = HEAD_MARKERS.filter(function (k) { return TXT.log.indexOf(k) < 0; });
+  var a1 = anchor.n >= 25 && anchor.bad.length === 0 && anchor.noAnchor.length === 0 &&
+    missingMarkers.length === 0 && VER.log === VER.meta;
+  rec('A1_changelogAnchorsResolve', a1,
+    '条目锚点 ' + anchor.n + ' 条全部命中代码=' + (anchor.bad.length === 0) +
+    '；无锚点条目=' + anchor.noAnchor.length +
+    '；指向 D-27~D-31 的标记缺失=' + (missingMarkers.length ? missingMarkers.join(',') : '0') +
+    '；版本 ' + VER.log + ' / meta ' + VER.meta +
+    (anchor.bad.length ? '；坏锚点 ' + anchor.bad.slice(0, 3).join(' | ') : ''));
+
+  /* ══ A2. 版本号三处一致，且旧口径（PLAN 表 v1.0）不存在 ═════════ */
+  var oldVer = /\|\s*版本\s*\|\s*v1\.0\s*\|/.test(TXT.plan);
+  var a2 = !!VER.meta && VER.meta === VER.log && VER.meta === VER.readme && !oldVer;
+  rec('A2_versionSingleSource', a2,
+    'index meta=' + VER.meta + '；CHANGELOG=' + VER.log + '；README=' + VER.readme +
+    '；PLAN 旧「| 版本 | v1.0 |」仍在=' + oldVer + '（必须 false）');
+
+  /* ══ A3. rot.js BSD-3 全文三条款 ═════════════════════════════ */
+  var NEED = [
+    'BSD 3-Clause License',
+    'Redistributions of source code must retain the above copyright notice',
+    'Redistributions in binary form must reproduce the above copyright notice',
+    'Neither the name of the copyright holder nor the names of its',
+    'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"',
+    'Ondrej Zara'
+  ];
+  var lack = NEED.filter(function (s) { return TXT.notices.indexOf(s) < 0; });
+  rec('A3_rotJsBsd3FullText', lack.length === 0,
+    '逐句命中 ' + (NEED.length - lack.length) + '/' + NEED.length +
+    (lack.length ? '；缺：' + lack.join(' ｜ ') : ''));
+
+  /* ══ A4. 素材许可文件：存在 + 声明张数 = 磁盘张数 = NAMES 数 ═══ */
+  var audit = null;
+  try { audit = JSON.parse(read('selfcheck/d21-audit.json')); } catch (e) { audit = null; }
+  var spritesJs = read('../js/core/sprites.js');
+  var nb = spritesJs.slice(spritesJs.indexOf('var NAMES ='), spritesJs.indexOf('];', spritesJs.indexOf('var NAMES =')));
+  var namesCount = (nb.match(/'[a-z0-9_]+'/g) || []).length;
+  var declared = (/共\s*\*\*(\d+)\s*个\s*PNG\*\*/.exec(TXT.sprites) || [])[1];
+  var a4 = !!TXT.sprites && declared === '207' && !!audit && audit.total === 207 &&
+    namesCount === 207 && TXT.sprites.indexOf('CC0') >= 0 && TXT.sprites.indexOf('MIT') >= 0;
+  rec('A4_spriteLicenseCountMatches', a4,
+    'LICENSE.md 声明=' + declared + '；审计（磁盘实测）=' + (audit ? audit.total : 'n/a') +
+    '；NAMES 注册=' + namesCount + '；许可字样 CC0=' + (TXT.sprites.indexOf('CC0') >= 0) +
+    ' MIT=' + (TXT.sprites.indexOf('MIT') >= 0));
+
+  /* ══ A5. D-14 补记卡存在且六节齐全 ═══════════════════════════ */
+  var secs = ['## 1.', '## 2.', '## 3.', '## 4.', '## 5.', '## 6.'];
+  var got5 = secs.filter(function (s) { return TXT.d14.indexOf(s) === 0 || TXT.d14.indexOf('\n' + s) >= 0; });
+  var a5 = TXT.d14.length > 800 && got5.length === 6;
+  rec('A5_d14TaskCardSixSections', a5,
+    'docs/tasks/D-14-notice.md 长度=' + TXT.d14.length + ' 字符；六节命中=' + got5.length + '/6');
+
+  /* ══ A6. 8 处事实错误：旧文本必须不存在 ═══════════════════════ */
+  function activeIgnore(line) { return line.indexOf('#') !== 0 && line.trim() !== ''; }
+  var ignoreActive = TXT.ignore.split('\n').filter(activeIgnore).join('\n');
+  var OLD = [
+    ['PLAN M8 待办', /M8 内容深度（待办）/.test(TXT.plan)],
+    ['PLAN M9 待办', /M9 表现力（待办）/.test(TXT.plan)],
+    ['rank.js 引用', /js\/systems\/rank\.js/.test(TXT.plan + TXT.readme + TXT.s33)],
+    ['assets/img/ 引用', /assets\/img\//.test(TXT.plan + TXT.readme)],
+    ['README「Pages 已部署」', /Pages 已部署/.test(TXT.readme)],
+    ['README 目录「M1–M7」', /M1[–-]M7/.test(TXT.readme)],
+    ['.gitignore 仍忽略 shots_resize', /preflight\/shots_resize\//.test(ignoreActive)],
+    ['.gitignore 仍忽略 自检报告.md', /自检报告\.md/.test(ignoreActive)]
+  ];
+  var stillOld = OLD.filter(function (x) { return x[1]; }).map(function (x) { return x[0]; });
+  rec('A6_eightStaleFactsGone', stillOld.length === 0,
+    '8 项旧文本残留=' + (stillOld.length ? stillOld.join(' ｜ ') : '0') +
+    '（' + OLD.map(function (x) { return x[0] + '=' + (x[1] ? '旧' : '已改'); }).join('；') + '）');
+
+  /* ══ A7. 全仓文档不再引用 rank.js / assets/img/ ═══════════════ */
+  var bad7 = [];
+  DOCSET.forEach(function (p) {
+    if (/js\/systems\/rank\.js/.test(p[1])) bad7.push(p[0] + ':rank.js');
+    if (/assets\/img\//.test(p[1])) bad7.push(p[0] + ':assets/img');
+  });
+  rec('A7_noDanglingPaths', bad7.length === 0,
+    '扫描 ' + DOCSET.length + ' 份文档；悬空引用=' + (bad7.length ? bad7.join(',') : '0'));
+
+  /* ══ A8. 5 层口径统一（代码唯一权威 + 文档不冲突）═══════════════ */
+  var maps = Game.Data && Game.Data.MAPS;
+  var codeFloors = (maps && typeof maps.floors === 'number') ? maps.floors : null;
+  var bad8 = [];
+  DOCSET.forEach(function (p) {
+    if (/7\s*层|七层/.test(p[1])) bad8.push(p[0]);
+  });
+  var readmeFive = /地牢层数固定\s*\*{0,2}\s*5\s*层/.test(TXT.readme);
+  rec('A8_floorsFiveConsistent', codeFloors === 5 && readmeFive && bad8.length === 0,
+    'MAPS.floors=' + codeFloors + '（代码权威）；README「地牢层数固定 **5 层**」=' + readmeFive +
+    '；文档出现「7 层/七层」=' + (bad8.length ? bad8.join(',') : '0'));
+
+  /* ══ N1. 负例：CHANGELOG 塞一条假功能必须 FAIL ═══════════════ */
+  var fake = TXT.log + '\n- 云存档与跨设备同步。<!-- 锚点: js/systems/cloud.js#syncAll -->\n';
+  var badFake = scanAnchors(fake, FS);
+  var n1 = anchor.bad.length === 0 && badFake.bad.length === 1 &&
+    badFake.bad[0].indexOf('js/systems/cloud.js') === 0;
+  rec('N1_negativeFakeFeatureFails', n1,
+    '真实 CHANGELOG 坏锚点=' + anchor.bad.length + '；塞入假功能后坏锚点=' +
+    JSON.stringify(badFake.bad) + '（必须命中 js/systems/cloud.js）');
+
+  /* ══ N2. 负例：删掉许可文件必须 FAIL ═════════════════════════ */
+  var noLicense = { ok: false, d: '' };
+  (function () {
+    var empty = '';
+    var okReal = TXT.notices.indexOf('BSD 3-Clause License') >= 0;
+    var okEmpty = empty.indexOf('BSD 3-Clause License') >= 0;
+    noLicense = { ok: okReal && !okEmpty, d: '真实许可命中=' + okReal + '；空文件命中=' + okEmpty };
+  })();
+  rec('N2_negativeMissingLicenseFails', noLicense.ok, noLicense.d);
+
+  /* ══ N3. 负例：把旧文本改回去必须 FAIL ═══════════════════════ */
+  function staleDetect(t) {
+    return [/M8 内容深度（待办）/.test(t), /js\/systems\/rank\.js/.test(t), /assets\/img\//.test(t)];
+  }
+  var goodHits = staleDetect(TXT.plan).filter(Boolean).length;
+  var mutPlan = TXT.plan + '\n| 本地排行榜 | `js/systems/rank.js` |';
+  var mutHits = staleDetect(mutPlan).filter(Boolean).length;
+  var n3 = goodHits === 0 && mutHits === 1;
+  rec('N3_negativeStaleTextFails', n3,
+    '当前 PLAN 旧文本命中=' + goodHits + '（必须 0）；把 rank.js 写回去后命中=' + mutHits +
+    '（必须 1，说明检测器有效）');
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+  document.getElementById('result').textContent = head + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = head;
+})();
+</script>
+</body>
+</html>

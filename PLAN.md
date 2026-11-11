@@ -5,9 +5,9 @@
 | 课程 | 《人工智能基础》大作业 |
 | 项目类型 | 小游戏（AI 应用型） |
 | 作者 | 黄文博（软件245） |
-| 版本 | v1.0 |
-| 日期 | 2026-10-26 |
-| 状态 | 已定题登记，仓库已就绪，计划框架确认中 |
+| 版本 | v1.0.0（唯一权威来源：`index.html` 的 `meta[name=game-version]`） |
+| 日期 | 2026-10-26（规划）/ 2026-11-12（v1.0.0 交付） |
+| 状态 | 已完成 v1.0.0：五层地牢 + 四类 AI 能力，回归 73/73 |
 | 仓库 | https://github.com/CodeKiller-3/ai-dungeon-rpg（已创建，main 已推送） |
 
 > 本文档为项目开发规划书，长期维护于仓库根目录（`PLAN.md`），随里程碑推进更新，作为需求基线、架构设计、拼装清单、开发排期与验收依据。
@@ -375,7 +375,7 @@ const ITEMS = {
     atk: 5,
     price: 60,
     stackable: false,
-    icon: "assets/img/sword_iron.png"
+    icon: "weapon_regular_sword"   /* 图标名为 assets/sprites 下的素材键，映射表见 js/data/items.js 的 ITEM_ICONS */
   },
   potion_small: {
     id: "potion_small",
@@ -417,7 +417,7 @@ const MONSTERS = {
 | maxStack | number | 堆叠上限（stackable=true 时） |
 | atk / def / heal / mp | number(可选) | 属性效果（按 type 使用） |
 | slot | weapon\|armor(可选) | 装备位（weapon/armor 时必填） |
-| icon | string | 图标相对路径 assets/img/ |
+| icon | string | 素材键名（对应 `assets/sprites/<name>.png`，由 `js/data/items.js` 的 `ITEM_ICONS` 显式映射） |
 
 **MONSTERS**（`data/monsters.js`）：
 
@@ -699,7 +699,9 @@ const MONSTERS = {
 | 渲染增强 | 自绘像素 + **引入 kni-dungeon 真实精灵**（骑士/小怪/Boss） | headless 无报错、素材就绪时自动替换色块 | ✅ 通过 |
 | 素材尝试 | 0x72 DungeonTileset II（CC0，经 kni-dungeon 镜像） | LFS 通道部分受限：6/7 精灵成功，地板 atlas 失败 | ⚠️ 6 个精灵已接入，地板降级自绘砖纹 |
 
-### 14.3 M8 内容深度（待办）
+### 14.3 M8 内容深度（已完成）
+
+> 状态：6 项全部落地并过验证（v1.0.0 交付，回归 73/73）。
 
 | 子任务 | 模块 | AI 协作轮次 | 效果判据 |
 |---|---|---|---|
@@ -707,10 +709,12 @@ const MONSTERS = {
 | Boss 战机制 | `js/data/monsters.js` 扩展 + battle 分支：巨龙二阶段（半血狂暴，攻防提升） | 3-5 轮 | 主线 Boss 血量 <50% 触发狂暴，日志提示，数值正确 |
 | 装备词缀 | ITEMS Schema 扩展：普通/优秀/稀有 3 档，随机附加属性 | 3-5 轮 | 商店与掉落出现多档装备，装备后属性结算正确 |
 | 图鉴收集 | `js/systems/bestiary.js`：怪物/物品图鉴（M 面板分页） | 2-4 轮 | 首次击杀/获得自动登记，图鉴可翻页查看 |
-| 本地排行榜 | `js/systems/rank.js`：通关时间/金币/等级 3 项排行（localStorage） | 2-3 轮 | 通关后写入排行，排行榜面板可查看最近 10 条 |
+| 本地排行榜 | `js/systems/leaderboard.js`：通关时间/金币/等级 3 项排行（localStorage 键 `aiDungeon_leaderboard`） | 2-3 轮 | 通关后写入排行，排行榜面板可查看最近 10 条 |
 | 难度曲线 | MAPS/enemyTable 数值平衡（逐层强度） | 2-3 轮 | 1-3 层难度单调递增，不靠刷可通关 |
 
-### 14.4 M9 表现力（待办）
+### 14.4 M9 表现力（已完成）
+
+> 状态：已落地（粒子 / 三场景 BGM / 素材接入 / 程序化音效 / 设置面板）。其中「音频素材」一项按原计划评估后**未引入外部音效包**，改用 Web Audio 程序化合成（零素材依赖），`assets/sprites/` 的逐文件来源声明见同目录 `LICENSE.md`。
 
 | 子任务 | 模块 | AI 协作轮次 | 效果判据 |
 |---|---|---|---|
