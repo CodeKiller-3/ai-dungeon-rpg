@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-11T16:59:24.607Z",
+  "at": "2026-11-11T17:10:32.665Z",
   "summary": {
     "PASS": 32,
     "WARN": 1,
@@ -10,13 +10,13 @@
       "level": "WARN",
       "id": "QF-01",
       "name": "单文件体积偏大",
-      "detail": "js/core/main.js 34.9KB, js/core/render.js 67.2KB, js/systems/battle.js 35.6KB, js/systems/map.js 35.7KB, js/systems/modal.js 53.4KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
+      "detail": "js/core/main.js 34.9KB, js/core/render.js 67.2KB, js/systems/battle.js 35.6KB, js/systems/map.js 35.7KB, js/systems/modal.js 52.0KB, js/vendor/howler.min.js 35.3KB, js/vendor/rot.min.js 67.3KB"
     },
     {
       "level": "PASS",
       "id": "AS-01",
       "name": "已注册素材缺文件",
-      "detail": "全部 198 个注册名均有 PNG"
+      "detail": "全部 207 个注册名均有 PNG"
     },
     {
       "level": "PASS",
@@ -94,7 +94,7 @@
       "level": "PASS",
       "id": "QF-02",
       "name": "代码总量",
-      "detail": "38 文件 / 518.5 KB（不含 vendor）"
+      "detail": "38 文件 / 520.2 KB（不含 vendor）"
     },
     {
       "level": "PASS",
@@ -230,8 +230,8 @@
       8,
       8
     ],
-    "spritesRegistered": 198,
-    "spritesOnDisk": 198,
+    "spritesRegistered": 207,
+    "spritesOnDisk": 207,
     "spritesMissing": []
   }
 }

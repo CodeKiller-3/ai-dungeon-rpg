@@ -126,41 +126,14 @@
     return n > 0 ? ' +' + n : '';
   }
 
-  /* P2-2：物品行图标映射（以 js/data/items.js 实际 id 为准）：
-   *   potion_small→flask_red、potion_large/potion_xl→flask_big_red、potion_mana→flask_blue；
-   *   新武器按卡面逐一映射（sword_rusty→weapon_rusty_sword、knife→weapon_knife、
-   *   machete→weapon_machete、sword_iron→weapon_regular_sword、sword_steel→weapon_duel_sword、
-   *   axe_war→weapon_waraxe、bow_hunter→weapon_bow_2、hammer→weapon_hammer、spear→weapon_spear、
-   *   sword_magic→weapon_knight_sword、staff_fire→weapon_red_magic_staff、bow_elite→weapon_bow、
-   *   axe_double→weapon_double_axe、sword_anime→weapon_anime_sword）；
-   *   品质档沿用 P1-2 既有规则（*_rare→weapon_golden_sword、*_epic→weapon_lavish_sword，
-   *   保持品质可辨识，不改为基础档图标）；armor_* / 未知 → null（不画，行文字原位）。素材缺失同样返回 null。 */
+  /* D-30：物品 id → 图标名只查显式表（Game.Data.ITEM_ICONS，见 js/data/items.js）。
+   * 表缺失或该 id 未登记 → null（不再按 id 命名规则猜；画不出图标就退回纯文字行）。
+   * 品质变体（_rare/_epic）在表里逐条写明，映射关系可机器读、可断言。 */
   function itemIcon(id) {
     if (typeof id !== 'string' || !id) return null;
-    var name;
-    if (id === 'potion_small') name = 'flask_red';
-    else if (id === 'potion_large') name = 'flask_big_red';
-    else if (id === 'potion_xl') name = 'flask_big_red';
-    else if (id === 'potion_mana') name = 'flask_blue';
-    else if (id === 'sword_bone') name = 'weapon_rusty_sword';
-    else if (id === 'sword_dragon') name = 'weapon_red_gem_sword';
-    else if (id === 'sword_rusty') name = 'weapon_rusty_sword';
-    else if (id === 'knife') name = 'weapon_knife';
-    else if (id === 'machete') name = 'weapon_machete';
-    else if (id === 'sword_iron') name = 'weapon_regular_sword';
-    else if (id === 'sword_steel') name = 'weapon_duel_sword';
-    else if (id === 'axe_war') name = 'weapon_waraxe';
-    else if (id === 'bow_hunter') name = 'weapon_bow_2';
-    else if (id === 'hammer') name = 'weapon_hammer';
-    else if (id === 'spear') name = 'weapon_spear';
-    else if (id === 'sword_magic') name = 'weapon_knight_sword';
-    else if (id === 'staff_fire') name = 'weapon_red_magic_staff';
-    else if (id === 'bow_elite') name = 'weapon_bow';
-    else if (id === 'axe_double') name = 'weapon_double_axe';
-    else if (id === 'sword_anime') name = 'weapon_anime_sword';
-    else if (/^sword_.+_rare$/.test(id)) name = 'weapon_golden_sword';
-    else if (/^sword_.+_epic$/.test(id)) name = 'weapon_lavish_sword';
-    else return null;
+    var map = Game.Data && Game.Data.ITEM_ICONS;
+    if (!map || !Object.prototype.hasOwnProperty.call(map, id)) return null;
+    var name = map[id];
     var S = Game.Core && Game.Core.Sprites;
     if (!S || typeof S.get !== 'function') return null;
     return S.get(name) || null;
@@ -1089,10 +1062,15 @@
       return str + ell;
     },
 
-    /* P1-2：当前行物品图标（inventory/shop/图鉴物品页；armor/未知返回 null 不画）
+    /* P1-2：当前行物品图标（inventory/shop/图鉴物品页）。D-30 起物品 id → 图标名走显式表，
+     * 表里没有的 id（含未知物品）返回 null，不画图标、行文字保持原位。
      * shop 条目结构为 {id, item}，inventory 为 {id, count}，图鉴 page2 为 {id, def} */
     _rowIcon: function (entry) {
       if (!entry) return null;
+      /* D-30：逻辑宽 < 420（含 320 档）一律不画图标——那里连正文都在截断，
+       * 再让图标占 22px 行首只会更挤；宽屏照常。宽度未知（0）时保持旧行为。 */
+      var vw = cssSize().w;
+      if (vw && vw < 420) return null;
       var id = null;
       if (kind === 'shop') id = (entry.item && entry.item.id) || entry.id;
       else if (kind === 'inventory') id = entry.id;

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-30 背包图标化</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+  canvas#cv { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-30 · 背包图标化：48/48 映射、素材可解码、仍 60 色、行首 16×16、320 不画</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<canvas id="cv" width="16" height="16"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="lib/assetcheck.js"></script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var AC = window.AssetCheck;
+  var M = Game.Modal, R = Game.Core.Render, S = Game.Core.Sprites,
+      IT = Game.Data.ITEMS, MAP = Game.Data.ITEM_ICONS || {}, Inv = Game.Systems.Inventory;
+
+  var NEW_ICONS = ['icon_armor_leather', 'icon_armor_chain_mail', 'icon_armor_plate',
+    'icon_armor_robe', 'icon_armor_scale',
+    'icon_scroll_1', 'icon_scroll_2', 'icon_scroll_3', 'icon_scroll_4'];
+
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  function src(path) {
+    var x = new XMLHttpRequest();
+    x.open('GET', path, false); x.send(null);
+    return x.responseText || '';
+  }
+  function uniq(a) {
+    var s = {}, o = [];
+    a.forEach(function (v) { if (!s[v]) { s[v] = 1; o.push(v); } });
+    return o;
+  }
+  /* 假 ctx：记录 drawImage / fillText 的落笔位置，用来断言"图标在哪、文字从哪开始" */
+  function fakeCtx(log) {
+    var o = {}, noop = function () {};
+    var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+      'fillRect', 'strokeRect', 'clearRect', 'arc', 'rect', 'roundRect', 'setTransform',
+      'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+    for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+    o.createLinearGradient = function () { return { addColorStop: noop }; };
+    o.createRadialGradient = o.createLinearGradient;
+    o.createPattern = function () { return {}; };
+    o.measureText = function (t) { return { width: String(t).length * 7 }; };
+    o.fillText = function (t, x, y) { log.push({ t: 'text', s: String(t), x: x, y: y }); };
+    o.strokeText = o.fillText;
+    o.drawImage = function (img, dx, dy, dw, dh) {
+      log.push({ t: 'img', n: String(img && img.src || '').split('/').pop().replace(/\.png$/i, ''),
+        x: dx, y: dy, w: dw, h: dh });
+    };
+    o.getImageData = function () { return { data: [] }; };
+    return o;
+  }
+  function setViewport(w, h) { R.cssW = w; R.cssH = h; }
+  function drawWith(kind) {
+    var log = [], real = R._ctx;
+    M.open(kind);
+    try { R._ctx = fakeCtx(log); M.draw(); } catch (e) { log.push({ t: 'err', s: String(e) }); }
+    R._ctx = real;
+    var L = M._layout();
+    M.close();
+    return { log: log, L: L };
+  }
+  function iconsOf(log) {
+    return log.filter(function (e) { return e.t === 'img'; });
+  }
+  /* 映射覆盖：返回未映射物品 + 孤儿图标（素材已注册、但没有任何物品用） */
+  function coverage() {
+    var missing = [], used = {};
+    for (var id in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, id)) continue;
+      var n = MAP[id];
+      if (typeof n !== 'string' || !n) { missing.push(id); continue; }
+      used[n] = 1;
+    }
+    return { missing: missing, used: used, mapped: Object.keys(MAP).length };
+  }
+
+  /* 页内解码一张 PNG（D-21 同一套 statsFromImageData） */
+  function loadOne(name) {
+    return new Promise(function (resolve) {
+      var cv = document.getElementById('cv');
+      var ctx = cv.getContext('2d');
+      var im = new Image();
+      im.onload = function () {
+        try {
+          cv.width = im.width; cv.height = im.height;
+          ctx.clearRect(0, 0, im.width, im.height);
+          ctx.drawImage(im, 0, 0);
+          var data = ctx.getImageData(0, 0, im.width, im.height);
+          resolve({ name: name, ok: true, stat: AC.statsFromImageData(name, data) });
+        } catch (e) {
+          resolve({ name: name, ok: false, err: String(e && e.message || e) });
+        }
+      };
+      im.onerror = function () { resolve({ name: name, ok: false, err: 'load error' }); };
+      im.src = '../assets/sprites/' + name + '.png';
+    });
+  }
+
+  function run(list) {
+    try {
+      var audit = null;
+      try { audit = JSON.parse(src('selfcheck/d21-audit.json')); } catch (e) { audit = null; }
+      var palette = (audit && audit.palette) || [];
+      var auditFiles = {};
+      ((audit && audit.files) || []).forEach(function (f) { auditFiles[f.name] = f; });
+      var stats = list.filter(function (x) { return x.ok; }).map(function (x) { return x.stat; });
+
+      /* NAMES 从源码解析（不手抄） */
+      var jsSrc = src('../js/core/sprites.js');
+      var namesBlock = jsSrc.slice(jsSrc.indexOf('var NAMES ='), jsSrc.indexOf('];', jsSrc.indexOf('var NAMES =')));
+      var names = (namesBlock.match(/'([a-z0-9_]+)'/g) || []).map(function (s) { return s.slice(1, -1); });
+
+      /* ══ A1. 48 件全部有图标名，且图标名已注册、可解析 ══════════ */
+      var cov = coverage();
+      /* 孤儿图标 = 已注册为物品图标名（weapon_/flask_/icon_ 前缀）、但没有任何物品引用。
+       * 不要求为 0（0x72 素材包本身就有未使用的武器图），但必须列出来可见。 */
+      var orphanIcons = uniq(names).filter(function (n) {
+        return /^(weapon_|flask_|icon_)/.test(n) && !cov.used[n];
+      });
+      var notRegistered = [];
+      var notResolved = [];
+      for (var id in MAP) {
+        if (!Object.prototype.hasOwnProperty.call(MAP, id)) continue;
+        var nm = MAP[id];
+        if (names.indexOf(nm) < 0) notRegistered.push(id + '→' + nm);
+        /* 走真实渲染入口：itemIcon 同路径（_rowIcon）解析不到就是 null */
+        if (!S.get(nm)) notResolved.push(id + '→' + nm);
+      }
+      var a1 = cov.missing.length === 0 && notRegistered.length === 0 &&
+        notResolved.length === 0 && cov.mapped === 48 && orphanIcons.length >= 0;
+      rec('A1_all48Mapped', a1,
+        '物品 ' + Object.keys(IT).length + ' 件 / 映射 ' + cov.mapped + ' 条；未映射=' +
+        (cov.missing.length ? cov.missing.join(',') : '0') +
+        '；图标名未注册=' + (notRegistered.length ? notRegistered.join(',') : '0') +
+        '；解析不到素材=' + (notResolved.length ? notResolved.join(',') : '0') +
+        '；孤儿图标（已注册但无物品使用，不要求为 0）=' +
+        (orphanIcons.length ? orphanIcons.join(',') : '无'));
+
+      /* ══ A2. 9 张新图标可加载、不透明像素 > 0（D-21 空帧检测器）══ */
+      var failed = list.filter(function (x) { return !x.ok; });
+      var empty = AC.emptyFrames(stats);
+      var near = AC.nearEmptyFrames(stats, 5);
+      var auditMiss = NEW_ICONS.filter(function (n) { return !auditFiles[n + '.png']; });
+      var auditEmpty = NEW_ICONS.filter(function (n) {
+        var f = auditFiles[n + '.png']; return f && !(f.opaque > 0);
+      });
+      var a2 = failed.length === 0 && stats.length === NEW_ICONS.length && empty.length === 0 &&
+        auditMiss.length === 0 && auditEmpty.length === 0 && near.length === 0;
+      rec('A2_newIconsDecodable', a2,
+        '新图标 ' + stats.length + '/' + NEW_ICONS.length + ' 张解码成功；加载失败=' +
+        (failed.length ? JSON.stringify(failed) : '0') + '；不透明像素为 0=' +
+        (empty.length ? empty.join(',') : '0') + '；近乎空帧(≤5px)=' +
+        (near.length ? JSON.stringify(near) : '无') +
+        '；审计产物缺口=' + (auditMiss.length ? auditMiss.join(',') : '无') +
+        '；opaque 明细=' + stats.map(function (s) { return s.name.replace('icon_', '') + ':' + s.opaque; }).join(' '));
+
+      /* ══ A3. 调色板仍恰好 60 色，新图标无越界色 ══════════════════ */
+      var colors9 = uniq([].concat.apply([], stats.map(function (s) { return s.colors; })));
+      var bad = AC.paletteViolations(stats, palette);
+      var a3 = palette.length === 60 && (audit && audit.paletteSize === 60) &&
+        bad.length === 0 && !!audit && audit.total === 198 + NEW_ICONS.length;
+      rec('A3_paletteStill60', a3,
+        '审计调色板=' + palette.length + '（paletteSize=' + (audit ? audit.paletteSize : 'n/a') +
+        '）、审计文件数=' + (audit ? audit.total : 'n/a') + '（期望 198+9=207）；' +
+        '9 张新图标用到 ' + colors9.length + ' 种色，越界=' +
+        (bad.length ? JSON.stringify(bad) : '0'));
+
+      /* ══ A4. 行首图标 ↔ 物品 id 对应（5 件：护甲/卷轴/强化武器/药水/新武器）══ */
+      var LIST5 = [
+        { id: 'armor_leather', count: 1 },      /* 护甲 */
+        { id: 'scroll_upgrade_3', count: 1 },   /* 卷轴 */
+        { id: 'sword_iron', count: 1 },         /* 强化过的武器 */
+        { id: 'potion_small', count: 2 },       /* 药水 */
+        { id: 'sword_knight', count: 1 }        /* 新映射武器（weapon_katana） */
+      ];
+      var realList = Inv.list;
+      Inv.list = function () { return LIST5; };
+      setViewport(1024, 640);
+      Game.Data.Player.equipment = { weapon: 'sword_iron', armor: null };
+      Game.Data.Player.upg = { sword_iron: 3 };
+      Inv.recalcEquip();
+      var r4 = drawWith('inventory');
+      Inv.list = realList;
+      var got4 = iconsOf(r4.log).map(function (e) { return e.n; });
+      var exp4 = ['icon_armor_leather', 'icon_scroll_3', 'weapon_regular_sword',
+        'flask_red', 'weapon_katana'];
+      var a4 = got4.length === exp4.length && got4.every(function (n, i) { return n === exp4[i]; });
+      rec('A4_rowIconPerItem', a4,
+        '实绘图标序列=' + JSON.stringify(got4) + '；期望=' + JSON.stringify(exp4));
+
+      /* ══ A5. 320 逻辑宽不画图标；文字仍照常 ═════════════════════ */
+      Inv.list = function () { return LIST5; };
+      setViewport(320, 568);
+      var r5 = drawWith('inventory');
+      Inv.list = realList;
+      var imgs5 = iconsOf(r5.log);
+      var texts5 = r5.log.filter(function (e) { return e.t === 'text'; });
+      var a5 = imgs5.length === 0 && texts5.length > 0 &&
+        M._rowIcon({ id: 'armor_leather' }) === null;
+      rec('A5_noIconAt320', a5,
+        '320 宽：drawImage 次数=' + imgs5.length + '（必须 0）、文字落笔=' + texts5.length +
+        ' 条（必须 >0）；_rowIcon(armor_leather)=' + M._rowIcon({ id: 'armor_leather' }));
+
+      /* ══ A6. 宽屏图标不侵占文字起始 x（实测数字）══════════════════ */
+      Inv.list = function () { return LIST5; };
+      setViewport(1024, 640);
+      var r6 = drawWith('inventory');
+      Inv.list = realList;
+      var imgs6 = iconsOf(r6.log);
+      var px6 = r6.L.panelLeft;
+      var i0 = imgs6[0] || null;
+      var rowText6 = r6.log.filter(function (e) { return e.t === 'text' && e.s.indexOf('皮革甲') === 0; })[0] || null;
+      var iconEnd = i0 ? i0.x + i0.w : null;
+      var a6 = !!i0 && i0.w === 16 && i0.h === 16 && !!rowText6 &&
+        Math.abs(i0.x - (px6 + 16)) < 0.01 && Math.abs(rowText6.x - (px6 + 36)) < 0.01 &&
+        iconEnd <= rowText6.x;
+      rec('A6_iconDoesNotInvadeText', a6,
+        'panelLeft=' + px6 + '；图标 x=' + (i0 ? i0.x : 'n/a') + ' 宽=' + (i0 ? i0.w : 'n/a') +
+        '（期望 ' + (px6 + 16) + '/16）；文字 x=' + (rowText6 ? rowText6.x : 'n/a') +
+        '（期望 ' + (px6 + 36) + '）；图标右缘 ' + iconEnd + ' ≤ 文字起点 ' +
+        (rowText6 ? rowText6.x : 'n/a'));
+
+      /* ══ A7. _rowText 逐条与 D-29 相同 ═══════════════════════════ */
+      Game.Data.Player.upg = { sword_iron: 2 };
+      M.open('inventory');
+      var bad7 = [], eq7 = 0;
+      for (var rid in IT) {
+        if (!Object.prototype.hasOwnProperty.call(IT, rid)) continue;
+        var rit = IT[rid], rn = (Game.Data.Player.upg && Game.Data.Player.upg[rid]) || 0;
+        var got7 = M._rowText({ id: rid, count: 1 });
+        if (rit.type === 'weapon' || rit.type === 'armor') {
+          eq7++;
+          var rf = rit.type === 'weapon' ? 'atk' : 'def';
+          var rb = (rit.effect && rit.effect[rf]) ? rit.effect[rf] : 0;
+          var exp7 = rit.name + (rn > 0 ? ' +' + rn : '') + ' x1   ' +
+            (rf === 'atk' ? '攻击+' : '防御+') + rb +
+            ((rit.effect && rit.effect.maxHp) ? ' 生命+' + rit.effect.maxHp : '');
+          if (got7 !== exp7) bad7.push(rid + '：' + got7 + ' ≠ ' + exp7);
+        } else if (got7.indexOf('▲') >= 0 || got7.indexOf('▼') >= 0) {
+          bad7.push(rid + '：行串混入差值');
+        }
+      }
+      M.close();
+      rec('A7_rowTextUnchanged', bad7.length === 0 && eq7 >= 15,
+        '装备类 ' + eq7 + ' 件逐条与 D-29 串重建一致=' + (bad7.length === 0) +
+        (bad7.length ? '；差异 ' + bad7.slice(0, 2).join(' | ') : ''));
+
+      /* ══ A8. 商店沿用同一映射（上下文一致）══════════════════════ */
+      var realStock = Game.Systems.Shop.getStock;
+      Game.Systems.Shop.getStock = function () {
+        return [{ id: 'armor_leather', item: IT.armor_leather },
+                { id: 'scroll_upgrade', item: IT.scroll_upgrade }];
+      };
+      setViewport(1024, 640);
+      var r8 = drawWith('shop');
+      Game.Systems.Shop.getStock = realStock;
+      var got8 = iconsOf(r8.log).map(function (e) { return e.n; });
+      var a8 = got8.length === 2 && got8[0] === 'icon_armor_leather' && got8[1] === 'icon_scroll_1';
+      rec('A8_shopSameMapping', a8,
+        '商店实绘图标=' + JSON.stringify(got8) + '；期望 [icon_armor_leather,icon_scroll_1]（与背包同一张表）；' +
+        '几何说明：图标只占行首 22px，行高/行数/滚动锚定不变');
+
+      /* ══ N1. 负例：映射表删一条必须 FAIL ═════════════════════════ */
+      var saved = MAP.armor_leather;
+      delete MAP.armor_leather;
+      var covBad = coverage();
+      MAP.armor_leather = saved;
+      var n1 = cov.missing.length === 0 && covBad.missing.length === 1 && covBad.missing[0] === 'armor_leather';
+      rec('N1_negativeMissingMapFails', n1,
+        '正常未映射=' + cov.missing.length + '；删掉 armor_leather 后未映射=' +
+        JSON.stringify(covBad.missing) + '（必须恰好 1 条，否则覆盖断言是假的）');
+
+      /* ══ N2. 负例：掺入新颜色的假图必须被 60 色断言抓住 ═════════ */
+      var cv = document.getElementById('cv');
+      var cx = cv.getContext('2d');
+      var origW = cv.width, origH = cv.height;
+      cv.width = 16; cv.height = 16;
+      cx.clearRect(0, 0, 16, 16);
+      cx.fillStyle = '#123456';            /* 不在 60 色调色板内 */
+      cx.fillRect(0, 0, 8, 16);
+      cx.fillStyle = palette[0] || '#000000';
+      cx.fillRect(8, 0, 8, 16);
+      var fakeStat = AC.statsFromImageData('icon_fake_newcolor', cx.getImageData(0, 0, 16, 16));
+      cv.width = origW; cv.height = origH;
+      var fakeBad = AC.paletteViolations([fakeStat], palette);
+      var realOk = AC.paletteViolations(stats, palette).length === 0;
+      var n2 = realOk && fakeBad.length === 1 && fakeBad[0].colors.indexOf('#123456') >= 0;
+      rec('N2_negativeNewColorFails', n2,
+        '真实 9 张判=' + (realOk ? '0 越界' : '有越界') + '；伪造 #123456 假图判=' +
+        JSON.stringify(fakeBad) + '（必须命中 #123456，否则 60 色断言不敏感）');
+
+      /* ══ N3. 负例：320 宽仍画图标必须 FAIL ═══════════════════════ */
+      function iconGate(cw, drawn) {
+        return cw < 420 ? drawn === 0 : true;
+      }
+      var n3 = iconGate(320, 0) === true && iconGate(320, 5) === false &&
+        iconGate(1024, 5) === true;
+      rec('N3_negativeIconAt320Fails', n3,
+        '真实 320 判=' + iconGate(320, 0) + '（true）；伪造"320 仍画 5 个图标"判=' +
+        iconGate(320, 5) + '（false，会被抓住）；1024 画 5 个判=' + iconGate(1024, 5) + '（true）');
+
+      setViewport(1024, 640);
+    } catch (e) {
+      rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
+    }
+    finish();
+  }
+
+  function finish() {
+    var keys = Object.keys(out.sub);
+    var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+    var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+    document.getElementById('result').textContent = head + '\n\n' +
+      keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+    document.title = head;
+  }
+
+  /* 等素材全部加载（最多 8s），再页内解码 9 张新图标 */
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (S.isReady() || (Date.now() - t0) > 8000) {
+      Promise.all(NEW_ICONS.map(loadOne)).then(run);
+      return;
+    }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

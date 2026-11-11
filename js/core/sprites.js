@@ -86,7 +86,11 @@
     'masked_orc_run_anim_f0', 'masked_orc_run_anim_f1', 'masked_orc_run_anim_f2', 'masked_orc_run_anim_f3',
     'pumpkin_dude_idle_anim_f0', 'pumpkin_dude_idle_anim_f1', 'pumpkin_dude_idle_anim_f2', 'pumpkin_dude_idle_anim_f3',
     'pumpkin_dude_run_anim_f0', 'pumpkin_dude_run_anim_f1', 'pumpkin_dude_run_anim_f2', 'pumpkin_dude_run_anim_f3',
-    'angel_idle_anim_f0', 'angel_idle_anim_f1', 'angel_idle_anim_f2', 'angel_idle_anim_f3'];
+    'angel_idle_anim_f0', 'angel_idle_anim_f1', 'angel_idle_anim_f2', 'angel_idle_anim_f3',
+    /* D-30：背包图标补齐——护甲 5 类 + 强化卷轴 4 档（16×16，全部落在既有 60 色内）。
+     * 与物品 id 的对应关系不在这里猜，显式表见 js/data/items.js 的 Game.Data.ITEM_ICONS。 */
+    'icon_armor_leather', 'icon_armor_chain_mail', 'icon_armor_plate', 'icon_armor_robe', 'icon_armor_scale',
+    'icon_scroll_1', 'icon_scroll_2', 'icon_scroll_3', 'icon_scroll_4'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */

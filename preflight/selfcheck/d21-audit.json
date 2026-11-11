@@ -1,6 +1,6 @@
-﻿{
-  "at": "2026-11-11T12:27:46.109Z",
-  "total": 198,
+{
+  "at": "2026-11-11T17:05:52.558Z",
+  "total": 207,
   "paletteSize": 60,
   "palette": [
     "#221510",
@@ -69,7 +69,7 @@
   "dimsBad": [],
   "indexBad": [],
   "names": {
-    "count": 198,
+    "count": 207,
     "missingFiles": [],
     "extraFiles": [],
     "dupNames": []
@@ -1192,6 +1192,220 @@
         4,
         6,
         13,
+        15
+      ]
+    },
+    {
+      "name": "icon_armor_chain_mail.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 146,
+      "full": 146,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#414859",
+        "#8f4029",
+        "#b6cbcf",
+        "#facb3e"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_armor_leather.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 146,
+      "full": 146,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#62232f",
+        "#8f4029",
+        "#c56025",
+        "#facb3e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_armor_plate.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 152,
+      "full": 152,
+      "semi": 0,
+      "colorCount": 5,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#b6cbcf",
+        "#facb3e",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_armor_robe.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 151,
+      "full": 151,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#5698cc",
+        "#5956bd",
+        "#5f2d56",
+        "#9f294e",
+        "#facb3e"
+      ],
+      "bbox": [
+        1,
+        1,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_armor_scale.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 146,
+      "full": 146,
+      "semi": 0,
+      "colorCount": 6,
+      "colors": [
+        "#222222",
+        "#2a2a3a",
+        "#417089",
+        "#72d6ce",
+        "#8f4029",
+        "#facb3e"
+      ],
+      "bbox": [
+        1,
+        2,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_scroll_1.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 166,
+      "full": 166,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#414859",
+        "#483b3a",
+        "#aa8d7a",
+        "#b58049",
+        "#b6cbcf",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_scroll_2.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 166,
+      "full": 166,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#3d734f",
+        "#483b3a",
+        "#4ba747",
+        "#aa8d7a",
+        "#b58049",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_scroll_3.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 166,
+      "full": 166,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#314152",
+        "#483b3a",
+        "#5698cc",
+        "#aa8d7a",
+        "#b58049",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
+        15
+      ]
+    },
+    {
+      "name": "icon_scroll_4.png",
+      "w": 16,
+      "h": 16,
+      "opaque": 166,
+      "full": 166,
+      "semi": 0,
+      "colorCount": 8,
+      "colors": [
+        "#222222",
+        "#483b3a",
+        "#5956bd",
+        "#5f2d56",
+        "#aa8d7a",
+        "#b58049",
+        "#d3bfa9",
+        "#fdf7ed"
+      ],
+      "bbox": [
+        1,
+        0,
+        14,
         15
       ]
     },
@@ -4906,6 +5120,123 @@
         "goblin_run_anim_f1",
         "goblin_run_anim_f2",
         "goblin_run_anim_f3"
+      ]
+    },
+    {
+      "group": "icon_armor_chain_mail",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_armor_chain_mail"
+      ]
+    },
+    {
+      "group": "icon_armor_leather",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_armor_leather"
+      ]
+    },
+    {
+      "group": "icon_armor_plate",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_armor_plate"
+      ]
+    },
+    {
+      "group": "icon_armor_robe",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_armor_robe"
+      ]
+    },
+    {
+      "group": "icon_armor_scale",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_armor_scale"
+      ]
+    },
+    {
+      "group": "icon_scroll_1",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_scroll_1"
+      ]
+    },
+    {
+      "group": "icon_scroll_2",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_scroll_2"
+      ]
+    },
+    {
+      "group": "icon_scroll_3",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_scroll_3"
+      ]
+    },
+    {
+      "group": "icon_scroll_4",
+      "frames": 1,
+      "dims": [
+        "16x16"
+      ],
+      "dimsOk": true,
+      "missing": [],
+      "dup": [],
+      "files": [
+        "icon_scroll_4"
       ]
     },
     {

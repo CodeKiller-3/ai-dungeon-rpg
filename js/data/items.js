@@ -124,4 +124,64 @@
   Game.Data.SHOP_SCROLLS = [
     'scroll_upgrade', 'scroll_upgrade_2', 'scroll_upgrade_3', 'scroll_upgrade_4', 'scroll_upgrade_4'
   ];
+
+  /* D-30：物品 id → 素材名的显式映射表（可机器读，不靠命名规则猜）。
+   * 覆盖 ITEMS 全部 48 件，未映射数量为 0；品质变体（_rare/_epic）与基础档共用同一图标，
+   * 与 D-21/P2-2 既有口径一致（品质靠行尾徽标识别，不靠图标）。
+   * 本表是唯一事实来源：modal.itemIcon() 只查表，查不到即返回 null（画不出图标就退回纯文字）。
+   * 护甲/卷轴为 D-30 新增素材；sword_knight 复用既有未映射的 weapon_katana
+   * （骑士长剑是长直刃；weapon_knight_sword 已被 sword_magic 占用，不动既有映射）。 */
+  Game.Data.ITEM_ICONS = {
+    /* 武器 27 件 */
+    sword_bone: 'weapon_rusty_sword',
+    sword_bone_rare: 'weapon_golden_sword',
+    sword_bone_epic: 'weapon_lavish_sword',
+    sword_dragon: 'weapon_red_gem_sword',
+    sword_dragon_rare: 'weapon_golden_sword',
+    sword_dragon_epic: 'weapon_lavish_sword',
+    sword_rusty: 'weapon_rusty_sword',
+    knife: 'weapon_knife',
+    machete: 'weapon_machete',
+    sword_iron: 'weapon_regular_sword',
+    sword_iron_rare: 'weapon_golden_sword',
+    sword_iron_epic: 'weapon_lavish_sword',
+    sword_steel: 'weapon_duel_sword',
+    sword_steel_rare: 'weapon_golden_sword',
+    sword_steel_epic: 'weapon_lavish_sword',
+    axe_war: 'weapon_waraxe',
+    bow_hunter: 'weapon_bow_2',
+    hammer: 'weapon_hammer',
+    spear: 'weapon_spear',
+    sword_magic: 'weapon_knight_sword',
+    sword_magic_rare: 'weapon_golden_sword',
+    sword_magic_epic: 'weapon_lavish_sword',
+    staff_fire: 'weapon_red_magic_staff',
+    bow_elite: 'weapon_bow',
+    axe_double: 'weapon_double_axe',
+    sword_anime: 'weapon_anime_sword',
+    sword_knight: 'weapon_katana',
+    /* 护甲 13 件（D-30 新增素材，按甲系共用） */
+    armor_leather: 'icon_armor_leather',
+    armor_leather_rare: 'icon_armor_leather',
+    armor_leather_epic: 'icon_armor_leather',
+    chain_mail: 'icon_armor_chain_mail',
+    chain_mail_rare: 'icon_armor_chain_mail',
+    chain_mail_epic: 'icon_armor_chain_mail',
+    plate_armor: 'icon_armor_plate',
+    plate_armor_rare: 'icon_armor_plate',
+    plate_armor_epic: 'icon_armor_plate',
+    robe_mage: 'icon_armor_robe',
+    robe_mage_rare: 'icon_armor_robe',
+    robe_mage_epic: 'icon_armor_robe',
+    armor_scale: 'icon_armor_scale',
+    /* 消耗品 8 件：药水沿用 P2-2 既有图标，卷轴 4 档 D-30 新增 */
+    potion_small: 'flask_red',
+    potion_large: 'flask_big_red',
+    potion_xl: 'flask_big_red',
+    potion_mana: 'flask_blue',
+    scroll_upgrade: 'icon_scroll_1',
+    scroll_upgrade_2: 'icon_scroll_2',
+    scroll_upgrade_3: 'icon_scroll_3',
+    scroll_upgrade_4: 'icon_scroll_4'
+  };
 })();
