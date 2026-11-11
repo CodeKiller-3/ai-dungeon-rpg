@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-29 装备栏面板 + 装备对比差值</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-29 · 背包右栏只读装备栏（≥700）+ 装备对比差值（▲/▼/持平）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, P = Game.Data.Player, IT = Game.Data.ITEMS,
+      I = Game.Systems.Inventory, R = Game.Core.Render, Modal = Game.Modal;
+  var KEY = 'ai_dungeon_rpg_save_v1';
+  var RAIL_MIN_W = 700;
+  var SUM_PREFIX = '已装备：';
+
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  function clearSave() {
+    try { localStorage.removeItem(KEY); } catch (e) { /* 降级 */ }
+  }
+  function fakeCtx(sink) {
+    var o = {}, noop = function () {};
+    var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+      'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'arc', 'rect', 'roundRect',
+      'setTransform', 'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+    for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+    o.createLinearGradient = function () { return { addColorStop: noop }; };
+    o.createRadialGradient = o.createLinearGradient;
+    o.createPattern = function () { return {}; };
+    o.measureText = function (t) { return { width: String(t).length * 7 }; };
+    o.fillText = function (t) { sink.push(String(t)); };
+    o.strokeText = o.fillText;
+    o.getImageData = function () { return { data: [] }; };
+    return o;
+  }
+  function setViewport(w, h) { R.cssW = w; R.cssH = h; }
+  function drawWith(kind) {
+    var sink = [], real = R._ctx;
+    Modal.open(kind);
+    try { R._ctx = fakeCtx(sink); Modal.draw(); } catch (e) { sink.push('DRAW_ERROR:' + e); }
+    R._ctx = real;
+    var L = Modal._layout();
+    Modal.close();
+    return { sink: sink, L: L };
+  }
+  /* 只读探针：在某个 kind 上下文里调 _rowDelta */
+  function deltaWith(kind, entry) {
+    Modal.open(kind);
+    var d = null;
+    try { d = Modal._rowDelta(entry); } catch (e) { d = { error: String(e) }; }
+    Modal.close();
+    return d;
+  }
+  function key(code) {
+    var e = new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true });
+    window.dispatchEvent(e);
+  }
+  function setup(weapon, armor, upg, inv) {
+    P.inventory = inv || {};
+    P.equipment = { weapon: weapon || null, armor: armor || null };
+    P.upg = upg || {};
+    I.recalcEquip();
+  }
+
+  try {
+    Game.Core.Input.bind();
+    clearSave();
+    M.init();
+    M.closeGuide();
+    M.restart();
+
+    /* ══ A1. ≥700：右栏存在、两槽、槽内名称/强化/实际加成与 equipment 一致 ══ */
+    setup('sword_iron', null, { sword_iron: 2 }, { sword_iron: 1, potion_small: 1 });
+    setViewport(1024, 640);
+    var r1 = drawWith('inventory');
+    var rail1 = r1.L.rail;
+    var s0 = rail1 && rail1.slots[0], s1 = rail1 && rail1.slots[1];
+    var a1 = !!rail1 && rail1.slots.length === 2 && rail1.selectable === false &&
+      r1.L.panelW === 732 && r1.L.listW === 520 &&
+      s0.slot === 'weapon' && s0.name === '铁剑' && s0.plus === 2 && s0.value === '攻+4' && !s0.empty &&
+      s1.slot === 'armor' && s1.empty === true && s1.name === '空' && s1.value === '防+0' &&
+      r1.sink.indexOf('装备栏（只读）') >= 0 && r1.sink.indexOf('武器') >= 0 &&
+      r1.sink.indexOf('护甲') >= 0 && r1.sink.indexOf('铁剑+2') >= 0 &&
+      r1.sink.indexOf('攻+4') >= 0 && r1.sink.indexOf('空') >= 0 && r1.sink.indexOf('防+0') >= 0;
+    rec('A1_railWideSlotsMatchEquipment', a1,
+      '1024：panelW=' + r1.L.panelW + '/listW=' + r1.L.listW +
+      '；槽1=' + (s0 ? s0.name + '+' + s0.plus + ' ' + s0.value : 'null') +
+      '；槽2=' + (s1 ? (s1.empty ? '空' : s1.name) + ' ' + s1.value : 'null') +
+      '；实绘含 装备栏（只读）/铁剑+2/攻+4/空/防+0=' +
+      (r1.sink.indexOf('装备栏（只读）') >= 0 && r1.sink.indexOf('铁剑+2') >= 0 &&
+       r1.sink.indexOf('攻+4') >= 0 && r1.sink.indexOf('空') >= 0 && r1.sink.indexOf('防+0') >= 0));
+
+    /* ══ A2. <700：右栏完全不存在（不占位）且摘要行仍在 ═══════════ */
+    var narrow = [];
+    [699, 320].forEach(function (cw) {
+      setViewport(cw, 568);
+      var r = drawWith('inventory');
+      var txt = r.sink.join('\n');
+      narrow.push({
+        cw: cw, rail: r.L.rail, panelW: r.L.panelW, listW: r.L.listW,
+        singleW: Math.min(cw * 0.88, 520),
+        noRailText: txt.indexOf('装备栏') < 0 && txt.indexOf('武器') < 0,
+        hasSummary: txt.indexOf(SUM_PREFIX) >= 0,
+        panelIsSingle: r.L.panelW === r.L.listW
+      });
+    });
+    var a2 = narrow.every(function (n) {
+      return n.rail === null && n.panelW === n.singleW && n.panelIsSingle &&
+        n.noRailText && n.hasSummary;
+    });
+    rec('A2_railAbsentBelow700SummaryKept', a2,
+      narrow.map(function (n) {
+        return n.cw + '宽：rail=' + (n.rail === null ? 'null' : 'EXISTS') +
+          '、panelW=' + Math.round(n.panelW) + '（单列公式 ' + Math.round(n.singleW) + '）' +
+          '、listW=panelW=' + (n.panelIsSingle) + '、无右栏文案=' + n.noRailText +
+          '、摘要仍在=' + n.hasSummary;
+      }).join(' ｜ '));
+
+    /* ══ A3. 右栏不可被键盘选中：真实按键回放 + 点击探针 ═════════ */
+    setup('sword_iron', 'armor_leather', { sword_iron: 1 }, {
+      sword_iron: 1, armor_leather: 1, potion_small: 2
+    });
+    setViewport(1024, 640);
+    Modal.open('inventory');
+    var total3 = Modal._visibleRange().total;
+    var selLog = [];
+    var selOut = false;
+    for (var k = 0; k < 12; k++) {
+      key('ArrowDown');
+      var v = Modal._visibleRange();
+      selLog.push(v.sel);
+      if (v.sel < 0 || v.sel > total3 - 1) selOut = true;
+    }
+    for (var u = 0; u < 5; u++) {
+      key('ArrowUp');
+      var v2 = Modal._visibleRange();
+      selLog.push(v2.sel);
+      if (v2.sel < 0 || v2.sel > total3 - 1) selOut = true;
+    }
+    var st3 = Modal._debugState();
+    var rail3 = st3.layout.rail;
+    var hitWeapon = rail3 ? Modal._rowAt(rail3.slots[0].x + rail3.slots[0].w / 2,
+      rail3.slots[0].y + rail3.slots[0].h / 2) : 'NO_RAIL';
+    var hitArmor = rail3 ? Modal._rowAt(rail3.slots[1].x + rail3.slots[1].w / 2,
+      rail3.slots[1].y + rail3.slots[1].h / 2) : 'NO_RAIL';
+    /* 点击右栏槽位 → sel/装备/背包都不许变（只读） */
+    function clickProbe() {
+      var st = Modal._debugState();
+      if (!st.layout.rail) return { applicable: false, changed: false };
+      var sl = st.layout.rail.slots[0];
+      var before = { sel: Modal._visibleRange().sel, w: P.equipment.weapon,
+        inv: JSON.stringify(P.inventory) };
+      Modal._handleClick(sl.x + sl.w / 2, sl.y + sl.h / 2);
+      var after = { sel: Modal._visibleRange().sel, w: P.equipment.weapon,
+        inv: JSON.stringify(P.inventory) };
+      return { applicable: true, changed: before.sel !== after.sel || before.w !== after.w ||
+        before.inv !== after.inv, before: before, after: after };
+    }
+    var probe3 = clickProbe();
+    Modal.close();
+    var a3 = !selOut && rail3 && rail3.selectable === false &&
+      hitWeapon === null && hitArmor === null && probe3.applicable && probe3.changed === false &&
+      selLog.length === 17;
+    rec('A3_railNotSelectable', a3,
+      '真实按键回放 17 次（↓×12/↑×5）sel 全程 ∈ [0,' + (total3 - 1) + ']=' + !selOut +
+      '、轨迹=' + selLog.join(',') + '；rail.selectable=' + (rail3 ? rail3.selectable : 'null') +
+      '；槽心命中=' + hitWeapon + '/' + hitArmor + '（必须 null）；点右栏后状态变化=' +
+      probe3.changed + '（必须 false）');
+
+    /* ══ A4. 差值徽标：正/负/持平 + maxHp 口径 + 无装备 + 卷轴 ════ */
+    var cases4 = [];
+    function dcase(label, weapon, armor, upg, id, expect) {
+      setup(weapon, armor, upg, {});
+      var d = deltaWith('inventory', { id: id, count: 1 });
+      var ok = !!d && d.text === expect;
+      cases4.push({ label: label, got: d ? d.text : 'null', expect: expect, ok: ok });
+      return d;
+    }
+    var dPos = dcase('正（匕首→铁剑）', 'knife', null, {}, 'sword_iron', '▲+2');
+    var dNeg = dcase('负（双刃斧→匕首）', 'axe_double', null, {}, 'knife', '▼-9');
+    var dEq = dcase('持平（同件）', 'sword_iron', null, {}, 'sword_iron', '持平');
+    var dHp = dcase('含 maxHp（铁剑→稀有白骨剑）', 'sword_iron', null, {}, 'sword_bone_epic', '▲+3 生命+10');
+    var dHpA = dcase('护甲 maxHp（皮革甲→法袍）', null, 'armor_leather', {}, 'robe_mage', '▲+1 生命+10');
+    var dZero = dcase('无装备从 0 起算', null, null, {}, 'sword_iron', '▲+3');
+    var dUp = dcase('强化计入（匕首+0→钢剑+3）', 'knife', null, { sword_steel: 3 }, 'sword_steel', '▲+6');
+    var dScroll = deltaWith('inventory', { id: 'scroll_upgrade', count: 1 });
+    var dPotion = deltaWith('inventory', { id: 'potion_small', count: 1 });
+    var a4 = cases4.every(function (c) { return c.ok; }) &&
+      dHp && dHp.dMain === 3 && dHp.dHp === 10 &&
+      dHpA && dHpA.dMain === 1 && dHpA.dHp === 10 &&
+      dUp && dUp.dMain === 6 && dScroll === null && dPotion === null;
+    rec('A4_deltaSignsAndMaxHp', a4,
+      cases4.map(function (c) { return c.label + '→' + c.got + (c.ok ? '✓' : '✗(期望' + c.expect + ')'); }).join('；') +
+      '；maxHp 分项 攻=' + (dHp ? dHp.dMain : '?') + ' 生命=' + (dHp ? dHp.dHp : '?') +
+      '；护甲 攻=' + (dHpA ? dHpA.dMain : '?') + ' 生命=' + (dHpA ? dHpA.dHp : '?') +
+      '；卷轴/药水=' + dScroll + '/' + dPotion + '（必须 null，不显示差值）');
+
+    /* ══ A5. 商店 / 图鉴：无差值徽标，也无强化实值 ═══════════════ */
+    setup('sword_iron', null, { sword_iron: 2 }, { sword_iron: 1 });
+    setViewport(1024, 640);
+    var shop5 = drawWith('shop');
+    var bag5 = drawWith('quests');
+    Modal.open('quests'); Modal._setPage(2);
+    var fixed = [];
+    try { R._ctx = fakeCtx(fixed); Modal.draw(); } catch (e) { fixed.push('DRAW_ERROR:' + e); }
+    R._ctx = null;
+    Modal.close();
+    var txtShop = shop5.sink.join('\n');
+    var txtBag = fixed.join('\n');
+    var noDeltaShop = txtShop.indexOf('▲') < 0 && txtShop.indexOf('▼') < 0 && txtShop.indexOf('持平') < 0;
+    var noDeltaBag = txtBag.indexOf('▲') < 0 && txtBag.indexOf('▼') < 0 && txtBag.indexOf('持平') < 0;
+    var shopBaseOnly = !/铁剑 {3}攻击\+4/.test(txtShop);
+    var dShop = deltaWith('shop', { id: 'sword_iron', item: IT.sword_iron });
+    var dBag = deltaWith('quests', { id: 'sword_iron', def: IT.sword_iron });
+    var a5 = noDeltaShop && noDeltaBag && shopBaseOnly && dShop === null && dBag === null;
+    rec('A5_shopBestiaryNoDelta', a5,
+      '商店实绘含 ▲/▼/持平=' + !noDeltaShop + '、图鉴物品页含=' + !noDeltaBag +
+      '（都必须 false）；商店出现「铁剑   攻击+4」=' + !shopBaseOnly + '（必须 false，仍基础值 攻击+3）；' +
+      '_rowDelta(shop/quests)=' + dShop + '/' + dBag + '（必须 null）');
+
+    /* ══ A6. _rowText 逐条与 D-28 相同 ══════════════════════════ */
+    setup('sword_iron', null, { sword_iron: 2 }, { sword_iron: 1, potion_small: 1 });
+    Modal.open('inventory');
+    var bad6 = [], eqCount = 0;
+    for (var rid in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, rid)) continue;
+      var rit = IT[rid];
+      var rn = (P.upg && P.upg[rid]) || 0;
+      var got6 = Modal._rowText({ id: rid, count: 1 });
+      if (rit.type === 'weapon' || rit.type === 'armor') {
+        eqCount++;
+        var rf = rit.type === 'weapon' ? 'atk' : 'def';
+        var rb = (rit.effect && rit.effect[rf]) ? rit.effect[rf] : 0;
+        var exp6 = rit.name + (rn > 0 ? ' +' + rn : '') + ' x1   ' +
+          (rf === 'atk' ? '攻击+' : '防御+') + rb +
+          ((rit.effect && rit.effect.maxHp) ? ' 生命+' + rit.effect.maxHp : '');
+        if (got6 !== exp6) bad6.push(rid + '：' + got6 + ' ≠ ' + exp6);
+      } else {
+        /* 消耗品行串 = 名称 + 数量 + 描述，且不得混入差值符号 */
+        if (got6.indexOf('▲') >= 0 || got6.indexOf('▼') >= 0 || got6.indexOf('持平') >= 0) {
+          bad6.push(rid + '：行串混入差值');
+        }
+      }
+    }
+    Modal.close();
+    rec('A6_rowTextUnchanged', bad6.length === 0 && eqCount >= 15,
+      '装备类 ' + eqCount + ' 件逐条与 D-28 串重建一致=' + (bad6.length === 0) +
+      '（差值/强化实值均未拼进 _rowText）' +
+      (bad6.length ? '；差异 ' + bad6.slice(0, 2).join(' | ') : ''));
+
+    /* ══ A7. 几何：700 边界、960/1024 双栏、最小字号、面板不出界 ══ */
+    var geo7 = [];
+    [[700, 640], [960, 540], [1024, 640]].forEach(function (p) {
+      setViewport(p[0], p[1]);
+      var r = drawWith('inventory');
+      geo7.push({
+        cw: p[0], ch: p[1], rail: !!r.L.rail, panelW: r.L.panelW, listW: r.L.listW,
+        margin: (p[0] - r.L.panelW) / 2, panelH: r.L.panelH,
+        top: r.L.panelTop, bottom: r.L.panelBottom,
+        railH: r.L.rail ? r.L.rail.h : 0,
+        slotBottom: r.L.rail ? r.L.rail.slots[1].y + r.L.rail.slots[1].h : 0
+      });
+    });
+    var a7 = geo7.every(function (g) {
+      return g.rail === true && g.listW <= 520 && g.margin >= 16 &&
+        g.top >= 0 && g.bottom <= g.ch && g.slotBottom <= g.bottom - 34;
+    }) && geo7[0].panelW === 668 && geo7[0].listW === 456 &&
+      geo7[1].panelW === 732 && geo7[1].listW === 520;
+    rec('A7_geometryBoundary700', a7,
+      geo7.map(function (g) {
+        return g.cw + '宽：rail=' + g.rail + '、panelW=' + g.panelW + '、listW=' + g.listW +
+          '、余量=' + Math.round(g.margin) + '、面板 ' + Math.round(g.top) + '~' + Math.round(g.bottom) +
+          '（视口 ' + g.ch + '）、槽底=' + Math.round(g.slotBottom);
+      }).join(' ｜ ') + '；规则：逻辑宽 ≥700 展开右栏（左列 ≤520），<700 回退单列；最小字号 11px');
+
+    /* ══ A8. 差值徽标独立绘制且不在行串里 ═══════════════════════ */
+    setup('knife', null, {}, { knife: 1, sword_iron: 1 });
+    setViewport(1024, 640);
+    var r8 = drawWith('inventory');
+    var txt8 = r8.sink.join('\n');
+    Modal.open('inventory');
+    var rowSword = Modal._rowText({ id: 'sword_iron', count: 1 });
+    var d8 = Modal._rowDelta({ id: 'sword_iron', count: 1 });
+    Modal.close();
+    var a8 = txt8.indexOf('▲+2') >= 0 && rowSword.indexOf('▲') < 0 &&
+      rowSword.indexOf('+2') < 0 && d8 && d8.text === '▲+2';
+    rec('A8_deltaDrawnSeparately', a8,
+      '实绘出现独立徽标「▲+2」=' + (txt8.indexOf('▲+2') >= 0) +
+      '；行串「' + rowSword + '」不含 ▲/+2=' +
+      (rowSword.indexOf('▲') < 0 && rowSword.indexOf('+2') < 0));
+
+    /* ══ N1. 负例：右栏一旦可被选中必须 FAIL ═════════════════════ */
+    /* 用"未装备 + 背包第一行是武器"的状态：若右栏被当成行 0，点击会真的把它装上 */
+    setup(null, null, {}, { sword_iron: 1, potion_small: 1 });
+    setViewport(1024, 640);
+    Modal.open('inventory');
+    var probeGood = clickProbe();
+    var realRowAt = Modal._rowAt;
+    Modal._rowAt = function () { return 0; };   /* 变异：右栏也当行 */
+    var probeMut = clickProbe();
+    Modal._rowAt = realRowAt;
+    Modal.close();
+    var n1 = probeGood.changed === false && probeMut.changed === true;
+    rec('N1_negativeRailSelectableFails', n1,
+      '正常右栏点击：状态变化=' + probeGood.changed + '（false，装备栏 ' +
+      probeGood.before.w + '→' + probeGood.after.w + '）' +
+      '；变异 _rowAt 后：状态变化=' + probeMut.changed + '（true，装备栏 ' +
+      probeMut.before.w + '→' + probeMut.after.w +
+      '，说明"右栏可选中"会被抓住）');
+
+    /* ══ N2. 负例：宽度 <700 仍显示右栏必须 FAIL ═════════════════ */
+    /* 判定器：<700 时右栏必须 null 且面板按单列公式（不占位） */
+    function railGate(cw, m, L) {
+      if (cw < RAIL_MIN_W) {
+        return m.railVisible === false && L.rail === null &&
+          L.panelW === Math.min(cw * 0.88, 520) && L.listW === L.panelW;
+      }
+      return m.railVisible === true && L.rail !== null;
+    }
+    setViewport(320, 568);
+    Modal.open('inventory');
+    var m320 = Modal._metrics(320);
+    var L320 = Modal._layout();
+    Modal.close();
+    var mutantL = {
+      rail: { slots: [], selectable: false }, panelW: 732, listW: 520
+    };
+    var n2 = railGate(320, m320, L320) === true &&
+      railGate(320, { railVisible: true }, mutantL) === false;
+    rec('N2_negativeRailAtNarrowFails', n2,
+      '真实 320 宽判=' + railGate(320, m320, L320) + '（true）；' +
+      '伪造"320 仍展开右栏"判=' + railGate(320, { railVisible: true }, mutantL) +
+      '（false，说明"窄屏仍显示右栏"会被抓住）');
+
+    /* ══ N3. 负例：差值符号写反必须 FAIL ═════════════════════════ */
+    function deltaSignGate(d) {
+      if (!d) return false;
+      if (d.dMain === 0 && d.dHp === 0) return d.text === '持平';
+      var sign = (d.dMain !== 0) ? d.dMain : d.dHp;
+      return sign > 0 ? d.text.indexOf('▲') === 0 : d.text.indexOf('▼') === 0;
+    }
+    var goodDelta = { dMain: 2, dHp: 0, text: '▲+2' };
+    var badDelta = { dMain: 2, dHp: 0, text: '▼+2' };
+    var goodNeg = { dMain: -9, dHp: 0, text: '▼-9' };
+    var badNeg = { dMain: -9, dHp: 0, text: '▲-9' };
+    var n3 = deltaSignGate(goodDelta) === true && deltaSignGate(badDelta) === false &&
+      deltaSignGate(goodNeg) === true && deltaSignGate(badNeg) === false &&
+      deltaSignGate({ dMain: 0, dHp: 0, text: '持平' }) === true &&
+      deltaSignGate({ dMain: 0, dHp: 0, text: '▲+0' }) === false;
+    rec('N3_negativeReversedSignFails', n3,
+      '正例判=' + deltaSignGate(goodDelta) + '/' + deltaSignGate(goodNeg) + '（true）；' +
+      '写反判=' + deltaSignGate(badDelta) + '/' + deltaSignGate(badNeg) +
+      '（false，说明"符号写反"会被抓住）；持平判=' +
+      deltaSignGate({ dMain: 0, dHp: 0, text: '持平' }) + '/' +
+      deltaSignGate({ dMain: 0, dHp: 0, text: '▲+0' }) + '（true/false）');
+
+    clearSave();
+  } catch (e) {
+    rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+  document.getElementById('result').textContent = head + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = head;
+})();
+</script>
+</body>
+</html>

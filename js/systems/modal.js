@@ -25,6 +25,13 @@
   var MARGIN = 16;        /* C-03：面板与逻辑视口上下的最小留白（滚动的判定依据） */
   var MAX_W = 520;
   var W_RATIO = 0.88;    /* 窄窗口时面板宽 ≤ 画布 88% */
+  /* D-29：背包双栏——逻辑宽 ≥ RAIL_MIN_W 时右侧展开只读装备栏。
+   * 左列表仍受 MAX_W(520) 约束（单列宽上限不变）；面板总宽上限 = 520 + 12 + 200 = 732。
+   * < RAIL_MIN_W 整体回退单列（右栏不占位、不画、不参与命中），页头摘要仍在。 */
+  var RAIL_MIN_W = 700;
+  var RAIL_W = 200;
+  var RAIL_GAP = 12;
+  var RAIL_H = 184;      /* 右栏内容高（页头之下）：标题 + 两槽 */
 
   var kind = null;
   var data = [];
@@ -58,6 +65,21 @@
     return { w: w, h: h };
   }
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  /* D-29：右栏可见性——只看逻辑宽，与 kind 无关（调用方叠加 kind === 'inventory'）。
+   * 单独抽出便于验证页在 699/700 两个边界直接判定，而不是靠"画出来看不见"。 */
+  function railVisible(cw) { return cw >= RAIL_MIN_W; }
+
+  /* D-29：面板总宽 / 左列表宽。双栏时总宽上限 732（左列仍 ≤520），
+   * 仅在视口太窄时装不下才被 cw - 2*MARGIN 压回；单列公式与 D-28 完全一致。 */
+  function panelWidth(cw, rail) {
+    return rail ? Math.min(cw - 2 * MARGIN, MAX_W + RAIL_GAP + RAIL_W)
+      : Math.min(cw * W_RATIO, MAX_W);
+  }
+  function listWidth(cw, rail) {
+    var pw = panelWidth(cw, rail);
+    return rail ? pw - RAIL_GAP - RAIL_W : pw;
+  }
 
   /* C-03：当前视口可容纳的列表行数 = min(MAX_VISIBLE, 可用高度能放下的行数)。
    * 可用高度 = 逻辑视口高 - 上下留白 - 页头 - 页尾；至少 1 行（极小视口降级，不出现负高度）。
@@ -355,6 +377,12 @@
       var panelH = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
         : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
         : HEADER_H + rows * ROW_H + FOOTER_H;
+      /* D-29：与 draw 共用同一套双栏度量 */
+      var railOn = (kind === 'inventory') && railVisible(sz.w);
+      if (railOn) panelH = Math.max(panelH, HEADER_H + RAIL_H + FOOTER_H);
+      var panelW = panelWidth(sz.w, railOn);
+      var listW = listWidth(sz.w, railOn);
+      var px = (sz.w - panelW) / 2;
       var py = (sz.h - panelH) / 2;
       var rowYs = [];
       for (var i = 0; i < rows; i++) rowYs.push(py + HEADER_H + i * ROW_H);
@@ -362,9 +390,54 @@
         viewport: sz, visibleRows: vr, start: start, rows: rows,
         panelH: panelH, contentH: HEADER_H + data.length * ROW_H + FOOTER_H,
         scrollable: data.length > vr, panelTop: py, panelBottom: py + panelH,
+        panelW: panelW, listW: listW, panelLeft: px,
+        rail: railOn ? this._railLayout(px, py, listW, panelH) : null,
         firstRowY: rowYs.length ? rowYs[0] : null,
         lastRowY: rowYs.length ? rowYs[rowYs.length - 1] : null,
         rowYs: rowYs, total: data.length, sel: sel
+      };
+    },
+
+    /* D-29：布局度量（验证/调试读取）——不绘制，纯算。 */
+    _metrics: function (cw) {
+      var rail = railVisible(cw);
+      return {
+        cw: cw, railVisible: rail, panelW: panelWidth(cw, rail),
+        listW: listWidth(cw, rail), margin: (cw - panelWidth(cw, rail)) / 2,
+        minFont: 11
+      };
+    },
+
+    /* D-29：右栏几何 + 槽位内容快照（与 draw 共用；只读，不可选中）。
+     * 槽内 name/plus/value 全部从 Player.equipment / Player.upg 现场取，
+     * 空槽显式 empty:true、name:'空'、value 归零（不允许留白）。 */
+    _railLayout: function (px, py, listW, panelH) {
+      var x = px + listW + RAIL_GAP;
+      var top = py + HEADER_H;
+      var bottom = py + panelH - FOOTER_H;
+      var p = Game.Data.Player || {};
+      var eq = p.equipment || {};
+      var upg = p.upg || {};
+      var IT = Game.Data.ITEMS || {};
+      function buildSlot(key, label, field, id, sy) {
+        var it = id ? IT[id] : null;
+        var base = (it && it.effect && it.effect[field]) ? it.effect[field] : 0;
+        var n = it ? Math.min(Math.max(upg[id] || 0, 0), 5) : 0;
+        return {
+          slot: key, label: label, field: field,
+          x: x + 8, y: sy, w: RAIL_W - 16, h: 60,
+          empty: !it, id: it ? id : null,
+          name: it ? it.name : '空', plus: n,
+          value: (field === 'atk' ? '攻+' : '防+') + (it ? effOf(base, n) : 0)
+        };
+      }
+      return {
+        x: x, y: top, w: RAIL_W, h: Math.max(0, bottom - top),
+        title: '装备栏（只读）', selectable: false,
+        slots: [
+          buildSlot('weapon', '武器', 'atk', eq.weapon, top + 40),
+          buildSlot('armor', '护甲', 'def', eq.armor, top + 120)
+        ]
       };
     },
 
@@ -487,16 +560,40 @@
         }
         return;
       }
-      var rowY = rect.y + HEADER_H;
-      var rowIdx = Math.floor((y - rowY) / ROW_H);
-      /* P2-3b/C-03：点击行按滚动窗口偏移换算为绝对索引（超出可见行数时 start 才非 0） */
-      var vr = visibleRowCount(cssSize());
-      var start = (data.length > vr) ? qScroll : 0;
-      var absIdx = rowIdx + start;
-      if (rowIdx >= 0 && rowIdx < vr && absIdx >= 0 && absIdx < data.length) {
+      /* D-29：命中统一走 _rowAt——落在右栏（≥700 的装备栏）或列表区外一律返回 null，
+       * 右栏点不中、也不会改 sel；键盘路径本就不把右栏放进 data，同样选不中。 */
+      var absIdx = this._rowAt(x, y);
+      if (absIdx !== null) {
         sel = absIdx;
         this._confirm();
       }
+    },
+
+    /* D-29：行命中测试——返回绝对行索引；x 落在左列表之外（含右栏）返回 null。
+     * 抽出独立函数是为了让"右栏不可被选中"可被验证页用真实点击坐标反复断言。 */
+    _rowAt: function (x, y) {
+      if (!rect) return null;
+      var cw = cssSize().w;
+      var railOn = (kind === 'inventory') && railVisible(cw);
+      var lw = railOn ? listWidth(cw, true) : rect.w;
+      if (x < rect.x || x > rect.x + lw) return null;
+      var rowIdx = Math.floor((y - (rect.y + HEADER_H)) / ROW_H);
+      var vr = visibleRowCount(cssSize());
+      if (rowIdx < 0 || rowIdx >= vr) return null;
+      /* P2-3b/C-03：点击行按滚动窗口偏移换算为绝对索引（超出可见行数时 start 才非 0） */
+      var start = (data.length > vr) ? qScroll : 0;
+      var absIdx = rowIdx + start;
+      if (absIdx < 0 || absIdx >= data.length) return null;
+      return absIdx;
+    },
+
+    /* D-29：状态快照（验证/调试只读）——sel 一定指向 data 下标；rail.selectable 恒 false */
+    _debugState: function () {
+      return {
+        kind: kind, sel: sel, total: data.length, page: page, shopMode: shopMode,
+        rect: rect,
+        layout: this._layout()
+      };
     },
 
     /* M9-4：绘制设置面板——音量滑块（拖拽）/静音开关（点击）/操作说明 */
@@ -635,16 +732,22 @@
       var vr = visibleRowCount(sz);
       var start = (data.length > vr) ? qScroll : 0;
       var rows = Math.min(Math.max(data.length - start, 0), vr);
-      var w = Math.min(cw * W_RATIO, MAX_W);
+      /* D-29：只有背包在逻辑宽 ≥700 时展开右栏；w 为面板总宽，listW 为左侧列表可用宽 */
+      var railOn = (kind === 'inventory') && railVisible(cw);
+      var w = panelWidth(cw, railOn);
+      var listW = listWidth(cw, railOn);
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
       var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
         : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
         /* D-27：空列表也保留 1 行高度，避免"空态提示"与底部操作提示叠在同一条线上
          * （新档背包为空是首屏常态，页头又加了装备摘要，必须让空态有独立一行） */
         : HEADER_H + Math.max(rows, 1) * ROW_H + FOOTER_H;
+      /* D-29：右栏两槽最小需要 RAIL_H 内容高（行数很少时也不许把槽压扁/裁切） */
+      if (railOn) h = Math.max(h, HEADER_H + RAIL_H + FOOTER_H);
       var px = (cw - w) / 2;
       var py = (ch - h) / 2;
       rect = { x: px, y: py, w: w, h: h };
+      var rail = railOn ? this._railLayout(px, py, listW, h) : null;
 
       /* 半透明遮罩（压暗地图与 HUD，HUD 仍每帧同步在遮罩下） */
       c.fillStyle = 'rgba(0,0,0,0.55)';
@@ -721,7 +824,8 @@
         var entry = data[start + i]; /* P2-3b：按滚动窗口取行数据 */
         if (i + start === sel) {
           c.fillStyle = 'rgba(255,207,110,0.18)';
-          c.fillRect(px + 6, ry + 2, w - 12, ROW_H - 4);
+          /* D-29：高亮只铺左列表宽（listW），不跨到右栏去 */
+          c.fillRect(px + 6, ry + 2, listW - 12, ROW_H - 4);
           /* P1-2：选中行左侧 2px 金色竖条 */
           c.fillStyle = '#ffcf6e';
           c.fillRect(px + 6, ry + 2, 2, ROW_H - 4);
@@ -732,25 +836,37 @@
         /* P1-2：行左物品图标（16×16，y 居中）；无图标时文字保持原位 */
         var ric = this._rowIcon(entry);
         var rowTextX = px + 14;
-        var rowMaxW = w - 28;
+        var rowMaxW = listW - 28;
         if (ric) {
           rowTextX = px + 14 + 22;
-          rowMaxW = w - 28 - 22;
+          rowMaxW = listW - 28 - 22;
           var riy = ry + Math.floor((ROW_H - 16) / 2);
           c.drawImage(ric, px + 14 + 2, riy, 16, 16);
         }
-        /* D-28：行尾徽标独立绘制（已装备 / 强化后数值），行串本身不变 */
+        /* D-28：行尾徽标独立绘制（已装备 / 强化后数值），行串本身不变
+         * D-29：再往右独立绘制差值徽标（▲+N / ▼-N / 持平），两者都不拼进 _rowText */
         var badge = this._rowBadges(kind, entry);
-        var badgeW = 0;
-        if (badge) {
+        var delta = this._rowDelta(entry);
+        var badgeW = 0, deltaW = 0;
+        c.font = '11px monospace';
+        if (badge) badgeW = Math.round(c.measureText(badge.text).width) + 14;
+        if (delta) deltaW = Math.round(c.measureText(delta.text).width) + 10;
+        c.font = '14px monospace';
+        c.fillText(this._fitRow(c, this._rowText(entry), rowMaxW - badgeW - deltaW), rowTextX, ry + 20);
+        var rightEdge = px + listW - 14;
+        if (delta) {
+          c.fillStyle = delta.color;
           c.font = '11px monospace';
-          badgeW = Math.round(c.measureText(badge.text).width) + 14;
+          c.textAlign = 'right';
+          c.fillText(delta.text, rightEdge, ry + 20);
+          c.textAlign = 'left';
+          rightEdge -= deltaW;
         }
-        c.fillText(this._fitRow(c, this._rowText(entry), rowMaxW - badgeW), rowTextX, ry + 20);
         if (badge) {
           c.fillStyle = badge.color;
+          c.font = '11px monospace';
           c.textAlign = 'right';
-          c.fillText(badge.text, px + w - 14, ry + 20);
+          c.fillText(badge.text, rightEdge, ry + 20);
           c.textAlign = 'left';
         }
       }
@@ -761,11 +877,14 @@
         var emptyMsg = '（空）';
         if (kind === 'inventory') emptyMsg = '背包空空如也';
         else if (kind === 'quests') emptyMsg = '暂无任务';
-        /* 居中：估算文字宽度后水平居中（灰字） */
+        /* 居中：估算文字宽度后水平居中（灰字）；D-29 双栏时居中于左列表 */
         c.textAlign = 'center';
-        c.fillText(emptyMsg, px + w / 2, py + HEADER_H + 20);
+        c.fillText(emptyMsg, px + listW / 2, py + HEADER_H + 20);
         c.textAlign = 'left';
       }
+
+      /* D-29：右栏只读装备栏（仅背包、逻辑宽 ≥700 时存在；否则一行都不画） */
+      if (rail) this._drawRail(c, rail);
 
       /* 底部操作提示（窄屏缩字号，避免 320 宽溢出；D-28：溢出时折两行且保留操作指导） */
       c.fillStyle = '#9bbbf4';
@@ -850,6 +969,113 @@
       if (plus > 0) parts.push((field === 'atk' ? '攻击+' : '防御+') + effOf(base, plus));
       if (!parts.length) return null;
       return { text: parts.join(' · '), color: equipped ? '#ffcf6e' : '#7fd1ff' };
+    },
+
+    /* D-29：装备对比差值——"这件装上之后，该槽位的实际变化"，口径与 recalcEquip 完全一致：
+     *   主属性 = effOf(候选基础值, 候选强化等级) − effOf(当前槽基础值, 当前强化等级)
+     *   生命   = 候选 effect.maxHp − 当前槽 effect.maxHp（maxHp 不参与强化倍率，故取原始差）
+     * 规则：
+     *   - 只对背包里的武器/护甲出徽标；消耗品、强化卷轴、其他类型 → null（不显示）
+     *   - 当前槽为空 → 当前值按 0 起算（即"从 0 起算"，不写"首次装备"特例）
+     *   - 主属性为 0 且生命为 0 → "持平"
+     *   - 符号以主属性优先；主属性为 0 时看生命。混合符号（攻升血降）会同时列出两项
+     *     （如 ▲+2 生命-10），不隐藏任何一边
+     * 商店/图鉴：kind !== 'inventory' 直接 null（沿用 D-28 的上下文分离）。 */
+    _rowDelta: function (entry) {
+      if (kind !== 'inventory' || !entry || !entry.id) return null;
+      var IT = Game.Data.ITEMS || {};
+      var it = IT[entry.id];
+      if (!it || (it.type !== 'weapon' && it.type !== 'armor')) return null;
+      var p = Game.Data.Player || {};
+      var eq = p.equipment || {};
+      var upg = p.upg || {};
+      var field = it.type === 'weapon' ? 'atk' : 'def';
+      var curId = (it.type === 'weapon') ? (eq.weapon || null) : (eq.armor || null);
+      var cur = curId ? IT[curId] : null;
+      var candBase = (it.effect && it.effect[field]) ? it.effect[field] : 0;
+      var curBase = (cur && cur.effect && cur.effect[field]) ? cur.effect[field] : 0;
+      var candPlus = Math.min(Math.max(upg[entry.id] || 0, 0), 5);
+      var curPlus = curId ? Math.min(Math.max(upg[curId] || 0, 0), 5) : 0;
+      var dMain = effOf(candBase, candPlus) - effOf(curBase, curPlus);
+      var dHp = ((it.effect && it.effect.maxHp) || 0) - ((cur && cur.effect && cur.effect.maxHp) || 0);
+
+      var sign = (dMain !== 0) ? dMain : dHp;   /* 主属性优先，其为 0 时看生命 */
+      var parts = [];
+      if (dMain !== 0) parts.push((dMain > 0 ? '+' : '') + dMain);
+      if (dHp !== 0) parts.push('生命' + (dHp > 0 ? '+' : '') + dHp);
+      var text, color;
+      if (!parts.length) {
+        text = '持平';
+        color = '#9aa0b0';
+      } else {
+        text = (sign > 0 ? '▲' : '▼') + parts.join(' ');
+        color = sign > 0 ? '#7ce38b' : '#ff8080';
+      }
+      return { text: text, color: color, sign: sign, dMain: dMain, dHp: dHp, cur: curId };
+    },
+
+    /* D-29：右栏装备栏绘制——两个槽（武器/护甲），程序化色块占位，不引入新 PNG。
+     * 只读：不参与 sel、不响应点击（_rowAt 在 listW 之外直接返回 null）。 */
+    _drawRail: function (c, rail) {
+      if (!rail) return;
+      /* 与左列表之间的竖分隔线 */
+      c.fillStyle = 'rgba(255,255,255,0.10)';
+      c.fillRect(rail.x - RAIL_GAP / 2, rail.y, 1, rail.h);
+
+      c.fillStyle = '#9fb6cf';
+      c.font = '11px monospace';
+      c.fillText(rail.title, rail.x + 8, rail.y + 16);
+
+      for (var i = 0; i < rail.slots.length; i++) {
+        var s = rail.slots[i];
+        /* 槽位标签（武器 / 护甲） */
+        c.fillStyle = '#8a8aa0';
+        c.font = '11px monospace';
+        c.fillText(s.label, s.x, s.y - 6);
+        /* 槽框：外黑 1px + 内亮 1px——形状与边框要能一眼看出"这是一个槽" */
+        c.fillStyle = '#1b1b33';
+        c.fillRect(s.x, s.y, s.w, s.h);
+        c.strokeStyle = 'rgba(0,0,0,0.9)';
+        c.lineWidth = 1;
+        c.strokeRect(s.x + 0.5, s.y + 0.5, s.w - 1, s.h - 1);
+        c.strokeStyle = s.empty ? 'rgba(255,255,255,0.22)' : 'rgba(255,207,110,0.45)';
+        c.strokeRect(s.x + 1.5, s.y + 1.5, s.w - 3, s.h - 3);
+
+        /* 图标位 26×26：程序化色块（武器=剑形，护甲=胸甲形，空槽=短横） */
+        var ix = s.x + 8, iy = s.y + Math.floor((s.h - 26) / 2);
+        c.fillStyle = '#0f0f1e';
+        c.fillRect(ix, iy, 26, 26);
+        c.strokeStyle = 'rgba(255,255,255,0.18)';
+        c.strokeRect(ix + 0.5, iy + 0.5, 25, 25);
+        if (s.empty) {
+          c.fillStyle = 'rgba(255,255,255,0.16)';
+          c.fillRect(ix + 9, iy + 12, 8, 2);
+        } else if (s.slot === 'weapon') {
+          c.fillStyle = '#c9d4e3';
+          c.fillRect(ix + 12, iy + 5, 2, 12);
+          c.fillStyle = '#ffcf6e';
+          c.fillRect(ix + 8, iy + 17, 10, 2);
+          c.fillStyle = '#b5793f';
+          c.fillRect(ix + 12, iy + 19, 2, 4);
+        } else {
+          c.fillStyle = '#6f8bb5';
+          c.fillRect(ix + 7, iy + 7, 12, 12);
+          c.fillStyle = '#4d6389';
+          c.fillRect(ix + 7, iy + 7, 4, 12);
+          c.fillStyle = '#a9c0e0';
+          c.fillRect(ix + 13, iy + 7, 2, 7);
+        }
+
+        /* 名称+强化等级 / 实际加成（空槽写"空"与 0 加成，不许留白） */
+        var tx = ix + 34;
+        var maxW = s.x + s.w - tx - 6;
+        c.fillStyle = s.empty ? '#7c8296' : '#e8e8f0';
+        c.font = '12px monospace';
+        c.fillText(this._fitRow(c, s.empty ? '空' : (s.name + '+' + s.plus), maxW), tx, s.y + 26);
+        c.fillStyle = s.empty ? '#5f6578' : '#7fd1ff';
+        c.font = '11px monospace';
+        c.fillText(s.value, tx, s.y + 46);
+      }
     },
 
     /* 自适应：单行文本超宽时按实际字宽截断并加省略号（调用前已设好字体） */
