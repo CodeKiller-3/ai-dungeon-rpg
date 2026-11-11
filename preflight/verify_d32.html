@@ -55,6 +55,11 @@
 <script src="../js/systems/learner.js"></script>
 <script src="../js/core/main.js"></script>
 <script>
+/* D-33 改造：
+ * 1) 旧路径判定从「任意子串包含」改为「路径形态」（D-33 裁定一）——改扫描器，不改被检查的文档；
+ * 2) A3 分两栏：功能性残留（必须 0）/ 历史提及（数量 + 文件），不合并成一个数字（裁定二）；
+ * 3) 线上轻量模式：file:// 永远跑全量；http(s) 下 1.1s 内跑不完则退到 online-lite 并显式打印（裁定四）。
+ */
 (function () {
   'use strict';
   var out = { ok: true, sub: {} };
@@ -63,13 +68,17 @@
     if (!ok) out.ok = false;
   }
 
-  /* ── 取数：先并行拉全部文件再判（本页要读 200+ 份，同步 XHR 在静态托管上会串行拖死）── */
-  var CACHE = {};
-  var textQ = [], binQ = [];
-  var LOADED = 0, TOTAL = 0, FINISHED = false;
+  var LITE_FORCED = /[?&]lite=1/.test(location.search);
+  var IS_FILE = location.protocol === 'file:';
+  var MODE = 'full';
+  var CACHE = {}, textQ = [], binQ = [];
+  var LOADED = 0, TOTAL = 0, DONE = false, ABANDONED = false;
+
   function tick() {
     LOADED++;
-    if (!FINISHED) document.getElementById('result').textContent = 'LOADING ' + LOADED + '/' + TOTAL;
+    if (!DONE && !ABANDONED) {
+      document.getElementById('result').textContent = 'LOADING ' + LOADED + '/' + TOTAL + '（mode=full）';
+    }
   }
   function collectText(p) { if (!(p in CACHE)) { CACHE[p] = ''; textQ.push(p); } }
   function collectBin(p) { if (!(p in CACHE)) { CACHE[p] = null; binQ.push(p); } }
@@ -128,231 +137,352 @@
     try { return new TextEncoder().encode(s).length; } catch (e) { return -1; }
   }
 
-  var MAN = null, BASE = null, SCAN = null;
-  var CORE = ['PLAN.md', 'README.md', 'CHANGELOG.md', '规划-对标补齐.md'];
-  var MUST_STAY = ['verify_d31.html', 'verify_d29.html', 'verify_d22.html'];
-  var PROCESS_HTML = ['verify_d31.html', 'verify_d22.html', 'verify_d02.html'];
-
-  function compute() {
-    try { MAN = JSON.parse(read('selfcheck/d32-move-manifest.json') || 'null'); } catch (e) { MAN = null; }
-    try { BASE = JSON.parse(read('selfcheck/page-baseline.json') || 'null'); } catch (e) { BASE = null; }
-    try { SCAN = JSON.parse(read('selfcheck/d32-scanlist.json') || 'null'); } catch (e) { SCAN = null; }
-
-    /* 汇总本页要读的全部文件（去重），二阶段并行取数 */
-    if (MAN) {
-      MAN.moves.forEach(function (m) { collectText('../' + m.next); collectText('../' + m.old); });
-      MAN.shots.files.forEach(function (f) { collectBin('artifacts/shots_resize/' + f.name); });
-      collectBin('shots_resize/' + MAN.shots.files[0].name);
-    }
-    if (SCAN && SCAN.files) SCAN.files.forEach(function (p) { collectText('../' + p); });
-    CORE.forEach(function (f) { collectText('../' + f); collectText('../docs/process/' + f); });
-    MUST_STAY.forEach(function (p) { collectText(p); });
-    PROCESS_HTML.forEach(function (p) { collectText('../docs/process/' + p); });
-    collectText('artifacts/README.md');
-    collectText('../README.md');
-    collectText('../CHANGELOG.md');
-    collectText('../docs/process/自检报告.md');
-
-    TOTAL = textQ.length + binQ.length + 3; /* +3：三份 meta 已取过 */
-    /* 文本与二进制两拨**同时**发：串行两波时，第二波要等第一波全完才开始，
-     * 线上（235 份文本 + 13 张图）会把时间轴拖成两倍。 */
-    var waves = 2;
-    function waveDone() { waves--; if (waves === 0) assertAll(); }
-    runAll(textQ, fetchText, waveDone);
-    runAll(binQ, fetchBin, waveDone);
+  /* ══ 旧路径判定：只认「路径形态」，不认任意子串（D-33 裁定一） ═══════
+   * new   : 前缀解析为 docs/process/ —— 正确的新路径，直接放行
+   * old   : 前缀是 ./ ../ / 路径片段，或行首裸名（含 file:///…/名）—— 功能性旧路径
+   * bare  : 正文中以书名号 / 反引号包住的文件提及 —— 历史提及
+   * 另外前后必须是边界：避免把「对标自检报告.md」里的「自检报告.md」算成一次引用。 */
+  var PATH_CH = /[A-Za-z0-9_.\/~\\-]/;
+  var WORD = /[A-Za-z0-9_]/;
+  var CJK = /[\u3400-\u9fff]/;
+  function prefixOf(text, i) {
+    var s = i, lo = Math.max(0, i - 200);
+    while (s > lo && PATH_CH.test(text.charAt(s - 1))) s--;
+    return text.slice(s, i);
   }
-
-  function assertAll() {
-  FINISHED = true;
-
-  /* ══ A1. 新路径逐份存在 ═══════════════════════════════════════ */
-  var a1miss = [];
-  if (!MAN) a1miss.push('台账不可读');
-  else MAN.moves.forEach(function (m) { if (!read('../' + m.next)) a1miss.push(m.next); });
-  rec('A1_newPathsExist', !!MAN && a1miss.length === 0,
-    '台账 ' + (MAN ? MAN.moves.length : 0) + ' 份；新位置缺失=' +
-    (a1miss.length ? a1miss.join(',') : '0'));
-
-  /* ══ A2. 旧路径逐份不存在 ═════════════════════════════════════ */
-  var a2alive = [];
-  if (MAN) {
-    MAN.moves.forEach(function (m) { if (read('../' + m.old)) a2alive.push('../' + m.old); });
-    if (readBin('shots_resize/' + MAN.shots.files[0].name)) a2alive.push('shots_resize/' + MAN.shots.files[0].name);
+  function boundaryOk(text, i, len) {
+    var a = i > 0 ? text.charAt(i - 1) : '';
+    var b = (i + len) < text.length ? text.charAt(i + len) : '';
+    return !WORD.test(a) && !WORD.test(b) && !CJK.test(a);
   }
-  rec('A2_oldPathsGone', !!MAN && a2alive.length === 0,
-    '根目录旧文件 + 旧截图目录；仍可读到=' + (a2alive.length ? a2alive.join(',') : '0'));
-
-  /* ══ A3. 全仓旧路径引用：功能性引用必须为 0 ═══════════════════ */
-  /* 口径：token 是「带目录的旧路径」或「被搬走的文件名」。
-   * 允许域只有三处，且都不是功能性引用：
-   *   1) docs/tasks/**  —— 冻结的历史任务卡，正文记录当时的 .gitignore / 目录状态（本卡不改历史记录）
-   *   2) docs/process/** —— 4 份报告互相之间的同目录兄弟引用（搬完后同一目录，仍然正确）
-   *   3) preflight/verify_d31.html —— D-31 的冻结断言页，其中一条负例的**说明文字**写着
-   *      「.gitignore 仍忽略 <旧文件名>」；它读的是 .gitignore 的有效行，不指向任何文件。
-   *      按本卡硬约束「不改既有验证页断言」，原样保留并在此显式标注。
-   * 迁移台账（d32-*.json）与本页 verify_d32.html 按设计含旧路径字样（一个是证据链，一个是检测器），
-   * 已从扫描清单中排除，见 preflight/selfcheck/d32-scanlist.json 的 note。 */
+  function classifyAt(text, i) {
+    var p = prefixOf(text, i);
+    if (/(^|\/)docs\/process\/$/.test(p)) return 'new';
+    if (p !== '') return 'old';
+    var ls = text.lastIndexOf('\n', i - 1) + 1;
+    return /^[\s>*\-|`]*$/.test(text.slice(ls, i)) ? 'old' : 'bare';
+  }
   var TOKENS = ['preflight/shots_resize', '自检报告.md', '修复报告.md', '诊断报告.md', '对标自检报告.md'];
-  function residueScan(files) {
-    var v = [], arch = 0, sib = 0, frozen = 0;
+  function isHistFile(name) {
+    return /^docs\/tasks\//.test(name) || /^docs\/process\//.test(name) || name === 'preflight/verify_d31.html';
+  }
+  function lineNo(text, i) {
+    var n = 1;
+    for (var k = 0; k < i && k < text.length; k++) if (text.charAt(k) === '\n') n++;
+    return n;
+  }
+  /* 返回 { fn: [功能性残留（必须 0）], hist: {文件: 次数}, histTotal, kinds: {old,bare} } */
+  function scanFiles(files) {
+    var r = { fn: [], hist: {}, histTotal: 0, old: 0, bare: 0 };
     files.forEach(function (f) {
-      var isTask = /^docs\/tasks\//.test(f.name);
-      var isProc = /^docs\/process\//.test(f.name);
-      var isFrozen = f.name === 'preflight/verify_d31.html';
       TOKENS.forEach(function (tk) {
         var i = -1;
         while ((i = f.text.indexOf(tk, i + 1)) >= 0) {
-          if (isTask) arch++;
-          else if (isProc) sib++;
-          else if (isFrozen) frozen++;
-          else v.push(f.name + ':' + tk);
+          if (!boundaryOk(f.text, i, tk.length)) continue;
+          var c = classifyAt(f.text, i);
+          if (c === 'new') continue;
+          if (isHistFile(f.name)) {
+            r.hist[f.name] = (r.hist[f.name] || 0) + 1;
+            r.histTotal++;
+            if (c === 'old') r.old++; else r.bare++;
+          } else {
+            r.fn.push(f.name + ':' + lineNo(f.text, i) + ' ' + tk + '（' + c + '）');
+          }
         }
       });
     });
-    return { v: v, arch: arch, sib: sib, frozen: frozen };
+    return r;
   }
-  var SCANNED = [];
-  if (SCAN && SCAN.files) {
-    SCAN.files.forEach(function (p) {
-      var t = read('../' + p);
-      if (t) SCANNED.push({ name: p, text: t });
+  function histText(r) {
+    var keys = Object.keys(r.hist).sort();
+    return '共 ' + r.histTotal + ' 处［' + keys.map(function (k) { return k + '×' + r.hist[k]; }).join('、') + '］';
+  }
+
+  var MAN = null, BASE = null, SCAN = null;
+  var CORE = ['PLAN.md', 'README.md', 'CHANGELOG.md', '规划-对标补齐.md'];
+  var FALLBACK_MOVES = [
+    { old: '自检报告.md', next: 'docs/process/自检报告.md' },
+    { old: '修复报告.md', next: 'docs/process/修复报告.md' },
+    { old: '诊断报告.md', next: 'docs/process/诊断报告.md' },
+    { old: '对标自检报告.md', next: 'docs/process/对标自检报告.md' }
+  ];
+  var MUST_STAY = ['verify_d31.html', 'verify_d29.html', 'verify_d22.html'];
+  var PROCESS_HTML = ['verify_d31.html', 'verify_d22.html', 'verify_d02.html'];
+
+  /* ══ 全量模式（本地 file:// 恒走此路）═══════════════════════════ */
+  function startFull() {
+    MODE = 'full';
+    runAll(['selfcheck/d32-move-manifest.json', 'selfcheck/page-baseline.json', 'selfcheck/d32-scanlist.json'],
+      fetchText, function () {
+        try { MAN = JSON.parse(read('selfcheck/d32-move-manifest.json') || 'null'); } catch (e) { MAN = null; }
+        try { BASE = JSON.parse(read('selfcheck/page-baseline.json') || 'null'); } catch (e) { BASE = null; }
+        try { SCAN = JSON.parse(read('selfcheck/d32-scanlist.json') || 'null'); } catch (e) { SCAN = null; }
+
+        if (MAN) {
+          MAN.moves.forEach(function (m) { collectText('../' + m.next); collectText('../' + m.old); });
+          MAN.shots.files.forEach(function (f) { collectBin('artifacts/shots_resize/' + f.name); });
+          collectBin('shots_resize/' + MAN.shots.files[0].name);
+        }
+        if (SCAN && SCAN.files) SCAN.files.forEach(function (p) { collectText('../' + p); });
+        CORE.forEach(function (f) { collectText('../' + f); collectText('../docs/process/' + f); });
+        MUST_STAY.forEach(function (p) { collectText(p); });
+        PROCESS_HTML.forEach(function (p) { collectText('../docs/process/' + p); });
+        collectText('artifacts/README.md');
+        collectText('../README.md');
+        collectText('../CHANGELOG.md');
+        collectText('../docs/process/自检报告.md');
+
+        TOTAL = textQ.length + binQ.length + 3;
+        var waves = 2;
+        function waveDone() { waves--; if (waves === 0) assertFull(); }
+        runAll(textQ, fetchText, waveDone);
+        runAll(binQ, fetchBin, waveDone);
+      });
+  }
+
+  function assertFull() {
+    if (ABANDONED) return;
+    DONE = true;
+
+    /* A1 */
+    var a1miss = [];
+    if (!MAN) a1miss.push('台账不可读');
+    else MAN.moves.forEach(function (m) { if (!read('../' + m.next)) a1miss.push(m.next); });
+    rec('A1_newPathsExist', !!MAN && a1miss.length === 0,
+      '台账 ' + (MAN ? MAN.moves.length : 0) + ' 份；新位置缺失=' + (a1miss.length ? a1miss.join(',') : '0'));
+
+    /* A2 */
+    var a2alive = [];
+    if (MAN) {
+      MAN.moves.forEach(function (m) { if (read('../' + m.old)) a2alive.push('../' + m.old); });
+      if (readBin('shots_resize/' + MAN.shots.files[0].name)) a2alive.push('shots_resize/');
+    }
+    rec('A2_oldPathsGone', !!MAN && a2alive.length === 0,
+      '根目录旧文件 + 旧截图目录；仍可读到=' + (a2alive.length ? a2alive.join(',') : '0'));
+
+    /* A3：两栏打印 */
+    var SCANNED = [];
+    if (SCAN && SCAN.files) {
+      SCAN.files.forEach(function (p) { var t = read('../' + p); if (t) SCANNED.push({ name: p, text: t }); });
+    }
+    var rs = scanFiles(SCANNED);
+    rec('A3_noOldPathReferences', !!SCAN && SCANNED.length >= 200 && rs.fn.length === 0,
+      '扫描 ' + SCANNED.length + ' 份源码/文档（清单 ' + (SCAN ? SCAN.count : 0) + '）；取数 ' + LOADED + '/' + TOTAL +
+      '｜功能性残留（必须 0）= ' + rs.fn.length + (rs.fn.length ? '：' + rs.fn.slice(0, 4).join('，') : '') +
+      '｜历史提及（不计入残留）= ' + histText(rs) + '［旧形态 ' + rs.old + ' / 正文提及 ' + rs.bare + '］');
+
+    /* A4 */
+    function coreCheck(map) { return CORE.filter(function (f) { return !(map[f] || ''); }); }
+    var coreMap = {};
+    CORE.forEach(function (f) { coreMap[f] = read('../' + f); });
+    var coreGone = coreCheck(coreMap);
+    var copiedToProcess = CORE.filter(function (f) { return read('../docs/process/' + f); });
+    rec('A4_coreDocsStayInRoot', coreGone.length === 0 && copiedToProcess.length === 0,
+      '根目录仍在=' + (CORE.length - coreGone.length) + '/4' +
+      (coreGone.length ? '；缺失=' + coreGone.join(',') : '') +
+      '；被误搬进 docs/process/=' + (copiedToProcess.length ? copiedToProcess.join(',') : '0'));
+
+    /* A5 */
+    var a5bad = [];
+    if (MAN) {
+      MAN.moves.forEach(function (m) {
+        var t = read('../' + m.next);
+        var body = t.slice(t.indexOf('\n') + 1);
+        var h = fnvText(norm(body)), n = utf8Len(body);
+        if (h !== m.bodyHash || n !== m.bodyBytes) {
+          a5bad.push(m.next + '：hash ' + h + '/' + m.bodyHash + '，bytes ' + n + '/' + m.bodyBytes);
+        }
+      });
+    }
+    rec('A5_movedBodiesUnchanged', !!MAN && a5bad.length === 0,
+      '逐份比对「来源说明行之后的正文」与 d32-before.json 的 LF 归一 FNV-1a；不一致=' +
+      (a5bad.length ? a5bad.join(' ｜ ') : '0'));
+
+    /* A6 */
+    var a6bad = [], a6ok = !!MAN && MAN.shots.count === 12;
+    if (MAN) {
+      MAN.shots.files.forEach(function (f) {
+        var u8 = readBin('artifacts/shots_resize/' + f.name);
+        if (!u8) { a6bad.push(f.name + '：读不到'); return; }
+        if (u8.length !== f.bytes) a6bad.push(f.name + '：bytes ' + u8.length + '/' + f.bytes);
+        else if (fnvBytes(u8) !== f.hash) a6bad.push(f.name + '：hash 不符');
+      });
+    }
+    rec('A6_twelveShotsMoved', a6ok && a6bad.length === 0,
+      '台账 ' + (MAN ? MAN.shots.files.length : 0) + ' 张；新目录实测异常=' + (a6bad.length ? a6bad.join(',') : '0'));
+
+    /* A7 */
+    var a7bad = [];
+    if (MAN) {
+      MAN.moves.forEach(function (m) {
+        var t = read('../' + m.next);
+        if (t.indexOf(m.note) !== 0) a7bad.push(m.next + '：来源说明不在首行');
+        if (t.indexOf('2026-11-12') < 0 || t.indexOf(m.old) < 0) a7bad.push(m.next + '：缺原路径或日期');
+      });
+    }
+    var shotNote = read('artifacts/README.md');
+    if (!shotNote || shotNote.indexOf('2026-11-12') < 0) a7bad.push('artifacts/README.md：缺来源说明');
+    rec('A7_provenanceNote', !!MAN && a7bad.length === 0,
+      '4 份报告首行来源说明 + 截图目录 README；问题=' + (a7bad.length ? a7bad.join(',') : '0'));
+
+    /* A8 */
+    var movedAway = MUST_STAY.filter(function (p) { return !read(p); });
+    var htmlInProcess = PROCESS_HTML.filter(function (p) { return read('../docs/process/' + p); });
+    rec('A8_verifyPagesUntouched', movedAway.length === 0 && htmlInProcess.length === 0,
+      '抽查 3 页仍在 preflight/=' + (MUST_STAY.length - movedAway.length) + '/3' +
+      (movedAway.length ? '；缺失=' + movedAway.join(',') : '') +
+      '；被搬进 docs/process/=' + (htmlInProcess.length ? htmlInProcess.join(',') : '0'));
+
+    /* A9 */
+    var a9 = !!BASE && BASE.count === 74 && Array.isArray(BASE.pages) &&
+      BASE.pages.length === 74 && BASE.pages.indexOf('verify_d32') >= 0;
+    rec('A9_pageBaseline74', a9,
+      'count=' + (BASE ? BASE.count : 'n/a') + '；pages.length=' +
+      (BASE && BASE.pages ? BASE.pages.length : 'n/a') +
+      '；含 verify_d32=' + (BASE && BASE.pages ? BASE.pages.indexOf('verify_d32') >= 0 : 'n/a'));
+
+    /* A10 */
+    var README = read('../README.md'), LOG = read('../CHANGELOG.md');
+    var a10 = README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
+      README.indexOf('验证页 74 个') >= 0 &&
+      LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0;
+    rec('A10_docsUpdated', a10,
+      'README 含 docs/process=' + (README.indexOf('docs/process/') >= 0) +
+      ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
+      ' / 验证页 74 个=' + (README.indexOf('验证页 74 个') >= 0) +
+      '；CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) +
+      ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
+
+    /* A11：路径形态匹配器的正负例（裁定一）*/
+    var negText = '依据：[对标自检报告](docs/process/对标自检报告.md)，另见 `docs/process/自检报告.md` 与 preflight/artifacts/shots_resize/';
+    var posText = '../对标自检报告.md\nfile:///d:/work/自检报告.md\n诊断报告.md\n见 `修复报告.md` 与 ../preflight/shots_resize/shot_1280x720.png';
+    var negRs = scanFiles([{ name: 'synthetic/negative.md', text: negText }]);
+    var posRs = scanFiles([{ name: 'synthetic/positive.md', text: posText }]);
+    var a11 = negRs.fn.length === 0 && posRs.fn.length === 5;
+    rec('A11_pathFormMatcher', a11,
+      '指向新路径的引用命中=' + negRs.fn.length + '（必须 0）' + (negRs.fn.length ? '：' + negRs.fn.join('，') : '') +
+      '；指向旧路径的引用命中=' + posRs.fn.length + '（必须 5：../ 形态、file:/// 形态、行首裸名、正文提及、旧截图目录）' +
+      (posRs.fn.length ? '：' + posRs.fn.join('，') : ''));
+
+    /* A12：规划-对标补齐.md 的引用必须是人能点开的新路径（裁定一）*/
+    var PLAN2 = read('../规划-对标补齐.md');
+    var citeLine = (PLAN2.split('\n').filter(function (l) { return l.indexOf('依据：') >= 0; })[0] || '');
+    var planRs = scanFiles([{ name: '规划-对标补齐.md', text: PLAN2 }]);
+    var a12 = /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(citeLine) &&
+      citeLine.indexOf('.md') > 0 && citeLine.indexOf('\u200b') < 0 && planRs.fn.length === 0;
+    rec('A12_planCitationClickable', a12,
+      '行首依据行=' + JSON.stringify(citeLine.slice(0, 90)) +
+      '；含 markdown 链接=' + /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(citeLine) +
+      '；零宽字符=' + (citeLine.indexOf('\u200b') >= 0) + '；该文件功能性残留=' + planRs.fn.length);
+
+    /* N1 */
+    var mutMove = {};
+    Object.keys(coreMap).forEach(function (k) { mutMove[k] = coreMap[k]; });
+    mutMove['规划-对标补齐.md'] = '';
+    var n1 = coreCheck(coreMap).length === 0 && coreCheck(mutMove).length === 1 &&
+      coreCheck(mutMove)[0] === '规划-对标补齐.md';
+    rec('N1_negativeOverMoveFails', n1,
+      '真实缺失=' + coreCheck(coreMap).length + '；模拟搬走「规划-对标补齐.md」后缺失=' + JSON.stringify(coreCheck(mutMove)));
+
+    /* N2 */
+    var mutFiles = SCANNED.slice(0, 3).map(function (f) { return { name: f.name, text: f.text }; });
+    mutFiles.push({ name: 'README.md', text: (README || '') + '\n见 ../preflight/shots_resize/shot_1280x720.png' });
+    var mutRs = scanFiles(mutFiles);
+    var n2 = rs.fn.length === 0 && mutRs.fn.length === 1;
+    rec('N2_negativeResidueFails', n2,
+      '真实功能性残留=' + rs.fn.length + '；注入 `../preflight/shots_resize/…` 后残留=' + JSON.stringify(mutRs.fn));
+
+    /* N3 */
+    var t0 = read('../docs/process/自检报告.md');
+    var body0 = t0.slice(t0.indexOf('\n') + 1);
+    var mutBody = (body0.charAt(0) === 'Z' ? 'Y' : 'Z') + body0.slice(1);
+    var ref = null;
+    if (MAN) MAN.moves.forEach(function (m) { if (/^docs\/process\/自检报告\.md$/.test(m.next)) ref = m.bodyHash; });
+    var n3 = !!ref && fnvText(norm(body0)) === ref && fnvText(norm(mutBody)) !== ref;
+    rec('N3_negativeByteFlipFails', n3,
+      '真实哈希命中=' + (fnvText(norm(body0)) === ref) + '；把首字符改成 ' + JSON.stringify(mutBody.charAt(0)) +
+      ' 后命中=' + (fnvText(norm(mutBody)) === ref));
+
+    emit('full');
+  }
+
+  /* ══ 线上轻量模式（裁定四）：≤13 次取数，明确标记 online-lite ════ */
+  var LITE_FILES = ['selfcheck/d32-move-manifest.json', 'selfcheck/page-baseline.json',
+    '../README.md', '../CHANGELOG.md', '../规划-对标补齐.md'];
+  function startLite() {
+    MODE = 'online-lite';
+    ABANDONED = true;
+    var attempted = LOADED;
+    var q = LITE_FILES.slice();
+    (MAN ? MAN.moves : FALLBACK_MOVES).forEach(function (m) { q.push('../' + m.next); });
+    CORE.forEach(function (f) { q.push('../' + f); });
+    q = q.filter(function (p, i) { return q.indexOf(p) === i; });
+    runAll(q, fetchText, function () { assertLite(attempted); });
+  }
+  function assertLite(attempted) {
+    DONE = true;
+    var man = null, base = null;
+    try { man = JSON.parse(read('selfcheck/d32-move-manifest.json') || 'null'); } catch (e) { man = null; }
+    try { base = JSON.parse(read('selfcheck/page-baseline.json') || 'null'); } catch (e) { base = null; }
+    var names = man ? man.moves : FALLBACK_MOVES;
+    var newMiss = names.filter(function (m) { return !read('../' + m.next); }).map(function (m) { return m.next; });
+    rec('L1_newPathsExist', newMiss.length === 0,
+      '4 份报告新路径存在=' + (names.length - newMiss.length) + '/' + names.length +
+      (newMiss.length ? '；缺=' + newMiss.join(',') : ''));
+
+    var coreMiss = CORE.filter(function (f) { return !read('../' + f); });
+    rec('L2_coreDocsInRoot', coreMiss.length === 0,
+      'PLAN/README/CHANGELOG/规划 仍在根目录=' + (CORE.length - coreMiss.length) + '/4' +
+      (coreMiss.length ? '；缺=' + coreMiss.join(',') : ''));
+
+    var a9 = !!base && base.count === 74 && Array.isArray(base.pages) &&
+      base.pages.length === 74 && base.pages.indexOf('verify_d32') >= 0;
+    rec('L3_pageBaseline74', a9,
+      'count=' + (base ? base.count : 'n/a') + '；含 verify_d32=' +
+      (base && base.pages ? base.pages.indexOf('verify_d32') >= 0 : 'n/a'));
+
+    var README = read('../README.md'), LOG = read('../CHANGELOG.md'), PLAN2 = read('../规划-对标补齐.md');
+    rec('L4_readmeUpdated', README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
+      README.indexOf('验证页 74 个') >= 0,
+      'README 关键锚点 docs/process=' + (README.indexOf('docs/process/') >= 0) +
+      ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
+      ' / 74 个=' + (README.indexOf('验证页 74 个') >= 0));
+
+    rec('L5_changelogUpdated', LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0,
+      'CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) + ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
+
+    var cite = (PLAN2.split('\n').filter(function (l) { return l.indexOf('依据：') >= 0; })[0] || '');
+    rec('L6_planCitationClickable', /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(cite),
+      '依据行含可点击新路径=' + /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(cite));
+
+    emit('online-lite', attempted);
+  }
+
+  function emit(mode, attempted) {
+    var keys = Object.keys(out.sub);
+    var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+    var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({
+      mode: mode, ok: out.ok, n: keys.length, fail: failed,
+      attempted: mode === 'online-lite' ? (attempted + '/' + (TOTAL || '?')) : undefined
     });
-  }
-  var rs = residueScan(SCANNED);
-  rec('A3_noOldPathReferences', !!SCAN && SCANNED.length >= 200 && rs.v.length === 0,
-    '扫描 ' + SCANNED.length + ' 份源码/文档（清单 ' + (SCAN ? SCAN.count : 0) +
-    '）；功能性残留=' + (rs.v.length ? rs.v.slice(0, 5).join(',') + '…' : '0') +
-    '；允许域：历史存档 docs/tasks/** ' + rs.arch + ' 处、过程报告同目录兄弟引用 docs/process/** ' + rs.sib +
-    ' 处、D-31 冻结断言页说明文字 ' + rs.frozen + ' 处；取数 ' + LOADED + '/' + TOTAL);
-
-  /* ══ A4. 防过度搬运：4 个核心文件仍在根目录 ═══════════════════ */
-  function coreCheck(map) {
-    return CORE.filter(function (f) { return !(map[f] || ''); });
-  }
-  var coreMap = {};
-  CORE.forEach(function (f) { coreMap[f] = read('../' + f); });
-  var coreGone = coreCheck(coreMap);
-  var copiedToProcess = CORE.filter(function (f) { return read('../docs/process/' + f); });
-  rec('A4_coreDocsStayInRoot', coreGone.length === 0 && copiedToProcess.length === 0,
-    '根目录仍在=' + (CORE.length - coreGone.length) + '/4' +
-    (coreGone.length ? '；缺失=' + coreGone.join(',') : '') +
-    '；被误搬进 docs/process/=' + (copiedToProcess.length ? copiedToProcess.join(',') : '0'));
-
-  /* ══ A5. 被搬文件正文内容未变（搬家前同一份哈希）══════════════ */
-  var a5bad = [];
-  if (MAN) {
-    MAN.moves.forEach(function (m) {
-      var t = read('../' + m.next);
-      var body = t.slice(t.indexOf('\n') + 1);
-      var h = fnvText(norm(body));
-      var n = utf8Len(body);
-      if (h !== m.bodyHash || n !== m.bodyBytes) {
-        a5bad.push(m.next + '：hash ' + h + '/' + m.bodyHash + '，bytes ' + n + '/' + m.bodyBytes);
-      }
-    });
-  }
-  rec('A5_movedBodiesUnchanged', !!MAN && a5bad.length === 0,
-    '逐份比对「来源说明行之后的正文」与 d32-before.json 的 LF 归一 FNV-1a；不一致=' +
-    (a5bad.length ? a5bad.join(' ｜ ') : '0'));
-
-  /* ══ A6. 12 张截图在新位置，字节与哈希一致 ════════════════════ */
-  var a6bad = [];
-  var a6ok = !!MAN && MAN.shots.count === 12;
-  if (MAN) {
-    MAN.shots.files.forEach(function (f) {
-      var u8 = readBin('artifacts/shots_resize/' + f.name);
-      if (!u8) { a6bad.push(f.name + '：读不到'); return; }
-      if (u8.length !== f.bytes) a6bad.push(f.name + '：bytes ' + u8.length + '/' + f.bytes);
-      else if (fnvBytes(u8) !== f.hash) a6bad.push(f.name + '：hash 不符');
-    });
-  }
-  rec('A6_twelveShotsMoved', a6ok && a6bad.length === 0,
-    '台账 ' + (MAN ? MAN.shots.files.length : 0) + ' 张；新目录实测异常=' +
-    (a6bad.length ? a6bad.join(',') : '0'));
-
-  /* ══ A7. 新位置有来源说明（原路径 + 日期）═════════════════════ */
-  var a7bad = [];
-  if (MAN) {
-    MAN.moves.forEach(function (m) {
-      var t = read('../' + m.next);
-      if (t.indexOf(m.note) !== 0) a7bad.push(m.next + '：来源说明不在首行');
-      if (t.indexOf('2026-11-12') < 0 || t.indexOf(m.old) < 0) a7bad.push(m.next + '：缺原路径或日期');
-    });
-  }
-  var shotNote = read('artifacts/README.md');
-  if (!shotNote || shotNote.indexOf('2026-11-12') < 0) a7bad.push('artifacts/README.md：缺来源说明');
-  rec('A7_provenanceNote', !!MAN && a7bad.length === 0,
-    '4 份报告首行来源说明 + 截图目录 README；问题=' + (a7bad.length ? a7bad.join(',') : '0'));
-
-  /* ══ A8. 没搬验证页（拆防线）═════════════════════════════════ */
-  var movedAway = MUST_STAY.filter(function (p) { return !read(p); });
-  var htmlInProcess = PROCESS_HTML.filter(function (p) { return read('../docs/process/' + p); });
-  rec('A8_verifyPagesUntouched', movedAway.length === 0 && htmlInProcess.length === 0,
-    '抽查 3 页仍在 preflight/=' + (MUST_STAY.length - movedAway.length) + '/3' +
-    (movedAway.length ? '；缺失=' + movedAway.join(',') : '') +
-    '；被搬进 docs/process/=' + (htmlInProcess.length ? htmlInProcess.join(',') : '0'));
-
-  /* ══ A9. 页数基线同步（73→74，且登记了本页）══════════════════ */
-  var a9 = !!BASE && BASE.count === 74 && Array.isArray(BASE.pages) &&
-    BASE.pages.length === 74 && BASE.pages.indexOf('verify_d32') >= 0;
-  rec('A9_pageBaseline74', a9,
-    'count=' + (BASE ? BASE.count : 'n/a') + '；pages.length=' +
-    (BASE && BASE.pages ? BASE.pages.length : 'n/a') +
-    '；含 verify_d32=' + (BASE && BASE.pages ? BASE.pages.indexOf('verify_d32') >= 0 : 'n/a'));
-
-  /* ══ A10. README / CHANGELOG 已指向新结构 ═════════════════════ */
-  var README = read('../README.md');
-  var LOG = read('../CHANGELOG.md');
-  var a10 = README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
-    README.indexOf('验证页 74 个') >= 0 &&
-    LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0;
-  rec('A10_docsUpdated', a10,
-    'README 含 docs/process=' + (README.indexOf('docs/process/') >= 0) +
-    ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
-    ' / 验证页 74 个=' + (README.indexOf('验证页 74 个') >= 0) +
-    '；CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) +
-    ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
-
-  /* ══ N1. 负例：把 规划-对标补齐.md 也搬走必须 FAIL ════════════ */
-  var mutMove = {};
-  Object.keys(coreMap).forEach(function (k) { mutMove[k] = coreMap[k]; });
-  mutMove['规划-对标补齐.md'] = '';
-  var n1 = coreCheck(coreMap).length === 0 && coreCheck(mutMove).length === 1 &&
-    coreCheck(mutMove)[0] === '规划-对标补齐.md';
-  rec('N1_negativeOverMoveFails', n1,
-    '真实缺失=' + coreCheck(coreMap).length + '；模拟搬走「规划-对标补齐.md」后缺失=' +
-    JSON.stringify(coreCheck(mutMove)));
-
-  /* ══ N2. 负例：留一处旧路径引用必须 FAIL ═════════════════════ */
-  var mutFiles = SCANNED.slice(0, 3).map(function (f) { return { name: f.name, text: f.text }; });
-  mutFiles.push({ name: 'README.md', text: (README || '') + '\n见 `preflight/shots_resize/shot_1280x720.png`' });
-  var mutRs = residueScan(mutFiles);
-  var n2 = rs.v.length === 0 && mutRs.v.length === 1 && mutRs.v[0].indexOf('shots') >= 0;
-  rec('N2_negativeResidueFails', n2,
-    '真实残留=' + rs.v.length + '；注入一条后残留=' + JSON.stringify(mutRs.v));
-
-  /* ══ N3. 负例：搬完改一个字节必须 FAIL ═══════════════════════ */
-  var t0 = read('../docs/process/自检报告.md');
-  var body0 = t0.slice(t0.indexOf('\n') + 1);
-  var mutBody = (body0.charAt(0) === 'Z' ? 'Y' : 'Z') + body0.slice(1);
-  var ref = null;
-  if (MAN) MAN.moves.forEach(function (m) { if (/^docs\/process\/自检报告\.md$/.test(m.next)) ref = m.bodyHash; });
-  var n3 = !!ref && fnvText(norm(body0)) === ref && fnvText(norm(mutBody)) !== ref;
-  rec('N3_negativeByteFlipFails', n3,
-    '真实哈希命中=' + (fnvText(norm(body0)) === ref) +
-    '；把首字符改成 ' + JSON.stringify(mutBody.charAt(0)) + ' 后命中=' +
-    (fnvText(norm(mutBody)) === ref));
-
-  var keys = Object.keys(out.sub);
-  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
-  var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
-  document.getElementById('result').textContent = head + '\n\n' +
-    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
-  document.title = head;
+    var note = mode === 'online-lite'
+      ? '\nmode=online-lite（线上轻量模式：全量 ' + (TOTAL || '?') + ' 份未在取数窗口内跑完，已试取 ' + attempted +
+        ' 份；本裁决**只覆盖关键 ' + keys.length + ' 项，不代表全量残留扫描通过**，全量结论以本地 run-all 为准）'
+      : '\nmode=full（本地全量：' + (TOTAL || '?') + ' 份取数完成）';
+    document.getElementById('result').textContent = head + note + '\n\n' +
+      keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+    document.title = head;
   }
 
-  runAll(['selfcheck/d32-move-manifest.json', 'selfcheck/page-baseline.json', 'selfcheck/d32-scanlist.json'],
-    fetchText, compute);
+  /* ── 入口：file:// 恒全量；?lite=1 强制轻量（仅用于本地验证轻量分支）── */
+  if (LITE_FORCED) {
+    startLite();
+  } else if (IS_FILE) {
+    startFull();
+  } else {
+    startFull();
+    setTimeout(function () { if (!DONE) { ABANDONED = true; startLite(); } }, 1100);
+  }
 })();
 </script>
 </body>
