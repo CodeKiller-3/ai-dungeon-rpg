@@ -62,28 +62,42 @@
     out.sub[name] = { ok: !!ok, d: d };
     if (!ok) out.ok = false;
   }
-  function read(path) {
-    try {
-      var x = new XMLHttpRequest();
-      x.open('GET', path, false); x.send(null);
-      return x.responseText || '';
-    } catch (e) { return ''; }
+
+  /* ── 取数：先并行拉全部文件再判（本页要读 200+ 份，同步 XHR 在静态托管上会串行拖死）── */
+  var CACHE = {};
+  var textQ = [], binQ = [];
+  function collectText(p) { if (!(p in CACHE)) { CACHE[p] = ''; textQ.push(p); } }
+  function collectBin(p) { if (!(p in CACHE)) { CACHE[p] = null; binQ.push(p); } }
+  function read(p) { return CACHE[p] || ''; }
+  function readBin(p) { return CACHE[p] || null; }
+  function fetchText(p, cb) {
+    var x = new XMLHttpRequest();
+    x.open('GET', p, true);
+    x.onload = x.onerror = function () { CACHE[p] = x.responseText || ''; cb(); };
+    x.send(null);
   }
-  function readBin(path) {
-    /* 同步 XHR 在 Window 下不允许 responseType='arraybuffer'（规范禁止），
-     * 改用 x-user-defined 把字节映射成 0x00~0xFF 的码元，再逐字节还原。 */
-    try {
-      var x = new XMLHttpRequest();
-      x.open('GET', path, false);
-      x.overrideMimeType('text/plain; charset=x-user-defined');
-      x.send(null);
+  function fetchBin(p, cb) {
+    /* Window 下同步 XHR 不允许 responseType='arraybuffer'，用 x-user-defined 拿字节 */
+    var x = new XMLHttpRequest();
+    x.open('GET', p, true);
+    try { x.overrideMimeType('text/plain; charset=x-user-defined'); } catch (e) { /* noop */ }
+    x.onload = x.onerror = function () {
       var s = x.responseText || '';
-      if (!s) return null;
+      if (!s) { CACHE[p] = null; return cb(); }
       var u8 = new Uint8Array(s.length);
       for (var i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i) & 0xff;
-      return u8;
-    } catch (e) { return null; }
+      CACHE[p] = u8; cb();
+    };
+    x.send(null);
   }
+  function runAll(list, fn, cb) {
+    var n = list.length;
+    if (!n) return cb();
+    list.forEach(function (p) {
+      fn(p, function () { n--; if (n === 0) cb(); });
+    });
+  }
+
   function fnvText(str) {
     var h = 0x811c9dc5;
     for (var i = 0; i < str.length; i++) {
@@ -105,12 +119,37 @@
     try { return new TextEncoder().encode(s).length; } catch (e) { return -1; }
   }
 
-  var MAN = null;
-  try { MAN = JSON.parse(read('selfcheck/d32-move-manifest.json')); } catch (e) { MAN = null; }
-  var BASE = null;
-  try { BASE = JSON.parse(read('selfcheck/page-baseline.json')); } catch (e) { BASE = null; }
-  var SCAN = null;
-  try { SCAN = JSON.parse(read('selfcheck/d32-scanlist.json')); } catch (e) { SCAN = null; }
+  var MAN = null, BASE = null, SCAN = null;
+  var CORE = ['PLAN.md', 'README.md', 'CHANGELOG.md', '规划-对标补齐.md'];
+  var MUST_STAY = ['verify_d31.html', 'verify_d29.html', 'verify_d22.html'];
+  var PROCESS_HTML = ['verify_d31.html', 'verify_d22.html', 'verify_d02.html'];
+
+  function compute() {
+    try { MAN = JSON.parse(read('selfcheck/d32-move-manifest.json') || 'null'); } catch (e) { MAN = null; }
+    try { BASE = JSON.parse(read('selfcheck/page-baseline.json') || 'null'); } catch (e) { BASE = null; }
+    try { SCAN = JSON.parse(read('selfcheck/d32-scanlist.json') || 'null'); } catch (e) { SCAN = null; }
+
+    /* 汇总本页要读的全部文件（去重），二阶段并行取数 */
+    if (MAN) {
+      MAN.moves.forEach(function (m) { collectText('../' + m.next); collectText('../' + m.old); });
+      MAN.shots.files.forEach(function (f) { collectBin('artifacts/shots_resize/' + f.name); });
+      collectBin('shots_resize/' + MAN.shots.files[0].name);
+    }
+    if (SCAN && SCAN.files) SCAN.files.forEach(function (p) { collectText('../' + p); });
+    CORE.forEach(function (f) { collectText('../' + f); collectText('../docs/process/' + f); });
+    MUST_STAY.forEach(function (p) { collectText(p); });
+    PROCESS_HTML.forEach(function (p) { collectText('../docs/process/' + p); });
+    collectText('artifacts/README.md');
+    collectText('../README.md');
+    collectText('../CHANGELOG.md');
+    collectText('../docs/process/自检报告.md');
+
+    runAll(textQ, fetchText, function () {
+      runAll(binQ, fetchBin, assertAll);
+    });
+  }
+
+  function assertAll() {
 
   /* ══ A1. 新路径逐份存在 ═══════════════════════════════════════ */
   var a1miss = [];
@@ -160,7 +199,10 @@
   }
   var SCANNED = [];
   if (SCAN && SCAN.files) {
-    SCAN.files.forEach(function (p) { var t = read('../' + p); if (t) SCANNED.push({ name: p, text: t }); });
+    SCAN.files.forEach(function (p) {
+      var t = read('../' + p);
+      if (t) SCANNED.push({ name: p, text: t });
+    });
   }
   var rs = residueScan(SCANNED);
   rec('A3_noOldPathReferences', !!SCAN && SCANNED.length >= 200 && rs.v.length === 0,
@@ -170,7 +212,6 @@
     ' 处、D-31 冻结断言页说明文字 ' + rs.frozen + ' 处');
 
   /* ══ A4. 防过度搬运：4 个核心文件仍在根目录 ═══════════════════ */
-  var CORE = ['PLAN.md', 'README.md', 'CHANGELOG.md', '规划-对标补齐.md'];
   function coreCheck(map) {
     return CORE.filter(function (f) { return !(map[f] || ''); });
   }
@@ -230,10 +271,8 @@
     '4 份报告首行来源说明 + 截图目录 README；问题=' + (a7bad.length ? a7bad.join(',') : '0'));
 
   /* ══ A8. 没搬验证页（拆防线）═════════════════════════════════ */
-  var MUST_STAY = ['verify_d31.html', 'verify_d29.html', 'verify_d22.html'];
   var movedAway = MUST_STAY.filter(function (p) { return !read(p); });
-  var htmlInProcess = ['verify_d31.html', 'verify_d22.html', 'verify_d02.html']
-    .filter(function (p) { return read('../docs/process/' + p); });
+  var htmlInProcess = PROCESS_HTML.filter(function (p) { return read('../docs/process/' + p); });
   rec('A8_verifyPagesUntouched', movedAway.length === 0 && htmlInProcess.length === 0,
     '抽查 3 页仍在 preflight/=' + (MUST_STAY.length - movedAway.length) + '/3' +
     (movedAway.length ? '；缺失=' + movedAway.join(',') : '') +
@@ -296,6 +335,10 @@
   document.getElementById('result').textContent = head + '\n\n' +
     keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
   document.title = head;
+  }
+
+  runAll(['selfcheck/d32-move-manifest.json', 'selfcheck/page-baseline.json', 'selfcheck/d32-scanlist.json'],
+    fetchText, compute);
 })();
 </script>
 </body>
