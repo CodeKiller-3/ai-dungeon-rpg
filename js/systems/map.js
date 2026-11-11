@@ -710,7 +710,7 @@
         Game.Systems.Status.apply(def.status, def.turns);
         res.status = def.status;
       }
-      var msg = '踩到' + def.name + '！';
+      var msg = '踩到' + def.name + '。';
       if (res.dmg > 0) msg += ' 受到 ' + res.dmg + ' 伤害';
       if (res.status) {
         var sdef = Game.Data.STATUS && Game.Data.STATUS[res.status];

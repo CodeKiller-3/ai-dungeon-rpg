@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-20 文案与按键表一致性</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-20 · 按键表 ↔ 代码映射 / 六处机制 / 术语冻结 / 感叹号口径 / 未实现文案</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, R = Game.Core.Render, B = Game.Systems.Battle, P = Game.Data.Player;
+
+  /* 本页不跑 Main.init()，但要走真实键盘路径 —— 必须显式绑定 Input（与 verify_d19 同因） */
+  Game.Core.Input.bind();
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* ── 读源码：run-all.ps1 以 --allow-file-access-from-files 启动，file:// 同步 XHR 可用 ── */
+  function src(path) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', '../' + path, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); }
+
+  function segOf(text, startMark, endMark) {
+    var i = text.indexOf(startMark);
+    if (i < 0) return '';
+    var j = text.indexOf(endMark, i + startMark.length);
+    return text.substring(i, j > i ? j : text.length);
+  }
+  function uniq(arr) {
+    var seen = {}, out2 = [];
+    for (var i = 0; i < arr.length; i++) if (!seen[arr[i]]) { seen[arr[i]] = 1; out2.push(arr[i]); }
+    return out2;
+  }
+  /* code → 引导页键名（Digit7→7、KeyH→H、Escape→Esc…） */
+  function codeLabel(code) {
+    var m;
+    if ((m = /^Digit(\d)$/.exec(code))) return m[1];
+    if ((m = /^Numpad(\d)$/.exec(code))) return m[1];
+    if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
+    if (code === 'Escape') return 'Esc';
+    if (code === 'Enter' || code === 'NumpadEnter') return 'Enter';
+    return code;
+  }
+  function codesIn(text) {
+    var re = /k\['([A-Za-z0-9]+)'\]/g, m, list = [];
+    while ((m = re.exec(text))) list.push(m[1]);
+    return uniq(list);
+  }
+  function labelsOf(km, scope) {
+    var list = [];
+    for (var i = 0; i < km[scope].length; i++) list.push(km[scope][i].label);
+    return list;
+  }
+  function rowOf(km, scope, act) {
+    for (var i = 0; i < km[scope].length; i++) if (km[scope][i].act === act) return km[scope][i];
+    return null;
+  }
+
+  var mainSrc = src('js/core/main.js');
+  var inputSrc = src('js/core/input.js');
+  var exSeg = segOf(mainSrc, '_updateExplore: function', '_updateBattle: function');
+  var btSeg = segOf(mainSrc, '_updateBattle: function', '_updateInventory: function');
+  var dirCodes = (function () {
+    var m = /DIR_CODES\s*=\s*\{([\s\S]*?)\}/.exec(inputSrc), list = [];
+    if (!m) return list;
+    var re = /([A-Za-z0-9]+)\s*:\s*1/g, g;
+    while ((g = re.exec(m[1]))) list.push(g[1]);
+    return uniq(list);
+  })();
+
+  /* ── a) 按键表 ↔ 代码映射：双向比对 ─────────────────────────────
+   * 方向 1（表→码）：表里写出的每个键，回放真实按键后必须命中声称的行为；
+   * 方向 2（码→表）：代码里实际读取的每个键，表里必须有一行认领。
+   * 两个方向都跑，删掉任意一行都会被方向 2 抓住。 */
+  function auditTable(km, guideText) {
+    var missing = [], extra = [];
+    var exLabels = labelsOf(km, 'explore'), btLabels = labelsOf(km, 'battle');
+    var exCodes = codesIn(exSeg), btCodes = codesIn(btSeg);
+    var i, lab;
+
+    /* 方向 2：代码 → 表 */
+    for (i = 0; i < exCodes.length; i++) {
+      lab = codeLabel(exCodes[i]);
+      if (exLabels.indexOf(lab) < 0) missing.push('探索 ' + exCodes[i] + ' → 表里没有「' + lab + '」');
+    }
+    for (i = 0; i < btCodes.length; i++) {
+      lab = codeLabel(btCodes[i]);
+      if (btLabels.indexOf(lab) < 0) missing.push('战斗 ' + btCodes[i] + ' → 表里没有「' + lab + '」');
+    }
+    /* 方向键由 Input.direction 统一读，不在 _updateExplore 里出现，单列比对 */
+    var move = rowOf(km, 'explore', 'move');
+    for (i = 0; i < dirCodes.length; i++) {
+      if (!move || move.codes.indexOf(dirCodes[i]) < 0) missing.push('移动键 ' + dirCodes[i] + ' → 表里没有');
+    }
+    /* 表里认领的键必须都画在引导页正文里（避免"数据改了、文案没改"） */
+    var all = km.explore.concat(km.battle);
+    for (i = 0; i < all.length; i++) {
+      if (guideText.indexOf(all[i].label + ' ' + all[i].name) < 0) extra.push(all[i].label + ' ' + all[i].name);
+    }
+    return { ok: missing.length === 0 && extra.length === 0, missing: missing, extra: extra };
+  }
+
+  /* ── a) 真实按键回放：表里每一行都要能打出它声称的行为 ────────── */
+  var battleRec = null, exploreHit = null;
+  var origPlayerAction = B.playerAction;
+
+  function playBattle(code) {
+    battleRec = null;
+    B.playerAction = function (cmd) { battleRec = cmd; return {}; };
+    kd(code); M._updateBattle(); ku(code);
+    B.playerAction = origPlayerAction;
+    return battleRec;
+  }
+  function playFx(code) {
+    var called = 0, orig = Game.Fx.cycle;
+    Game.Fx.cycle = function () { called++; };
+    kd(code); M._updateBattle(); ku(code);
+    Game.Fx.cycle = orig;
+    return called;
+  }
+  function playExplore(code, want) {
+    Game.Core.Input.clear();
+    if (Game.Modal.isOpen()) Game.Modal.close();
+    M._guideVisible = false;
+    exploreHit = null;
+    var om = Game.Modal.open, on = Game.Systems.NPC.open,
+        ol = Game.Systems.Learner.init, oa = Game.Systems.Audio.setMuted;
+    Game.Modal.open = function (kind) { exploreHit = kind; };
+    Game.Systems.NPC.open = function () { exploreHit = 'npc'; };
+    Game.Systems.Learner.init = function () { exploreHit = 'learner'; };
+    Game.Systems.Audio.setMuted = function () { exploreHit = 'mute'; };
+    if (want === 'move') {
+      /* 移动分支需要地图；本页不起 Map，全部用桩替身，只验证"键 → 位移方向"这段映射 */
+      var og = Game.Systems.Map.isWalkable, ot = Game.Systems.Map.tileAt,
+          oe = Game.Systems.Map.enemyAt, od = Game.Systems.Map.getDecor,
+          otr = Game.Systems.Map.triggerTrap, oai = Game.Systems.AI.tick,
+          of = Game.fov && Game.fov.update;
+      Game.Systems.Map.isWalkable = function () { return true; };
+      Game.Systems.Map.tileAt = function () { return 0; };
+      Game.Systems.Map.enemyAt = function () { return null; };
+      Game.Systems.Map.getDecor = function () { return null; };
+      Game.Systems.Map.triggerTrap = function () { return null; };
+      Game.Systems.AI.tick = function () {};
+      if (Game.fov) Game.fov.update = function () {};
+      P.x = 5; P.y = 5;
+      kd(code); M._updateExplore(1e9); ku(code);
+      Game.Systems.Map.isWalkable = og; Game.Systems.Map.tileAt = ot;
+      Game.Systems.Map.enemyAt = oe; Game.Systems.Map.getDecor = od;
+      Game.Systems.Map.triggerTrap = otr; Game.Systems.AI.tick = oai;
+      if (Game.fov && of) Game.fov.update = of;
+    } else {
+      kd(code); M._updateExplore(1e9); ku(code);
+    }
+    Game.Modal.open = om; Game.Systems.NPC.open = on;
+    Game.Systems.Learner.init = ol; Game.Systems.Audio.setMuted = oa;
+    return exploreHit;
+  }
+
+  try {
+    var lines = R.guideLines();
+    var guideText = lines.join('\n');
+
+    /* ══ A. 按键表与代码映射 ════════════════════════════════════ */
+    var audit = auditTable(R.KEYMAP, guideText);
+    rec('A1_tableMatchesCode', audit.ok,
+      '双向比对：代码读到的键 ' + codesIn(exSeg).concat(codesIn(btSeg)).length + ' 个 + 方向键 ' +
+      dirCodes.length + ' 个，全部在表里；缺失 ' + JSON.stringify(audit.missing) +
+      '，文案缺行 ' + JSON.stringify(audit.extra));
+
+    /* 负例：从表里删掉 7（用药）——同一判定必须转 FAIL，并指出 Digit7 无人认领 */
+    var kmNo7 = JSON.parse(JSON.stringify(R.KEYMAP));
+    kmNo7.battle = kmNo7.battle.filter(function (r) { return r.act !== 'item'; });
+    var auditNeg = auditTable(kmNo7, guideText);
+    rec('A2_negativeDrop7Fails', auditNeg.ok === false &&
+      auditNeg.missing.join('|').indexOf('Digit7') >= 0,
+      '删掉 7 用药后：ok=' + auditNeg.ok + '，missing=' + JSON.stringify(auditNeg.missing));
+
+    /* 真实回放：战斗 8 行 */
+    var bRows = R.KEYMAP.battle, bBad = [], bDetail = [];
+    B.start('slime');
+    M._scene = 'battle';
+    for (var bi = 0; bi < bRows.length; bi++) {
+      var row = bRows[bi];
+      var got = (row.act === 'fx') ? playFx(row.codes[0]) : playBattle(row.codes[0]);
+      var expect = (row.act === 'fx') ? 1 : row.act;
+      if (got !== expect) bBad.push(row.label + '→' + got);
+      bDetail.push(row.label + '=' + (got === 1 && row.act === 'fx' ? 'cycle' : got));
+    }
+    rec('A3_battleKeysReplay', bBad.length === 0,
+      '逐键回放（真实 KeyboardEvent → Input → _updateBattle）：' + bDetail.join(' ') +
+      (bBad.length ? '；不符 ' + bBad.join(',') : ''));
+
+    /* 真实回放：探索 9 行 + 移动方向 */
+    var eBad = [], eDetail = [];
+    var eExpect = {
+      inventory: 'inventory', shop: 'shop', quests: 'quests',
+      npc: 'npc', learner: 'learner', settings: 'settings', mute: 'mute'
+    };
+    for (var ei = 0; ei < R.KEYMAP.explore.length; ei++) {
+      var er = R.KEYMAP.explore[ei];
+      if (er.act === 'guide') {
+        var before = M._guideVisible;
+        var g = playExplore(er.codes[0], 'guide');
+        var hitGuide = (before === false && M._guideVisible === true);
+        if (!hitGuide) eBad.push('H');
+        eDetail.push('H=' + (hitGuide ? '打开引导' : '未打开'));
+        if (M._guideVisible) M.closeGuide();
+      } else if (er.act === 'move') {
+        /* 四个方向都打一遍：ArrowLeft/Right/Up/Down 各走一步，方向要对 */
+        var dirCase = [
+          { code: 'ArrowRight', dx: 1, dy: 0 }, { code: 'ArrowLeft', dx: -1, dy: 0 },
+          { code: 'ArrowUp', dx: 0, dy: -1 }, { code: 'ArrowDown', dx: 0, dy: 1 }
+        ], dOk = true, dTxt = [];
+        for (var di = 0; di < dirCase.length; di++) {
+          P.x = 5; P.y = 5;
+          playExplore(dirCase[di].code, 'move');
+          var okd = (P.x === 5 + dirCase[di].dx && P.y === 5 + dirCase[di].dy);
+          if (!okd) dOk = false;
+          dTxt.push(dirCase[di].code + (okd ? '✓' : '✗'));
+        }
+        if (!dOk) eBad.push('move');
+        eDetail.push('移动 ' + dTxt.join(' '));
+      } else if (er.act === 'closePanel') {
+        Game.Modal.open('inventory');
+        kd('Escape');
+        var closed = !Game.Modal.isOpen();
+        ku('Escape');
+        if (!closed) { Game.Modal.close(); eBad.push('Esc'); }
+        eDetail.push('Esc=' + (closed ? '关面板' : '未关'));
+      } else if (er.act === 'confirm') {
+        M.showGuide();
+        kd('Enter');
+        var closedG = (M._guideVisible === false);
+        ku('Enter');
+        if (!closedG) { M.closeGuide(); eBad.push('Enter'); }
+        eDetail.push('Enter=' + (closedG ? '确认关闭' : '未关闭'));
+      } else {
+        var want = eExpect[er.act];
+        var h = playExplore(er.codes[0], er.act);
+        if (h !== want) eBad.push(er.label + '→' + h);
+        eDetail.push(er.label + '=' + (h || '无'));
+      }
+    }
+    rec('A4_exploreKeysReplay', eBad.length === 0,
+      '逐键回放：' + eDetail.join('；') + (eBad.length ? '；不符 ' + eBad.join(',') : ''));
+
+    /* 图例：引导页必须同时出现探索与战斗两张表（D-19 后只写 1/2/3 即为过期） */
+    var hasAll = ['1 攻击', '2 防御', '3 逃跑', '4 火球', '5 冲刺', '6 护盾', '7 用药', 'F 战斗特效',
+      '↑↓←→ / WASD 移动', 'H 重看引导', 'E 商店', 'Esc 关闭面板', 'Enter 确认'].every(function (t) {
+      return guideText.indexOf(t) >= 0;
+    });
+    rec('A5_guideCoversBothScenes', hasAll,
+      '引导页正文共 ' + lines.length + ' 行，含探索/战斗两张表与 Esc/Enter：' +
+      (hasAll ? '齐备' : '缺项'));
+
+    /* ══ B. 六处机制：文案有 + 代码有 ═══════════════════════════ */
+    var MECHS = [
+      { id: 'B1_fxThreeLevels', text: 'F 战斗特效：关 / 低 / 高',
+        file: 'js/systems/fx.js', re: /LEVELS\s*=\s*\['off',\s*'low',\s*'high'\]/,
+        why: '三档档位表 off/low/high' },
+      { id: 'B2_trapRevealOnStep', text: '陷阱：踩中才现形',
+        file: 'js/systems/map.js', re: /if\s*\(!tr\s*\|\|\s*tr\.seen\)\s*return\s*null;[\s\S]{0,400}?tr\.seen\s*=\s*true;/,
+        why: '未踩到不结算，踩中后 seen=true 永久显现' },
+      { id: 'B3_upgradeCap5', text: '强化：装备最多 +5',
+        file: 'js/systems/inventory.js', re: /lv\s*>=\s*5/,
+        why: '+5 上限判定（lv>=5 拒绝继续强化）' },
+      { id: 'B4_bossHalfEnrage', text: 'Boss 半血狂暴',
+        file: 'js/data/monsters.js', re: /hpPct:\s*0\.5/,
+        why: 'Boss 血量 ≤50% 触发二阶段' },
+      { id: 'B5_fleeRule', text: '逃跑：成功退一格且怪物留场',
+        file: 'js/core/main.js', re: /tx\s*=\s*enc\.fromX/,
+        why: '成功后落回遭遇前来格；50% 成功率，失败不占额外回合但立刻吃反击',
+        why2: { file: 'js/systems/battle.js', re: /Math\.random\(\)\s*<\s*0\.5[\s\S]{0,300}?你成功逃离了战斗/ } },
+      { id: 'B6_autosave', text: '自动存档：换层、开箱、战斗结束时',
+        file: 'js/core/main.js', re: /Save\.save\(\)[\s\S]*Save\.save\(\)[\s\S]*Save\.save\(\)/,
+        why: '换层 / 战斗结束 / 开箱三处及以上自动写档' }
+    ];
+    var mechOk = 0, mechDetail = [];
+    for (var mi = 0; mi < MECHS.length; mi++) {
+      var mech = MECHS[mi];
+      var textOk = guideText.indexOf(mech.text) >= 0;
+      var s1 = src(mech.file);
+      var codeOk = mech.re.test(s1);
+      if (mech.why2) codeOk = codeOk && mech.why2.re.test(src(mech.why2.file));
+      if (textOk && codeOk) mechOk++;
+      mechDetail.push(mech.id + (textOk ? ' 文案✓' : ' 文案✗') + (codeOk ? '代码✓' : '代码✗'));
+      rec(mech.id, textOk && codeOk, mech.id + '：文案=' + textOk + '，代码=' + codeOk + '（' + mech.why + '）');
+    }
+    rec('B0_sixMechanicsCovered', mechOk === 6, mechOk + '/6：' + mechDetail.join(' | '));
+
+    /* ══ C. 术语冻结 ═══════════════════════════════════════════ */
+    var TEXT_FILES = ['js/core/render.js', 'js/core/main.js', 'js/systems/battle.js',
+      'js/systems/map.js', 'js/systems/modal.js', 'js/systems/hud.js', 'js/systems/notice.js',
+      'js/systems/inventory.js', 'js/systems/shop.js', 'js/systems/quest.js',
+      'js/systems/npc.js', 'js/systems/learner.js', 'js/data/dialogue.js'];
+    var modalSrc = src('js/systems/modal.js');
+
+    /* 只取字符串字面量：注释里的"强化学习/触屏"是开发者用词，玩家看不到，不计入文案扫描 */
+    var literalText = '', cjkStrings = 0, literals = [];
+    for (var lf = 0; lf < TEXT_FILES.length; lf++) {
+      var lsrc = src(TEXT_FILES[lf]);
+      var lre = /'((?:[^'\\]|\\.)*)'/g, lm;
+      while ((lm = lre.exec(lsrc))) {
+        if (!/[\u4e00-\u9fa5]/.test(lm[1])) continue;
+        literals.push({ file: TEXT_FILES[lf], s: lm[1] });
+        literalText += lm[1] + '\n';
+        cjkStrings++;
+      }
+    }
+
+    /* C1：L 场景不再叫「强化学习」——玩家可见文案里该词为 0 次 */
+    var rlHits = (literalText.match(/强化学习/g) || []).length;
+    rec('C1_noTermCollision', rlHits === 0,
+      '玩家可见字符串中「强化学习」' + rlHits + ' 次（L 场景已改名 Q-learning 寻宝鼠演示 / AI 演示；注释不计）');
+
+    /* C2：「强化」只指装备强化；出现该词的引导行必须同时带「装备」或「卷轴」 */
+    var badLine = [];
+    for (var li = 0; li < lines.length; li++) {
+      if (lines[li].indexOf('强化') >= 0 && !/装备|卷轴/.test(lines[li])) badLine.push(lines[li]);
+    }
+    rec('C2_upgradeUnambiguous', badLine.length === 0,
+      '含「强化」的引导行均限定为装备/卷轴；歧义行 ' + JSON.stringify(badLine));
+
+    /* C3：H 的文案 = 实际行为（重看引导），不再写「帮助」 */
+    var hRow = rowOf(R.KEYMAP, 'explore', 'guide');
+    var hOk = !!hRow && hRow.name === '重看引导' &&
+      guideText.indexOf('H 帮助') < 0 && src('js/core/render.js').indexOf('H 帮助') < 0 &&
+      modalSrc.indexOf('H 重看引导') >= 0;
+    rec('C3_hMeansShowGuide', hOk,
+      'H 行为=' + (hRow ? hRow.name : '无') + '，底部提示与设置面板已改为「重看引导」');
+
+    /* C4：只记录不修的数值事实（数值门内，本卡不动） */
+    var I = Game.Data.ITEMS;
+    rec('C4_knownEqualitiesRecorded',
+      I.sword_bone.effect.atk === I.sword_iron.effect.atk &&
+      I.knife.effect.atk === I.sword_rusty.effect.atk && I.knife.price < I.sword_rusty.price,
+      'sword_bone.atk=' + I.sword_bone.effect.atk + ' 与 sword_iron.atk=' + I.sword_iron.effect.atk +
+      ' 相同（价格同为 ' + I.sword_bone.price + '）；knife 与 sword_rusty 同为 atk ' +
+      I.knife.effect.atk + '，但价格 ' + I.knife.price + ' < ' + I.sword_rusty.price +
+      '，故 knife 严格占优——两处按卡面只记录、不修');
+
+    /* ══ D. 感叹号密度口径 ═════════════════════════════════════ */
+    /* 口径：玩家可见的中文字符串里，除「死亡」「胜利」「升级」三类极端时刻外，感叹号总数为 0；
+     * reactions.js 是语气基准，冻结不改造，只核对它的感叹号数量没被"改软"。 */
+    var EXEMPT = ['胜利', '升级', '被击败', '阵亡', '死亡'];
+    var bang = [];
+    for (var bi2 = 0; bi2 < literals.length; bi2++) {
+      var s = literals[bi2].s;
+      if (s.indexOf('！') < 0) continue;
+      var exempt = false;
+      for (var xi = 0; xi < EXEMPT.length; xi++) if (s.indexOf(EXEMPT[xi]) >= 0) exempt = true;
+      if (!exempt) bang.push(literals[bi2].file + ': ' + s);
+    }
+    rec('D1_bangOutsideExtremes', bang.length === 0,
+      '扫描 ' + TEXT_FILES.length + ' 个文案源、' + cjkStrings + ' 条中文字符串：非死亡/胜利/升级文案中感叹号 ' +
+      bang.length + ' 处' + (bang.length ? '：' + bang.join(' || ') : '（密度 0/1000）'));
+
+    var reactSrc = src('js/data/reactions.js');
+    var reactBang = (reactSrc.match(/！/g) || []).length;
+    rec('D2_baselineNotSoftened', reactBang === 1,
+      'reactions.js 感叹号 ' + reactBang + ' 处（基准冻结为 1，未随统一而改软）');
+
+    /* ══ E. 不许写没实现的东西 ═════════════════════════════════ */
+    var FAKE = ['成就', '联机', '多人', '手柄', '触屏', '自动战斗', '多存档', '剧情分支', '宠物', '每日任务'];
+    var fakeHit = [];
+    for (var ki = 0; ki < FAKE.length; ki++) {
+      if (guideText.indexOf(FAKE[ki]) >= 0 || literalText.indexOf(FAKE[ki]) >= 0) fakeHit.push(FAKE[ki]);
+    }
+    rec('E1_noUnimplementedClaims', fakeHit.length === 0,
+      '未实现功能词扫描（' + FAKE.join('/') + '）：命中 ' + fakeHit.length + ' 个' +
+      (fakeHit.length ? '：' + fakeHit.join(',') : ''));
+
+    /* E2：文案里出现的每个数字键 / 字母键都必须能被代码接住（与 A 同源，但直接扫正文） */
+    var claimed = [];
+    for (var cl = 0; cl < lines.length; cl++) {
+      var cre = /(^|[ ·])([1-7]|[A-Z])(?=[ 　])/g, cm;
+      while ((cm = cre.exec(lines[cl]))) claimed.push(cm[2]);
+    }
+    var keySet = {};
+    var allRows = R.KEYMAP.explore.concat(R.KEYMAP.battle);
+    for (var ri = 0; ri < allRows.length; ri++) keySet[allRows[ri].label] = 1;
+    var orphan = claimed.filter(function (c) { return !keySet[c]; });
+    rec('E2_noOrphanKeyClaims', orphan.length === 0,
+      '正文中认领的键 ' + JSON.stringify(uniq(claimed)) + '；无代码入口的 ' + JSON.stringify(uniq(orphan)));
+
+  } catch (e) {
+    rec('X0_exception', false, String(e && (e.stack || e.message) || e));
+  }
+
+  var pre = document.getElementById('result');
+  pre.textContent = JSON.stringify(out, null, 2);
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

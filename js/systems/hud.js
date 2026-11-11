@@ -193,7 +193,7 @@
     var s = last || {};
     var hp = s.hp, mx = s.hpMax;
     var active = (typeof hp === 'number' && typeof mx === 'number' && mx > 0 && hp > 0 && hp / mx <= 0.25);
-    return { active: active, text: active ? ('！血量危急 ' + hp + '/' + mx + '（≤25%）') : '' };
+    return { active: active, text: active ? ('血量危急 ' + hp + '/' + mx + '（≤25%）') : '' };
   }
 
   function nowMs() {

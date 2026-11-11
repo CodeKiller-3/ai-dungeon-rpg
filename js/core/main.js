@@ -276,7 +276,7 @@
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
       syncHud();    /* S3-2：初始顶部 HUD 数据 */
       Game.Core.EventBus.emit('ui:notice', {
-        msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始！'
+        msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始'
       });
       /* M9-5：首次引导 + resize 监听（静默降级）；D-14：改为明确确认键关闭 */
       this._guideVisible = needsGuide();

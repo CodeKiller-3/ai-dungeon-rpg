@@ -193,9 +193,78 @@
     return S.getFrame(name, animIndex(name, 4));
   }
 
+  /* D-20：引导页按键表——画在页面上的内容与验证页比对共用这一份声明。
+   * label 是键名（玩家看到的字），act 是验证页据此回放真实按键后比对的行为标识，
+   * codes 是该动作实际接收的 KeyboardEvent.code（与 input.js / main.js 的映射一一对应）。
+   * 探索表对应 main.js `_updateExplore`，战斗表对应 `_updateBattle`；
+   * 两侧字幕（Esc/Enter）由弹窗与引导确认各自处理，故单列在探索表末行。 */
+  var KEYMAP = {
+    explore: [
+      { label: '↑↓←→ / WASD', act: 'move', name: '移动', line: 0,
+        codes: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'] },
+      { label: 'B', act: 'inventory', name: '背包', line: 0, codes: ['KeyB'] },
+      { label: 'E', act: 'shop', name: '商店', line: 0, codes: ['KeyE'] },
+      { label: 'M', act: 'quests', name: '任务', line: 0, codes: ['KeyM'] },
+      { label: 'T', act: 'npc', name: '对话', line: 1, codes: ['KeyT'] },
+      { label: 'L', act: 'learner', name: 'AI 演示', line: 1, codes: ['KeyL'] },
+      { label: 'Q', act: 'settings', name: '设置', line: 1, codes: ['KeyQ'] },
+      { label: 'K', act: 'mute', name: '静音', line: 1, codes: ['KeyK'] },
+      { label: 'H', act: 'guide', name: '重看引导', line: 1, codes: ['KeyH'] },
+      { label: 'Esc', act: 'closePanel', name: '关闭面板', line: 2, codes: ['Escape'] },
+      { label: 'Enter', act: 'confirm', name: '确认', line: 2, codes: ['Enter', 'NumpadEnter'] }
+    ],
+    battle: [
+      { label: '1', act: 'attack', name: '攻击', line: 0, codes: ['Digit1', 'Numpad1'] },
+      { label: '2', act: 'defend', name: '防御', line: 0, codes: ['Digit2', 'Numpad2'] },
+      { label: '3', act: 'run', name: '逃跑', line: 0, codes: ['Digit3', 'Numpad3'] },
+      { label: '4', act: 'skill:fireball', name: '火球', line: 0, codes: ['Digit4', 'Numpad4'] },
+      { label: '5', act: 'skill:dash', name: '冲刺', line: 1, codes: ['Digit5', 'Numpad5'] },
+      { label: '6', act: 'skill:shield', name: '护盾', line: 1, codes: ['Digit6', 'Numpad6'] },
+      { label: '7', act: 'item', name: '用药', line: 1, codes: ['Digit7', 'Numpad7'] },
+      { label: 'F', act: 'fx', name: '战斗特效：关 / 低 / 高', line: 1, codes: ['KeyF'] }
+    ]
+  };
+
+  /* D-20：按行拼一行键位说明（同 line 的项用 · 连接），避免手写文案与映射漂移 */
+  function keyLine(scope, line) {
+    var out = [];
+    var rows = KEYMAP[scope];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].line === line) out.push(rows[i].label + ' ' + rows[i].name);
+    }
+    return out.join(' · ');
+  }
+
+  /* D-20：引导页正文——三块：探索/面板、战斗、机制须知。
+   * 机制须知只写代码里确实存在的六件事（F 三档已并入战斗键行）。 */
+  function guideRows() {
+    return [
+      { head: true, text: '探索 · 面板' },
+      { text: keyLine('explore', 0) },
+      { text: keyLine('explore', 1) },
+      { text: keyLine('explore', 2) },
+      { head: true, text: '战斗（踩到怪物即进入）' },
+      { text: keyLine('battle', 0) },
+      { text: keyLine('battle', 1) },
+      { head: true, text: '你需要知道的事' },
+      { text: '陷阱：踩中才现形——地刺扣血并流血，毒气让你中毒' },
+      { text: '强化：装备最多 +5，用强化卷轴在战斗外提升' },
+      { text: 'Boss 半血狂暴：攻防提升，还可能追加技能' },
+      { text: '逃跑：成功退一格且怪物留场；失败立刻被反击' },
+      { text: '自动存档：换层、开箱、战斗结束时' }
+    ];
+  }
+
   Game.Core.Render = {
     _canvas: null,
     _ctx: null,
+    KEYMAP: KEYMAP,           /* D-20：按键表（引导页与验证页共用） */
+    guideRows: guideRows,     /* D-20：引导页正文（验证页据此做"文案有/代码有"比对） */
+    guideLines: function () { /* D-20：正文纯文本，便于机器比对 */
+      var rows = guideRows(), out = [];
+      for (var i = 0; i < rows.length; i++) out.push(rows[i].text);
+      return out;
+    },
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
     MONSTER_ANIM: MONSTER_ANIM,  /* P2-1：怪物 id → {idle,run} 帧组（验证/调试可读，运行时只读） */
     /* M9-5：DPR 高清适配——逻辑坐标统一用 CSS 像素，物理像素 = CSS * dpr */
@@ -786,10 +855,10 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = (narrow ? '10px' : '12px') + ' monospace';
       var hint = narrow
-        ? ('FPS=' + (stats ? stats.fps : 0) + ' | 方向键移动 | 踩怪开战 | H 帮助')
+        ? ('FPS=' + (stats ? stats.fps : 0) + ' | 方向键移动 | 踩怪开战 | H 重看引导')
         : ('FPS=' + (stats ? stats.fps : 0) +
           (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
-          ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上 | H 帮助');
+          ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上 | H 重看引导');
       ctx.fillText(hint, 10, H - 10);
       this._drawHud(); /* S3-2 */
       this._drawModal(); /* S3-3：弹窗叠在最上层（仅探索场景路径，弹窗仅从此打开） */
@@ -1091,7 +1160,7 @@
       if (!active || active.length === 0) {
         ctx.fillStyle = '#52c41a';
         ctx.font = '15px monospace';
-        ctx.fillText('全部任务已完成！', 30, 100);
+        ctx.fillText('全部任务已完成', 30, 100);
       } else {
         for (var i = 0; i < active.length; i++) {
           var a = active[i];
@@ -1232,7 +1301,7 @@
       /* HUD */
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 20px monospace';
-      ctx.fillText('强化学习演示 · Q-learning 寻宝鼠', 24, 34);
+      ctx.fillText('Q-learning 寻宝鼠演示（AI 学习）', 24, 34);
       ctx.fillStyle = '#8f8';
       ctx.font = '15px monospace';
       ctx.fillText('训练轮次: ' + stats.episode +
@@ -1259,7 +1328,8 @@
     /* M9-5：首次引导覆盖层——半透明遮罩 + 目标/去向说明 + 按键说明。
      * D-14：改为 Enter 或点击确认按钮关闭（不再任意键）；补目标与去向；可经 H 重看。
      * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
-     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾），不杜撰。 */
+     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾、7 用药、F 特效），不杜撰。
+     * D-20：整块按键与机制文案改由 KEYMAP / guideRows 生成，与实际映射同源。 */
     drawGuide: function () {
       var ctx = this._ctx;
       if (!ctx) return;
@@ -1284,20 +1354,17 @@
       ctx.font = '14px monospace';
       ctx.fillText('往哪走：踩紫色下行梯下一层，绿色上行梯回上一层', cx, Math.max(136, H * 0.13 + 58));
 
-      /* 操作按键（与 M9-4 设置面板同源） */
-      var lines = [
-        '方向键 / WASD : 移动',
-        '1攻 2防 3逃 · 4火球 5冲刺 6护盾',
-        'B 背包 · E 商店 · M 任务',
-        'T 对话 · L 强化学习',
-        'K 静音 · Q 设置 · H 帮助',
-        'Esc : 关闭弹窗'
-      ];
-      ctx.fillStyle = '#9bbbf4';
-      ctx.font = '15px monospace';
-      var ly = Math.max(168, H * 0.13 + 78);
-      for (var i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], cx, ly + i * 24);
+      /* D-20：操作说明 + 机制须知（数据来自 KEYMAP / guideRows，见 render.js 顶部） */
+      var rows = this._guideLayout();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].head) {
+          ctx.fillStyle = '#ffb86b';
+          ctx.font = 'bold 14px monospace';
+        } else {
+          ctx.fillStyle = '#9bbbf4';
+          ctx.font = '13px monospace';
+        }
+        ctx.fillText(rows[i].text, cx, rows[i].y);
       }
 
       /* D-14：明确的确认按钮（Enter 或点击此按钮；不再是"任意键"） */
@@ -1320,13 +1387,33 @@
       ctx.textAlign = 'left';
     },
 
-    /* D-14：引导页确认按钮的命中矩形（绘制与点击判定共用，避免两处坐标漂移） */
+    /* D-20：引导页正文排版参数（正文行数随按键表变化，按钮位置必须跟着算，不能写死） */
+    _guideMetrics: function () {
+      var H = this.cssH || 640;
+      return { startY: Math.max(168, H * 0.13 + 78), lineH: (H < 600 ? 18 : 22) };
+    },
+
+    /* D-20：逐行算坐标（分组标题前多留 6px），绘制与按钮定位共用这一份 */
+    _guideLayout: function () {
+      var mt = this._guideMetrics();
+      var rows = guideRows(), out = [], y = mt.startY;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].head && i > 0) y += 6;
+        out.push({ text: rows[i].text, head: !!rows[i].head, y: y });
+        y += mt.lineH;
+      }
+      return out;
+    },
+
+    /* D-14：引导页确认按钮的命中矩形（绘制与点击判定共用，避免两处坐标漂移）
+     * D-20：y 由正文行数算出，新增键位/机制条目时按钮自动下移，不再依赖魔数 */
     _guideRect: function () {
-      var W = this.cssW || 1024, H = this.cssH || 640;
+      var W = this.cssW || 1024;
       var w = Math.min(300, W - 80);
       var h = 34;
-      var ly = Math.max(168, H * 0.13 + 78);
-      return { x: Math.round((W - w) / 2), y: Math.round(ly + 6 * 24 + 30), w: w, h: h };
+      var lay = this._guideLayout();
+      var last = lay.length ? lay[lay.length - 1].y : this._guideMetrics().startY;
+      return { x: Math.round((W - w) / 2), y: Math.round(last + this._guideMetrics().lineH + 18), w: w, h: h };
     }
   };
 })();

@@ -107,7 +107,7 @@
       state.enraged = true;
       state.enrageAtk = Math.round(state.monster.atk * ed.atkMul);
       state.enrageDef = Math.round(state.monster.def * ed.defMul);
-      logPush(state.monster.name + ' 发出怒吼，陷入狂暴！攻击与防御提升');
+      logPush(state.monster.name + ' 发出怒吼，陷入狂暴。攻击与防御提升');
     }
   }
 
@@ -289,7 +289,7 @@
     var atkVal = useBreath ? Math.round(monsterAtk() * ed.skill.dmgMul) : monsterAtk();
     var raw = state.defending ? Math.max(Math.floor(damage(atkVal, p.def) / 2), 1) : damage(atkVal, p.def);
     state.defending = false;
-    if (useBreath) logPush(m.name + ' 喷出' + ed.skill.name + '！');
+    if (useBreath) logPush(m.name + ' 喷出' + ed.skill.name + '。');
     /* M8-1：护盾先抵挡等量伤害（扣完归零），剩余伤害才进 HP */
     var absorbed = 0;
     if (state.shieldValue > 0) {
@@ -452,7 +452,7 @@
       var def = Game.Data.MONSTERS[monsterId];
       state = {
         monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage },
-        log: ['遭遇 ' + def.name + '！战斗开始'],
+        log: ['遭遇 ' + def.name + '，战斗开始'],
         turn: 0,
         defending: false,
         shieldValue: 0, /* M8-1：本次战斗临时护盾 */
@@ -571,7 +571,7 @@
           state.pending = null;
           Game.Core.EventBus.emit('battle:end', { result: 'run' });
         } else {
-          logPush('逃跑失败！');
+          logPush('逃跑失败，怪物立刻反击。');
           scheduleMonster(t0);
         }
       }
