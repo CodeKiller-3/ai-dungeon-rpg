@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-17：本页读取 preflight/selfcheck/d17-report.json（50 局实测产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-17 bot 跑局压测台</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-17 · bot 确定性 / 真实输入入口 / 跑局指标</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, Bot = Game.Bot, P = Game.Data.Player;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function firstDiff(x, y) {
+    var n = Math.min(x.length, y.length);
+    for (var i = 0; i < n; i++) if (x[i] !== y[i]) break;
+    return '第 ' + i + ' 字符起：' + JSON.stringify(x.slice(i, i + 48)) + ' vs ' + JSON.stringify(y.slice(i, i + 48));
+  }
+  /* spy 是同一个活对象，Bot.resetSpy() 会就地清零 ⇒ 必须拷贝快照后再读 */
+  function snap() {
+    var s = Bot.spy(), o = {}, k;
+    for (k in s) o[k] = s[k];
+    return o;
+  }
+  /* 单局签名：除了 wallMs（真实耗时，天然不可复现）以外全部字段 */
+  function sig(r) {
+    var o = {}, k;
+    for (k in r) if (k !== 'wallMs') o[k] = r[k];
+    return JSON.stringify(o);
+  }
+  /* 地图指纹：用于验证"种子真的决定生成结果" */
+  function gridHash() {
+    var g = Game.Systems.Map.getGrid(), s = '';
+    for (var y = 0; y < g.length; y++) s += g[y].join('');
+    return s;
+  }
+
+  var MAX = 1000;   /* 单局动作上限（足够跑到常见死亡点，控制本页耗时） */
+
+  try {
+    M.init();
+    M.closeGuide();
+    Bot.install();
+
+    /* ══ A) 确定性 ═════════════════════════════════════════════ */
+    var gA, gA2, gB;
+    Math.random = Bot.mulberry32(7001); M.restart(); gA = gridHash();
+    Math.random = Bot.mulberry32(7001); M.restart(); gA2 = gridHash();
+    Math.random = Bot.mulberry32(7004); M.restart(); gB = gridHash();
+    rec('A1_seedDrivesMapGeneration', gA === gA2 && gA !== gB,
+      '同种子 7001 两次生成的地图指纹相同（' + gA.length + ' 字符，' +
+      (gA === gA2 ? '完全一致' : '不一致') + '），换种子 7004 后指纹改变=' + (gA !== gB));
+
+    Bot.resetSpy();
+    var runA = Bot.run(7001, { maxActions: MAX });
+    var spA = snap();
+    Bot.resetSpy();
+    var runB = Bot.run(7001, { maxActions: MAX });
+    var IA = sig(runA), IB = sig(runB);
+    rec('A2_sameSeedSameRun', IA === IB,
+      '同种子跑两次，除 wallMs 外全部字段（结局/步数/位置/金币/装备/任务/死层/帧数）' +
+      (IA === IB ? '逐字节相同，签名 ' + IA.length + ' 字符' : '不同 → ' + firstDiff(IA, IB)));
+
+    var bt1 = Bot.batch([7003, 7004], { maxActions: MAX });
+    var bt2 = Bot.batch([7003, 7004], { maxActions: MAX });
+    var S1 = JSON.stringify(bt1.summary), S2 = JSON.stringify(bt2.summary);
+    rec('A3_batchSummaryReproducible', S1 === S2,
+      '两个种子的批次汇总跑两次' + (S1 === S2 ? '完全一致' : '不一致 → ' + firstDiff(S1, S2)));
+
+    /* ══ B) 真实输入入口（不许内部直接调用） ═════════════════════ */
+    Bot.resetSpy();
+    Math.random = Bot.mulberry32(9100);
+    M.restart();
+    var p0 = P.x + ',' + P.y, hp0 = P.hp;
+    var spIdle = snap();
+    Bot.tickFrames(180);   /* 只推进主循环，一个按键都不发 */
+    var idleMoves = Bot.spy().moves - spIdle.moves, idlePa = Bot.spy().pa - spIdle.pa;
+    rec('B1_noInputNoAction', idleMoves === 0 && idlePa === 0 && (P.x + ',' + P.y) === p0,
+      '空转 180 帧（约 3 秒）不发任何按键：位移 ' + idleMoves + ' 次、出招 ' + idlePa +
+      ' 次、位置 ' + p0 + '→' + (P.x + ',' + P.y) + '、HP ' + hp0 + '→' + P.hp);
+
+    rec('B2_movesOnlyInsideMainLoop', spA.moves > 0 && spA.movesOutside === 0,
+      '单局（种子 7001）玩家位移 ' + spA.moves + ' 次，其中发生在 _updateExplore 之外 ' +
+      spA.movesOutside + ' 次（必须为 0，否则说明 bot 绕过主循环直接挪人）');
+    rec('B3_attackOnlyInsideBattleUpdate', spA.pa > 0 && spA.paOutside === 0,
+      '单局玩家出招 ' + spA.pa + ' 次，其中发生在 _updateBattle 之外 ' + spA.paOutside +
+      ' 次（必须为 0，否则说明 bot 直接调了 Battle.playerAction）');
+    rec('B4_everyActionFromKeyEvent', runA.keys > 0 && runA.playerActions > 0 &&
+      runA.playerActions <= runA.keys,
+      '本次跑局派发 keydown ' + runA.keys + ' 次，玩家实际出招 ' + runA.playerActions +
+      ' 次（每次出招至少对应 1 次真实 keydown，方向/菜单键使 keys 更多）');
+    rec('B5_drivenByMainLoop', runA.loops > 0 && spA.updates > 0,
+      '单局推进主循环 ' + runA.loops + ' 帧，_updateExplore/_updateBattle 被调用 ' +
+      spA.updates + ' 次');
+
+    /* ══ C) 指标 JSON ═══════════════════════════════════════════ */
+    var bb = Bot.batch([7005, 7006, 7007], { maxActions: MAX });
+    var s = bb.summary;
+    var numeric = ['winRate', 'deadRate', 'stuckRate', 'avgSimSec', 'medianSimSec', 'avgActions'];
+    var numOk = numeric.every(function (k) { return typeof s[k] === 'number' && isFinite(s[k]); });
+    rec('C1_summaryFieldsNumeric', numOk && s.runs === 3 && s.seeds.length === 3,
+      '3 局汇总：' + numeric.join('/') + ' 均为数值；winRate=' + s.winRate +
+      ' deadRate=' + s.deadRate + ' stuckRate=' + s.stuckRate + ' avgSimSec=' + s.avgSimSec);
+
+    rec('C2_outcomeAccounting', s.win + s.dead + s.stuck === s.runs,
+      '结局计数 win=' + s.win + ' dead=' + s.dead + ' stuck=' + s.stuck + ' 合计=' +
+      (s.win + s.dead + s.stuck) + ' = runs=' + s.runs);
+
+    var distSum = 0, kk;
+    for (kk in s.deathFloorDist) distSum += s.deathFloorDist[kk];
+    rec('C3_deathFloorDistSumsToDead', distSum === s.dead,
+      '死层分布 ' + JSON.stringify(s.deathFloorDist) + ' 合计 ' + distSum + ' = dead ' + s.dead);
+
+    var fsOk = s.floorStats.length > 0 && s.floorStats.every(function (f) {
+      return typeof f.floor === 'number' && typeof f.reached === 'number' &&
+        typeof f.avgActions === 'number' && typeof f.avgGold === 'number' &&
+        typeof f.avgEquip === 'number' && typeof f.avgHp === 'number';
+    });
+    rec('C4_floorCurvesPresent', fsOk,
+      '每层曲线字段齐全：' + s.floorStats.map(function (f) {
+        return 'F' + f.floor + '(n=' + f.reached + ',步=' + f.avgActions + ',金=' + f.avgGold +
+          ',装=' + f.avgEquip + ')';
+      }).join(' '));
+
+    rec('C5_goblinQuestRecorded', !!s.goblinQuest && s.goblinQuest.need === 5 &&
+      typeof s.goblinQuest.rate === 'number' && s.goblinQuest.claimedRate === 0.0012,
+      '「击杀 5 只哥布林」：本批 ' + s.goblinQuest.completedRuns + '/' + s.goblinQuest.runs +
+      ' 完成（' + (s.goblinQuest.rate * 100).toFixed(2) + '%），累计击杀 ' +
+      s.goblinQuest.totalGoblinKills + ' 只；对照声称值 ' +
+      (s.goblinQuest.claimedRate * 100).toFixed(2) + '%（只记录，不设判定阈值）');
+
+    /* ══ D) 50 局实测产物 ═══════════════════════════════════════ */
+    var rep = null, repErr = '';
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'selfcheck/d17-report.json', false);
+      xhr.send(null);
+      rep = JSON.parse(xhr.responseText);
+    } catch (e) {
+      repErr = String((e && e.message) || e);
+    }
+    if (!rep || !rep.summary) {
+      rec('D1_reportReadable', false, '读不到 selfcheck/d17-report.json：' + repErr);
+    } else {
+      var rs = rep.summary;
+      rec('D1_reportReadable', rep.ok === true && rep.runs.length >= 50,
+        '50 局产物：ok=' + rep.ok + ' runs=' + rep.runs.length + ' 实际墙钟 ' +
+        rep.wallMs + 'ms（单局均值 ' + Math.round(rep.wallMs / rep.runs.length) + 'ms）');
+
+      var seedsOk = true;
+      for (var i2 = 0; i2 < rep.runs.length; i2++) if (rep.runs[i2].seed !== 1001 + i2) seedsOk = false;
+      rec('D2_fixedSeedSet', seedsOk && rep.runs.length === 50,
+        '种子集合固定为 1001..' + (1000 + rep.runs.length) + '，连续无缺=' + seedsOk);
+
+      var needFields = ['seed', 'outcome', 'floor', 'actions', 'simSec', 'keys', 'playerActions',
+        'gold', 'equip', 'floors', 'crashes'];
+      var fOk = rep.runs.every(function (r) {
+        return needFields.every(function (f) { return r[f] !== undefined; });
+      });
+      rec('D3_perRunDetailFields', fOk &&
+        rep.runs.every(function (r) { return r.outcome === 'win' || r.outcome === 'dead' || r.outcome === 'stuck'; }),
+        '逐局明细含 ' + needFields.join('/') + '；结局取值仅 win/dead/stuck');
+
+      var stCount = 0, stBack = true, kk2;
+      for (kk2 in rs.stuckReasons) stCount += rs.stuckReasons[kk2];
+      rep.runs.forEach(function (r) {
+        if (r.outcome === 'stuck' && typeof r.stuckReason !== 'string') stBack = false;
+      });
+      rec('D4_stuckReasonsAccounted', stCount === rs.stuck && stBack,
+        '卡关 ' + rs.stuck + ' 局，原因归类合计 ' + stCount + '：' + JSON.stringify(rs.stuckReasons));
+
+      rec('D5_inputPathProofInReport', !!rep.spy && rep.spy.paOutside === 0 &&
+        rep.spy.movesOutside === 0 && rep.spy.pa > 0 && rep.spy.moves > 0,
+        '50 局累计：位移 ' + (rep.spy && rep.spy.moves) + ' 次（循环外 ' +
+        (rep.spy && rep.spy.movesOutside) + '）、出招 ' + (rep.spy && rep.spy.pa) +
+        ' 次（循环外 ' + (rep.spy && rep.spy.paOutside) + '）、keydown ' +
+        (rep.spy && rep.spy.keys) + ' 次');
+
+      rec('D6_timingsRecorded', rs.avgSimSec > 0 && rs.avgSimSec === rs.avgSimSec &&
+        rep.runs.every(function (r) { return r.simSec >= 0 && typeof r.wallMs === 'number'; }),
+        '每局模拟时长均值 ' + rs.avgSimSec + 's（中位 ' + rs.medianSimSec + 's，按 ' +
+        (Game.Bot.ACTION_SEC * 1000) + 'ms/步 换算），实测墙钟均值 ' +
+        Math.round(rep.wallMs / rep.runs.length) + 'ms/局');
+
+      out.report = {
+        runs: rep.runs.length,
+        winRate: rs.winRate, deathFloorDist: rs.deathFloorDist,
+        deathCauses: rs.deathCauses, stuckReasons: rs.stuckReasons,
+        avgSimSec: rs.avgSimSec, floorStats: rs.floorStats,
+        goblinQuest: rs.goblinQuest
+      };
+    }
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>
