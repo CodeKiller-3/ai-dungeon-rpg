@@ -188,8 +188,21 @@
     }
   }
 
+  /* D-14：低血量判定（HP > 0 且 ≤ 25% 上限）。抽成函数便于验证页断言，不参与数值结算 */
+  function lowHpInfo() {
+    var s = last || {};
+    var hp = s.hp, mx = s.hpMax;
+    var active = (typeof hp === 'number' && typeof mx === 'number' && mx > 0 && hp > 0 && hp / mx <= 0.25);
+    return { active: active, text: active ? ('！血量危急 ' + hp + '/' + mx + '（≤25%）') : '' };
+  }
+
+  function nowMs() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+
   Game.hud = {
     last: null,
+    lowHp: lowHpInfo,
 
     update: function (stats) {
       stats = stats || {};
@@ -275,6 +288,26 @@
       }
       /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏） */
       drawStatusRow(ctx, s.status, W, barH);
+      /* D-14：低血量可见警示——HP ≤ 25% 时屏幕内缘红色脉动框 + 右侧文字。
+       * 纯展示层，不读写任何数值，也不改战斗公式。 */
+      var low = lowHpInfo();
+      if (low.active) {
+        var H = (R && typeof R.cssH === 'number') ? R.cssH : (cv.clientHeight || 0);
+        var pulse = 0.30 + 0.28 * (0.5 + 0.5 * Math.sin(nowMs() / 220));
+        ctx.strokeStyle = 'rgba(255,70,70,' + pulse.toFixed(3) + ')';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(1.5, barH + 1.5, W - 3, Math.max(0, H - barH - 3));
+        ctx.fillStyle = 'rgba(6,6,12,0.82)';
+        ctx.font = 'bold 11px monospace';
+        var tw = ctx.measureText(low.text).width;
+        ctx.fillRect(W - 10 - tw - 8, barH + 3, tw + 8, 15);
+        ctx.fillStyle = '#ff6b6b';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText(low.text, W - 14, barH + 6);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
     },
 
     show: function () { visible = true; },

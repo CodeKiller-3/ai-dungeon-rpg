@@ -32,8 +32,12 @@
       }
       var hpGain = item.effect.hp || 0;
       var mpGain = item.effect.mp || 0;
-      /* 蓝瓶：MP 已满则拒绝（不消耗物品，提示避免浪费） */
-      if (mpGain > 0 && p.mp >= p.maxMp) return { ok: false, msg: 'MP 已满，无需使用 ' + item.name };
+      /* D-14：满血喝红瓶一律拒绝（不再允许满血浪费）；蓝瓶同理，口径统一为「已满则拒绝并提示」。
+       * 同时回 HP+MP 的药剂，只有两者都已满时才拒绝。 */
+      if (hpGain > 0 && p.hp >= p.maxHp && (mpGain === 0 || p.mp >= p.maxMp)) {
+        return { ok: false, msg: '生命已满，无需使用 ' + item.name };
+      }
+      if (mpGain > 0 && p.mp >= p.maxMp) return { ok: false, msg: '魔法已满，无需使用 ' + item.name };
       p.hp = Math.min(p.hp + hpGain, p.maxHp);
       p.mp = Math.min((p.mp || 0) + mpGain, p.maxMp);
       p.inventory[id]--;

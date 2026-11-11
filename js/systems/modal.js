@@ -410,22 +410,34 @@
       } catch (e) { this.close(); }
     },
 
+    /* D-14：把 {ok,msg} 的结果接到提示条（notice.js 底部提示）。原先返回值被直接丢弃，
+     * 金币不足 / MP 已满 / 未装备武器 / 生命已满 全部无声失败。 */
+    _report: function (res) {
+      if (!res || typeof res.msg !== 'string' || !res.msg) return;
+      var EB = Game.Core && Game.Core.EventBus;
+      if (EB && typeof EB.emit === 'function') {
+        EB.emit('ui:notice', { msg: res.msg, ok: res.ok === true });
+      }
+    },
+
     _confirm: function () {
       if (data.length === 0) return;
       var entry = data[sel];
+      var res = null;
       try {
         if (kind === 'inventory') {
           var it = Game.Data.ITEMS[entry.id];
-          if (it && it.type === 'consumable') Game.Systems.Inventory.use(entry.id);
-          else Game.Systems.Inventory.equip(entry.id);
+          if (it && it.type === 'consumable') res = Game.Systems.Inventory.use(entry.id);
+          else res = Game.Systems.Inventory.equip(entry.id);
         } else if (kind === 'shop') {
-          if (shopMode === 'buy') Game.Systems.Shop.buy(entry.id);
-          else Game.Systems.Shop.sell(entry.id);
+          if (shopMode === 'buy') res = Game.Systems.Shop.buy(entry.id);
+          else res = Game.Systems.Shop.sell(entry.id);
         } else if (kind === 'quests') {
           this.close(); return;
         }
         this._refresh();
       } catch (e) { /* 降级：弹窗内操作异常不影响主游戏 */ }
+      this._report(res);
     },
 
     /* 点击：面板外→关闭；命中条目行→选中并执行；设置面板→静音开关；结算→重新开始 */

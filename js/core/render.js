@@ -497,6 +497,9 @@
     _staticBypass: false,
     _staticRebuilds: 0,
 
+    /* D-14：只读镜头偏移（验证页做未探索格"无缝"像素断言用；不参与绘制决策） */
+    _cam: function () { return { x: cam.x, y: cam.y }; },
+
     /* D-12：静态层失效（FOV/装饰/陷阱/换层变化时由 main.js 调用） */
     invalidateStatic: function () {
       staticCache.valid = false;
@@ -548,8 +551,10 @@
           var py = y * TILE - cam.y;
           if (px + TILE < 0 || py + TILE < 0 || px > W || py > H) continue;
           if (fovOn && !Game.fov.isExplored(x, y) && !Game.fov.isVisible(x, y)) {
+            /* D-14：未探索格整格填满（原先 TILE-1 留 1px 缝，露出底色形成满屏网格，
+             * 第一眼像"资源没加载完"）。只改绘制尺寸，不改地图数据与 FOV 判定。 */
             ctx.fillStyle = '#07070f';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillRect(px, py, TILE, TILE);
             continue;
           }
           if (t === 0) {
@@ -618,10 +623,10 @@
               ? Game.Systems.Map.getTrap(x, y) : null;
             if (tr && tr.seen) this._drawTrap(ctx, tr.id, px, py);
           }
-          /* S3-1 FOV：已点亮但当前不可见 → 较暗覆盖（记忆效果） */
+          /* S3-1 FOV：已点亮但当前不可见 → 较暗覆盖（记忆效果）；D-14：整格覆盖，与未探索格一致不留缝 */
           if (fovOn && !Game.fov.isVisible(x, y)) {
             ctx.fillStyle = 'rgba(4,4,12,0.55)';
-            ctx.fillRect(px, py, TILE - 1, TILE - 1);
+            ctx.fillRect(px, py, TILE, TILE);
           }
         }
       }
@@ -696,10 +701,10 @@
       ctx.fillStyle = '#9bbbf4';
       ctx.font = (narrow ? '10px' : '12px') + ' monospace';
       var hint = narrow
-        ? ('FPS=' + (stats ? stats.fps : 0) + ' | 方向键移动 | 踩怪开战')
+        ? ('FPS=' + (stats ? stats.fps : 0) + ' | 方向键移动 | 踩怪开战 | H 帮助')
         : ('FPS=' + (stats ? stats.fps : 0) +
           (stats ? ' | 攻击:' + stats.atk + ' 防御:' + stats.def : '') +
-          ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上');
+          ' | 方向键/WASD 移动 | 红点=怪物(踩到开战) | 紫梯下 / 绿梯上 | H 帮助');
       ctx.fillText(hint, 10, H - 10);
       this._drawHud(); /* S3-2 */
       this._drawModal(); /* S3-3：弹窗叠在最上层（仅探索场景路径，弹窗仅从此打开） */
@@ -1092,7 +1097,8 @@
       this._drawHud(); /* S3-2 */
     },
 
-    /* M9-5：首次引导覆盖层——半透明遮罩 + 按键说明 + 目标 + 任意键开始。
+    /* M9-5：首次引导覆盖层——半透明遮罩 + 目标/去向说明 + 按键说明。
+     * D-14：改为 Enter 或点击确认按钮关闭（不再任意键）；补目标与去向；可经 H 重看。
      * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
      * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾），不杜撰。 */
     drawGuide: function () {
@@ -1109,11 +1115,15 @@
 
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 26px monospace';
-      ctx.fillText('AI 勇者闯地牢', cx, Math.max(90, H * 0.16));
+      ctx.fillText('AI 勇者闯地牢', cx, Math.max(78, H * 0.13));
 
-      ctx.fillStyle = '#cfcfcf';
+      /* D-14：补上"目标是什么"与"该往哪走"——原引导只讲按键，玩家不知道该干什么 */
+      ctx.fillStyle = '#ffb86b';
+      ctx.font = 'bold 15px monospace';
+      ctx.fillText('你的目标：往地牢更深处走，第 5 层击败地牢巨龙', cx, Math.max(112, H * 0.13 + 34));
+      ctx.fillStyle = '#8fe3a0';
       ctx.font = '14px monospace';
-      ctx.fillText('目标：探索地牢 · 击杀怪物 · 层层深入', cx, Math.max(124, H * 0.16 + 34));
+      ctx.fillText('往哪走：踩紫色下行梯下一层，绿色上行梯回上一层', cx, Math.max(136, H * 0.13 + 58));
 
       /* 操作按键（与 M9-4 设置面板同源） */
       var lines = [
@@ -1121,21 +1131,43 @@
         '1攻 2防 3逃 · 4火球 5冲刺 6护盾',
         'B 背包 · E 商店 · M 任务',
         'T 对话 · L 强化学习',
-        'K 静音 · Q 设置',
+        'K 静音 · Q 设置 · H 帮助',
         'Esc : 关闭弹窗'
       ];
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '15px monospace';
-      var ly = Math.max(170, H * 0.16 + 84);
+      var ly = Math.max(168, H * 0.13 + 78);
       for (var i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], cx, ly + i * 26);
+        ctx.fillText(lines[i], cx, ly + i * 24);
       }
 
+      /* D-14：明确的确认按钮（Enter 或点击此按钮；不再是"任意键"） */
+      var btn = this._guideRect();
+      ctx.fillStyle = 'rgba(255,207,110,0.16)';
+      ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+      ctx.strokeStyle = '#ffcf6e';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(btn.x + 1, btn.y + 1, btn.w - 2, btn.h - 2);
       ctx.fillStyle = '#ffcf6e';
-      ctx.font = 'bold 16px monospace';
-      ctx.fillText('按任意键开始冒险', cx, ly + lines.length * 26 + 40);
+      ctx.font = 'bold 15px monospace';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('按 Enter 开始冒险', cx, btn.y + btn.h / 2);
+      ctx.textBaseline = 'alphabetic';
+
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('（也可点击上方按钮；游戏中随时按 H 重看本页）', cx, btn.y + btn.h + 26);
 
       ctx.textAlign = 'left';
+    },
+
+    /* D-14：引导页确认按钮的命中矩形（绘制与点击判定共用，避免两处坐标漂移） */
+    _guideRect: function () {
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var w = Math.min(300, W - 80);
+      var h = 34;
+      var ly = Math.max(168, H * 0.13 + 78);
+      return { x: Math.round((W - w) / 2), y: Math.round(ly + 6 * 24 + 30), w: w, h: h };
     }
   };
 })();

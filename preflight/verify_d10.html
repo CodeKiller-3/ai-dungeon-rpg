@@ -81,9 +81,10 @@ window.addEventListener('unhandledrejection', function (e) {
     if (!RES.loaded) throw new Error('核心模块缺失（Main/Player/Battle/Save/Modal）');
 
     M.init();
-    /* 首次引导覆盖层会暂停探索输入：用真实 click 事件关闭（Main 公开的 dismiss 路径），
+    /* 首次引导覆盖层会暂停探索输入：D-14 起引导只接受 Enter / 点击确认按钮，
+       不再"任意键/任意点击"关闭，这里走 Main 公开的显式关闭路径（closeGuide），
        再断言已关闭，避免后续 B/Esc 键被拦截。 */
-    window.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    M.closeGuide();
     var guideDismissed = (M._guideVisible === false);
 
     /* 一局：restart 起局 → 探索按键 → 战斗到 gameover → 键盘回主界面。

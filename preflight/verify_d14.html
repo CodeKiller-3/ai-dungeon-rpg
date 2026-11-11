@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-14 反馈层修复</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-14 · ui:notice 接通 / 失败原因 / 未探索格无缝 / 引导 / 战斗文字</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<!-- 加载序与 index.html 完全一致（含 D-14 新增 js/systems/notice.js）；NO_AUTOSTART 后由本页主动 init -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, R = Game.Core.Render, EB = Game.Core.EventBus;
+  var Map = Game.Systems.Map, P = Game.Data.Player;
+  var N = Game.Notice, Modal = Game.Modal, Inv = Game.Systems.Inventory, B = Game.Systems.Battle;
+  var TILE = 24; /* render.js 的瓦片尺寸（不在这里自创，用于屏幕坐标换算） */
+
+  function rec(id, ok, detail) {
+    out.sub[id] = { ok: !!ok, detail: detail === undefined ? '' : String(detail) };
+  }
+  function lastNotice() {
+    var l = N._list();
+    return l.length ? l[l.length - 1].text : '';
+  }
+  function withRnd(v, fn) {
+    var o = Math.random;
+    Math.random = function () { return v; };
+    try { return fn(); } finally { Math.random = o; }
+  }
+  function key(code, keyName) {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: code, key: keyName || code, bubbles: true, cancelable: true
+    }));
+  }
+  function findDecor(id) {
+    var g = Map.getGrid();
+    for (var y = 0; y < g.length; y++) {
+      for (var x = 0; x < g[0].length; x++) {
+        if (Map.getDecor(x, y) === id) return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+
+  try {
+    /* 干净起点：清掉旧档与引导标记，避免上次运行残留影响判定 */
+    try {
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+      localStorage.removeItem('aiDungeon_guided');
+    } catch (e) { /* 存储禁用时忽略 */ }
+
+    /* map.js 的 cfg 在首次 generate 时才初始化；本页先手动生成一次，之后 setFloor 才可用 */
+    Map.generate();
+
+    /* ── A0 订阅者存在 ─────────────────────────────────── */
+    N._setClock(10000);
+    N._clear();
+    EB.emit('ui:notice', { msg: '订阅自检' });
+    var a0 = lastNotice() === '订阅自检';
+    rec('A0_noticeSubscriber', a0 && N.MAX === 3 && typeof N.push === 'function',
+      'emit 后进入显示队列=' + a0 + '，MAX=' + N.MAX + '，LIFE=' + N.LIFE + 'ms，FADE=' + N.FADE + 'ms');
+
+    /* ── A1 生命周期：最多 3 条 / 去重 / 到期消失 ───────── */
+    N._clear();
+    ['q1', 'q2', 'q3', 'q4'].forEach(function (t) { N.push(t); });
+    var capList = N._list();
+    var capOk = capList.length === 3 && capList[0].text === 'q2' && capList[2].text === 'q4';
+    N._clear();
+    N._setClock(20000);
+    N.push('重复消息');
+    N.push('重复消息');
+    var dupOk = N._list().length === 1;
+    var dupInHist = N._historyTexts().filter(function (t) { return t === '重复消息'; }).length === 1;
+    N._setClock(20000 + N.LIFE + 1);
+    N.update(16);
+    var expireOk = N._list().length === 0;
+    N._setClock(30000);
+    rec('A1_lifecycle', capOk && dupOk && dupInHist && expireOk,
+      'cap3=' + capOk + '(保留 q2..q4) dedupe=' + dupOk + '/hist=' + dupInHist +
+      ' expire@' + (N.LIFE + 1) + 'ms=' + expireOk);
+
+    /* ── A2 9 处发送点逐条：消息真实进入显示队列（渲染层唯一订阅方） ───── */
+    /* ① skills.js：MP 不足 */
+    N._clear();
+    P.mp = 0; P.maxMp = 50;
+    Game.Skills.cast('fireball');
+    var msgSkills = lastNotice();
+    rec('A2_1_skills', /MP 不足/.test(msgSkills), msgSkills);
+
+    /* ② map.js：踩陷阱（trap 569） */
+    Map.setFloor(1);
+    P.hp = 100; P.maxHp = 100;
+    var trapPos = null;
+    (function () {
+      var g = Map.getGrid();
+      for (var y = 0; y < g.length && !trapPos; y++) {
+        for (var x = 0; x < g[0].length; x++) {
+          var t = Map.getTrap(x, y);
+          if (t && !t.seen) { trapPos = { x: x, y: y }; break; }
+        }
+      }
+    })();
+    N._clear();
+    var trapRes = trapPos ? Map.triggerTrap(trapPos.x, trapPos.y) : null;
+    var msgTrap = lastNotice();
+    rec('A2_2_trap', !!trapPos && !!trapRes && /踩到/.test(msgTrap), msgTrap);
+
+    /* ③④ map.js：密室宝箱（金币 + 道具两条；F2 起才有密室） */
+    var roomPos = null;
+    for (var rf = 1; rf <= 5 && !roomPos; rf++) {
+      for (var rt = 0; rt < 8 && !roomPos; rt++) {
+        Map.setFloor(rf); /* setFloor 每次清空楼层快照 → 每次都是新布局 */
+        roomPos = findDecor('room_chest');
+      }
+    }
+    N._clear();
+    var roomMsgs = [];
+    if (roomPos) {
+      withRnd(0.5, function () {
+        Map.takeDecor(roomPos.x, roomPos.y);
+        N._list().forEach(function (e) { roomMsgs.push(e.text); });
+      });
+    }
+    var msgRoomGold = '';
+    var msgRoomItem = '';
+    roomMsgs.forEach(function (t) {
+      if (/密室宝箱.*金币/.test(t)) msgRoomGold = t;
+      else if (/密室宝箱.*获得/.test(t)) msgRoomItem = t;
+    });
+    rec('A2_3_roomChestGold', !!msgRoomGold, msgRoomGold || roomMsgs.join(' | '));
+    rec('A2_4_roomChestItem', !!msgRoomItem, msgRoomItem || roomMsgs.join(' | '));
+
+    /* ⑤⑥ map.js：普通宝箱 → 金币 / 道具 */
+    Map.setFloor(1);
+    var chestPos = findDecor('chest');
+    N._clear();
+    var msgChestGold = '';
+    if (chestPos) {
+      withRnd(0.1, function () {
+        Map.takeDecor(chestPos.x, chestPos.y);
+        msgChestGold = lastNotice();
+      });
+    }
+    rec('A2_5_chestGold', !!chestPos && /宝箱.*金币/.test(msgChestGold), msgChestGold);
+
+    Map.setFloor(1);
+    var chestPos2 = findDecor('chest');
+    N._clear();
+    var msgChestItem = '';
+    if (chestPos2) {
+      withRnd(0.9, function () {
+        Map.takeDecor(chestPos2.x, chestPos2.y);
+        msgChestItem = lastNotice();
+      });
+    }
+    rec('A2_6_chestItem', !!chestPos2 && /宝箱.*获得/.test(msgChestItem), msgChestItem);
+
+    /* ⑦⑧ main.js：任务完成 + 启动/读档提示（init 注册订阅者，同时产生 boot 提示） */
+    localStorage.removeItem('aiDungeon_guided');
+    N._clear();
+    M.init();
+    var firstShowAfterInit = (M._guideVisible === true); /* 引导首次自动弹出（D1 复用） */
+    var msgBoot = '';
+    var histAtBoot = N._historyTexts();
+    for (var hi = 0; hi < histAtBoot.length; hi++) {
+      if (/新冒险开始|已读取存档/.test(histAtBoot[hi])) msgBoot = histAtBoot[hi];
+    }
+    rec('A2_7_boot', !!msgBoot, msgBoot);
+    N._clear();
+    EB.emit('quest:complete', { questId: 'main_1', reward: { gold: 10, exp: 20 } });
+    var msgQuest = lastNotice();
+    rec('A2_8_quest', /任务完成/.test(msgQuest), msgQuest);
+
+    /* ⑨ main.js：遗产商店场景失败（金币不足）——走真实 _updateShop 输入路径，
+       先 Tab 两次把列表建出来（sell→inventory、buy→stock），再 Enter 买 */
+    N._clear();
+    P.gold = 0;
+    M._scene = 'shop';
+    var origGet = Game.Core.Input.getState;
+    try {
+      Game.Core.Input.getState = function () { return { Tab: true }; };
+      M._updateShop();
+      M._updateShop();
+      Game.Core.Input.getState = function () { return { Enter: true }; };
+      M._updateShop();
+    } finally {
+      Game.Core.Input.getState = origGet;
+    }
+    M._scene = 'explore';
+    var msgShop = lastNotice();
+    rec('A2_9_shopLegacy', /金币/.test(msgShop), msgShop);
+
+    var senderList = [msgSkills, msgTrap, msgRoomGold, msgRoomItem, msgChestGold,
+      msgChestItem, msgQuest, msgBoot, msgShop];
+    var allPresent = senderList.filter(function (t) {
+      return typeof t === 'string' && t.length > 0;
+    }).length;
+    rec('A3_nineSendersAllRender', allPresent === 9,
+      allPresent + '/9 条进入显示队列：' + senderList.join(' ‖ '));
+
+    /* ── B 失败原因：四条失败路径都产生提示文本 ─────────── */
+    /* B1 满血喝红瓶（端到端：Modal._confirm → Inventory.use → Modal._report → ui:notice） */
+    P.inventory = {};
+    Inv.add('potion_small', 2);
+    P.hp = P.maxHp;
+    N._clear();
+    Modal.open('inventory');
+    Modal._confirm();
+    var msgHpFull = lastNotice();
+    Modal.close();
+    rec('B1_hpFullPotionRefused', /生命已满/.test(msgHpFull) && P.inventory.potion_small === 2,
+      msgHpFull + '（数量仍=' + P.inventory.potion_small + '）');
+
+    /* B2 满蓝喝蓝瓶 */
+    P.inventory = {};
+    Inv.add('potion_mana', 1);
+    P.mp = P.maxMp;
+    N._clear();
+    Modal.open('inventory');
+    Modal._confirm();
+    var msgMpFull = lastNotice();
+    Modal.close();
+    rec('B2_mpFullPotionRefused', /魔法已满/.test(msgMpFull) && P.inventory.potion_mana === 1,
+      msgMpFull + '（数量仍=' + P.inventory.potion_mana + '）');
+
+    /* B3 金币不足（端到端：Modal._confirm → Shop.buy → Modal._report） */
+    P.gold = 0;
+    N._clear();
+    Modal.open('shop');
+    Modal._confirm();
+    var msgGold = lastNotice();
+    Modal.close();
+    rec('B3_goldInsufficient', /金币/.test(msgGold), msgGold);
+
+    /* B4 未装备武器（强化卷轴 → Inventory.upgrade 失败 → Modal._report） */
+    P.equipment = { weapon: null, armor: null };
+    var upRes = Inv.upgrade();
+    N._clear();
+    Modal._report(upRes);
+    var msgNoWeapon = lastNotice();
+    rec('B4_noWeapon', /装备/.test(msgNoWeapon) && upRes.ok === false, msgNoWeapon);
+
+    /* B5 负例：把返回值丢回去（_report 置空 = 原实现的"丢弃 {ok,msg}"）→ B3 的 /金币/ 断言必然为 false */
+    var oldReport = Modal._report;
+    var lostMsg = '';
+    try {
+      Modal._report = function () { /* 旧行为：丢弃 {ok,msg} */ };
+      P.gold = 0;
+      N._clear();
+      Modal.open('shop');
+      Modal._confirm();
+      lostMsg = lastNotice();
+      Modal.close();
+    } finally {
+      Modal._report = oldReport;
+    }
+    rec('B5_negativeDropReturnValue', lostMsg === '' && !/金币/.test(lostMsg) && /金币/.test(msgGold),
+      '丢弃返回值后提示="' + lostMsg + '"（同一条 /金币/ 断言=false）；正常路径提示="' + msgGold + '"');
+
+    /* B6 药水在真正有效时仍生效、数量正确扣减（同一条 Modal 路径，走 _report 出提示） */
+    P.inventory = {};
+    Inv.add('potion_small', 2);
+    P.hp = 50; P.maxHp = 100;
+    var hpBefore = P.hp, nBefore = P.inventory.potion_small;
+    N._clear();
+    Modal.open('inventory');
+    Modal._confirm();
+    var msgHeal = lastNotice();
+    Modal.close();
+    rec('B6_potionStillWorks', P.hp > hpBefore &&
+      P.inventory.potion_small === nBefore - 1 && /回复/.test(msgHeal),
+      'HP ' + hpBefore + '→' + P.hp + '，数量 ' + nBefore + '→' + P.inventory.potion_small + '，提示=' + msgHeal);
+
+    /* ── C 未探索格 1px 缝隙 ─────────────────────────────
+     * 判定方式（像素断言）：取一个未探索格，采样三处物理像素——格中心、右边缘最后一列、
+     * 下边缘最后一行。整格填充时三点颜色必须完全一致；旧写法 fillRect(...,TILE-1,TILE-1)
+     * 会让边缘落在底色上而不同。负例单独用 scratch canvas 按旧写法复现"边缘=底色"。
+     * 为了让采样只反映静态层绘制，本段临时停用光影/粒子（它们会全屏叠色）。 */
+    M.closeGuide();
+    Map.setFloor(1);
+    R.resize();
+    var savedLighting = Game.Lighting;
+    var savedParticles = Game.Particles;
+    var cand = null;
+    try {
+      Game.Lighting = null;
+      Game.Particles = null;
+      R._staticBypass = true;   /* 跳过离屏缓存，逐格直绘到主画布 */
+      R.drawMap(Map.getGrid(), P);
+    } finally {
+      R._staticBypass = false;
+      Game.Lighting = savedLighting;
+      Game.Particles = savedParticles;
+    }
+    var camo = R._cam();
+    var grid0 = Map.getGrid();
+    for (var sy = grid0.length - 1; sy >= 0 && !cand; sy--) {
+      for (var sx = grid0[0].length - 1; sx >= 0; sx--) {
+        var px0 = sx * TILE - camo.x, py0 = sy * TILE - camo.y;
+        if (px0 < 0 || py0 < 0 || px0 + TILE > R.cssW || py0 + TILE > R.cssH) continue;
+        if (Game.fov.isExplored(sx, sy) || Game.fov.isVisible(sx, sy)) continue;
+        cand = { x: sx, y: sy, px: px0, py: py0 };
+        break;
+      }
+    }
+    var drewK = R.dpr * R.scale;
+    var gctx = R._ctx;
+    function pix(lx, ly) {
+      var d = gctx.getImageData(Math.round(lx * drewK), Math.round(ly * drewK), 1, 1).data;
+      return [d[0], d[1], d[2]];
+    }
+    var eq = function (a, b) {
+      return !!a && !!b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+    };
+    var pCenter = cand ? pix(cand.px + TILE / 2, cand.py + TILE / 2) : null;
+    var pRight = cand ? pix(cand.px + TILE - 1, cand.py + TILE / 2) : null;
+    var pBottom = cand ? pix(cand.px + TILE / 2, cand.py + TILE - 1) : null;
+    var isDark = !!pCenter && pCenter[0] < 40 && pCenter[1] < 40 && pCenter[2] < 48;
+    rec('C1_unexploredNoGap', !!cand && eq(pCenter, pRight) && eq(pCenter, pBottom) && isDark,
+      '采样未探索格(' + (cand ? cand.x + ',' + cand.y : '-') + ') 中心=' + (pCenter || []).join(',') +
+      ' 右缘=' + (pRight || []).join(',') + ' 下缘=' + (pBottom || []).join(',') + '（要求三点一致且为暗色）');
+
+    /* 负例：旧写法 TILE-1 在同一采样点必然取到底色 */
+    var scratch = document.createElement('canvas');
+    scratch.width = 40; scratch.height = 40;
+    var sctx = scratch.getContext('2d');
+    sctx.fillStyle = '#14142a'; sctx.fillRect(0, 0, 40, 40);
+    sctx.fillStyle = '#07070f'; sctx.fillRect(2, 2, TILE - 1, TILE - 1);
+    var nc = function (lx, ly) {
+      var d = sctx.getImageData(lx, ly, 1, 1).data;
+      return [d[0], d[1], d[2]];
+    };
+    var ncCenter = nc(2 + TILE / 2, 2 + TILE / 2);
+    var ncEdge = nc(2 + TILE - 1, 2 + TILE / 2);
+    var ncBg = [20, 20, 42];
+    rec('C2_gapNegativeControl', !eq(ncEdge, ncCenter) && eq(ncEdge, ncBg),
+      '旧写法：中心=' + ncCenter.join(',') + ' 右缘=' + ncEdge.join(',') + '（=底色 20,20,42，证明该采样点能区分新旧）');
+
+    /* ── D 引导页 ──────────────────────────────────────── */
+    /* D1：首次弹出（A2 init 实测）+ 普通键/空白点击都不能关 + Enter 关闭 */
+    localStorage.removeItem('aiDungeon_guided');
+    if (M._guideVisible) M.closeGuide();
+    localStorage.removeItem('aiDungeon_guided'); /* closeGuide 会写标记，先清掉再重开 */
+    M.showGuide();
+    var guideShown = (M._guideVisible === true);
+    key('ArrowRight', 'ArrowRight');
+    var afterMoveKey = (M._guideVisible === true);
+    window.dispatchEvent(new MouseEvent('click', { clientX: 5, clientY: 5, bubbles: true }));
+    var afterMissClick = (M._guideVisible === true);
+    key('Enter', 'Enter');
+    var afterEnter = (M._guideVisible === false);
+    var storedMark = localStorage.getItem('aiDungeon_guided') === '1';
+    rec('D1_guideNeedsExplicitConfirm', firstShowAfterInit && guideShown &&
+      afterMoveKey && afterMissClick && afterEnter && storedMark,
+      'init 首次弹出=' + firstShowAfterInit + ' 重开=' + guideShown +
+      ' 移动键后仍开=' + afterMoveKey + ' 点空白后仍开=' + afterMissClick +
+      ' Enter 后关闭=' + afterEnter + ' 已写标记=' + storedMark);
+
+    /* D2：已写标记后仍可重看（不依赖存档状态），点确认按钮可关 */
+    M.showGuide();
+    var reopenAfterMark = (M._guideVisible === true);
+    var rect = R._guideRect();
+    var box = R._canvas.getBoundingClientRect();
+    var sxRatio = box.width ? (R.cssW / box.width) : 1;
+    var syRatio = box.height ? (R.cssH / box.height) : 1;
+    window.dispatchEvent(new MouseEvent('click', {
+      clientX: box.left + (rect.x + rect.w / 2) * sxRatio,
+      clientY: box.top + (rect.y + rect.h / 2) * syRatio,
+      bubbles: true
+    }));
+    var afterBtnClick = (M._guideVisible === false);
+    rec('D2_guideCanReopen', reopenAfterMark && afterBtnClick,
+      '写标记后重看=' + reopenAfterMark + ' 点按钮关闭=' + afterBtnClick +
+      ' 标记键=' + localStorage.getItem('aiDungeon_guided'));
+
+    /* D3：引导页实际绘制文本含「你的目标」「往哪走」（拦截 fillText，断言真实绘制） */
+    var guideTexts = [];
+    var oldFill = R._ctx.fillText;
+    try {
+      R._ctx.fillText = function (t) { guideTexts.push(String(t)); };
+      R.drawGuide();
+    } finally {
+      R._ctx.fillText = oldFill;
+    }
+    var guideAll = guideTexts.join('\n');
+    var hasGoal = guideAll.indexOf('你的目标：往地牢更深处走，第 5 层击败地牢巨龙') >= 0;
+    var hasWhere = guideAll.indexOf('往哪走：') >= 0;
+    var hasConfirm = guideAll.indexOf('按 Enter 开始冒险') >= 0;
+    var hasH = guideAll.indexOf('H 帮助') >= 0 || guideAll.indexOf('H 重看') >= 0;
+    rec('D3_guideHasGoal', hasGoal && hasWhere && hasConfirm,
+      '目标=' + hasGoal + ' 去向=' + hasWhere + ' 确认按钮=' + hasConfirm + ' H提示=' + hasH +
+      '；首行=' + guideTexts.slice(0, 6).join(' / '));
+
+    /* D4：H 键在探索场景能打开引导（真实输入 → Main.loop） */
+    if (M._guideVisible) M.closeGuide();
+    Game.Core.Input.getState()['KeyH'] = true;
+    M._scene = 'explore';
+    M.loop(performance.now());
+    var hOpens = (M._guideVisible === true);
+    rec('D4_hKeyReopens', hOpens, 'H 键后引导可见=' + hOpens);
+    if (M._guideVisible) M.closeGuide();
+
+    /* ── E 战斗胜利日志：中文名、无英文 id、分行 ─────────── */
+    P.level = 1; P.exp = 0;
+    Inv.recalcEquip();
+    B.start('ogre_boss'); /* 双掉落：钢剑 + 锁链甲（验证多件排版） */
+    var st = B.getState();
+    st.monster.hp = 1;
+    st.monster.atk = 0;
+    withRnd(0, function () { B.playerAction('attack'); });
+    var logLines = (B.getState().log || []).slice();
+    var logText = logLines.join('\n');
+    var idPattern = /[a-z][a-z0-9]*_[a-z0-9_]+/;
+    var noIds = !idPattern.test(logText);
+    var dropLine = '';
+    for (var li = 0; li < logLines.length; li++) if (/获得/.test(logLines[li])) dropLine = logLines[li];
+    var nameSet = {};
+    Object.keys(Game.Data.ITEMS).forEach(function (id) { nameSet[Game.Data.ITEMS[id].name] = true; });
+    var dropNames = dropLine.replace(/^[^：]*：/, '').split('、')
+      .filter(function (s) { return s && !/^\d+ 件$/.test(s); });
+    var namesValid = dropNames.length > 0 && dropNames.every(function (n) { return !!nameSet[n]; });
+    var splitOk = logLines.some(function (t) { return /^胜利！/.test(t) && !/获得/.test(t); }) &&
+      logLines.some(function (t) { return /^获得/.test(t); });
+    rec('E1_winLogChineseNames', noIds && namesValid && splitOk,
+      '日志=' + logLines.join(' ‖ ') + '；掉落解析=' + dropNames.join('/'));
+
+    /* ── F 升级文字 + 低血量警示 ───────────────────────── */
+    N._clear();
+    P.level = 1; P.exp = 60; P.hp = 1;
+    Inv.recalcEquip();
+    var ups = B.checkLevelUp();
+    var msgLv = lastNotice();
+    rec('F1_levelUpText', ups > 0 && /升级！Lv\.1 → Lv\.2/.test(msgLv) &&
+      /攻击\+\d/.test(msgLv) && /生命上限\+\d/.test(msgLv),
+      '升级次数=' + ups + '，提示=' + msgLv);
+
+    Game.hud.update({ hp: 10, hpMax: 100, mp: 5, mpMax: 50, gold: 0, floor: 1, level: 2, exp: 0, status: [] });
+    var low1 = Game.hud.lowHp();
+    Game.hud.update({ hp: 60, hpMax: 100, mp: 5, mpMax: 50, gold: 0, floor: 1, level: 2, exp: 0, status: [] });
+    var low2 = Game.hud.lowHp();
+    rec('F2_lowHpWarn', low1.active === true && /血量危急/.test(low1.text) && low2.active === false,
+      '10/100 → ' + JSON.stringify(low1) + '；60/100 → active=' + low2.active);
+
+    /* ── G 提示条不遮挡：几何断言（在 HUD 之下、画面中心之下、不越出画布） ── */
+    N._clear();
+    N._setClock(40000);
+    N.push('遮挡自检一');
+    N.push('遮挡自检二');
+    N.push('遮挡自检三');
+    R.drawMap(Map.getGrid(), P);
+    N.draw();
+    var rr = N._rect();
+    var hudBottom = 22;
+    var geomOk = !!rr && rr.y > hudBottom + 20 && (rr.y + rr.h) <= R.cssH &&
+      rr.y > R.cssH / 2 + 60 && rr.count === 3;
+    rec('G1_noticeBandGeometry', geomOk,
+      '提示条 rect=' + JSON.stringify(rr) + '，逻辑视口=' + R.cssW + 'x' + R.cssH +
+      '，HUD 高=' + hudBottom + '，画面中心 y=' + (R.cssH / 2));
+    N._clear();
+    N._setClock(null);
+
+    var keys = Object.keys(out.sub);
+    out.ok = keys.every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+
+  /* 本页不读其它产物，故不加 preflight-meta */
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

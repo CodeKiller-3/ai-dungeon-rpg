@@ -48,7 +48,9 @@
    * 会用默认新档覆盖磁盘旧档，导致读档永远读不到进度。 */
   var booting = true;
 
-  /* M9-5：首次引导覆盖层（localStorage 键 aiDungeon_guided） */
+  /* M9-5：首次引导覆盖层（localStorage 键 aiDungeon_guided）
+   * D-14：该标记只决定"是否首次自动弹出"，不再是"永远看不到引导"的唯一原因——
+   *       探索中按 H、或点底部提示栏的「H 帮助」可随时重看，且重看不写任何新键。 */
   var GUIDE_KEY = 'aiDungeon_guided';
   function needsGuide() {
     try { return localStorage.getItem(GUIDE_KEY) === null; } catch (e) { return true; } /* 存储禁用→每局显示（降级） */
@@ -56,16 +58,40 @@
   function markGuided() {
     try { localStorage.setItem(GUIDE_KEY, '1'); } catch (e) { /* 存储禁用降级 */ }
   }
-  function dismissGuide() {
+  /* D-14：不再"任意键关闭"。只接受两种明确确认：Enter，或点击引导页上的确认按钮 */
+  function guideConfirm(evt) {
+    var M = Game.Core.Main;
+    if (!M || !M._guideVisible || !evt) return;
+    if (evt.type === 'keydown') {
+      if (evt.key !== 'Enter' && evt.code !== 'Enter' && evt.code !== 'NumpadEnter') return;
+    } else {
+      var R = Game.Core && Game.Core.Render;
+      var p = (R && typeof R.toLogical === 'function') ? R.toLogical(evt.clientX, evt.clientY) : null;
+      var r = (R && typeof R._guideRect === 'function') ? R._guideRect() : null;
+      if (!p || !r) return;
+      if (p.x < r.x || p.x > r.x + r.w || p.y < r.y || p.y > r.y + r.h) return;
+    }
+    if (typeof evt.preventDefault === 'function') evt.preventDefault();
+    closeGuide();
+  }
+  function closeGuide() {
     var M = Game.Core.Main;
     if (!M || !M._guideVisible) return;
     M._guideVisible = false;
     markGuided();
-    window.removeEventListener('keydown', dismissGuide);
-    window.removeEventListener('click', dismissGuide);
+    window.removeEventListener('keydown', guideConfirm);
+    window.removeEventListener('click', guideConfirm);
     if (Game.Core && Game.Core.Input && typeof Game.Core.Input.clear === 'function') {
       Game.Core.Input.clear();
     }
+  }
+  /* D-14：随时重看（H 键 / 底部提示栏入口），不依赖存档状态、不落新键 */
+  function openGuide() {
+    var M = Game.Core.Main;
+    if (!M || M._guideVisible) return;
+    M._guideVisible = true;
+    window.addEventListener('keydown', guideConfirm);
+    window.addEventListener('click', guideConfirm);
   }
 
   /* 修复 P1：换层/重置只负责落点与特效清理，不再无条件回满 HP/MP。
@@ -204,11 +230,11 @@
       Game.Core.EventBus.emit('ui:notice', {
         msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始！'
       });
-      /* M9-5：首次引导 + resize 监听（静默降级） */
+      /* M9-5：首次引导 + resize 监听（静默降级）；D-14：改为明确确认键关闭 */
       this._guideVisible = needsGuide();
       if (this._guideVisible) {
-        window.addEventListener('keydown', dismissGuide);
-        window.addEventListener('click', dismissGuide);
+        window.addEventListener('keydown', guideConfirm);
+        window.addEventListener('click', guideConfirm);
       }
       /* 自适应缩放：窗口 resize / 浏览器缩放 / 横竖屏切换 / 移动端视口变化都重新计算
        * （resize 覆盖桌面缩放与横竖屏；orientationchange 兜底老浏览器；visualViewport 覆盖移动端地址栏收起） */
@@ -325,9 +351,12 @@
       this.switchScene('explore');
     },
 
-    /* M9-5：首次引导（验证页断言用） */
+    /* M9-5：首次引导（验证页断言用）
+     * D-14：showGuide/closeGuide 供 H 键与验证页显式重看/关闭 */
     needsGuide: needsGuide,
     markGuided: markGuided,
+    showGuide: openGuide,
+    closeGuide: closeGuide,
 
     switchScene: function (name) {
       this._scene = name;
@@ -347,11 +376,13 @@
     _updateExplore: function (now) {
       /* D-12：方向键"新按下"边沿每帧消费一次（弹窗/引导期间也消费，避免恢复后误触发） */
       var dirEdge = (Game.Core.Input.takeDirEdge && Game.Core.Input.takeDirEdge()) || false;
-      /* M9-5：首次引导覆盖层显示时暂停游戏输入（dismissGuide 监听任意键关闭） */
+      /* M9-5：首次引导覆盖层显示时暂停游戏输入；D-14：仅 Enter / 点击确认按钮可关闭 */
       if (this._guideVisible) return;
       /* S3-3：弹窗打开时暂停地图移动输入（弹窗自行处理 Esc/↑↓/Enter/点击） */
       if (Game.Modal && Game.Modal.isOpen()) return;
       var k = Game.Core.Input.getState();
+      /* D-14：H 随时重看帮助（不依赖存档状态，不再写新键） */
+      if (k['KeyH']) { delete k['KeyH']; openGuide(); return; }
       if (k['KeyB']) { delete k['KeyB']; Game.Modal.open('inventory'); return; }
       /* 修复：S 是 WASD 的“向下移动”，不能再同时作为商店热键（否则按 S 会弹出商店面板）。
        * 商店改用 E 打开；S 保留给移动，其余按键语义不变。 */
@@ -530,6 +561,8 @@
       var dt = this._lastFrame ? (ts - this._lastFrame) : 0;
       this._lastFrame = ts;
       if (Game.Feedback && typeof Game.Feedback.update === 'function') Game.Feedback.update(dt);
+      /* D-14：底部提示条生命周期（2.4s 存活 + 400ms 淡出，最多 3 条） */
+      if (Game.Notice && typeof Game.Notice.update === 'function') Game.Notice.update(dt);
       /* M9-3：推进移动插值、粒子生命、战斗死亡消散计时 */
       if (Game.Motion && typeof Game.Motion.update === 'function') Game.Motion.update(dt);
       if (Game.Particles && typeof Game.Particles.update === 'function') Game.Particles.update(dt);
@@ -571,7 +604,11 @@
         this._updateVictory();
         Game.Core.Render.drawVictory(player);
       }
-      /* M9-5：首次引导覆盖层（悬停最顶层，任意键/点击关闭） */
+      /* D-14：底部提示条画在所有场景之上（含弹窗），但在引导覆盖层之下 */
+      if (Game.Notice && typeof Game.Notice.draw === 'function') {
+        try { Game.Notice.draw(); } catch (e) { /* 降级 */ }
+      }
+      /* M9-5：首次引导覆盖层（悬停最顶层；D-14：Enter / 点击确认按钮关闭） */
       if (this._guideVisible) {
         try { Game.Core.Render.drawGuide(); } catch (e) { /* 降级 */ }
       }

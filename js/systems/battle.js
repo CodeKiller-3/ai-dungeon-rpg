@@ -34,6 +34,7 @@
     if (!p) return 0;
     if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
     if (typeof p.exp !== 'number' || !isFinite(p.exp)) p.exp = 0;
+    var oldLv = p.level, oldAtk = p.atk || 0, oldDef = p.def || 0, oldMax = p.maxHp || 0;
     var ups = 0;
     while (p.exp >= expToNext(p.level)) {
       p.exp -= expToNext(p.level);
@@ -53,6 +54,15 @@
       /* P2-5：level 任务推进——只在确实升级时调用（ups>0），避免每战重复 */
       if (Game.Systems.Quest && typeof Game.Systems.Quest.progress === 'function') {
         Game.Systems.Quest.progress('level', p.level);
+      }
+      /* D-14：升级补一条文字提示（升到几级 + 哪些属性变了）。战斗内进日志，同时发提示条；
+       * 战斗外（任务奖励经验触发升级）只发提示条，不触碰不存在的战斗日志。 */
+      var upMsg = '升级！Lv.' + oldLv + ' → Lv.' + p.level +
+        '（攻击+' + ((p.atk || 0) - oldAtk) + ' 防御+' + ((p.def || 0) - oldDef) +
+        ' 生命上限+' + ((p.maxHp || 0) - oldMax) + '，HP/MP 已回满）';
+      if (state && state.log) logPush(upMsg);
+      if (Game.Core && Game.Core.EventBus) {
+        Game.Core.EventBus.emit('ui:notice', { msg: upMsg, ok: true });
       }
     }
     return ups;
@@ -164,7 +174,16 @@
       Game.Systems.Bestiary.record('monster', m.id);
       for (var bi = 0; bi < drops.length; bi++) Game.Systems.Bestiary.record('item', drops[bi]);
     }
-    logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold + (drops.length ? ' 获得:' + drops.join(',') : ''));
+    /* D-14：胜利日志——物品用中文名（取自 items.js 的 name），不再输出英文 id；
+     * 多件物品写成「获得 N 件：A、B」，与经验/金币分行，不挤成一行。 */
+    var dropNames = [];
+    for (var di = 0; di < drops.length; di++) {
+      var dit = (Game.Data.ITEMS) ? Game.Data.ITEMS[drops[di]] : null;
+      dropNames.push((dit && dit.name) ? dit.name : drops[di]);
+    }
+    logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold);
+    if (dropNames.length === 1) logPush('获得：' + dropNames[0]);
+    else if (dropNames.length > 1) logPush('获得 ' + dropNames.length + ' 件：' + dropNames.join('、'));
     if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
     Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
     /* M9-3：标记死亡消散状态，暂存胜利结果 */
