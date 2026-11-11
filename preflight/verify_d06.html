@@ -81,12 +81,19 @@
     var negs = !!ev5 && ev5.d52.exit === 1 && ev5.d52.line.indexOf('[FAIL] XC-01') >= 0 &&
       ev5.d54.verdict === 'FAIL' && ev5.d54.reasons.join('|').indexOf('23') >= 0 &&
       ev5.d55.verdict === 'FAIL' && ev5.d55.reasons.join('|').indexOf('45') >= 0;
-    var rows = (reg && reg.rows) || [];
-    var d05row = rows.filter(function (r) { return r.page === 'verify_d05'; })[0] || null;
-    var d05pass = !!d05row && d05row.verdict === 'PASS';
+    /* ── D-15b：d05 行改从**本轮台账**取，不再要求上一轮 JSON 里 d05 是 PASS ──
+     * 旧写法（读上一轮 regression-result.json）会让"上一轮 d05 FAIL"必然拖累本轮 d06，
+     * 形成一轮收敛，只能靠手工改历史产物打破。current-run.json 由 run-all 每页结束即写，
+     * 这里读到的是本轮 d05 的真实裁决，且 source 可机器读出。 */
+    var led = readJson('selfcheck/current-run.json');
+    var myRun = PreflightMeta.runIdFromSearch(location.search);
+    var cur = PreflightMeta.annotate((led && led.rows) || [], led && led.runId, myRun);
+    var d05row = cur.filter(function (r) { return r.page === 'verify_d05'; })[0] || null;
+    var d05pass = !!d05row && d05row.verdict === 'PASS' && d05row.source === 'current-run';
     sub.d64_d05Reverted = hasOkFields && noPassFields && negs && d05pass;
     sub.d64_fields = { okFields: hasOkFields, noPassFields: noPassFields, negatives: negs,
-      d05Verdict: d05row ? d05row.verdict : null };
+      d05Verdict: d05row ? d05row.verdict : null,
+      d05Source: d05row ? d05row.source : null, runId: myRun || null };
     ok = ok && sub.d64_d05Reverted;
 
     /* ── D6-5 全量回归 47/47（套件已随 D-07 增至 48 页）──

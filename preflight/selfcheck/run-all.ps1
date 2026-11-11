@@ -40,6 +40,30 @@ function Get-RegressionSummary {
   }
 }
 
+# ── 产物指纹（D-15b）──────────────────────────────────────────
+# 与 preflight/lib/meta.js 的 canonical()/fnv1a() 逐字节对齐：
+#   page|verdict|meta|source|ms，行间 \n，无尾随换行；FNV-1a 32 位，输出小写 8 位十六进制。
+# 规范化文本只含 ASCII（页面名、裁决、true/false、current-run、整数毫秒），
+# 因此 JS 的 charCodeAt 与 PowerShell 的 UTF-8 字节等价。
+function Get-RowsHash {
+  param($Rows)
+  $sb = New-Object System.Text.StringBuilder
+  $first = $true
+  foreach ($r in @($Rows)) {
+    if (-not $first) { [void]$sb.Append("`n") }
+    $first = $false
+    $m = if ($r.meta) { 'true' } else { 'false' }
+    $s = if ($r.source) { $r.source } else { '' }
+    [void]$sb.Append("$($r.page)|$($r.verdict)|$m|$s|$($r.ms)")
+  }
+  $h = [uint32]2166136261
+  foreach ($b in [Text.Encoding]::UTF8.GetBytes($sb.ToString())) {
+    $h = $h -bxor [uint32]$b
+    $h = [uint32](([uint64]$h * 16777619) % 4294967296)
+  }
+  return $h.ToString('x8')
+}
+
 # D6-1/D6-2/D6-3 用：对给定文本文件跑一次裁决解析（不启动浏览器），输出裁决行供取证
 # D8-1~D8-3 用：加 -ShowSummary 时按同一套汇总函数打印汇总行并以 FAIL 数退出，用于单条场景取证
 if ($VerdictFile.Count -gt 0) {
@@ -69,8 +93,19 @@ $targets = @(Get-ChildItem -LiteralPath (Join-Path $root 'preflight') -Filter 'v
 $rows = @()
 $fail = 0
 
+# ── 本轮身份证与台账（D-15b）──────────────────────────────────
+# 每条结果行都带 runId / source=current-run；每页结束即把截至当前的行写入 current-run.json。
+# 页面以 ?run=<runId> 打开，读 JSON 时把 runId 不等的行标为 previous-run——"这行哪来的"可被机器读出。
+# 最终 regression-result.json 额外写 rowsHash（FNV-1a over 规范化行文本），页面可复算；
+# 任何手工改行的行为都会让哈希不匹配，自举不再需要人工介入。
+$runId = (Get-Date).ToString('yyyyMMddHHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0, 6)
+$startedAt = (Get-Date).ToString('s')
+$ledgerPath = Join-Path $PSScriptRoot 'current-run.json'
+@{ runId = $runId; startedAt = $startedAt; rows = @() } |
+  ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ledgerPath -Encoding utf8
+
 foreach ($t in $targets) {
-  $url = ([System.Uri]$t.FullName).AbsoluteUri
+  $url = ([System.Uri]$t.FullName).AbsoluteUri + '?run=' + $runId
   $tag = [guid]::NewGuid().ToString('N').Substring(0, 8)
   $ud = Join-Path $env:TEMP ("edgedata_$tag")
   $o  = Join-Path $env:TEMP ("sc_$tag.out")
@@ -101,9 +136,14 @@ foreach ($t in $targets) {
     page    = $t.BaseName
     verdict = $verdict
     meta    = $isMeta
+    source  = 'current-run'
     ms      = [int]$sw.ElapsedMilliseconds
     payload = if ($payload.Length -gt 220) { $payload.Substring(0, 220) + '…' } else { $payload }
   }
+  # 本轮台账：后续页面（按文件名排在后面的元页面）读到的就是本轮已完成页的真实裁决，
+  # 不再需要"读上一轮 → 被上一轮的失败拖一轮"。
+  @{ runId = $runId; startedAt = $startedAt; rows = $rows } |
+    ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $ledgerPath -Encoding utf8
   Remove-Item -LiteralPath $o, $e -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $ud -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -115,6 +155,8 @@ $rows | Format-Table -AutoSize -Wrap | Out-String -Width 260
 $summary = Get-RegressionSummary -Rows $rows
 "TOTAL=$($summary.total) PASS=$($summary.pass) FAIL=$($summary.fail) NONE=$($summary.none) MIXED=$($summary.mixed)"
 $jsonPath = Join-Path $PSScriptRoot 'regression-result.json'
-@{ summary = $summary; rows = $rows } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jsonPath -Encoding utf8
+$rowsHash = Get-RowsHash -Rows $rows
+@{ runId = $runId; startedAt = $startedAt; summary = $summary; rowsHash = $rowsHash; rows = $rows } |
+  ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $jsonPath -Encoding utf8
 "RESULT_JSON=$jsonPath"
 exit $fail

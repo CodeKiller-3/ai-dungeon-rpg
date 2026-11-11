@@ -47,12 +47,65 @@
     return (names || []).filter(function (n) { return !!m[n]; }).sort();
   }
 
+  /* ── D-15b：产物溯源与防篡改 ─────────────────────────────────
+   * run-all 每次运行生成一个 runId，逐页结束即把行写入 current-run.json（本轮台账），
+   * 全部结束后再写 regression-result.json（含同一 runId 与 rowsHash）。
+   * 页面读到的 JSON 若 runId 与自己的 `?run=` 不同，则这些行是上一轮的——
+   * 机器可读地区分 current-run / previous-run，而不是靠人工判断。 */
+
+  // 从 location.search 取本轮 runId（run-all 以 ?run=<id> 打开每个页面）
+  function runIdFromSearch(search) {
+    var m = /[?&]run=([^&]+)/.exec(search || '');
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  // FNV-1a 32 位；canonical() 只含 ASCII（页面名/裁决/布尔/run 标记/整数毫秒）
+  function fnv1a(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+
+  // 行的规范化文本：page|verdict|meta|source|ms，行间以 \n 连接（无尾随换行）
+  function canonical(rows) {
+    return (rows || []).map(function (r) {
+      return r.page + '|' + r.verdict + '|' + (r.meta ? 'true' : 'false') + '|' +
+        (r.source || '') + '|' + r.ms;
+    }).join('\n');
+  }
+
+  // 产物指纹：run-all.ps1 的 Get-RowsHash 用同一规范化文本与同一 FNV 参数
+  function rowsHash(rows) {
+    return fnv1a(canonical(rows));
+  }
+
+  // 给行标注来源：JSON 的 runId 与本轮一致 → current-run，否则 previous-run
+  function annotate(rows, jsonRunId, myRunId) {
+    var same = !!jsonRunId && !!myRunId && jsonRunId === myRunId;
+    return (rows || []).map(function (r) {
+      var c = {};
+      for (var k in r) {
+        if (Object.prototype.hasOwnProperty.call(r, k)) c[k] = r[k];
+      }
+      c.source = same ? 'current-run' : 'previous-run';
+      return c;
+    });
+  }
+
   return {
     MARKER_NAME: MARKER_NAME,
     MARKER_HTML: MARKER_HTML,
     hasMarker: hasMarker,
     substantive: substantive,
     metaNames: metaNames,
-    excludeByName: excludeByName
+    excludeByName: excludeByName,
+    runIdFromSearch: runIdFromSearch,
+    fnv1a: fnv1a,
+    canonical: canonical,
+    rowsHash: rowsHash,
+    annotate: annotate
   };
 }));

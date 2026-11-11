@@ -152,11 +152,40 @@
      * 两轮记录负责——若在此再要求上一轮已是 50 行，新一轮加页的首轮必然先判 FAIL。 */
     var ss = (sc && sc.summary) || null;
     var rs = (reg && reg.summary) || null;
+    /* D-15b：只判实质页面（meta 行是"上一轮元页面自己的裁决"，纳入即形成一轮收敛），
+     * 并要求上一轮产物指纹可复算——手工改任何一行都会在这里被抓到。 */
+    var regRows = (reg && reg.rows) || [];
+    var subs = PreflightMeta.substantive(regRows);
+    var hashOk = !!reg && typeof reg.rowsHash === 'string' &&
+      reg.rowsHash === PreflightMeta.rowsHash(regRows);
     sub.d97_staticClean = !!ss && ss.PASS === 32 && ss.WARN === 1 && ss.FAIL === 0 &&
-      !!rs && rs.fail === 0 && rs.none === 0 && rs.mixed === 0 && rs.pass === rs.total;
+      subs.length >= 1 && subs.every(function (r) { return r.verdict === 'PASS'; }) && hashOk;
     sub.d97_selfcheck = ss;
     sub.d97_regression = rs;
+    sub.d97_substantive = subs.filter(function (r) { return r.verdict === 'PASS'; }).length + '/' + subs.length;
+    sub.d97_rowsHash = { stored: reg ? reg.rowsHash : null, computed: PreflightMeta.rowsHash(regRows) };
     ok = ok && sub.d97_staticClean;
+
+    /* ── D9-8 本轮台账：runId 与 ?run= 一致，已完成页均为 current-run ── */
+    var led = readJson('selfcheck/current-run.json');
+    var myRun = PreflightMeta.runIdFromSearch(location.search);
+    var cur = PreflightMeta.annotate((led && led.rows) || [], led && led.runId, myRun);
+    sub.d98_currentRunProvenance = !!myRun && !!led && led.runId === myRun &&
+      cur.length >= 4 && cur.every(function (r) { return r.source === 'current-run'; });
+    sub.d98_runId = myRun || null;
+    sub.d98_ledgerRows = cur.length;
+    ok = ok && sub.d98_currentRunProvenance;
+
+    /* ── D9-9 负例：改一行裁决 → rowsHash 必须变 ──────── */
+    var cp = regRows.map(function (r) {
+      var c = {};
+      for (var k in r) { if (Object.prototype.hasOwnProperty.call(r, k)) c[k] = r[k]; }
+      return c;
+    });
+    if (cp.length) cp[0].verdict = (cp[0].verdict === 'PASS' ? 'FAIL' : 'PASS');
+    sub.d99_tamperDetected = cp.length > 0 && !!reg &&
+      PreflightMeta.rowsHash(cp) !== reg.rowsHash;
+    ok = ok && sub.d99_tamperDetected;
 
     out.sub = sub;
     out.ok = ok;

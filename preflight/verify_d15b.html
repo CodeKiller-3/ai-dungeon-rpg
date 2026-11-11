@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>D-15b 回归产物溯源与存档写入开销</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-15b · 回归产物溯源（runId / 台账 / rowsHash）与 save() 实测开销</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<!--
+  本页回答两件事：
+  1) 元页面的自举不再靠手工改历史产物：run-all 给每次运行发 runId、逐页写 current-run.json 台账、
+     最终产物带 rowsHash；页面能机器读出"这行来自本轮还是上一轮"，并复算哈希发现篡改。
+  2) 存档 v2（5 层全量）的 save() 单次与连续 50 次耗时实测，判断是否构成下一个卡顿来源。
+-->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/meta.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var PM = window.PreflightMeta;
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function rec(id, ok, detail) {
+    out.sub[id] = { ok: !!ok, detail: detail === undefined ? '' : detail };
+  }
+  function clone(r) {
+    var c = {};
+    for (var k in r) { if (Object.prototype.hasOwnProperty.call(r, k)) c[k] = r[k]; }
+    return c;
+  }
+  function finish() {
+    var all = true;
+    for (var k in out.sub) {
+      if (Object.prototype.hasOwnProperty.call(out.sub, k) && out.sub[k].ok !== true) all = false;
+    }
+    out.ok = all;
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+    document.getElementById('result').textContent = text;
+  }
+
+  try {
+    var led = readJson('selfcheck/current-run.json');
+    var reg = readJson('selfcheck/regression-result.json');
+    var runall = readDoc('selfcheck/run-all.ps1');
+    var myRun = PM.runIdFromSearch(location.search);
+    var ledRows = PM.annotate((led && led.rows) || [], led && led.runId, myRun);
+    var regRows = PM.annotate((reg && reg.rows) || [], reg && reg.runId, myRun);
+
+    /* ── M1 本轮台账：runId 与 ?run= 一致，已完成页都是 current-run ──
+     * 这是"本轮产物由本轮生成"的直接证据：台账只由 run-all 在本次运行中写入。 */
+    var ledPages = ledRows.map(function (r) { return r.page; });
+    rec('M1_ledgerCurrentRun',
+      !!myRun && !!led && led.runId === myRun && ledRows.length >= 4 &&
+      ledRows.every(function (r) { return r.source === 'current-run'; }) &&
+      ledPages.indexOf('verify_d05') >= 0,
+      { myRun: myRun || '(none)', ledgerRun: led ? led.runId : null, rows: ledRows.length });
+
+    /* ── M2 上一轮产物自带指纹，且可复算 ────────────────────
+     * 手工改任何一行的 verdict/meta/source/ms，rowsHash 就对不上（M3 负例证敏感性）。
+     * source 标注按 runId 相等与否推出：正常回归时本轮页面读到的是上一轮产物。 */
+    var regHashOk = !!reg && typeof reg.rowsHash === 'string' &&
+      reg.rowsHash === PM.rowsHash((reg && reg.rows) || []);
+    var sameRun = !!reg && !!myRun && reg.runId === myRun;
+    var srcLabel = sameRun ? 'current-run' : 'previous-run';
+    rec('M2_artifactHash', regHashOk && !!reg.runId &&
+      regRows.every(function (r) { return r.source === srcLabel; }),
+      { stored: reg ? reg.rowsHash : null, computed: PM.rowsHash((reg && reg.rows) || []),
+        artifactRun: reg ? reg.runId : null, rows: regRows.length, source: srcLabel });
+
+    /* ── M3 负例：改一行裁决 → 指纹必须变 ─────────────────── */
+    var cp = ((reg && reg.rows) || []).map(clone);
+    if (cp.length) cp[0].verdict = (cp[0].verdict === 'PASS' ? 'FAIL' : 'PASS');
+    rec('M3_tamperDetected', cp.length > 0 && !!reg &&
+      PM.rowsHash(cp) !== reg.rowsHash,
+      { tampered: PM.rowsHash(cp), stored: reg ? reg.rowsHash : null });
+
+    /* ── M4 跨语言指纹向量（PowerShell Get-RowsHash 与 meta.js 同值）── */
+    var vec = PM.rowsHash([{ page: 'a', verdict: 'PASS', meta: false, source: 'current-run', ms: 1 }]);
+    rec('M4_hashVector', vec === '0870bb18', vec);
+
+    /* ── M5 规则负例：上一轮元页面 FAIL 不得传染 ─────────────
+     * 只要断言只看 substantive(rows)，元页面之间就不会再出现"一轮收敛"。 */
+    var synth = [
+      { page: 'verify_d06', verdict: 'FAIL', meta: true },
+      { page: 'verify_x', verdict: 'PASS', meta: false }
+    ];
+    rec('M5_metaFailNoCascade',
+      PM.substantive(synth).every(function (r) { return r.verdict === 'PASS'; }) === true &&
+      PM.substantive(synth).length === 1,
+      PM.substantive(synth));
+
+    /* ── M6 run-all 已接上 runId / 台账 / 指纹 ─────────────── */
+    rec('M6_runallWiring',
+      runall.indexOf('current-run.json') >= 0 && runall.indexOf('function Get-RowsHash') >= 0 &&
+      runall.indexOf('rowsHash = Get-RowsHash') >= 0 && runall.indexOf("'?run='") >= 0 &&
+      runall.indexOf("source  = 'current-run'") >= 0,
+      { ledger: runall.indexOf('current-run.json') >= 0,
+        hash: runall.indexOf('function Get-RowsHash') >= 0,
+        query: runall.indexOf("'?run='") >= 0 });
+
+    /* ── M7 两张受害元页面已迁移到台账/指纹 ───────────────── */
+    rec('M7_metaPagesMigrated',
+      readDoc('verify_d06.html').indexOf('current-run.json') >= 0 &&
+      readDoc('verify_d09.html').indexOf('rowsHash') >= 0,
+      { d06: readDoc('verify_d06.html').indexOf('current-run.json') >= 0,
+        d09: readDoc('verify_d09.html').indexOf('rowsHash') >= 0 });
+
+    /* ── P 存档 v2 写入开销实测（不是估算）─────────────────── */
+    try { localStorage.removeItem('ai_dungeon_rpg_save_v1'); } catch (e) { /* ignore */ }
+    var Map = Game.Systems.Map, Save = Game.Systems.Save;
+    Map.generate();
+    Game.Core.Main.init();
+    /* 走真实换层路径把 5 层都写进 floorCache（setFloor 会清空缓存，不能用它累积） */
+    Map.setFloor(1);
+    for (var f = 1; f < Game.Data.MAPS.floors; f++) Map.changeFloor(1);
+
+    var one = 0, bytes = 0;
+    var t0 = performance.now();
+    Save.save();
+    one = performance.now() - t0;
+    var raw = '';
+    try { raw = localStorage.getItem('ai_dungeon_rpg_save_v1') || ''; } catch (e) { raw = ''; }
+    bytes = raw.length;
+
+    for (var w = 0; w < 3; w++) Save.save();          /* 预热 */
+    var singles = [];
+    for (var i = 0; i < 9; i++) {
+      var a = performance.now();
+      Save.save();
+      singles.push(performance.now() - a);
+    }
+    singles.sort(function (x, y) { return x - y; });
+    var median = singles[Math.floor(singles.length / 2)];
+
+    var t50 = performance.now();
+    for (var j = 0; j < 50; j++) Save.save();
+    var total50 = performance.now() - t50;
+
+    /* 拆解：深拷贝导出 / JSON 序列化 / localStorage 写入，各 50 次 */
+    var st = Map.exportState();
+    var tE = performance.now();
+    for (var e = 0; e < 50; e++) { st = Map.exportState(); }
+    var export50 = performance.now() - tE;
+    var str = JSON.stringify(st);
+    var tS = performance.now();
+    for (var s = 0; s < 50; s++) { str = JSON.stringify(st); }
+    var stringify50 = performance.now() - tS;
+    var tW = performance.now();
+    for (var k2 = 0; k2 < 50; k2++) { localStorage.setItem('d15b_probe', str); }
+    var setitem50 = performance.now() - tW;
+    try { localStorage.removeItem('d15b_probe'); } catch (e2) { /* ignore */ }
+
+    var per = { saveOne: one, median: median, total50: total50,
+      export50: export50, stringify50: stringify50, setitem50: setitem50, bytes: bytes };
+    out.perf = per;
+    /* 阈值取得很宽：这里防的是"每次都明显卡帧"的量级问题，不是微基准比较 */
+    rec('P1_saveCost', median < 16 && total50 < 800, per);
+    rec('P2_saveSize', bytes > 1000, { bytes: bytes });
+
+    finish();
+  } catch (err) {
+    out.err = String((err && err.stack) || err);
+    out.ok = false;
+    finish();
+  }
+})();
+</script>
+</body>
+</html>
