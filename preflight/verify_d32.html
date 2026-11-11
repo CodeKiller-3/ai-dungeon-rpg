@@ -72,12 +72,12 @@
   var IS_FILE = location.protocol === 'file:';
   var MODE = 'full';
   var CACHE = {}, textQ = [], binQ = [];
-  var LOADED = 0, TOTAL = 0, DONE = false, ABANDONED = false;
+  var LOADED = 0, TOTAL = 0, DONE = false, EMITTED = null;
 
   function tick() {
     LOADED++;
-    if (!DONE && !ABANDONED) {
-      document.getElementById('result').textContent = 'LOADING ' + LOADED + '/' + TOTAL + '（mode=full）';
+    if (!DONE && !EMITTED) {
+      document.getElementById('result').textContent = 'LOADING ' + LOADED + '/' + (TOTAL || '?');
     }
   }
   function collectText(p) { if (!(p in CACHE)) { CACHE[p] = ''; textQ.push(p); } }
@@ -241,8 +241,9 @@
   }
 
   function assertFull() {
-    if (ABANDONED) return;
+    if (EMITTED === 'full') return;
     DONE = true;
+    out = { ok: true, sub: {} };
 
     /* A1 */
     var a1miss = [];
@@ -411,16 +412,15 @@
     '../README.md', '../CHANGELOG.md', '../规划-对标补齐.md'];
   function startLite() {
     MODE = 'online-lite';
-    ABANDONED = true;
-    var attempted = LOADED;
     var q = LITE_FILES.slice();
     (MAN ? MAN.moves : FALLBACK_MOVES).forEach(function (m) { q.push('../' + m.next); });
     CORE.forEach(function (f) { q.push('../' + f); });
     q = q.filter(function (p, i) { return q.indexOf(p) === i; });
-    runAll(q, fetchText, function () { assertLite(attempted); });
+    runAll(q, fetchText, assertLite);
   }
-  function assertLite(attempted) {
-    DONE = true;
+  function assertLite() {
+    if (EMITTED === 'full') return;
+    out = { ok: true, sub: {} };
     var man = null, base = null;
     try { man = JSON.parse(read('selfcheck/d32-move-manifest.json') || 'null'); } catch (e) { man = null; }
     try { base = JSON.parse(read('selfcheck/page-baseline.json') || 'null'); } catch (e) { base = null; }
@@ -455,18 +455,20 @@
     rec('L6_planCitationClickable', /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(cite),
       '依据行含可点击新路径=' + /\[对标自检报告\]\(docs\/process\/对标自检报告\.md\)/.test(cite));
 
-    emit('online-lite', attempted);
+    emit('online-lite');
   }
 
-  function emit(mode, attempted) {
+  function emit(mode) {
+    if (EMITTED === 'full') return;          /* 全量已经出过裁决，轻量不得回写降级 */
+    EMITTED = mode;
     var keys = Object.keys(out.sub);
     var failed = keys.filter(function (k) { return !out.sub[k].ok; });
     var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({
       mode: mode, ok: out.ok, n: keys.length, fail: failed,
-      attempted: mode === 'online-lite' ? (attempted + '/' + (TOTAL || '?')) : undefined
+      attempted: mode === 'online-lite' ? (LOADED + '/' + (TOTAL || '?')) : undefined
     });
     var note = mode === 'online-lite'
-      ? '\nmode=online-lite（线上轻量模式：全量 ' + (TOTAL || '?') + ' 份未在取数窗口内跑完，已试取 ' + attempted +
+      ? '\nmode=online-lite（线上轻量模式：全量 ' + (TOTAL || '?') + ' 份仍在取数，已取 ' + LOADED +
         ' 份；本裁决**只覆盖关键 ' + keys.length + ' 项，不代表全量残留扫描通过**，全量结论以本地 run-all 为准）'
       : '\nmode=full（本地全量：' + (TOTAL || '?') + ' 份取数完成）';
     document.getElementById('result').textContent = head + note + '\n\n' +
@@ -474,15 +476,13 @@
     document.title = head;
   }
 
-  /* ── 入口：file:// 恒全量；?lite=1 强制轻量（仅用于本地验证轻量分支）── */
-  if (LITE_FORCED) {
-    startLite();
-  } else if (IS_FILE) {
-    startFull();
-  } else {
-    startFull();
-    setTimeout(function () { if (!DONE) { ABANDONED = true; startLite(); } }, 1100);
-  }
+  /* ── 入口 ──────────────────────────────────────────────────────
+   * file://（本地 run-all）：只跑全量，绝不退轻量。
+   * http(s)（线上）：两路同时起——轻量先出裁决（≤13 次取数，抓取窗口内可得），
+   *   全量跑完后用 mode=full 覆盖；若全量没跑完，页面上就是线上轻量裁决 + 已取份数。 */
+  if (LITE_FORCED) startLite();
+  else if (IS_FILE) startFull();
+  else { startLite(); startFull(); }
 })();
 </script>
 </body>
