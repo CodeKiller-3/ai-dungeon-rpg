@@ -322,6 +322,11 @@
     AI.getPatrols().length = 0;
     M._scene = 'battle';
     B.start('slime');
+    /* D-16：战斗表现改成分段时间轴（输入锁 150ms）。本组要验的是"同一帧内连按只行动一次"，
+       需要一个可控时钟才能把"锁窗口内"与"解锁后"区分开，故注入 dT；
+       负例前显式推进 200ms 越过锁窗口，否则负例按键只会被缓冲、日志不动。 */
+    var dT = performance.now();
+    B._setClock(function () { return dT; });
     var stD = B.getState();
     stD.monster.hp = 9999; stD.monster.atk = 0; /* 只数行动次数，不关心击杀 */
     var n0 = stD.log.length;
@@ -334,9 +339,11 @@
     M.loop(performance.now());
     var n2 = B.getState() ? B.getState().log.length : n1;
     /* 负例：模拟旧行为——repeat 事件把 keys 重新置 true，下一帧就会再次行动 */
+    dT += 200; /* D-16：越过输入锁窗口，让这次按键真正执行（否则只会被缓冲） */
     Input.getState()['Digit1'] = true;
     M.loop(performance.now());
     var n3 = B.getState() ? B.getState().log.length : n2;
+    B._setClock(null); /* D-16：恢复真实时钟 */
     M._scene = 'explore';
     rec('D1_repeatIgnored', onceSet && repeatIgnored && n1 > n0 && n2 === n1,
       '首次按下写入=' + onceSet + ' repeat 被忽略=' + repeatIgnored +

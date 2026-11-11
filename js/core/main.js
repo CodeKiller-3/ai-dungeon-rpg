@@ -519,16 +519,35 @@
       }
     },
 
-    /* 战斗场景 */
+    /* 战斗场景
+     * D-16：输入不再直接打到 playerAction——先过输入锁。锁定期间按键"缓冲一条"（不丢弃），
+     * 解锁后由 Battle.tick 执行一次；锁时长 ≤160ms，玩家不会感到"按了没反应"。 */
     _updateBattle: function () {
       var k = Game.Core.Input.getState();
-      if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; Game.Systems.Battle.playerAction('attack'); }
-      else if (k['Digit2'] || k['Numpad2']) { delete k['Digit2']; delete k['Numpad2']; Game.Systems.Battle.playerAction('defend'); }
-      else if (k['Digit3'] || k['Numpad3']) { delete k['Digit3']; delete k['Numpad3']; Game.Systems.Battle.playerAction('run'); }
+      var B = Game.Systems.Battle;
+      /* F：三档特效强度切换（关→低→高），入口可达且不改任何战斗数值 */
+      if (k['KeyF']) {
+        delete k['KeyF'];
+        if (Game.Fx && typeof Game.Fx.cycle === 'function') {
+          Game.Fx.cycle();
+          Game.Core.EventBus.emit('ui:notice', { msg: '战斗特效：' + Game.Fx.label() + '（F 切换）' });
+        }
+        return;
+      }
+      var cmd = null;
+      if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; cmd = 'attack'; }
+      else if (k['Digit2'] || k['Numpad2']) { delete k['Digit2']; delete k['Numpad2']; cmd = 'defend'; }
+      else if (k['Digit3'] || k['Numpad3']) { delete k['Digit3']; delete k['Numpad3']; cmd = 'run'; }
       /* M8-1：数字键 4/5/6 释放技能（探索场景无动作，不占用原有按键） */
-      else if (k['Digit4'] || k['Numpad4']) { delete k['Digit4']; delete k['Numpad4']; Game.Systems.Battle.playerAction('skill:fireball'); }
-      else if (k['Digit5'] || k['Numpad5']) { delete k['Digit5']; delete k['Numpad5']; Game.Systems.Battle.playerAction('skill:dash'); }
-      else if (k['Digit6'] || k['Numpad6']) { delete k['Digit6']; delete k['Numpad6']; Game.Systems.Battle.playerAction('skill:shield'); }
+      else if (k['Digit4'] || k['Numpad4']) { delete k['Digit4']; delete k['Numpad4']; cmd = 'skill:fireball'; }
+      else if (k['Digit5'] || k['Numpad5']) { delete k['Digit5']; delete k['Numpad5']; cmd = 'skill:dash'; }
+      else if (k['Digit6'] || k['Numpad6']) { delete k['Digit6']; delete k['Numpad6']; cmd = 'skill:shield'; }
+      if (!cmd) return;
+      if (B && typeof B.isInputLocked === 'function' && B.isInputLocked()) {
+        B.bufferCommand(cmd);   /* 只缓冲一条，解锁后执行一次 */
+        return;
+      }
+      B.playerAction(cmd);
     },
 
     /* 背包场景 */
@@ -619,12 +638,15 @@
       var dt = this._lastFrame ? (ts - this._lastFrame) : 0;
       this._lastFrame = ts;
       if (Game.Feedback && typeof Game.Feedback.update === 'function') Game.Feedback.update(dt);
+      /* D-16：战斗特效时钟（顿帧消耗 / 过期效果清理），放在反馈层之前推进 */
+      if (Game.Fx && typeof Game.Fx.update === 'function') Game.Fx.update(dt);
       /* D-14：底部提示条生命周期（2.4s 存活 + 400ms 淡出，最多 3 条） */
       if (Game.Notice && typeof Game.Notice.update === 'function') Game.Notice.update(dt);
       /* M9-3：推进移动插值、粒子生命、战斗死亡消散计时 */
       if (Game.Motion && typeof Game.Motion.update === 'function') Game.Motion.update(dt);
       if (Game.Particles && typeof Game.Particles.update === 'function') Game.Particles.update(dt);
-      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.tick === 'function') Game.Systems.Battle.tick();
+      /* D-16：把帧时间戳交给战斗时间轴（与 rAF 同钟；验证页可合成定步长驱动） */
+      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.tick === 'function') Game.Systems.Battle.tick(ts);
       syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {

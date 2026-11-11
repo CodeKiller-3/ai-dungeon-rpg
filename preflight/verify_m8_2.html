@@ -70,9 +70,11 @@
 
       /* 5. 吐息：狂暴后 mock Math.random<chance → 伤害 = max(round(27×1.4)-def,1)=max(38-5,1)=33 */
       Math.random = function () { return 0.1; }; /* 稳定命中吐息（0.1 < 0.3） */
+      B.flush(); /* D-16：先结清 t4 遗留的怪物段，否则它的伤害会被算进本次吐息 */
       P.hp = 100; /* 回满，避免前序普攻把 HP 压低导致钳制 */
       var hpBefore = P.hp;
       B.playerAction('attack'); /* 攻击不致死，触发怪物吐息 */
+      B.flush(); /* D-16：怪物段改为下一帧结算，不走帧循环的验证页需显式 flush */
       var breathDmg = hpBefore - P.hp;
       var breath_ok = (breathDmg === 33) && (st.log.join('|').indexOf('烈焰吐息') >= 0);
       sub.t5_breath = breath_ok;
@@ -83,6 +85,7 @@
       P.hp = 100;
       var hpB2 = P.hp;
       B.playerAction('defend');
+      B.flush(); /* D-16：怪物段改为下一帧结算，不走帧循环的验证页需显式 flush */
       var defDmg = hpB2 - P.hp;
       var def_ok = (defDmg === 16);
       sub.t6_defend = def_ok;

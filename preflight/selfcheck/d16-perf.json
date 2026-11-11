@@ -1,0 +1,172 @@
+{
+  "at": "2026-11-11T09:57:35.036Z",
+  "page": "preflight/perf_d16.html",
+  "commit": "",
+  "result": {
+    "ok": true,
+    "phase": "done",
+    "env": {
+      "dpr": 1,
+      "scale": 1.25,
+      "cssW": 1004.8,
+      "cssH": 566.4,
+      "innerW": 1256,
+      "innerH": 708,
+      "reduced": false
+    },
+    "off": {
+      "frames": 400,
+      "total": {
+        "p50": 1.5,
+        "p95": 3,
+        "max": 73.4,
+        "mean": 1.81,
+        "n": 400
+      },
+      "draw": {
+        "p50": 0.4,
+        "p95": 0.9,
+        "max": 39,
+        "mean": 0.54,
+        "n": 400
+      },
+      "drawBattle": {
+        "p50": 0.4,
+        "p95": 0.9,
+        "max": 39,
+        "mean": 0.54,
+        "n": 400
+      },
+      "update": {
+        "p50": 0.1,
+        "p95": 0.7,
+        "max": 4.2,
+        "mean": 0.18,
+        "n": 400
+      },
+      "fxUpdate": {
+        "p50": 0,
+        "p95": 0.1,
+        "max": 0.2,
+        "mean": 0.01,
+        "n": 400
+      },
+      "drawImage": 4,
+      "fillRect": 30,
+      "fillText": 25,
+      "over50": 1
+    },
+    "low": {
+      "frames": 400,
+      "total": {
+        "p50": 1.5,
+        "p95": 3.1,
+        "max": 12,
+        "mean": 1.81,
+        "n": 400
+      },
+      "draw": {
+        "p50": 0.4,
+        "p95": 0.7,
+        "max": 10.8,
+        "mean": 0.47,
+        "n": 400
+      },
+      "drawBattle": {
+        "p50": 0.4,
+        "p95": 0.7,
+        "max": 10.8,
+        "mean": 0.47,
+        "n": 400
+      },
+      "update": {
+        "p50": 0.1,
+        "p95": 0.6,
+        "max": 6.6,
+        "mean": 0.17,
+        "n": 400
+      },
+      "fxUpdate": {
+        "p50": 0,
+        "p95": 0.1,
+        "max": 0.9,
+        "mean": 0.01,
+        "n": 400
+      },
+      "drawImage": 4,
+      "fillRect": 32,
+      "fillText": 25,
+      "over50": 0
+    },
+    "high": {
+      "frames": 400,
+      "total": {
+        "p50": 1.6,
+        "p95": 4,
+        "max": 48,
+        "mean": 2.2,
+        "n": 400
+      },
+      "draw": {
+        "p50": 0.4,
+        "p95": 0.8,
+        "max": 17.1,
+        "mean": 0.54,
+        "n": 400
+      },
+      "drawBattle": {
+        "p50": 0.4,
+        "p95": 0.8,
+        "max": 17.1,
+        "mean": 0.54,
+        "n": 400
+      },
+      "update": {
+        "p50": 0.1,
+        "p95": 0.7,
+        "max": 17.5,
+        "mean": 0.22,
+        "n": 400
+      },
+      "fxUpdate": {
+        "p50": 0,
+        "p95": 0.1,
+        "max": 3.6,
+        "mean": 0.02,
+        "n": 400
+      },
+      "drawImage": 4,
+      "fillRect": 32,
+      "fillText": 25,
+      "over50": 0
+    },
+    "battle": {
+      "p50": 0.4,
+      "p95": 0.8,
+      "drawP50": 0.4,
+      "drawP95": 0.8,
+      "totalP50": 1.5,
+      "totalP95": 4,
+      "drawImage": 4,
+      "fillText": 25,
+      "samples": 800,
+      "framesLow": 400,
+      "framesHigh": 400,
+      "over50": 0
+    }
+  },
+  "battle": {
+    "p50": 0.4,
+    "p95": 0.8,
+    "drawP50": 0.4,
+    "drawP95": 0.8,
+    "totalP50": 1.5,
+    "totalP95": 4,
+    "drawImage": 4,
+    "fillText": 25,
+    "samples": 800,
+    "framesLow": 400,
+    "framesHigh": 400,
+    "over50": 0
+  }
+}

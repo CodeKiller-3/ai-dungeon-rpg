@@ -131,6 +131,8 @@
       var st2 = B.getState();
       var sv0 = st2.shieldValue;
       B.playerAction('attack'); /* 史莱姆 6 攻 - 5 防 = 1，全部由护盾抵挡 */
+      /* D-16：怪物段已改为下一帧结算（分段播放），不走帧循环的验证页需显式 flush */
+      B.flush();
       var sv1 = st2.shieldValue;
       var shOk = (sh === true) && (sv0 === 25) && (P.hp === 100) && (sv1 === 24);
       sub.t8_shield = shOk;

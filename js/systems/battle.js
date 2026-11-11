@@ -12,9 +12,35 @@
   var Game = window.Game = window.Game || {};
   Game.Systems = Game.Systems || {};
 
-  var state = null; /* { monster, log, turn, defending, shieldValue, enraged, enrageAtk, enrageDef, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt } */
+  var state = null; /* { monster, log, turn, defending, shieldValue, enraged, enrageAtk, enrageDef, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt,
+                       D-16: phase, pending, buffered, lockUntil, roundNo, turnRec, events, lastAction } */
 
   var DYING_MS = 700; /* 死亡消散动画时长 ms（渐隐+上浮+缩小） */
+
+  /* D-16：单回合表现时间轴（ms）。
+   * 玩家段立即结算并出反馈；怪物段推迟 seg1 后由 tick 推进结算/反馈——两段落在不同帧。
+   * lock：输入锁时长（卡面要求 ≤160ms）；total：整回合表现时长（卡面要求 ≤240ms）。
+   * 只推迟"结算发生的时刻"与反馈，伤害公式/数值/顺序（玩家先、怪物后）一概不动。 */
+  var TL = { seg1: 100, lock: 150, total: 180 };
+  var clock = null;  /* D-16：可注入时钟（验证页用；默认 performance.now，与肉眼节奏一致） */
+  var frameNow = null; /* D-16：主循环帧时间戳（rAF 同钟）；定步长驱动的验证页据此对齐时间轴 */
+  var turnSeq = 0;
+
+  function now() {
+    if (typeof clock === 'function') {
+      var v = clock();
+      if (typeof v === 'number' && isFinite(v)) return v;
+    }
+    if (typeof frameNow === 'number') return frameNow;
+    return performance.now();
+  }
+
+  /* D-16：伤害分级（游戏无暴击系统，仅按量级区分显示）
+   * 高伤 = 单次 ≥20 点，或 ≥ 目标生命上限的 20% */
+  function isHeavy(dmg, maxHp) {
+    if (dmg >= 20) return true;
+    return !!(maxHp > 0 && dmg / maxHp >= 0.2);
+  }
 
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
@@ -108,24 +134,78 @@
     return { x: cx - 45, y: top, w: 90, h: 90, cx: cx, cy: top + 45 };
   }
 
-  /* S3-4：仅在统一伤害入口触发反馈，不修改任何数值与 emit
-   * M9-3：命中处同时生成 spark 粒子 */
-  function spawnHitMonster(dmg) {
-    var m = monsterPos();
-    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
-      Game.Feedback.spawn({ x: m.cx, y: m.cy, text: '-' + dmg, color: '#ffffff' });
-      Game.Feedback.spawn({ x: m.x, y: m.y, kind: 'hit', w: m.w, h: m.h });
+  /* D-16：时间轴事件登记（顺序断言读这里：player-hit 必须早于 monster-hit） */
+  function pushEvent(kind, extra) {
+    if (!state) return null;
+    var ev = { kind: kind, at: now(), turn: state.roundNo };
+    if (extra) for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) ev[k] = extra[k];
+    if (!state.events) state.events = [];
+    state.events.push(ev);
+    if (state.events.length > 24) state.events.shift();
+    var rec = state.turnRec;
+    if (rec) {
+      if (kind === 'player-hit') rec.playerAt = ev.at;
+      else if (kind === 'monster-hit') rec.monsterAt = ev.at;
     }
+    return ev;
+  }
+
+  /* D-16：一次命中的表现打包（顿帧/震屏/挤退/局部闪白/斩击弧）——纯视觉，Game.Fx 缺失时静默跳过 */
+  function fxHit(who, dmg, opt) {
+    var Fx = Game.Fx;
+    if (!Fx || typeof Fx.hit !== 'function') return;
+    var o = opt || {};
+    var pos = (who === 'monster') ? monsterPos() : playerPos();
+    Fx.hit({
+      who: who,
+      dir: (who === 'monster') ? -1 : 1,
+      color: o.flash || (who === 'monster' ? '#ffffff' : '#ff6b6b'),
+      slash: o.slash === false ? null : {
+        x: pos.cx, y: pos.cy, r: 40,
+        a0: (who === 'monster') ? -1.1 : 1.9,
+        color: o.color || '#ffffff'
+      }
+    });
+  }
+
+  /* S3-4：仅在统一伤害入口触发反馈，不修改任何数值与 emit
+   * M9-3：命中处同时生成 spark 粒子
+   * D-16：登记时间轴事件 + 记录"上次行动"（战斗界面中段信息带用）+ 触发 Fx */
+  function spawnHitMonster(dmg, opt) {
+    var m = monsterPos();
+    var heavy = isHeavy(dmg, state ? state.monster.maxHp : 0);
+    var o = opt || {};
+    pushEvent('player-hit', { dmg: dmg, heavy: heavy });
+    if (state) {
+      state.lastAction = { by: 'player', name: state.monster.name, dmg: dmg, heavy: heavy, at: now() };
+    }
+    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      Game.Feedback.spawn({
+        x: m.cx, y: m.cy, text: '-' + dmg,
+        color: heavy ? '#ffc14d' : '#ffffff',
+        size: heavy ? 26 : 18, life: heavy ? 760 : 620
+      });
+    }
+    fxHit('monster', dmg, { color: o.color, slash: o.slash !== false });
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
-      Game.Particles.spawn('spark', m.cx, m.cy, { count: 6 });
+      Game.Particles.spawn('spark', m.cx, m.cy, o.color ? { count: 6, color: o.color } : { count: 6 });
     }
   }
   function spawnHurtPlayer(dmg) {
     var p = playerPos();
-    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
-      Game.Feedback.spawn({ x: p.cx, y: p.cy, text: '-' + dmg, color: '#ff5555' });
-      Game.Feedback.spawn({ x: p.x, y: p.y, kind: 'hurt', w: p.w, h: p.h });
+    var heavy = isHeavy(dmg, Game.Data.Player.maxHp);
+    pushEvent('monster-hit', { dmg: dmg, heavy: heavy });
+    if (state) {
+      state.lastAction = { by: 'monster', name: state.monster.name, dmg: dmg, heavy: heavy, at: now() };
     }
+    if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      Game.Feedback.spawn({
+        x: p.cx, y: p.cy, text: '-' + dmg,
+        color: heavy ? '#ff8a3d' : '#ff5555',
+        size: heavy ? 24 : 18
+      });
+    }
+    fxHit('player', dmg, {});
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
       Game.Particles.spawn('spark', p.cx, p.cy, { count: 5, color: '#ff8888' });
     }
@@ -294,7 +374,28 @@
     }
   };
 
+  /* D-16：玩家段结束——把怪物段排到 seg1 之后（不锁死输入、不用 setTimeout 链） */
+  function scheduleMonster(t0) {
+    if (!state) return;
+    state.pending = { due: t0 + TL.seg1 };
+    state.phase = 'monster';
+  }
+
+  /* D-16：怪物段结算/反馈（由 tick 在到点时调用；catch-up 时由 playerAction 提前调用） */
+  function runMonsterSegment(at) {
+    if (!state || !state.pending) return;
+    var rec = state.turnRec;
+    if (rec) rec.monsterAt = Math.max(at, rec.playerAt);
+    state.pending = null;
+    state.phase = 'monster';
+    monsterTurn();
+    if (state.dying) state.phase = 'dead';
+  }
+
   Game.Systems.Battle = {
+    /* D-16：时间轴参数（只读；验证页据此断言预算） */
+    timeline: function () { return { seg1: TL.seg1, lock: TL.lock, total: TL.total }; },
+
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
       state = {
@@ -305,7 +406,16 @@
         shieldValue: 0, /* M8-1：本次战斗临时护盾 */
         enraged: false, /* M8-2：狂暴二阶段标记 */
         enrageAtk: 0,
-        enrageDef: 0
+        enrageDef: 0,
+        /* D-16：分段表现状态机 */
+        phase: 'idle',   /* idle=可输入 / player=玩家段 / monster=怪物段 / dead=消散中 */
+        roundNo: 1,      /* 当前回合号（1 起） */
+        pending: null,   /* { due } 待播放的怪物段 */
+        buffered: null,  /* 输入锁期间缓冲的一条指令 */
+        lockUntil: 0,
+        turnRec: null,   /* 回合时间轴记录（时长断言读这里） */
+        events: [],      /* [{kind:'player-hit'|'monster-hit', at, turn, dmg, heavy}] */
+        lastAction: null
       };
       /* M8-1：新战斗冷却清零（战斗外残留冷却不带到本场） */
       if (Game.Skills && typeof Game.Skills.resetCooldowns === 'function') Game.Skills.resetCooldowns();
@@ -316,6 +426,20 @@
     playerAction: function (cmd) {
       if (!state) return null;
       if (state.dying) return state; /* M9-3：消散期间不接受任何操作 */
+      var t0 = now();
+      /* D-16：上一回合的怪物段还没播完（只可能来自直接 API 调用；正常输入被锁挡住）→ 先补结算，
+       * 保证"一次行动 = 一个回合"，不会把两次玩家行动压到同一时间轴。 */
+      if (state.pending) runMonsterSegment(state.pending.due);
+      if (state.dying || Game.Data.Player.hp <= 0) return state;
+      /* D-16：回合起拍——登记时间轴（顺序/时长断言读 turnRec 与 events） */
+      state.roundNo = (state.turn | 0) + 1;
+      state.phase = 'player';
+      state.lockUntil = t0 + TL.lock;
+      state.turnRec = {
+        id: ++turnSeq, startedAt: t0, playerAt: t0, monsterAt: 0,
+        unlockAt: 0, endedAt: 0, presentMs: 0, lockMs: 0,
+        planMs: TL.total, lockPlanMs: TL.lock, finalizeAt: t0 + TL.total, settled: false
+      };
       var skillId = null; /* M8-1：本次行动释放的技能（冷却推进时跳过它自己） */
       if (cmd === 'attack') {
         state.playerActionAt = performance.now(); /* M9-3：玩家攻击前摇帧（纯视觉） */
@@ -328,34 +452,38 @@
         if (state.monster.hp <= 0) {
           settleWin();
           if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick();
+          state.phase = 'idle';
           return state;
         }
         Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
-        monsterTurn();
+        scheduleMonster(t0);
       } else if (cmd === 'skill:fireball' || cmd === 'skill:dash' || cmd === 'skill:shield') {
         skillId = cmd.slice(6); /* 'skill:'.length === 6 */
         state.playerActionAt = performance.now(); /* M9-3：动作帧复用玩家前摇 */
         /* Skills.cast 负责校验 MP/冷却并触发效果；失败时不进入行动序列、不推进冷却 */
         var castOk = Game.Skills && typeof Game.Skills.cast === 'function' && Game.Skills.cast(skillId);
-        if (!castOk) return state;
+        if (!castOk) { state.phase = 'idle'; state.lockUntil = 0; return state; }
         if (state.dying || state.monster.hp <= 0) { /* 技能击杀：消散中，怪物不反击 */
           Game.Skills.tick(skillId);
+          state.phase = 'idle';
           return state;
         }
-        monsterTurn();
+        scheduleMonster(t0);
       } else if (cmd === 'defend') {
         state.defending = true;
         Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
         logPush('你进入防御姿态，本回合减伤 50%');
-        monsterTurn();
+        scheduleMonster(t0);
       } else if (cmd === 'run') {
         if (Math.random() < 0.5) {
           Game.Core.EventBus.emit('audio:play', { sfx: 'run' });
           logPush('你成功逃离了战斗');
+          state.phase = 'idle';
+          state.pending = null;
           Game.Core.EventBus.emit('battle:end', { result: 'run' });
         } else {
           logPush('逃跑失败！');
-          monsterTurn();
+          scheduleMonster(t0);
         }
       }
       state.turn++;
@@ -386,7 +514,10 @@
       var dmg = Math.max(def.dmg(p.atk) - monsterDef(), 1);
       Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
       state.monster.hp -= dmg;
-      spawnHitMonster(dmg);
+      /* D-16：技能命中带元素色（斩击弧/粒子用色区分技能归属，不做额外帧动画） */
+      spawnHitMonster(dmg, {
+        color: (Game.Fx && typeof Game.Fx.skillColor === 'function') ? Game.Fx.skillColor(id) : null
+      });
       logPush('你释放「' + def.name + '」，对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
       tryEnrage(); /* M8-2：受击后判定狂暴 */
       if (state.monster.hp <= 0) settleWin();
@@ -402,9 +533,100 @@
       logPush('你释放「' + def.name + '」，可抵挡 ' + state.shieldValue + ' 点伤害');
     },
 
-    /* M9-3：推进死亡消散计时；消散结束后发出 battle:end（此前结算已执行） */
-    tick: function () {
-      if (!state || !state.dying) return;
+    /* D-16：输入是否处于锁定（玩家段→怪物段的表现窗口内）。
+     * 锁定期间按键由调用方 bufferCommand 缓冲一条，解锁后由 tick 执行一次。 */
+    isInputLocked: function () {
+      if (!state || state.dying) return false;
+      return now() < state.lockUntil;
+    },
+
+    /* D-16：缓冲一条指令（不覆盖先按的：先按的意图优先，且保证解锁后只执行一次） */
+    bufferCommand: function (cmd) {
+      if (!state || state.dying || !cmd) return false;
+      if (state.buffered) return false;
+      state.buffered = cmd;
+      return true;
+    },
+
+    /* D-16：时间轴快照（顺序/时长/输入锁断言读这里） */
+    getTimeline: function () {
+      if (!state) return null;
+      var rec = state.turnRec;
+      return {
+        id: rec ? rec.id : 0,
+        turn: state.turn,
+        round: state.roundNo,
+        phase: state.phase,
+        locked: this.isInputLocked(),
+        buffered: state.buffered || null,
+        plan: { seg1: TL.seg1, lock: TL.lock, total: TL.total },
+        rec: rec ? {
+          startedAt: rec.startedAt, playerAt: rec.playerAt, monsterAt: rec.monsterAt,
+          unlockAt: rec.unlockAt, endedAt: rec.endedAt,
+          presentMs: rec.presentMs, lockMs: rec.lockMs,
+          planMs: rec.planMs, lockPlanMs: rec.lockPlanMs
+        } : null,
+        events: (state.events || []).slice(-10)
+      };
+    },
+
+    /* D-16：立即结算待播放的怪物段并收尾本回合。
+     * 主循环里由 tick 按时间推进；只有"不走帧循环、直接调 playerAction"的调用方（验证页/脚本）才需要它。 */
+    flush: function () {
+      if (!state) return null;
+      if (state.pending) runMonsterSegment(state.pending.due);
+      var rec = state.turnRec;
+      if (rec && !rec.settled) {
+        rec.settled = true;
+        rec.endedAt = now();
+        rec.presentMs = rec.endedAt - rec.startedAt;
+        if (!state.dying) state.phase = 'idle';
+      }
+      return state;
+    },
+
+    /* D-16：注入时钟（验证页用；null 还原为 performance.now） */
+    _setClock: function (fn) { clock = (typeof fn === 'function') ? fn : null; return clock; },
+    /* D-16：验证用——临时改时间轴参数（负例：seg1=0 即把两段合回同一帧，顺序断言必须 FAIL） */
+    _setTimeline: function (o) {
+      if (o && typeof o.seg1 === 'number') TL.seg1 = o.seg1;
+      if (o && typeof o.lock === 'number') TL.lock = o.lock;
+      if (o && typeof o.total === 'number') TL.total = o.total;
+      return { seg1: TL.seg1, lock: TL.lock, total: TL.total };
+    },
+    _now: now,
+
+    /* M9-3：推进死亡消散计时；消散结束后发出 battle:end（此前结算已执行）
+     * D-16：同时推进回合时间轴——怪物段到点结算、输入锁到点解锁并执行缓冲指令、回合表现收尾 */
+    tick: function (ts) {
+      if (typeof ts === 'number' && isFinite(ts)) frameNow = ts;  /* 与主循环同钟 */
+      if (!state) return;
+      var t = now();
+      /* 1) 怪物段到点 → 结算/反馈（玩家伤害与怪物反击因此分属两帧） */
+      if (state.pending && t >= state.pending.due) runMonsterSegment(state.pending.due);
+      if (!state) return;
+      /* 2) 输入锁到点 → 记录实测解锁时刻 */
+      var rec = state.turnRec;
+      if (rec && !rec.unlockAt && t >= state.lockUntil) {
+        rec.unlockAt = t;
+        rec.lockMs = t - rec.startedAt;
+      }
+      /* 3) 整回合表现收尾 → 记录实测总时长，回到可输入相位 */
+      if (rec && !rec.settled && t >= rec.finalizeAt) {
+        rec.settled = true;
+        rec.endedAt = t;
+        rec.presentMs = t - rec.startedAt;
+        if (!state.dying) state.phase = 'idle';
+      }
+      /* 4) 解锁 → 缓冲的一条指令执行一次（不丢弃、不重复） */
+      if (state.buffered && t >= state.lockUntil && !state.dying && Game.Data.Player.hp > 0) {
+        var cmd = state.buffered;
+        state.buffered = null;
+        Game.Systems.Battle.playerAction(cmd);
+      }
+      if (!state) return;
+      /* 5) 死亡消散（沿用真实时钟，与 M9-3 的既有断言一致） */
+      if (!state.dying) return;
       var elapsed = performance.now() - state.dyingAt;
       if (elapsed >= (state.dyingMs || DYING_MS)) {
         var result = pendingWin;

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-16：本页读取 preflight/selfcheck/d16-perf.json（CDP 实测性能产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-16 战斗界面重排 + 最小特效</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-16 · 时间轴分段 / 输入缓冲 / 三档特效 / 中段信息带 / 性能</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, Fx = Game.Fx;
+  var P = Game.Data.Player, R = Game.Core.Render;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* ── 测试时钟：把战斗时间轴放到完全可控的整数毫秒上 ─────────────── */
+  var T = 100000;
+  B._setClock(function () { return T; });
+  function step(ms) { T += ms; B.tick(); }
+
+  function evOf(tl, kind) {
+    var list = (tl && tl.events) || [], hit = null;
+    for (var i = 0; i < list.length; i++) if (list[i].kind === kind) hit = list[i];
+    return hit;
+  }
+  function countOf(tl, kind) {
+    var list = (tl && tl.events) || [], n = 0;
+    for (var i = 0; i < list.length; i++) if (list[i].kind === kind) n++;
+    return n;
+  }
+
+  try {
+    /* ══ a) 时间轴顺序：玩家伤害事件早于怪物反击事件 ═══════════════ */
+    P.hp = 100; P.maxHp = 100; P.mp = 50;
+    T = 100000;
+    B.start('slime');
+    B.playerAction('attack');
+    for (var i = 0; i < 240; i++) step(1);   /* 1ms 步进推进到回合收尾之后 */
+    var tlA = B.getTimeline();
+    var pHit = evOf(tlA, 'player-hit'), mHit = evOf(tlA, 'monster-hit');
+    var orderOk = !!(pHit && mHit && pHit.at < mHit.at);
+    rec('A1_playerHitBeforeMonsterHit', orderOk,
+      '玩家命中 at=' + (pHit ? pHit.at : '-') + ' / 怪物反击 at=' + (mHit ? mHit.at : '-') +
+      '（差 ' + ((pHit && mHit) ? (mHit.at - pHit.at) : '-') + 'ms）');
+
+    var sepOk = !!(pHit && mHit && (mHit.at - pHit.at) >= B.timeline().seg1);
+    rec('A2_twoSegmentsNotSameFrame', sepOk,
+      '两段间隔 ' + ((pHit && mHit) ? (mHit.at - pHit.at) : '-') + 'ms ≥ seg1=' + B.timeline().seg1 + 'ms');
+
+    /* 负例：seg1=0 等价于"把两段合回同一帧"，A1 的断言必须抓得到 */
+    var savedTL = B.timeline();
+    T = 200000;
+    B._setTimeline({ seg1: 0 });
+    B.start('slime');
+    B.playerAction('attack');
+    B.tick();                                 /* 同一时刻推进：怪物段与玩家段落在同一帧 */
+    var tlN = B.getTimeline();
+    var nP = evOf(tlN, 'player-hit'), nM = evOf(tlN, 'monster-hit');
+    var merged = !!(nP && nM && nP.at === nM.at);
+    var negOrderOk = !!(nP && nM && nP.at < nM.at);   /* 合回同帧后这条必须为 false */
+    B._setTimeline(savedTL);
+    rec('A3_negativeMergedSameFrameFails', merged && !negOrderOk,
+      'seg1=0 后两事件 at=' + (nP ? nP.at : '-') + '/' + (nM ? nM.at : '-') +
+      ' 同帧=' + merged + ' 顺序断言=' + negOrderOk + '（必须 false，否则 A1 抓不到回归）');
+
+    /* ══ b) 单回合表现 ≤240ms、输入阻塞 ≤160ms（实测值） ═══════════ */
+    T = 300000;
+    P.hp = 100; P.maxHp = 100;
+    B.start('slime');
+    B.playerAction('attack');
+    for (var j = 0; j < 300; j++) step(1);
+    var recB = B.getTimeline().rec;
+    var presentMs = recB ? recB.presentMs : 0;
+    var lockMs = recB ? recB.lockMs : 0;
+    rec('B1_turnPresentationWithin240', presentMs > 0 && presentMs <= 240,
+      '实测单回合表现 ' + presentMs + 'ms ≤240ms（计划 ' + (recB ? recB.planMs : '-') + 'ms）');
+    rec('B2_inputBlockWithin160', lockMs > 0 && lockMs <= 160,
+      '实测输入锁 ' + lockMs + 'ms ≤160ms（计划 ' + (recB ? recB.lockPlanMs : '-') + 'ms）');
+
+    /* 死亡/胜利允许超出该上限：击杀后进入消散（700ms），不应用 B1 的上限 */
+    var t0Kill = T;
+    var stK = B.getState();
+    stK.monster.hp = 1;
+    B.playerAction('attack');
+    var dyingNow = !!(B.getState() && B.getState().dying);
+    rec('B3_deathMayExceedBudget', dyingNow, '击杀进入 700ms 消散（不计入 240ms 预算）');
+    B.tick();
+
+    /* ══ c) 输入锁期间的按键被缓冲，解锁后执行一次 ═══════════════ */
+    T = 400000;
+    P.hp = 200; P.maxHp = 200;
+    B.start('dragon');                        /* 高血量怪：两次攻击不会打死，便于数次数 */
+    var stC = B.getState();
+    stC.monster.hp = 9999; stC.monster.maxHp = 9999; stC.monster.atk = 0;
+    B.playerAction('attack');
+    var hit0 = countOf(B.getTimeline(), 'player-hit');
+    var lockedNow = B.isInputLocked();
+    /* 模拟输入层：锁定期按键 → 缓冲一条 */
+    var bufAccepted = B.bufferCommand('attack');
+    var bufVisible = B.getTimeline().buffered === 'attack';
+    step(60);                                  /* 仍在锁内 */
+    var hitDuringLock = countOf(B.getTimeline(), 'player-hit');
+    var stillBuf = B.getTimeline().buffered === 'attack';
+    var turn0 = B.getTimeline().turn;
+    for (var k = 0; k < 240; k++) step(1);     /* 跨过 150ms 解锁点 */
+    var hitAfter = countOf(B.getTimeline(), 'player-hit');
+    var bufCleared = B.getTimeline().buffered === null;
+    var turn1 = B.getTimeline().turn;
+    rec('C1_keyBufferedNotDropped', lockedNow && bufAccepted && bufVisible && stillBuf,
+      '锁定中=' + lockedNow + ' 缓冲写入=' + bufAccepted + ' 解锁前仍在=' + stillBuf);
+    rec('C2_notExecutedWhileLocked', hitDuringLock === hit0,
+      '锁内命中事件 ' + hit0 + '→' + hitDuringLock + '（未执行）');
+    rec('C3_executedExactlyOnceAfterUnlock', hitAfter === hit0 + 1 && bufCleared && turn1 === turn0 + 1,
+      '解锁后命中 ' + hit0 + '→' + hitAfter + '（+1，非 0 非 2）缓冲已清=' + bufCleared +
+      ' 回合 ' + turn0 + '→' + turn1);
+
+    /* ══ d) 三档强度 + prefers-reduced-motion ═══════════════════ */
+    var fxT = 0;
+    Fx._setClock(function () { return fxT; });
+    Fx._reset();
+
+    Fx.setLevel('off');
+    var offHit = Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });
+    var stOff = Fx._state();
+    var offShake = Fx.shakeOffset();
+    var offFlash = Fx.flashOf('monster');
+    rec('D1_offHasNoShakeNoFlash', offHit === false && !stOff.frozen && !stOff.shake &&
+      stOff.flashes === 0 && stOff.slashes === 0 && offShake.x === 0 && offShake.y === 0 && !offFlash,
+      '关档：hit=' + offHit + ' 震屏=' + stOff.shake + ' 闪白=' + stOff.flashes +
+      ' 顿帧=' + stOff.freezeLeft + ' 偏移=' + offShake.x + ',' + offShake.y);
+
+    function sampleShake() {
+      var mx = 0;
+      for (var s = 0; s < 12; s++) {
+        fxT += 8;
+        var o = Fx.shakeOffset();
+        mx = Math.max(mx, Math.abs(o.x), Math.abs(o.y));
+      }
+      return mx;
+    }
+
+    Fx._reset(); fxT = 0;
+    Fx.setLevel('low');
+    Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });
+    var lowSt = Fx._state();
+    var lowFreeze = lowSt.freezeLeft;
+    var lowFlash = Fx.flashOf('monster');
+    var lowShake = sampleShake();
+    var lowFlashMs = lowSt.preset.flashMs;
+
+    Fx._reset(); fxT = 0;
+    Fx.setLevel('high');
+    Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });
+    var hiSt = Fx._state();
+    var hiFreeze = hiSt.freezeLeft;
+    var hiShake = sampleShake();
+    var hiFlashMs = hiSt.preset.flashMs;
+
+    rec('D2_lowHighDistinguishable', lowShake >= 1 && hiShake > lowShake && hiFreeze > lowFreeze,
+      '震屏峰值 低=' + lowShake + 'px 高=' + hiShake + 'px；顿帧 低=' + lowFreeze + 'ms 高=' + hiFreeze + 'ms' +
+      '；闪白 低=' + lowFlashMs + 'ms 高=' + hiFlashMs + 'ms');
+    rec('D3_presetWithinSpec', lowFreeze >= 50 && lowFreeze <= 90 && hiFreeze >= 50 && hiFreeze <= 90 &&
+      lowSt.preset.shake >= 2 && hiSt.preset.shake <= 4 && lowFlashMs <= 120 && hiFlashMs <= 120 && !!lowFlash,
+      '顿帧 50~90ms、震屏 2~4px、闪白单次 ≤120ms 全部满足');
+
+    /* prefers-reduced-motion：高档 + 系统要求减少动态 → 自动降为关 */
+    Fx._setPrefersReduced(true);
+    Fx.setLevel('high');
+    Fx._reset(); fxT = 0;
+    var redHit = Fx.hit({ who: 'player' });
+    var redEff = Fx.effectiveLevel();
+    var redSt = Fx._state();
+    var redShake = Fx.shakeOffset();
+    Fx._setPrefersReduced(false);
+    rec('D4_reducedMotionAutoDowngrade', redEff === 'off' && redHit === false && !redSt.frozen &&
+      !redSt.shake && redShake.x === 0 && redShake.y === 0,
+      'reduce 下请求=high 有效=' + redEff + ' hit=' + redHit + ' 偏移=' + redShake.x + ',' + redShake.y);
+
+    /* 光敏安全：不做高频闪烁——闪白单次上限与"一次命中只闪一次" */
+    Fx._reset(); fxT = 0; Fx.setLevel('high');
+    Fx.hit({ who: 'monster' });
+    var flashCount = Fx._state().flashes;
+    rec('D5_flashSingleLocalBurst', flashCount === 1 && hiFlashMs <= 120,
+      '一次命中只产生 1 条局部闪白=' + flashCount + '，时长 ' + hiFlashMs + 'ms（无 strobe）');
+
+    Fx.setLevel('low');   /* 还原默认档 */
+
+    /* ══ e) 战斗界面中段信息带：随战斗变化 ══════════════════════ */
+    var cv = document.getElementById('game');
+    R.init(cv);
+    var c2 = cv.getContext('2d');
+    var origFillText = c2.fillText;
+    var bandTexts = [];
+    var uiFonts = [];   /* 战斗界面（y≥180 且 y≤620，排除顶部 HUD）实际用到的字号 */
+    c2.fillText = function (txt, x, y) {
+      if (y >= 240 && y <= 400) bandTexts.push(String(txt));
+      if (y >= 180 && y <= 620) {
+        var m1 = /(\d+(?:\.\d+)?)px/.exec(String(c2.font || ''));
+        if (m1) uiFonts.push(parseFloat(m1[1]));
+      }
+      return origFillText.apply(c2, arguments);
+    };
+    function bandSig() {
+      var kx = cv.width / (R.cssW || cv.width);
+      var ky = cv.height / (R.cssH || cv.height);
+      var y0 = Math.floor(240 * ky), y1 = Math.ceil(400 * ky);
+      var img;
+      try { img = c2.getImageData(0, y0, cv.width, Math.max(1, y1 - y0)); } catch (e) { return { n: -1, h: 0 }; }
+      var d = img.data, n = 0, h = 2166136261;
+      /* 背景取条带左上角像素（战斗底色 + 行底色），只把"与背景差 >12"的像素算作绘制内容 */
+      var br = d[0], bg = d[1], bb = d[2];
+      for (var i = 0; i < d.length; i += 4) {
+        if (Math.abs(d[i] - br) > 12 || Math.abs(d[i + 1] - bg) > 12 || Math.abs(d[i + 2] - bb) > 12) {
+          n++;
+          h ^= (d[i] << 16) ^ (d[i + 1] << 8) ^ d[i + 2];
+          h = (h * 16777619) >>> 0;
+        }
+      }
+      return { n: n, h: h };
+    }
+
+    T = 500000; P.hp = 100; P.maxHp = 100;
+    B.start('slime');
+    bandTexts = [];
+    R.drawBattle(B.getState());
+    var sigIdle = bandSig();
+    var textsIdle = bandTexts.slice();
+    B.playerAction('attack');
+    bandTexts = [];
+    R.drawBattle(B.getState());
+    var sigActing = bandSig();
+    var textsActing = bandTexts.slice();
+    c2.fillText = origFillText;
+
+    var idleHasInfo = textsIdle.length >= 2 && sigIdle.n > 300;
+    var actingHasInfo = textsActing.length >= 2 && sigActing.n > 300;
+    var bandChanges = sigIdle.h !== sigActing.h;
+    var textsChange = textsIdle.join('|') !== textsActing.join('|');
+    rec('E1_bandFilledWithInfo', idleHasInfo && actingHasInfo,
+      '中段条带 y240~400：待机文字 ' + textsIdle.length + ' 条 / 非背景像素 ' + sigIdle.n +
+      '；行动后文字 ' + textsActing.length + ' 条 / 非背景像素 ' + sigActing.n);
+    rec('E2_bandContentChangesWithBattle', bandChanges && textsChange,
+      '判定方式：对该条带做 getImageData 像素哈希 + fillText 文本集比对；' +
+      '哈希 ' + sigIdle.h + '→' + sigActing.h + '，文本集变化=' + textsChange +
+      '（示例「' + (textsActing[1] || '-') + '」）');
+
+    /* 文字可读性：战斗界面（不含顶部 HUD）实际绘制的字号不得低于 HUD 最小字号 9px */
+    var minFont = uiFonts.length ? Math.min.apply(null, uiFonts) : 0;
+    var hudMin = 9;   /* hud.js 现有最小字号（血条数值 9px bold） */
+    rec('E3_textNotSmallerThanHud', uiFonts.length >= 6 && minFont >= hudMin && minFont >= 11,
+      '战斗界面实测字号 ' + uiFonts.length + ' 处，最小 ' + minFont + 'px（HUD 最小 ' + hudMin +
+      'px；本卡取 ≥11px 的可读档）');
+
+    /* ══ f) 性能：读 CDP 实测产物 d16-perf.json ═════════════════ */
+    var perf = null, perfErr = '';
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'selfcheck/d16-perf.json', false);
+      xhr.send(null);
+      perf = JSON.parse(xhr.responseText);
+    } catch (e) {
+      perfErr = String(e && e.message || e);
+    }
+    if (!perf) {
+      rec('F1_perfReadable', false, '读不到 selfcheck/d16-perf.json：' + perfErr);
+    } else {
+      var sc = perf.battle || perf;
+      var p50 = Number(sc.p50 || 0), p95 = Number(sc.p95 || 0);
+      rec('F1_perfWithinBudget', p50 > 0 && p50 <= 3 && p95 > 0 && p95 <= 6,
+        '实测 P50=' + p50.toFixed(2) + 'ms ≤3ms，P95=' + p95.toFixed(2) + 'ms ≤6ms；' +
+        '每帧 drawImage=' + sc.drawImage + ' 次，样本=' + sc.samples + '（方法同 D-12：CDP 真实时钟，' +
+        '含特效高/低两档 + 回合推进）');
+    }
+
+    var keys = Object.keys(out.sub);
+    out.ok = keys.every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

@@ -48,6 +48,8 @@
 <!-- M9-3：motion.js/particles.js 在 lighting.js 之后、quest.js 之前（移动插值+粒子特效） -->
 <script src="js/systems/motion.js"></script>
 <script src="js/systems/particles.js"></script>
+<!-- D-16：fx.js 在 particles.js 之后、battle.js 之前（战斗最小特效：顿帧/震屏/挤退/闪白/斩击弧） -->
+<script src="js/systems/fx.js"></script>
 <script src="js/systems/quest.js"></script>
 <!-- M8-1：技能运行时（需在 battle.js 之前；战斗命令经 Battle.playerAction → Skills.cast） -->
 <script src="js/systems/skills.js"></script>

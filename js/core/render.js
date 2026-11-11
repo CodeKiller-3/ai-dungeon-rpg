@@ -73,6 +73,91 @@
     return w;
   }
 
+  /* D-16：战斗血条（敌方/我方同款）——带数值标签，文字 11px（不低于 HUD 最小字号） */
+  function battleBar(ctx, cx, y, ratio, color, bgColor, label) {
+    var W = (Game.Core && Game.Core.Render && Game.Core.Render.cssW) || 960;
+    var w = Math.min(340, Math.max(200, W - 200));
+    var x = Math.round(cx - w / 2);
+    var h = 20;
+    var r = Math.max(0, Math.min(1, ratio || 0));
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, w, h);
+    if (r > 0) {
+      ctx.fillStyle = color;
+      ctx.fillRect(x + 1, y + 1, Math.round((w - 2) * r), h - 2);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(label, cx, y + h / 2 + 1);
+    ctx.restore();
+  }
+
+  /* D-16：回合与出手段提示——把"玩家段 → 怪物段"的时间轴画出来（纯 state 驱动） */
+  function battleSegments(ctx, cx, y, round, phase) {
+    var w = 320, h = 26;
+    var x = Math.round(cx - w / 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    var monsterActing = (phase === 'monster');
+    /* 段 1：玩家出手 */
+    ctx.fillStyle = monsterActing ? 'rgba(255,255,255,0.04)' : 'rgba(120,200,255,0.20)';
+    ctx.fillRect(x + 96, y + 3, 104, h - 6);
+    /* 段 2：怪物反击 */
+    ctx.fillStyle = monsterActing ? 'rgba(255,140,120,0.22)' : 'rgba(255,255,255,0.04)';
+    ctx.fillRect(x + 204, y + 3, 112, h - 6);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = '#ffcf6e';
+    ctx.fillText('第 ' + round + ' 回合', x + 48, y + h / 2 + 1);
+    ctx.fillStyle = monsterActing ? '#8d8f9e' : '#bfe6ff';
+    ctx.fillText('① 你出手', x + 148, y + h / 2 + 1);
+    ctx.fillStyle = monsterActing ? '#ffb1a1' : '#8d8f9e';
+    ctx.fillText('② 怪物反击', x + 260, y + h / 2 + 1);
+    ctx.restore();
+  }
+
+  /* D-16：状态 chips（狂暴/护盾/防御）——随战斗变化的中段信息 */
+  function battleChips(ctx, cx, y, state) {
+    var list = [];
+    if (state.enraged) list.push({ t: '⚡狂暴', c: '#ff7b6b' });
+    if (state.shieldValue > 0) list.push({ t: '护盾 ' + state.shieldValue, c: '#7dffb0' });
+    if (state.defending) list.push({ t: '防御中', c: '#9bbbf4' });
+    if (!list.length) return;
+    ctx.save();
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var gap = 8, padX = 10, h = 20;
+    var total = 0, i;
+    for (i = 0; i < list.length; i++) {
+      list[i].w = Math.round(ctx.measureText(list[i].t).width) + padX * 2;
+      total += list[i].w + (i ? gap : 0);
+    }
+    var x = Math.round(cx - total / 2);
+    for (i = 0; i < list.length; i++) {
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
+      ctx.fillRect(x, y, list[i].w, h);
+      ctx.strokeStyle = list[i].c;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, list[i].w - 1, h - 1);
+      ctx.fillStyle = list[i].c;
+      ctx.fillText(list[i].t, x + list[i].w / 2, y + h / 2 + 1);
+      x += list[i].w + gap;
+    }
+    ctx.restore();
+  }
+
   /* P2-1：怪物视觉映射集中表——id → { idle, run } 帧组名（10 种怪物全覆盖）。
    * 未登记的 id 由调用方回退 monster_chort（现状）；imp 只作 bat 的视觉帧组，不占怪物 id。 */
   var MONSTER_ANIM = {
@@ -723,40 +808,53 @@
     },
 
     /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令
-     * M9-3：怪物死亡消散（渐隐+上浮+缩小）、攻击前摇帧、粒子特效 */
+     * M9-3：怪物死亡消散（渐隐+上浮+缩小）、攻击前摇帧、粒子特效
+     * D-16 重排（消除中段约 240px 空白）：双血条（带数值）/ 回合与段提示 / 伤害分级 /
+     *   中段信息带（上次行动 + 战报 + 状态）全部由 state 驱动，不引入逐帧动画，保持可复算与省性能。
+     * 版式（逻辑像素，1024×640 基准）：
+     *   22  HUD 下沿            | 90~180  敌方精灵（Boss 67.5~180）
+     *   202 敌方名字            | 212~232 敌方血条
+     *   244~272 回合提示        | 300 上次行动（伤害分级）| 326/344/362 战报 | 376~396 状态
+     *   414~434 我方血条        | 450~540 我方精灵      | 562 我方属性 | 610 指令
+     * 文字最小 11px（HUD 现有最小 9px，这里取更高一档，避免"读不出的次级文字"）。 */
     drawBattle: function (state) {
       var ctx = this._ctx;
-      var cv = this._canvas;
       if (!ctx || !state) return;
       this._applyDpr(); /* M9-5 */
       var W = this.cssW, H = this.cssH;
+      var Fx = Game.Fx;
+      /* D-16：动作/特效统一取 Fx 时钟（顿帧期间不前进），Fx 缺失时退回真实时钟 */
+      var now = (Fx && typeof Fx.clockNow === 'function') ? Fx.clockNow() : performance.now();
+      var monster = state.monster || {};
+      var p = Game.Data.Player || {};
+      var dying = !!state.dying;
+      var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
+      var CX = W / 2;
+
       ctx.fillStyle = '#0f0f1f';
       ctx.fillRect(0, 0, W, H);
 
-      var now = performance.now();
-      var dying = !!state.dying;
-      var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
-
-      /* 敌人：素材就绪时用真实精灵（Boss 用大恶魔，其余用小怪） */
-      var ex = W / 2 - 45;
+      /* ===== 敌方 ===== */
+      var ex = CX - 45;
       var ey = 90;
-      /* M9-3：怪物攻击前摇帧偏移（向前=向下） */
+      /* M9-3：怪物攻击前摇帧偏移（向前=向下）；D-16：叠加受击挤退 */
       var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
-      ey += mAtkOff;
-      var boss = state.monster.id === 'dragon';
-      /* P2-4：Boss 判定读 MONSTERS[id].boss（battle.js 的 state.monster 不复制 boss 字段，本卡不改 battle.js），
-       * dragon / ogre_boss / zombie_king 均走放大绘制与【BOSS】名字前缀 */
-      var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[state.monster.id] &&
-        Game.Data.MONSTERS[state.monster.id].boss);
-      var bossScale = isBoss ? 1.25 : 1; /* 保持宽高比放大 1.25 倍（不越面板） */
-      /* P2-1：战斗侧同样查 MONSTER_ANIM 表取 idle 帧（ogre 等 32×36 走高适配）；
-       * dragon 帧缺失回退旧 boss_demon 单图，其他怪回退 monster_chort（色块兜底在下方） */
+      var mKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('monster') : 0;
+      ey += mAtkOff + mKnock;
+      var boss = monster.id === 'dragon';
+      /* P2-4：Boss 判定读 MONSTERS[id].boss */
+      var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[monster.id] &&
+        Game.Data.MONSTERS[monster.id].boss);
+      var bossScale = isBoss ? 1.25 : 1;
+      var shake = (Fx && typeof Fx.shakeOffset === 'function') ? Fx.shakeOffset() : { x: 0, y: 0 };
       var sp2 = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
-        sp2 = monsterFrame(state.monster.id, false);
+        sp2 = monsterFrame(monster.id, false);
         if (!sp2) sp2 = Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort');
       }
       ctx.save();
+      if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-16：震屏只作用于战场精灵，不动文字与 HUD */
+      var mW = 90;
       if (dying) {
         /* M9-3：死亡消散——渐隐 + 上浮 + 缩小 */
         ctx.globalAlpha = 1 - dieProg;
@@ -765,48 +863,96 @@
         var mDrawX = ex + (90 - mSize) / 2;
         var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
         if (sp2) {
-          /* P1-3：按贴图宽高比绘制（big_demon 32×36 → 高 mSize 宽 32/36×mSize，不再拉方）
-           * P2-4：Boss 再放 bossScale 倍（仍以同一中心/底边对齐） */
           var dmSize = mSize * bossScale;
-          drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, dmSize);
+          mW = drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, dmSize);
         } else {
-          ctx.fillStyle = state.monster.color;
+          ctx.fillStyle = monster.color || '#888';
           ctx.fillRect(mDrawX, mDrawY, mSize, mSize);
         }
       } else {
         if (sp2) {
-          /* P1-3：非 Boss 图（chort 16×23 / boss_demon）同样按比例绘制，宽高比正确
-           * P2-4：Boss 放大 1.25 倍（底部对齐 ey+90，向上生长） */
-          drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90 * bossScale);
+          mW = drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90 * bossScale);
         } else {
-          ctx.fillStyle = state.monster.color;
+          ctx.fillStyle = monster.color || '#888';
           ctx.fillRect(ex, ey, 90, 90);
+          mW = 90;
+        }
+      }
+      /* D-16：命中局部闪白（≤120ms，单次命中只闪一次；Fx 关档时无） */
+      if (!dying && Fx && typeof Fx.flashOf === 'function') {
+        var fl = Fx.flashOf('monster');
+        if (fl && fl.alpha > 0.01) {
+          ctx.fillStyle = 'rgba(255,255,255,' + fl.alpha.toFixed(3) + ')';
+          ctx.fillRect(CX - mW / 2, ey + 90 - 90 * bossScale, mW, 90 * bossScale);
         }
       }
       ctx.restore();
+
       if (!dying) {
-        ctx.fillStyle = '#fff';
-        ctx.font = '15px monospace';
-        ctx.fillText((isBoss ? '【BOSS】' : '') + state.monster.name + '  HP:' + state.monster.hp + '/' + state.monster.maxHp,
-          W / 2 - 140, ey + 120);
-        /* M8-2：狂暴状态视觉提示（红色标识） */
-        if (state.enraged) {
-          ctx.fillStyle = '#ff5555';
-          ctx.font = 'bold 14px monospace';
-          ctx.fillText('⚡狂暴 ATK:' + (state.enrageAtk || 0) + ' DEF:' + (state.enrageDef || 0),
-            W / 2 + 60, ey + 120);
-        }
+        /* D-16：敌方名字（Boss 保留【BOSS】前缀，供 P2-4 断言） */
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText((isBoss ? '【BOSS】' : '') + (monster.name || '?'), CX, 202);
+        ctx.restore();
+        /* D-16：敌方血条（带数值） */
+        var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
+        var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
+        battleBar(ctx, CX, 212, mobHp / mobMax, '#e24a4a', '#3a1218',
+          'HP ' + mobHp + ' / ' + mobMax + (state.enraged ? '  ⚡狂暴' : ''));
       }
 
-      /* 玩家：素材就绪时用骑士精灵 */
-      var p = Game.Data.Player;
-      var px = W / 2 - 45;
-      var py = H - 190;
+      /* ===== 中段信息带（原 240px 空白） ===== */
+      var phase = state.phase || 'idle';
+      var roundNo = state.roundNo || ((state.turn | 0) + 1);
+      battleSegments(ctx, CX, 244, roundNo, phase);
+      /* 上次行动结果——伤害分级：普通白字 16px，高伤橙字 18px 并带【高伤】标记（无暴击系统） */
+      var la = state.lastAction;
+      if (la && typeof la.dmg === 'number') {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = (la.heavy ? 'bold 18px monospace' : 'bold 16px monospace');
+        ctx.fillStyle = la.heavy ? '#ffb347' : '#e8e8e8';
+        var actTxt = la.by === 'player'
+          ? ('你对 ' + (la.name || '') + ' 造成 ' + la.dmg + ' 伤害')
+          : ((la.name || '') + ' 反击，造成 ' + la.dmg + ' 伤害');
+        ctx.fillText((la.heavy ? '【高伤】' : '') + actTxt, CX, 300);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '15px monospace';
+        ctx.fillStyle = '#7f8399';
+        ctx.fillText('选择行动：攻击 / 防御 / 逃跑 / 技能', CX, 300);
+        ctx.restore();
+      }
+      /* 战报（最近 3 行） */
+      var log = state.log || [];
+      var lstart = Math.max(log.length - 3, 0);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = '12px monospace';
+      for (var li = 0; li < log.length - lstart; li++) {
+        ctx.fillStyle = (li === log.length - lstart - 1) ? '#9fe08f' : '#6fae6a';
+        ctx.fillText(log[lstart + li], CX, 326 + li * 18);
+      }
+      ctx.restore();
+      /* 状态（随战斗变化：狂暴 / 护盾 / 防御） */
+      battleChips(ctx, CX, 378, state);
+
+      /* ===== 我方 ===== */
+      var pKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('player') : 0;
+      var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
+      var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
+      battleBar(ctx, CX, 414, pHp / pMax, '#4ade80', '#132a1c', 'HP ' + pHp + ' / ' + pMax);
+
+      var px = CX - 45;
+      var py = H - 190 + pKnock;
       /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
       var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1);
       py += pAtkOff;
-      /* P1-3：玩家侧骑士帧动画——攻击动作期间（playerActionAt 后 320ms 内）切 knight_m_hit，
-       * 否则 knight_m_idle；帧缺失回退 player.png 单图，再缺失回退色块 */
+      /* P1-3：玩家侧骑士帧动画——攻击动作期间切 knight_m_hit */
       var psp = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady() && typeof Game.Core.Sprites.getFrame === 'function') {
         var pActing = !!(state.playerActionAt && (now - state.playerActionAt) < 320);
@@ -814,33 +960,46 @@
           animIndex(pActing ? 'knight_m_hit' : 'knight_m_idle', 4));
       }
       if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
+      ctx.save();
+      if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
       if (psp) {
-        /* 16×28 按高度适配 90px 高绘制（宽 ≈ 51px，保持比例） */
         drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
       } else {
         ctx.fillStyle = '#ffcf6e';
         ctx.fillRect(px, py, 90, 90);
       }
-      ctx.fillStyle = '#fff';
-      ctx.font = '14px monospace';
-      ctx.fillText('勇者  HP:' + p.hp + '/' + p.maxHp + '  ATK:' + p.atk + '  DEF:' + p.def,
-        W / 2 - 150, py + 120);
-
-      /* 战斗日志（最近 4 行） */
-      ctx.fillStyle = '#8f8';
-      ctx.font = '13px monospace';
-      var start = Math.max(state.log.length - 4, 0);
-      for (var i = 0; i < state.log.length - start; i++) {
-        ctx.fillText(state.log[start + i], 30, H - 130 + i * 18);
+      if (Fx && typeof Fx.flashOf === 'function') {
+        var fp = Fx.flashOf('player');
+        if (fp && fp.alpha > 0.01) {
+          ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
+          ctx.fillRect(px, py, 90, 90);
+        }
       }
+      ctx.restore();
+      /* D-16：程序化斩击弧（零素材，1~2 段 arc） */
+      if (Fx && typeof Fx.drawSlashes === 'function') Fx.drawSlashes(ctx);
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '12px monospace';
+      var statTxt = '勇者  HP:' + pHp + '/' + pMax;
+      if (typeof p.atk === 'number') statTxt += '  ATK:' + p.atk;
+      if (typeof p.def === 'number') statTxt += '  DEF:' + p.def;
+      if (typeof p.mp === 'number' && typeof p.maxMp === 'number') statTxt += '  MP:' + p.mp + '/' + p.maxMp;
+      ctx.fillText(statTxt, CX, 562);
+      ctx.restore();
 
       /* 指令提示（消散期间隐藏） */
       if (!dying) {
+        ctx.save();
+        ctx.textAlign = 'center';
         ctx.fillStyle = '#9bbbf4';
-        ctx.font = '14px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾', W / 2 - 150, H - 30);
+        ctx.font = '13px monospace';
+        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   F 特效', CX, H - 30);
+        ctx.restore();
       }
-      /* S3-4：战斗视觉反馈（伤害飘字/受击闪白红闪），绘制于战斗内容之上、HUD 之下 */
+      /* S3-4：战斗视觉反馈（伤害飘字），绘制于战斗内容之上、HUD 之下 */
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
       /* M9-3：粒子特效（命中火花/死亡灵魂碎片），叠在反馈层之上 */
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }

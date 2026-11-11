@@ -111,6 +111,8 @@
           y: opts.y || 0,
           text: (opts.text == null) ? '' : String(opts.text),
           color: opts.color || '#ffffff',
+          /* D-16：伤害分级——普通 18px / 高伤 24~26px（默认 18px，旧调用方行为不变） */
+          size: (typeof opts.size === 'number' && opts.size >= 10) ? opts.size : 18,
           vy: (typeof opts.vy === 'number') ? opts.vy : TEXT_VY,
           maxLife: (typeof opts.life === 'number') ? opts.life : TEXT_LIFE
         };
@@ -140,7 +142,7 @@
           ctx.save();
           ctx.globalAlpha = ratio;
           ctx.fillStyle = it.color;
-          ctx.font = 'bold 18px monospace';
+          ctx.font = 'bold ' + (it.size || 18) + 'px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           /* 暗色描边提升可读性（数字为主，不依赖额外字体） */
