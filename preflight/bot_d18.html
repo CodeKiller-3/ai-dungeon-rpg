@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-18 bot 批量跑局（校准版）</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-18 · bot 批量跑局（本页不参与 run-all 回归，只产出 d18-report.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-18 批量跑局：固定种子 1001~1050，共 50 局，参数与 D-17 完全一致（maxActions 2500）。
+ * 与 D-17 的唯一差别是尺子本身被校准过（会进商店买药/买装备），产物另存 d18-report.json，
+ * 旧数据 d17-report.json 不动。 */
+(function () {
+  var out = { ok: false, env: {}, summary: null, runs: [] };
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var seeds = [];
+    var m = /n=(\d+)/.exec(location.search || '');
+    var n = m ? Math.max(1, Math.min(200, +m[1])) : 50;
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    var t0 = Date.now();
+    var res = Game.Bot.batch(seeds, { maxActions: 2500 });
+    out.wallMs = Date.now() - t0;
+    out.env = {
+      ua: navigator.userAgent,
+      stepMs: Game.Bot.STEP_MS,
+      actionSec: Game.Bot.ACTION_SEC,
+      seeds: 'seed 1001..' + (1000 + n) + ' (固定)',
+      maxActions: 2500
+    };
+    out.summary = res.summary;
+    out.runs = res.runs;
+    out.spy = Game.Bot.spy();
+    out.ok = true;
+    document.title = 'BATCH_DONE runs=' + res.runs.length + ' win=' + res.summary.win +
+      ' dead=' + res.summary.dead + ' stuck=' + res.summary.stuck +
+      ' shop=' + res.summary.shop.visits + ' crashes=' + res.summary.crashes +
+      ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D18__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out, null, 1);
+})();
+</script>
+</body>
+</html>

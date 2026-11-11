@@ -202,6 +202,87 @@
     if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
   }
 
+  /* ── D-18 商店：真实按键 E 进店，↑↓ 选行 + Enter 购买（绝不直接调 Shop.buy） ──
+   * 判断口径只用游戏已有的数值，不新造评分公式：
+   *   · 装备：type=weapon 比 effect.atk、type=armor 比 effect.def，严格高于当前装备才买
+   *     （与背包换装 betterEquipIndex 完全同一口径）；
+   *   · 药水：effect.hp>0 的消耗品，金币够且身上回血药少于 POTION_CAP 瓶才补，
+   *     同价位内挑回复量最高的（真人也会选更划算的那瓶）。 */
+  var POTION_CAP = 2;
+  function hpPotionCount() {
+    var list = Game.Systems.Inventory.list(), n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var d = items()[list[i].id];
+      if (d && d.type === 'consumable' && d.effect && d.effect.hp > 0) n += list[i].count;
+    }
+    return n;
+  }
+  /* 返回 { idx, kind } 或 null；stock 必须是当前展示的货架（Shop.getStock() 纯读，不推进换货相位） */
+  function pickShopTarget(stock, allowEquip) {
+    var P = Game.Data.Player, it = items();
+    var best = -1, bestGain = 0;
+    if (allowEquip) {
+      for (var i = 0; i < stock.length; i++) {
+        var d = stock[i].item;
+        if (!d || !d.effect) continue;
+        if (d.type !== 'weapon' && d.type !== 'armor') continue;
+        if (d.price > P.gold) continue;
+        var gain = 0;
+        if (d.type === 'weapon') {
+          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
+          gain = (d.effect.atk || 0) - ca;
+        } else {
+          var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
+          gain = (d.effect.def || 0) - cd;
+        }
+        if (gain > bestGain) { bestGain = gain; best = i; }
+      }
+      if (best >= 0) return { idx: best, kind: 'equip' };
+    }
+    if (hpPotionCount() < POTION_CAP) {
+      var bestHeal = 0;
+      best = -1;
+      for (var j = 0; j < stock.length; j++) {
+        var e = stock[j].item;
+        if (!e || e.type !== 'consumable' || !e.effect || !(e.effect.hp > 0)) continue;
+        if (e.price > P.gold) continue;
+        if (e.effect.hp > bestHeal) { bestHeal = e.effect.hp; best = j; }
+      }
+      if (best >= 0) return { idx: best, kind: 'potion' };
+    }
+    return null;
+  }
+  /* 光标归位：Modal 不暴露 sel，用 ↑ 顶到 0 再 ↓ 到目标行（行数上限 12，24 次足够） */
+  function shopSelect(idx) {
+    for (var i = 0; i < 24; i++) { kd('ArrowUp'); ku('ArrowUp'); }
+    for (var j = 0; j < idx; j++) { kd('ArrowDown'); ku('ArrowDown'); }
+  }
+  function shopAct(rec) {
+    var P = Game.Data.Player;
+    rec.shopVisitedFloor = P.floor;   /* 无论买成不成，本层只进一次 */
+    press('KeyE', MOVE_MS);
+    if (Game.Modal.current() !== 'shop') { rec.shopFail++; return; }
+    rec.shopVisits++;
+    rec.actions++;
+    var equips = 0, potions = 0, guard = 0;
+    while (guard++ < 4) {
+      var stock = Game.Systems.Shop.getStock();
+      var t = pickShopTarget(stock, equips === 0);
+      if (!t) break;
+      if (t.kind === 'potion' && potions >= 2) break;
+      shopSelect(t.idx);
+      var gold0 = P.gold;
+      press('Enter', STEP);
+      var spent = gold0 - P.gold;
+      if (spent <= 0) break;   /* 没买成（金币或货架变了），不硬撞 */
+      rec.actions++;
+      rec.shopBuys++;
+      rec.shopSpent += spent;
+      if (t.kind === 'equip') equips++; else potions++;
+    }
+    if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
+  }
+
   /* ── 记账 ────────────────────────────────────────────────────── */
   function newRec(seed, maxActions) {
     return {
@@ -210,6 +291,8 @@
       floorNow: 1, floorActions: 0, floors: [],
       battles: 0, kills: 0, goblinKills: 0, traps: 0,
       potions: 0, equips: 0, blockedSteps: 0, noDir: 0, modalStuck: 0,
+      shopVisits: 0, shopBuys: 0, shopSpent: 0, shopFail: 0, shopVisitedFloor: 0,
+      noShop: false,
       startPos: '', endPos: '',
       lastMonster: null, lastTrapAt: -1, diedInBattle: false, noPotionAtDeath: null,
       gold: 0, level: 1, hp: 0, equip: 0, quests: {}
@@ -261,7 +344,9 @@
     /* ② 有更好的装备就换 */
     var eq = betterEquipIndex();
     if (eq >= 0) { useIndex(eq); rec.equips++; rec.actions++; return; }
-    /* ③ 移动（未探索 → 下楼） */
+    /* ③ D-18：每到新一层先看一眼商店（真人到新层也会先看货），本层只进一次 */
+    if (!rec.noShop && rec.shopVisitedFloor !== P.floor) { shopAct(rec); return; }
+    /* ④ 移动（未探索 → 下楼） */
     var dir = nextDir(rec);
     if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
     var bx = P.x, by = P.y;
@@ -321,6 +406,7 @@
     var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player;
     Bot.install();
     var rec = newRec(seed | 0, opts.maxActions || 2500);
+    rec.noShop = !!opts.noShop;   /* D-18 负例开关：禁用商店步骤，验证"进店计数"确实来自这一步 */
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -357,6 +443,7 @@
     if (rec.floorNow === P.floor) pushFloor(rec, true);
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;
+    delete rec.shopVisitedFloor; delete rec.noShop;
     rec.simSec = Math.round(rec.actions * ACTION_SEC * 100) / 100;
     rec.wallMs = Date.now() - wall0;
     rec.keys = spy.keys - spy0.keys;
@@ -504,8 +591,15 @@
     var floorAgg = {}, floorPass = {};
     var simSec = [], actions = [];
     var goblinRuns = 0, goblinKills = 0;
+    var shopVisits = 0, shopBuys = 0, shopSpent = 0, shopRuns = 0, shopFails = 0, crashes = 0;
     for (var i = 0; i < runs.length; i++) {
       var r = runs[i];
+      shopVisits += r.shopVisits || 0;
+      shopBuys += r.shopBuys || 0;
+      shopSpent += r.shopSpent || 0;
+      shopFails += r.shopFail || 0;
+      crashes += r.crashes || 0;
+      if ((r.shopVisits || 0) > 0) shopRuns++;
       if (r.outcome === 'win') win++;
       else if (r.outcome === 'dead') dead++;
       else {
@@ -557,6 +651,9 @@
       medianSimSec: (function () { var s = simSec.slice().sort(function (x, y) { return x - y; }); return s.length ? s[Math.floor(s.length / 2)] : 0; })(),
       avgActions: mean(actions),
       floorStats: floors,
+      shop: { visits: shopVisits, buys: shopBuys, spent: shopSpent,
+        runsWithVisit: shopRuns, openFail: shopFails },
+      crashes: crashes,
       goblinQuest: {
         questId: 'kill_goblins', need: 5,
         completedRuns: goblinRuns, runs: n,

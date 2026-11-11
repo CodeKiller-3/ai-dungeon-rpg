@@ -89,8 +89,9 @@
     return false;
   }
 
-  /* BFS：从 (sx,sy) 出发能否走到 (tx,ty)，只走非墙格（含楼梯 2/3 与地板 1） */
-  function reachable(sx, sy, tx, ty) {
+  /* BFS：从 (sx,sy) 出发能否走到 (tx,ty)，只走非墙格（含楼梯 2/3 与地板 1）
+   * blockTile：把某个 tile 值视为不可通行（D-18：用于"楼梯不是走廊"的真实移动语义） */
+  function reachable(sx, sy, tx, ty, blockTile) {
     var w = grid[0].length, h = grid.length;
     var seen = [], q = [[sx, sy]], qi = 0;
     for (var yy = 0; yy < h; yy++) { seen[yy] = []; for (var xx = 0; xx < w; xx++) seen[yy][xx] = false; }
@@ -104,6 +105,7 @@
         var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
         if (seen[ny][nx] || grid[ny][nx] === 0) continue;
+        if (blockTile && grid[ny][nx] === blockTile) continue;
         seen[ny][nx] = true;
         q.push([nx, ny]);
       }
@@ -213,13 +215,80 @@
     return null;
   }
 
+  /* D-18：楼梯落点必须保证"出生点 → 上行梯"和"出生点 → 下行梯"都走得通。
+   * 关键：楼梯是传送门——踩到 tile 2/3 会立刻 changeFloor 并被传送到目标层出生点，
+   * 因此楼梯格不能当走廊穿行。只做"网格连通"检查是不够的（D-17 里 4/50 的卡关正是
+   * 上行梯卡在唯一走廊上：格子连通，但走过去的路上会先踩到上行梯被传走，下行梯永远到不了）。
+   * 这里按真实移动语义校验：去上行梯的路上不许踩下行梯，去下行梯的路上不许踩上行梯。
+   * 第 1 层的上行梯 / 最深层的下行梯，changeFloor 越界返回 null，踩上去等同普通地板，不构成阻断。 */
   function placeStairs() {
     var w = grid[0].length;
     var h = grid.length;
-    var up = findOpen(w, h);
-    var down = findOpen(w, h);
-    grid[up.y][up.x] = 3;   /* 楼梯上（回上一层） */
-    grid[down.y][down.x] = 2; /* 楼梯下（去下一层） */
+    var sx = spawn.x, sy = spawn.y;
+    var upBlocks = floorIndex > 0;                 /* 第 1 层的上行梯是空转 */
+    var downBlocks = floorIndex < cfg.floors - 1;  /* 最深层的下行梯是空转 */
+
+    /* 先按原顺序抽两个落点，占位后一起校验；不合格就整体撤销重抽。
+     * 首轮抽样与旧实现完全一致，因此原本就合法的地图指纹不变，只有真正会卡关的层会重新抽。 */
+    function fits(upCell, downCell) {
+      if (!upCell || !downCell) return false;
+      if (upCell.x === downCell.x && upCell.y === downCell.y) return false;
+      grid[upCell.y][upCell.x] = 3;
+      grid[downCell.y][downCell.x] = 2;
+      var okUp = reachable(sx, sy, upCell.x, upCell.y, downBlocks ? 2 : 0);
+      var okDown = reachable(sx, sy, downCell.x, downCell.y, upBlocks ? 3 : 0);
+      if (okUp && okDown) return true;
+      grid[upCell.y][upCell.x] = 1;
+      grid[downCell.y][downCell.x] = 1;
+      return false;
+    }
+
+    var up = null, down = null;
+    for (var t = 0; t < 60 && !down; t++) {
+      var a = findOpen(w, h);
+      if (!a || grid[a.y][a.x] !== 1) continue;
+      grid[a.y][a.x] = 3;            /* 先占位，避免第二次抽样选到同一格 */
+      var b = findOpen(w, h);
+      grid[a.y][a.x] = 1;
+      if (!b || grid[b.y][b.x] !== 1) continue;
+      if (fits(a, b)) { up = a; down = b; }
+    }
+
+    /* 兜底：死角（可走邻居 ≤1）不可能成为别人路径的中间点，把楼梯放死角必然不切断任何通路。
+     * 扫描顺序固定、不消耗随机数，任何地图都能落地（完美迷宫必有叶子）。
+     * 不缩图、不减楼梯、不减房间，只是换两个更安全的落点。 */
+    if (!up || !down) {
+      var leaves = [], others = [];
+      for (var y = 1; y < h - 1; y++) {
+        for (var x = 1; x < w - 1; x++) {
+          if (grid[y][x] !== 1) continue;
+          if (inRoom(x, y) || inRoomDoor(x, y)) continue;
+          if (dist(x, y, spawn.x, spawn.y) <= Math.min(w, h) * 0.35) continue;
+          var deg = 0;
+          if (x > 0 && grid[y][x - 1] !== 0) deg++;
+          if (x < w - 1 && grid[y][x + 1] !== 0) deg++;
+          if (y > 0 && grid[y - 1][x] !== 0) deg++;
+          if (y < h - 1 && grid[y + 1][x] !== 0) deg++;
+          (deg <= 1 ? leaves : others).push({ x: x, y: y });
+        }
+      }
+      var order = leaves.concat(others);
+      for (var i = 0; i < order.length && !down; i++) {
+        for (var j = 0; j < order.length; j++) {
+          if (i === j) continue;
+          if (fits(order[i], order[j])) { up = order[i]; down = order[j]; break; }
+        }
+      }
+    }
+
+    /* 理论不可达（迷宫结构退化到无任何可用落点）：仍按旧口径落地，避免生成直接失败。
+     * verify_d18 的 200 种子 × 5 层断言会把这种情况暴露出来。 */
+    if (!up || !down) {
+      up = up || findOpen(w, h);
+      down = down || findOpen(w, h);
+      grid[up.y][up.x] = 3;
+      grid[down.y][down.x] = 2;
+    }
   }
 
   /* 按楼层怪物概率表生成敌人（M2 战斗触发点） */

@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>verify_d18</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-18 验证页：
+     A) 楼梯落点可达性——200 种子 × 5 层，出生点→上行梯（不踩下行梯）、出生点→下行梯（不踩上行梯）
+        必须全部走得通；并含"合成走廊"正/负例，证明这个检查真的会失败（不是空断言）。
+     B) A* 坐标转置——修复后 200 局 0 抛错；负例：把转置写回去必须抛错。
+     C) bot 商店——真实按键 E 进店、购买走 Modal→Shop.buy；负例：禁用商店步骤后进店计数 = 0。
+     D) 产物：d17-report.json 原样保留，d18-report.json 为新产物（同种子集合、参数不变）。
+     只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, Bot = Game.Bot, Map = Game.Systems.Map, D = Game.Data;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* 通用 BFS：只走非墙格；block 指定的 tile 值视为不可通行（= 踩上去会换层的那种楼梯） */
+  function bfs(gx, sx, sy, tx, ty, block) {
+    var h = gx.length, w = gx[0].length;
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h) return false;
+    var seen = [], q = [[sx, sy]], hd = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[sy][sx] = true;
+    var d4 = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    while (hd < q.length) {
+      var cx = q[hd][0], cy = q[hd][1];
+      hd++;
+      if (cx === tx && cy === ty) return true;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + d4[d][0], ny = cy + d4[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (seen[ny][nx]) continue;
+        if (gx[ny][nx] === 0) continue;
+        if (block && gx[ny][nx] === block) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+
+  function findTiles(gx, v) {
+    var out2 = [];
+    for (var y = 0; y < gx.length; y++) {
+      for (var x = 0; x < gx[0].length; x++) if (gx[y][x] === v) out2.push({ x: x, y: y });
+    }
+    return out2;
+  }
+
+  try {
+    M.init();
+    M.closeGuide();
+
+    /* ══ A) 楼梯落点可达性（200 种子 × 5 层） ════════════════════ */
+    var FLOORS = D.MAPS.floors;
+    var badReach = [], badTiles = [], badDims = [], badEnemies = [];
+    var mapsChecked = 0;
+    var seedN = 200;
+    for (var s = 0; s < seedN; s++) {
+      var seed = 1001 + s;
+      Math.random = Bot.mulberry32(seed);
+      for (var f = 1; f <= FLOORS; f++) {
+        Map.setFloor(f);
+        var g = Map.getGrid(), sp = Map.getSpawn(), sz = D.MAPS.sizes[f - 1];
+        mapsChecked++;
+        if (g[0].length !== sz[0] || g.length !== sz[1]) badDims.push(seed + 'F' + f);
+        var ups = findTiles(g, 3), downs = findTiles(g, 2);
+        if (ups.length !== 1 || downs.length !== 1) { badTiles.push(seed + 'F' + f + ':' + ups.length + '/' + downs.length); continue; }
+        var en = Map.getEnemies().length;
+        if (en !== 5 + (f - 1) * 2) badEnemies.push(seed + 'F' + f + ':' + en);
+        var up = ups[0], down = downs[0];
+        /* 第 1 层的上行梯 / 最深层的下行梯踩上去不换层，不构成阻断 */
+        var upBlocks = f > 1, downBlocks = f < FLOORS;
+        var okUp = bfs(g, sp.x, sp.y, up.x, up.y, downBlocks ? 2 : 0);
+        var okDown = bfs(g, sp.x, sp.y, down.x, down.y, upBlocks ? 3 : 0);
+        var plainUp = bfs(g, sp.x, sp.y, up.x, up.y, 0);
+        var plainDown = bfs(g, sp.x, sp.y, down.x, down.y, 0);
+        if (!okUp || !okDown || !plainUp || !plainDown) {
+          badReach.push(seed + 'F' + f + ' b' + (okUp ? 1 : 0) + (okDown ? 1 : 0) + (plainUp ? 1 : 0) + (plainDown ? 1 : 0));
+        }
+      }
+    }
+    rec('A1_birthToUpStairReachable', badReach.length === 0,
+      '200 种子 × ' + FLOORS + ' 层 = ' + mapsChecked + ' 张地图：去上行梯的路上不踩下行梯（反之亦然）全部可达；' +
+      '失败 ' + badReach.length + (badReach.length ? ' → ' + badReach.slice(0, 6).join(' ') : ''));
+    rec('A2_exactlyOneStairEach', badTiles.length === 0,
+      '每层恰好 1 个上行梯(3) + 1 个下行梯(2)；异常 ' + badTiles.length +
+      (badTiles.length ? ' → ' + badTiles.slice(0, 6).join(' ') : '') + '（不靠减楼梯回避）');
+    rec('A3_mapSizeAndEnemiesUnchanged', badDims.length === 0 && badEnemies.length === 0,
+      '地图尺寸与 D.MAPS.sizes 逐层一致（异常 ' + badDims.length + '）、每层敌人数 = 5+2×(层-1) 未被削减（异常 ' +
+      badEnemies.length + '）');
+
+    /* A4 负例：合成"上行梯卡在唯一走廊"的地图，检查必须判不可达；同图搬到支路则必须通过 */
+    var negGrid = [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 3, 1, 2, 0],
+      [0, 0, 0, 0, 0, 0, 0]
+    ];
+    var posGrid = [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 1, 2, 0],
+      [0, 1, 0, 0, 0, 0, 0],
+      [0, 3, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0]
+    ];
+    var negFails = !bfs(negGrid, 1, 1, 5, 1, 3);   /* 唯一走廊被上行梯堵死 → 到不了下行梯 */
+    var posPass = bfs(posGrid, 1, 1, 5, 1, 3) && bfs(posGrid, 1, 1, 1, 3, 2);
+    rec('A4_checkerDetectsBlockedCorridor', negFails && posPass,
+      '合成地图：上行梯卡在宽度 1 的唯一走廊时检查判不可达=' + negFails +
+      '；上行梯在支路时双向可达=' + posPass + '（证明断言不是空转）');
+
+    /* ══ B) A* 坐标转置 ═══════════════════════════════════════ */
+    Bot.install();
+    var spy0 = Bot.spy();
+    var crashes0 = spy0.crashes;
+    var bSeeds = [];
+    for (var bi = 1201; bi < 1401; bi++) bSeeds.push(bi);
+    var bRes = Bot.batch(bSeeds, { maxActions: 700 });
+    var bCrashes = Bot.spy().crashes - crashes0;
+    var bActions = 0;
+    for (var bj = 0; bj < bRes.runs.length; bj++) bActions += bRes.runs[bj].actions;
+    rec('B1_twoHundredRunsNoThrow', bCrashes === 0 && bRes.runs.length === 200,
+      '200 局（种子 1201..1400，maxActions 700，共 ' + bActions + ' 步）主循环抛错 ' +
+      bCrashes + ' 帧（修复前 D-17 同一入口 50 局 230 帧）');
+
+    /* B3 等价性：修复只改"首节点坐标的解读"，不动搜索本身。
+     * 同一次搜索拿到的 path 数组在两套映射下长度必然相同；新映射的每一步都相邻且可走；
+     * 旧映射与新映射的每一处差异都能归到四类缺陷之一（越界 / 撞墙 / 跨格 / 方向镜像），
+     * 不存在"换了条更长的路"这种情况。 */
+    var as2 = window.astar.search;
+    var st = { n: 0, lenSame: 0, newOk: 0, oldOob: 0, oldWall: 0, oldFar: 0, oldSilent: 0, oldEqNew: 0, lens: [] };
+    window.astar.search = function (g2) {
+      var p = as2.apply(this, arguments);
+      if (p && p.length && p[0].parent && Game.Systems.Map && Game.Systems.Map.getGrid()) {
+        var gx = Game.Systems.Map.getGrid(), h = gx.length, w = gx[0].length;
+        st.n++;
+        st.lenSame++;
+        st.lens.push(p.length);
+        var px = p[0].y, py = p[0].x;            /* 修复后：x=真实x, y=真实y */
+        var ox = p[0].x, oy = p[0].y;            /* 旧实现：转置坐标 */
+        var sx = p[0].parent.y, sy = p[0].parent.x;
+        if (px >= 0 && py >= 0 && px < w && py < h && gx[py][px] !== 0 &&
+          Math.abs(px - sx) + Math.abs(py - sy) === 1) st.newOk++;
+        if (ox === px && oy === py) st.oldEqNew++;
+        else if (!(ox >= 0 && oy >= 0 && ox < w && oy < h)) st.oldOob++;
+        else if (gx[oy][ox] === 0) st.oldWall++;
+        else if (Math.abs(ox - sx) + Math.abs(oy - sy) !== 1) st.oldFar++;
+        else st.oldSilent++;   /* 相邻且可走，但方向被镜像——不会崩，但会走错格 */
+      }
+      return p;
+    };
+    Bot.batch([1001, 1002, 1003, 1004, 1005], { maxActions: 800 });
+    window.astar.search = as2;
+    var ls = st.lens.slice().sort(function (a, b) { return a - b; });
+    var lsum = 0;
+    for (var li = 0; li < st.lens.length; li++) lsum += st.lens[li];
+    var lmean = st.n ? lsum / st.n : 0;
+    var accounted = st.oldOob + st.oldWall + st.oldFar + st.oldSilent + st.oldEqNew;
+    rec('B3_mappingOnlyFixesDefect', st.n > 0 && st.lenSame === st.n && st.newOk === st.n &&
+      accounted === st.n,
+      '同一次搜索取 ' + st.n + ' 条 path：长度在两种映射下完全相同 ' + st.lenSame + '/' + st.n +
+      '（min ' + (ls[0] || 0) + ' / 中位 ' + (ls[Math.floor(ls.length / 2)] || 0) + ' / max ' +
+      (ls[ls.length - 1] || 0) + '，均值 ' + (Math.round(lmean * 100) / 100) + '）；' +
+      '新映射首步"相邻且可走" ' + st.newOk + '/' + st.n + '；旧映射的差异逐类：越界 ' + st.oldOob +
+      '、撞墙 ' + st.oldWall + '、跨格 ' + st.oldFar + '、相邻但方向被镜像 ' + st.oldSilent +
+      '，另有 ' + st.oldEqNew + ' 条落在 x=y 对角线上两套映射相同（合计 ' + accounted + '/' + st.n + '）');
+
+    /* 负例：把转置写回去（在 astar 出口交换 x/y，等价于 ai.js 里用旧的 path[0].x/.y）必须抛错 */
+    var botAstar = window.astar.search;
+    window.astar.search = function (g2) {
+      var p = botAstar.apply(this, arguments);
+      if (p && p.length) {
+        for (var i = 0; i < p.length; i++) { var t = p[i].x; p[i].x = p[i].y; p[i].y = t; }
+      }
+      return p;
+    };
+    var c0 = Bot.spy().crashes;
+    var nRes = Bot.batch([1501, 1502, 1503, 1504, 1505], { maxActions: 400 });
+    var nCrashes = Bot.spy().crashes - c0;
+    window.astar.search = botAstar;
+    rec('B2_negativeTransposeFails', nCrashes > 0,
+      '把坐标转置写回去后 5 局（种子 1501..1505）抛错 ' + nCrashes +
+      ' 帧（>0 才说明 B1 能抓到这类回归）');
+
+    /* ══ C) bot 商店行为 ═══════════════════════════════════════ */
+    var keyE = 0;
+    window.addEventListener('keydown', function (e) { if (e && e.code === 'KeyE') keyE++; });
+    var modalShop = 0, buyCalls = 0;
+    var origOpen = Game.Modal.open, origBuy = Game.Systems.Shop.buy;
+    Game.Modal.open = function (k) {
+      if (k === 'shop') modalShop++;
+      return origOpen.apply(this, arguments);
+    };
+    Game.Systems.Shop.buy = function () { buyCalls++; return origBuy.apply(this, arguments); };
+    var cSeeds = [1001, 1002, 1003, 1004, 1005];
+    buyCalls = 0;   /* 只统计 C 组这一批的购买调用 */
+    var cRes = Bot.batch(cSeeds, { maxActions: 800 });
+    var cSum = cRes.summary;
+    rec('C1_shopVisited', cSum.shop.visits > 0 && cSum.shop.runsWithVisit === cSeeds.length,
+      '5 局（种子 1001..1005，maxActions 800）：开店 ' + cSum.shop.visits + ' 次，' +
+      cSum.shop.runsWithVisit + '/' + cSeeds.length + ' 局进过店，购买 ' + cSum.shop.buys +
+      ' 件、花费 ' + cSum.shop.spent + ' 金币（开店未成功 ' + cSum.shop.openFail + ' 次）');
+    rec('C2_entryViaRealKey', keyE >= cSum.shop.visits && modalShop === cSum.shop.visits && keyE > 0,
+      '派发 KeyE keydown ' + keyE + ' 次；Modal.open("shop") 被调用 ' + modalShop +
+      ' 次、与开店次数 ' + cSum.shop.visits + ' 一致（不是直接调 Shop.buy 造出来的）');
+    rec('C3_buysGoThroughModal', buyCalls === cSum.shop.buys && buyCalls > 0,
+      'Shop.buy 被调用 ' + buyCalls + ' 次 = bot 记账购买 ' + cSum.shop.buys +
+      ' 件（全部经 Modal 的 Enter 确认路径）');
+
+    var c0b = Bot.spy().crashes;
+    var dRes = Bot.batch(cSeeds, { maxActions: 800, noShop: true });
+    var dSum = dRes.summary;
+    var dCrashes = Bot.spy().crashes - c0b;
+    rec('C4_negativeNoShopIsZero', dSum.shop.visits === 0,
+      '同一批种子禁用商店步骤：开店 ' + dSum.shop.visits + ' 次、购买 ' + dSum.shop.buys +
+      ' 件（负例必须为 0，证明 C1 的计数来自这一步）；抛错 ' + dCrashes + ' 帧');
+
+    Game.Modal.open = origOpen;
+    Game.Systems.Shop.buy = origBuy;
+
+    /* ══ D) 产物：旧数据保留 + 新数据另存 ═══════════════════════ */
+    var rep17 = null, rep18 = null, errD = '';
+    try {
+      var x1 = new XMLHttpRequest(); x1.open('GET', 'selfcheck/d17-report.json', false); x1.send(null);
+      rep17 = JSON.parse(x1.responseText);
+      var x2 = new XMLHttpRequest(); x2.open('GET', 'selfcheck/d18-report.json', false); x2.send(null);
+      rep18 = JSON.parse(x2.responseText);
+    } catch (e) { errD = String((e && e.message) || e); }
+    if (!rep17 || !rep18) {
+      rec('D1_reportsReadable', false, '读不到 d17-report.json / d18-report.json：' + errD);
+    } else {
+      var s17 = rep17.summary, s18 = rep18.summary;
+      rec('D1_oldDataKept', rep17.ok === true && rep17.runs.length === 50 && s17.win === 0 &&
+        s17.stuck === 4 && s17.crashes === undefined && rep17.spy && rep17.spy.crashes === 230,
+        'D-17 旧产物未被覆盖：50 局 win=' + s17.win + ' stuck=' + s17.stuck +
+        ' 异常帧=' + (rep17.spy && rep17.spy.crashes) + '（历史值 230）');
+      var sameSeeds = rep17.runs.length === rep18.runs.length;
+      for (var q = 0; q < rep17.runs.length && sameSeeds; q++) if (rep17.runs[q].seed !== rep18.runs[q].seed) sameSeeds = false;
+      rec('D2_newRunComparable', rep18.ok === true && rep18.runs.length === 50 && sameSeeds &&
+        rep18.env.maxActions === 2500 && rep17.env.maxActions === 2500,
+        '新产物 50 局、种子集合与 D-17 完全一致=' + sameSeeds + '、步数上限同为 2500=' +
+        (rep18.env.maxActions === rep17.env.maxActions) +
+        '；新局 win=' + s18.win + ' dead=' + s18.dead + ' stuck=' + s18.stuck);
+      rec('D3_newRunCrashesZero', s18.crashes === 0 && rep18.spy && rep18.spy.crashes === 0,
+        '新 50 局异常帧 ' + s18.crashes + '（spy ' + (rep18.spy && rep18.spy.crashes) +
+        '）；进店 ' + s18.shop.visits + ' 次、购买 ' + s18.shop.buys + ' 件');
+    }
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+
+  out.ok = out.ok && Object.keys(out.sub).length > 0 &&
+    Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

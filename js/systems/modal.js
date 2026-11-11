@@ -145,6 +145,10 @@
   Game.Modal = {
     open: function (k, stats) {
       if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover') return;
+      /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
+       * 原来直接 _bind() 会把上一份监听器引用覆盖掉，导致它永远删不掉：
+       * 之后每次 Enter 都会被重复确认 N 次（实测长跑后一次 Enter 触发 8 次确认）。 */
+      if (kind !== null) this._unbind();
       kind = k;
       sel = 0;
       shopMode = 'buy';

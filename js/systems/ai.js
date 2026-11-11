@@ -33,7 +33,11 @@
       var end = g.grid[to.y][to.x];
       var path = window.astar.search(g, start, end, { closest: true });
       if (path && path.length > 0) {
-        return { x: path[0].x, y: path[0].y };
+        /* D-18：Graph 把第一维当 x 用（g.grid[真实y][真实x]），所以节点上的
+         * node.x = 真实 y、node.y = 真实 x。这里必须换回来再返回，否则拿到的是
+         * 转置坐标：多数情况下 grid[next.y][next.x] 会越界抛错（D-17 的 230 帧），
+         * 少数情况会"走一步斜跳"到不相邻的格子。 */
+        return { x: path[0].y, y: path[0].x };
       }
     } catch (e) { /* 寻路失败则原地等待 */ }
     return null;
