@@ -8,12 +8,18 @@
 
   var KEY = 'ai_dungeon_rpg_save_v1';
 
+  /* D-15：存档结构版本号。v1 = 只有玩家/图鉴（旧档无该字段，读档时视为 1）；
+   * v2 = 追加 map（地图/怪物/宝箱/陷阱/巡逻的每层快照）。键名不变，只新增字段。 */
+  var SAVE_VERSION = 2;
+
   Game.Systems.Save = {
     save: function () {
       var p = Game.Data.Player;
+      var M = Game.Systems.Map;
       var data = {
+        saveVersion: SAVE_VERSION,
         savedAt: new Date().toISOString(),
-        floor: Game.Systems.Map.getFloor(),
+        floor: M.getFloor(),
         player: {
           hp: p.hp, maxHp: p.maxHp,
           mp: p.mp, maxMp: p.maxMp, /* M8-1：MP 存档字段 */
@@ -25,7 +31,10 @@
         },
         /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
         bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
-          ? Game.Systems.Bestiary.data : { monsters: {}, items: {} }
+          ? Game.Systems.Bestiary.data : { monsters: {}, items: {} },
+        /* D-15：地图状态（玩家到过的每层快照）。没有它刷新就会重生成整张图，
+         * 于是宝箱/怪物可以反复刷。exportState 返回深拷贝，与运行期互不引用。 */
+        map: (M && typeof M.exportState === 'function') ? M.exportState() : null
       };
       try {
         localStorage.setItem(KEY, JSON.stringify(data));
@@ -40,6 +49,9 @@
         var raw = localStorage.getItem(KEY);
         if (!raw) return null;
         var data = JSON.parse(raw);
+        /* D-15：旧档无 saveVersion 字段 → 视为 v1（只有玩家/图鉴，没有地图快照） */
+        var ver = (typeof data.saveVersion === 'number' && data.saveVersion >= 1)
+          ? Math.floor(data.saveVersion) : 1;
         var p = Game.Data.Player;
         var s = data.player || {};
         if (typeof s.hp === 'number') p.hp = s.hp;
@@ -75,14 +87,40 @@
         }
         /* 恢复到存档楼层 */
         var targetFloor = data.floor || 1;
-        var cur = Game.Systems.Map.getFloor();
-        var diff = targetFloor - cur;
-        if (diff > 0) { for (var i = 0; i < diff; i++) Game.Systems.Map.changeFloor(1); }
-        else if (diff < 0) { for (var j = 0; j < -diff; j++) Game.Systems.Map.changeFloor(-1); }
-        var sp = Game.Systems.Map.getSpawn();
+        var M = Game.Systems.Map;
+        /* D-15：优先用存档里的地图快照恢复现场（地图/怪物/宝箱/陷阱/巡逻），
+         * 这样刷新后"已开的箱、已杀的怪"不会被重生成，无法反复刷资源。
+         * 只有"缺 map 字段 / 版本或结构不合法 / 存档层没有快照"才降级。 */
+        var restored = false;
+        if (data.map && typeof M.importState === 'function') {
+          var mi = (typeof data.map.floorIndex === 'number') ? Math.floor(data.map.floorIndex) : -1;
+          if (mi + 1 === targetFloor) { /* 版本内自洽：floorIndex 与 floor 必须对应同一层 */
+            try { restored = M.importState(data.map) === true; } catch (e) { restored = false; }
+          }
+        }
+        if (restored) {
+          /* 命中缓存分支：恢复地图/敌人/装饰/陷阱/巡逻（含 AI.setPatrols）。
+           * quietQuest：读档不是"到达该层"，不能重复推进楼层任务、重复发奖励。 */
+          M.generate({ quietQuest: true });
+        } else {
+          var cur = M.getFloor();
+          var diff = targetFloor - cur;
+          if (diff > 0) { for (var i = 0; i < diff; i++) M.changeFloor(1); }
+          else if (diff < 0) { for (var j = 0; j < -diff; j++) M.changeFloor(-1); }
+        }
+        var sp = M.getSpawn();
         p.x = sp.x;
         p.y = sp.y;
-        p.floor = Game.Systems.Map.getFloor();
+        p.floor = M.getFloor();
+        /* D-15：降级只发生一次——重建出来的地图立即固化为 v2 档，
+         * 之后再刷新直接命中快照，不会每次重生成；并用提示条告知一次（D-14 通道）。 */
+        if (!restored) {
+          Game.Systems.Save.save();
+          Game.Core.EventBus.emit('ui:notice', {
+            msg: ver < 2 ? '存档已升级：地图重建了一次，此后不再重置'
+                         : '存档地图数据不可用，已重建一次'
+          });
+        }
         return data;
       } catch (e) {
         return null;

@@ -51,6 +51,11 @@
               Game.Systems.Battle.checkLevelUp();
             }
             Game.Core.EventBus.emit('quest:complete', { id: q.id, reward: q.reward });
+            /* D-15：任务奖励会加金币/经验（经验可能直接升级），也必须落盘；
+             * 战斗内完成的任务本次会被 battle:end 的写档覆盖，这里多写一次是幂等的。 */
+            if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') {
+              Game.Systems.Save.save();
+            }
           }
           changed = true;
         }

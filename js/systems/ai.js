@@ -70,6 +70,31 @@
 
     getPatrols: function () { return patrols; },
 
+    /* D-15：胜利结算时移除被击败的巡逻怪（唯一删除入口；逃跑绝不经过这里） */
+    removePatrolAt: function (x, y) {
+      for (var i = 0; i < patrols.length; i++) {
+        if (patrols[i].x === x && patrols[i].y === y) {
+          patrols.splice(i, 1);
+          return true;
+        }
+      }
+      return false;
+    },
+
+    /* D-15：逃跑成功后的短暂喘息（只延迟再追击，不删怪）。
+     * 没有它的话，巡逻怪在下一 tick 就会重新贴脸，"后退一格"等于白退。 */
+    fleeStunAt: function (x, y, ticks) {
+      for (var i = 0; i < patrols.length; i++) {
+        if (patrols[i].x === x && patrols[i].y === y) {
+          patrols[i].rest = Math.max(patrols[i].rest || 0, ticks || 6);
+          patrols[i].state = 'idle';
+          patrols[i].path = [];
+          return true;
+        }
+      }
+      return false;
+    },
+
     /* 修复 P1：楼层快照恢复时回填巡逻怪（保持回访层的怪物状态） */
     setPatrols: function (arr) { patrols = arr || []; },
 
@@ -78,16 +103,20 @@
       for (var i = 0; i < patrols.length; i++) {
         var e = patrols[i];
         e.frame++;
+        /* D-15：逃跑后的喘息期——只暂停追击，怪物仍在场景里 */
+        if (e.rest > 0) {
+          e.rest--;
+          e.state = 'idle';
+          e.path = [];
+          continue;
+        }
         var d = dist(e.x, e.y, player.x, player.y);
         if (d <= SIGHT) {
           e.state = 'chase';
-          /* 贴脸：触发战斗 */
+          /* 贴脸：触发战斗（D-15：不删怪；胜利才由 removePatrolAt 移除） */
           if (d <= 1) {
-            var mid = e.monsterId;
-            patrols.splice(i, 1);
-            i--;
-            Game.Core.EventBus.emit('ai:encounter', { monsterId: mid });
-            continue;
+            Game.Core.EventBus.emit('ai:encounter', { monsterId: e.monsterId, x: e.x, y: e.y });
+            return; /* 一帧只触发一次遭遇，避免相邻多怪同时开局 */
           }
           /* 周期重规划路径 */
           if (e.frame % REPLAN === 0) {

@@ -23,6 +23,11 @@
          * 否则输入字母 t 会在下一帧触发 T 键关闭对话。Esc 仍放行用于退出。 */
         var t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && e.code !== 'Escape') return;
+        /* D-15：忽略操作系统自动重复，只认"按下边沿"。
+         * 旧实现把 repeat 也写进 keys，主循环删键后又会被重复事件重新置位，
+         * 于是按住 1/2/3 等于按键盘重复率连发，手快与手慢玩家拿到的回合数不同。
+         * 方向键连走不受影响：keys 在按住期间一直为 true，连发仍由 main 的 120ms 节流控制。 */
+        if (e.repeat) return;
         if (!keys[e.code] && DIR_CODES[e.code]) dirEdge = true; /* 只认首次按下，忽略系统自动重复 */
         keys[e.code] = true;
       });

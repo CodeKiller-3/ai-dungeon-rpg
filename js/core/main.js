@@ -43,6 +43,11 @@
   var lastDir = null;
   var lastAiAt = -1e9;
 
+  /* D-15：本次战斗的遭遇上下文。
+   * 逃跑：按它把玩家后退一格、怪物留在原地；胜利：按它移除对应的那一只怪。
+   * 只在这两种结算里消费一次，避免"逃跑删怪 → Boss 消失 → 本局无法通关"。 */
+  var encounter = null;
+
   /* 修复：启动/读档期间禁止 floorChanged 自动写档。
    * 原流程 init 中 Map.generate() 先于 Save.load() 触发 map:floorChanged → Save.save()，
    * 会用默认新档覆盖磁盘旧档，导致读档永远读不到进度。 */
@@ -151,7 +156,47 @@
     Game.Core.EventBus.emit('ui:notice', { msg: '任务完成：+金币' + evt.reward.gold + ' +经验' + evt.reward.exp });
   }
 
+  /* D-15：逃跑成功 → 玩家后退一格，怪物留在原地（绝不删除）。
+   * 固定遭遇：退回踩怪前的格子；巡逻怪：沿背离方向退一格。
+   * 退不动时保持原位，但给该巡逻怪一次短暂喘息，避免下一 tick 立刻重新贴脸。 */
+  function retreatAfterFlee(enc) {
+    var tx = player.x, ty = player.y;
+    if (enc.kind === 'ambush') {
+      tx = enc.fromX; ty = enc.fromY;
+    } else {
+      var dx = player.x - enc.x, dy = player.y - enc.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        tx = player.x + (dx >= 0 ? 1 : -1); ty = player.y;
+      } else {
+        tx = player.x; ty = player.y + (dy >= 0 ? 1 : -1);
+      }
+    }
+    var canMove = Game.Systems.Map.isWalkable(tx, ty) && !(tx === enc.x && ty === enc.y);
+    if (canMove) {
+      var fx = player.x, fy = player.y;
+      player.x = tx; player.y = ty;
+      if (Game.Motion && typeof Game.Motion.setStep === 'function') {
+        Game.Motion.setStep('player', fx, fy, tx, ty, 140);
+      }
+      refreshFov();
+    }
+    if (enc.kind === 'patrol' && Game.Systems.AI && typeof Game.Systems.AI.fleeStunAt === 'function') {
+      Game.Systems.AI.fleeStunAt(enc.x, enc.y, 6);
+    }
+  }
+
   function onBattleEnd(evt) {
+    /* D-15：先消费遭遇上下文——只有 win 才移除怪物；run 只后退 */
+    var enc = encounter;
+    encounter = null;
+    if (enc && evt.result === 'win') {
+      if (enc.kind === 'ambush') Game.Systems.Map.removeEnemyAt(enc.x, enc.y);
+      else if (Game.Systems.AI && typeof Game.Systems.AI.removePatrolAt === 'function') {
+        Game.Systems.AI.removePatrolAt(enc.x, enc.y);
+      }
+    } else if (enc && evt.result === 'run') {
+      retreatAfterFlee(enc);
+    }
     if (evt.result === 'win') {
       Game.Systems.Quest.progress('kill', evt.monsterId);
       if (Game.Systems.Quest.isDone('main_clear_dragon')) {
@@ -179,6 +224,8 @@
 
   /* M5：巡逻怪贴脸 → 触发战斗 */
   function onAiEncounter(evt) {
+    /* D-15：记录遭遇上下文（巡逻怪已在 evt 中带上坐标；战斗期间 AI 不 tick，坐标保持有效） */
+    encounter = { kind: 'patrol', x: evt.x, y: evt.y, monsterId: evt.monsterId };
     Game.Systems.Battle.start(evt.monsterId);
     Game.Core.Main.switchScene('battle');
   }
@@ -212,6 +259,7 @@
       Game.Core.EventBus.on('map:floorChanged', onFloorChanged);
       Game.Core.EventBus.on('quest:complete', onQuestComplete);
       Game.Core.EventBus.on('ai:encounter', onAiEncounter);
+      encounter = null; /* D-15：新一局不继承上一局的遭遇上下文 */
       Game.Systems.NPC.bind();
       Game.Systems.Audio.init();
       Game.Systems.Audio.bind();
@@ -447,13 +495,23 @@
             }
             var e = Game.Systems.Map.enemyAt(nx, ny);
             if (e) {
+              /* D-15：记录遭遇上下文（含来路），逃跑时据此后退一格、胜利时据此删怪 */
+              encounter = {
+                kind: 'ambush', x: nx, y: ny, monsterId: e.monsterId,
+                fromX: fromX, fromY: fromY
+              };
               Game.Systems.Battle.start(e.monsterId);
               this.switchScene('battle');
             } else {
               /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空）
                * S-05：密室宝箱（room_chest）同样走 takeDecor，掉落口径在 map.js 内区分 */
               var dec = Game.Systems.Map.getDecor(nx, ny);
-              if (dec === 'chest' || dec === 'room_chest') Game.Systems.Map.takeDecor(nx, ny);
+              if (dec === 'chest' || dec === 'room_chest') {
+                Game.Systems.Map.takeDecor(nx, ny);
+                /* D-15：开箱同时改金币/背包 + 清空装饰格，两件事必须同一次落盘，
+                 * 否则刷新后会出现"箱子回来了、金币没回"或"金币涨了、箱子还在"。 */
+                Game.Systems.Save.save();
+              }
             }
           }
           refreshFov(); /* S3-1：移动/换层后刷新视野 */

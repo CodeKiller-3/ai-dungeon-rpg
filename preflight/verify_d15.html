@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-15 三个机制级 bug 修复</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-15 · 逃跑不删怪 / 刷新一致性 / repeat 过滤</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, Map = Game.Systems.Map, AI = Game.Systems.AI, B = Game.Systems.Battle;
+  var P = Game.Data.Player, Input = Game.Core.Input, Save = Game.Systems.Save;
+
+  function rec(id, ok, detail) {
+    out.sub[id] = { ok: !!ok, detail: detail === undefined ? '' : String(detail) };
+  }
+  function withRnd(v, fn) {
+    var o = Math.random;
+    Math.random = function () { return v; };
+    try { return fn(); } finally { Math.random = o; }
+  }
+  function keydown(code, keyName, repeat) {
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      code: code, key: keyName || code, repeat: !!repeat, bubbles: true, cancelable: true
+    }));
+  }
+  /* 只保留 target 这一只怪，并清空巡逻怪，让遭遇测试可复现 */
+  function isolate(target) {
+    var arr = Map.getEnemies();
+    for (var i = arr.length - 1; i >= 0; i--) if (arr[i] !== target) arr.splice(i, 1);
+    AI.getPatrols().length = 0;
+  }
+  /* engage 记录的"踩怪前所在格"（逃跑后应退回这里） */
+  var lastFrom = null;
+  /* 站到怪物旁边，按方向键踩上去，走真实 main._updateExplore 遭遇路径 */
+  function engage(m, ts) {
+    var dirs = [
+      { dx: 1, dy: 0, k: 'ArrowRight' }, { dx: -1, dy: 0, k: 'ArrowLeft' },
+      { dx: 0, dy: 1, k: 'ArrowDown' }, { dx: 0, dy: -1, k: 'ArrowUp' }
+    ];
+    for (var i = 0; i < dirs.length; i++) {
+      var d = dirs[i];
+      var sx = m.x - d.dx, sy = m.y - d.dy;
+      if (!Map.isWalkable(sx, sy)) continue;
+      if (Map.enemyAt(sx, sy)) continue;
+      var occ = AI.getPatrols().some(function (e) { return e.x === sx && e.y === sy; });
+      if (occ) continue;
+      M._scene = 'explore';
+      P.x = sx; P.y = sy; P.floor = Map.getFloor();
+      lastFrom = { x: sx, y: sy };
+      Input.clear();
+      Input.getState()[d.k] = true;
+      M._updateExplore(ts);
+      delete Input.getState()[d.k];
+      if (M._scene === 'battle') return true;
+    }
+    return false;
+  }
+  /* 强制结束"消散中"的战斗（不真等 700ms 动画） */
+  function finishDying() {
+    var st = B.getState();
+    if (st && st.dying) {
+      st.dyingAt = performance.now() - 2000;
+      B.tick();
+    }
+  }
+
+  try {
+    try {
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+      localStorage.removeItem('aiDungeon_guided');
+    } catch (e) { /* 存储禁用忽略 */ }
+
+    Map.generate();
+    M.init();
+    if (M._guideVisible) M.closeGuide();
+    M._scene = 'explore';
+
+    /* ── A 逃跑不删怪（Boss 必须留在场且仍可通关） ───────── */
+    Map.setFloor(5);
+    P.floor = 5; P.hp = 100; P.maxHp = 100;
+    M._scene = 'explore';
+    var dragon = Map.getEnemies().filter(function (e) { return e.monsterId === 'dragon'; })[0];
+    if (dragon) isolate(dragon);
+    var countA = Map.getEnemies().length;
+    var engA = dragon ? engage(dragon, 1e6) : false;
+    var dragonBefore = dragon && Map.getEnemies().indexOf(dragon) >= 0;
+    var fromA = lastFrom;
+    withRnd(0, function () { B.playerAction('run'); });
+    var dragonAfterFlee = dragon && Map.getEnemies().indexOf(dragon) >= 0;
+    var countAfterFlee = Map.getEnemies().length;
+    var sceneAfterFlee = M._scene;
+    var retreated = !!fromA && P.x === fromA.x && P.y === fromA.y;
+    var engA2 = dragon ? engage(dragon, 1.1e6) : false;
+    var stA = B.getState();
+    if (stA) { stA.monster.hp = 1; stA.monster.atk = 0; }
+    withRnd(0, function () { B.playerAction('attack'); });
+    finishDying();
+    var wonA = (M._scene === 'victory');
+    var dragonGone = dragon && Map.getEnemies().indexOf(dragon) < 0;
+    rec('A1_bossFleeKeepsBoss', !!dragon && engA && dragonBefore && dragonAfterFlee &&
+      countAfterFlee === countA && sceneAfterFlee === 'explore' && retreated &&
+      engA2 && wonA && dragonGone,
+      '龙存在=' + !!dragon + ' 遭遇=' + engA + ' 逃跑后仍在=' + dragonAfterFlee +
+      ' 怪物数 ' + countA + '→' + countAfterFlee + ' 后退一格=' + retreated +
+      ' 再遭遇=' + engA2 + ' 再击杀→victory=' + wonA + ' 击杀后移除=' + dragonGone);
+
+    /* A 负例：恢复旧 splice 行为（遭遇即删）时，上面的"逃跑后仍在"必为 false */
+    Map.setFloor(5); P.floor = 5; M._scene = 'explore'; P.hp = 100;
+    var d2 = Map.getEnemies().filter(function (e) { return e.monsterId === 'dragon'; })[0];
+    if (d2) isolate(d2);
+    var origEnemyAt = Map.enemyAt;
+    var negEng = false;
+    Map.enemyAt = function (x, y) {
+      var e = origEnemyAt.call(Map, x, y);
+      if (e) Map.removeEnemyAt(x, y); /* 旧行为：命中即 splice */
+      return e;
+    };
+    try {
+      negEng = d2 ? engage(d2, 2e6) : false;
+      withRnd(0, function () { B.playerAction('run'); });
+    } finally {
+      Map.enemyAt = origEnemyAt;
+    }
+    var negGone = d2 && Map.getEnemies().indexOf(d2) < 0;
+    M._scene = 'explore';
+    rec('A2_negativeSpliceOnFlee', negEng && negGone,
+      '旧 splice 行为下逃跑后龙仍在场=' + (!negGone) + '（此时 A1 的"逃跑后仍在"断言必为 false）');
+
+    /* ── B 普通怪逃跑后计数不变 ─────────────────────────── */
+    Map.setFloor(1); P.floor = 1; M._scene = 'explore'; P.hp = 100;
+    var mob = null;
+    var candidates = Map.getEnemies().slice();
+    for (var ci = 0; ci < candidates.length && !mob; ci++) {
+      isolate(candidates[ci]);
+      var c = candidates[ci];
+      var dirsTry = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      var okN = false;
+      for (var dj = 0; dj < dirsTry.length; dj++) {
+        var sx2 = c.x - dirsTry[dj][0], sy2 = c.y - dirsTry[dj][1];
+        if (Map.isWalkable(sx2, sy2) && !Map.enemyAt(sx2, sy2)) { okN = true; break; }
+      }
+      if (okN) mob = c;
+    }
+    var countB = Map.getEnemies().length;
+    var engB = mob ? engage(mob, 3e6) : false;
+    withRnd(0, function () { B.playerAction('run'); });
+    var keptB = mob && Map.getEnemies().indexOf(mob) >= 0;
+    rec('B1_normalFleeKeepsMob', !!mob && engB && keptB && Map.getEnemies().length === countB,
+      '普通怪=' + (mob ? mob.monsterId : '-') + ' 遭遇=' + engB +
+      ' 逃跑后仍在=' + keptB + ' 怪物数 ' + countB + '→' + Map.getEnemies().length);
+
+    /* ── C 刷新一致性（刷新等价 = save → 破坏内存地图 → load） ──────
+     * 判定用可复现指纹：FNV-1a over 「楼层#grid 各行#enemies 排序#patrols 排序#decor 列表#traps 列表」。
+     * 指纹相同 ⇒ 布局/怪物/宝箱/陷阱/巡逻逐项一致（不含时间戳与坐标以外的随机量）。 */
+    function fp() {
+      var g = Map.getGrid();
+      var rows = g.map(function (r) { return r.join(''); }).join('|');
+      var ens = Map.getEnemies().map(function (e) { return e.x + ',' + e.y + ',' + e.monsterId; }).sort().join(';');
+      var ps = AI.getPatrols().map(function (e) { return e.x + ',' + e.y + ',' + e.monsterId; }).sort().join(';');
+      var dec = [], tr = [], x, y;
+      for (y = 0; y < g.length; y++) {
+        for (x = 0; x < g[0].length; x++) {
+          var d = Map.getDecor(x, y);
+          if (d) dec.push(x + ',' + y + ',' + d);
+          var t = Map.getTrap(x, y);
+          if (t) tr.push(x + ',' + y + ',' + t.id + ',' + (t.seen ? 1 : 0));
+        }
+      }
+      var s = 'F' + Map.getFloor() + '#' + rows + '#' + ens + '#' + ps + '#' + dec.join(';') + '#' + tr.join(';');
+      var h = 2166136261;
+      for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+      return h.toString(16);
+    }
+    /* 刷新等价：取回磁盘存档 → 用另一个楼层覆盖内存地图（并会写一次档）→ 写回原存档 → load。
+     * 与真实刷新（新进程 init 重新生成 + load）走的是同一条 load 恢复路径。 */
+    function refreshSim() {
+      var raw = localStorage.getItem('ai_dungeon_rpg_save_v1');
+      Map.setFloor(Map.getFloor() === 5 ? 1 : 5);
+      if (raw === null) localStorage.removeItem('ai_dungeon_rpg_save_v1');
+      else localStorage.setItem('ai_dungeon_rpg_save_v1', raw);
+      return Save.load();
+    }
+
+    try {
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+      Map.setFloor(1); P.floor = 1; M._scene = 'explore'; P.hp = 100; P.maxHp = 100;
+      AI.getPatrols().length = 0;
+      var gC = Map.getGrid(), chest = null, cx, cy;
+      for (cy = 0; cy < gC.length && !chest; cy++) {
+        for (cx = 0; cx < gC[0].length; cx++) {
+          if (Map.getDecor(cx, cy) === 'chest') { chest = { x: cx, y: cy }; break; }
+        }
+      }
+      var goldC0 = P.gold;
+      var chestOk = chest ? withRnd(0, function () { return Map.takeDecor(chest.x, chest.y); }) : false;
+      var goldC1 = P.gold;
+      var victim = Map.getEnemies()[0] || null;
+      var victimKey = victim ? (victim.x + ',' + victim.y + ',' + victim.monsterId) : '';
+      var invC1 = JSON.stringify(P.inventory);
+      if (victim) Map.removeEnemyAt(victim.x, victim.y);
+      var countC1 = Map.getEnemies().length;
+      var fpC0 = fp();
+      Save.save();
+
+      refreshSim();
+      var goldC2 = P.gold, invC2 = JSON.stringify(P.inventory);
+      var fpC1 = fp();
+      var chestStillEmpty = chest ? (Map.getDecor(chest.x, chest.y) === null) : false;
+      var victimGone = victimKey ? !Map.getEnemies().some(function (e) {
+        return (e.x + ',' + e.y + ',' + e.monsterId) === victimKey;
+      }) : false;
+      /* 已拾取资源不可重复：再对同一格执行拾取，金币必须不变 */
+      var goldTry = P.gold;
+      if (chest) Map.takeDecor(chest.x, chest.y);
+      var noRegrant = (P.gold === goldTry);
+      rec('C1_refreshKeepsLootAndKills', chestOk && goldC1 > goldC0 && fpC1 === fpC0 &&
+        goldC2 === goldC1 && invC2 === invC1 && chestStillEmpty && victimGone && noRegrant &&
+        Map.getEnemies().length === countC1,
+        '指纹 ' + fpC0 + '→' + fpC1 + '，金币 ' + goldC0 + '→' + goldC1 + '→' + goldC2 +
+        '，宝箱格仍空=' + chestStillEmpty + '，已杀怪未复活=' + victimGone +
+        '，存活怪数 ' + countC1 + '=' + Map.getEnemies().length + '，同格再拾取金币不变=' + noRegrant);
+
+      /* 连续刷新两次：第二次也要与第一次完全一致（幂等，不能"每刷一次变一点"） */
+      refreshSim();
+      var fpC2 = fp();
+      rec('C2_refreshTwiceIdempotent', fpC2 === fpC1 && fpC2 === fpC0,
+        '指纹 原=' + fpC0 + ' 刷新1次=' + fpC1 + ' 刷新2次=' + fpC2);
+
+      /* 旧档降级：删掉 map/saveVersion 模拟 v1 存档 → load 只重建一次并立刻固化 */
+      var rawOld = localStorage.getItem('ai_dungeon_rpg_save_v1');
+      var dOld = JSON.parse(rawOld);
+      delete dOld.map;
+      delete dOld.saveVersion;
+      var fpOldMem = fp();
+      /* 真刷新时内存会被丢弃（新进程按新随机种子生成一层新图），这里等价模拟：
+       * 先换层破坏内存，再把 v1 存档写回，最后 load → 走降级重建。 */
+      Map.setFloor(Map.getFloor() === 5 ? 1 : 5);
+      localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify(dOld));
+      Save.load(); /* 降级路径：重建一层地图 + 末尾 save() 固化为 v2 */
+      var fpDeg1 = fp();
+      var savedDeg = JSON.parse(localStorage.getItem('ai_dungeon_rpg_save_v1') || '{}');
+      var degFixed = savedDeg.saveVersion === 2 && !!savedDeg.map && !!savedDeg.map.floors &&
+        !!savedDeg.map.floors[String(savedDeg.map.floorIndex)];
+      refreshSim(); /* 第二次刷新：必须命中快照，不再重建 */
+      var fpDeg2 = fp();
+      rec('C3_oldSaveDowngradeOnce', fpDeg1 !== fpOldMem && degFixed && fpDeg2 === fpDeg1,
+        '降级确实重建=' + (fpDeg1 !== fpOldMem) + ' 立即固化v2=' + degFixed +
+        ' 指纹 降级后=' + fpDeg1 + ' 再刷新=' + fpDeg2);
+
+      /* 负例：importState 恒失败（=强制每次都走降级重建）时，"刷新后指纹一致"必须 FAIL */
+      var fpN0 = fp();
+      var origImport = Map.importState;
+      Map.importState = function () { return false; };
+      try { refreshSim(); } finally { Map.importState = origImport; }
+      var fpN1 = fp();
+      rec('C4_negativeImportAlwaysFails', fpN1 !== fpN0,
+        '强制 importState=false 后指纹 ' + fpN0 + '→' + fpN1 + '（相同则 C1 的"刷新指纹一致"断言抓不到回归）');
+    } catch (eC) {
+      out.errC = String((eC && eC.stack) || eC);
+      out.ok = false;
+    }
+
+    /* ── D e.repeat 过滤（只认按下边沿） ─────────────────── */
+    Input.clear();
+    keydown('Digit1', '1', false);
+    var onceSet = !!Input.getState()['Digit1'];
+    Input.clear();
+    keydown('Digit1', '1', true);
+    var repeatIgnored = !Input.getState()['Digit1'];
+
+    Map.setFloor(1); P.floor = 1; P.hp = 100; P.maxHp = 100;
+    AI.getPatrols().length = 0;
+    M._scene = 'battle';
+    B.start('slime');
+    var stD = B.getState();
+    stD.monster.hp = 9999; stD.monster.atk = 0; /* 只数行动次数，不关心击杀 */
+    var n0 = stD.log.length;
+    Input.clear();
+    keydown('Digit1', '1', false);
+    M.loop(performance.now());
+    var n1 = B.getState() ? B.getState().log.length : n0;
+    Input.clear();
+    keydown('Digit1', '1', true);
+    M.loop(performance.now());
+    var n2 = B.getState() ? B.getState().log.length : n1;
+    /* 负例：模拟旧行为——repeat 事件把 keys 重新置 true，下一帧就会再次行动 */
+    Input.getState()['Digit1'] = true;
+    M.loop(performance.now());
+    var n3 = B.getState() ? B.getState().log.length : n2;
+    M._scene = 'explore';
+    rec('D1_repeatIgnored', onceSet && repeatIgnored && n1 > n0 && n2 === n1,
+      '首次按下写入=' + onceSet + ' repeat 被忽略=' + repeatIgnored +
+      ' 日志行 ' + n0 + '→' + n1 + '（首次攻击）→' + n2 + '（repeat 无第二次行动）');
+    rec('D2_repeatNegativeControl', n3 > n2,
+      '把 repeat 重新写回按键状态后日志 ' + n2 + '→' + n3 + '（证明 D1 的"无第二次行动"断言能抓到泄漏）');
+
+    /* ── E 按住方向键仍能连走（与 p1p2 的 moveSteps1s 同口径） ── */
+    Map.setFloor(1); P.floor = 1; P.x = 1; P.y = 1; M._scene = 'explore';
+    AI.getPatrols().length = 0;
+    Map.getEnemies().length = 0;
+    var walk = Map.isWalkable, tried = 0;
+    Map.isWalkable = function (x, y) { tried++; return walk.call(Map, x, y); };
+    Input.clear();
+    Input.getState()['KeyA'] = true;
+    for (var f = 0; f < 60; f++) M._updateExplore(5e6 + f * 16.67);
+    delete Input.getState()['KeyA'];
+    Map.isWalkable = walk;
+    rec('E1_holdMoveStillWorks', tried >= 6 && tried <= 10, '60 帧按住 A 的移动尝试=' + tried + '（口径 6~10，既有 8）');
+
+    var keys = Object.keys(out.sub);
+    out.ok = keys.every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+
+  /* 本页不读其它产物，故不加 preflight-meta */
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

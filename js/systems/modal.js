@@ -437,6 +437,12 @@
         }
         this._refresh();
       } catch (e) { /* 降级：弹窗内操作异常不影响主游戏 */ }
+      /* D-15：背包/商店的成功操作会改金币、背包、装备、HP/MP 等持久状态。
+       * 旧实现只有换层/战斗结算才写档，于是"买到的装备/药水效果"刷新即消失。
+       * 失败（res.ok 非 true）不写档，避免把"没发生"的操作写进存档。 */
+      if (res && res.ok === true && Game.Systems.Save && typeof Game.Systems.Save.save === 'function') {
+        Game.Systems.Save.save();
+      }
       this._report(res);
     },
 

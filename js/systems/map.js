@@ -425,9 +425,82 @@
     }
   }
 
+  /* D-15：存档快照的深拷贝工具——存档与运行期互不引用，
+   * 避免"存档里保存了同一批数组，之后挖宝/杀怪把已写出的档改脏"。
+   * 只复制快照实际需要的字段，全部是纯 JSON 数据。 */
+  function isGrid(a) { return Array.isArray(a) && a.length > 0 && Array.isArray(a[0]); }
+  function cloneGrid(a) {
+    var out = [];
+    if (!isGrid(a)) return out;
+    for (var y = 0; y < a.length; y++) out.push(a[y].slice());
+    return out;
+  }
+  function cloneRows(a) {
+    var out = [];
+    if (!Array.isArray(a)) return out;
+    for (var y = 0; y < a.length; y++) out.push(Array.isArray(a[y]) ? a[y].slice() : []);
+    return out;
+  }
+  function cloneTraps(a) {
+    var out = [];
+    if (!Array.isArray(a)) return out;
+    for (var y = 0; y < a.length; y++) {
+      var row = [];
+      if (Array.isArray(a[y])) {
+        for (var x = 0; x < a[y].length; x++) {
+          var t = a[y][x];
+          row.push(t ? { id: t.id, seen: !!t.seen } : null);
+        }
+      }
+      out.push(row);
+    }
+    return out;
+  }
+  function clonePatrol(p) {
+    return {
+      x: p.x, y: p.y, monsterId: p.monsterId,
+      state: p.state || 'idle',
+      path: Array.isArray(p.path) ? p.path.slice() : [],
+      frame: p.frame || 0,
+      rest: p.rest || 0
+    };
+  }
+  function cloneEntry(e) {
+    var ens = [], ps = [], rms = [];
+    var i;
+    if (e && Array.isArray(e.enemies)) {
+      for (i = 0; i < e.enemies.length; i++) {
+        var m = e.enemies[i];
+        if (m) ens.push({ x: m.x, y: m.y, monsterId: m.monsterId });
+      }
+    }
+    if (e && Array.isArray(e.patrols)) {
+      for (i = 0; i < e.patrols.length; i++) if (e.patrols[i]) ps.push(clonePatrol(e.patrols[i]));
+    }
+    if (e && Array.isArray(e.rooms)) {
+      for (i = 0; i < e.rooms.length; i++) {
+        var r = e.rooms[i] || {};
+        rms.push({ x: r.x, y: r.y, w: r.w, h: r.h, cx: r.cx, cy: r.cy, doorX: r.doorX, doorY: r.doorY });
+      }
+    }
+    return {
+      grid: cloneGrid(e && e.grid),
+      enemies: ens,
+      details: cloneRows(e && e.details),
+      decor: cloneRows(e && e.decor),
+      traps: cloneTraps(e && e.traps),
+      rooms: rms,
+      spawn: (e && e.spawn) ? { x: e.spawn.x, y: e.spawn.y } : { x: 1, y: 1 },
+      patrols: ps
+    };
+  }
+
   Game.Systems.Map = {
-    generate: function () {
+    /* opts.quietQuest：读档恢复时跳过 floor 任务推进。
+     * 否则"恢复存档"会被当成一次"到达该层"，把楼层任务奖励再发一次（读档刷奖励）。 */
+    generate: function (opts) {
       cfg = Game.Data.MAPS;
+      var quietQuest = !!(opts && opts.quietQuest);
       /* 修复 P1：已有该层快照则原样恢复，不重新生成 */
       var cached = floorCache[floorIndex];
       if (cached) {
@@ -442,7 +515,7 @@
           Game.Systems.AI.setPatrols(cached.patrols);
         }
         Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
-        notifyFloorQuest();
+        if (!quietQuest) notifyFloorQuest();
         return grid;
       }
       var size = cfg.sizes[floorIndex % cfg.sizes.length];
@@ -467,7 +540,7 @@
           ? Game.Systems.AI.getPatrols() : []
       };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
-      notifyFloorQuest();
+      if (!quietQuest) notifyFloorQuest();
       return grid;
     },
 
@@ -505,16 +578,24 @@
       return this.generate();
     },
 
-    /* 取该格敌人：命中则移除（一次遭遇） */
+    /* D-15：只读查询该格敌人——遭遇时**不再移除**。
+     * 旧实现命中即 splice，导致"逃跑成功 = 怪物消失"（Boss 逃一次就再也通不了关）。
+     * 现在移除只发生在胜利结算（main.js onBattleEnd → removeEnemyAt）。 */
     enemyAt: function (x, y) {
       for (var i = 0; i < enemies.length; i++) {
-        if (enemies[i].x === x && enemies[i].y === y) {
-          var e = enemies[i];
-          enemies.splice(i, 1);
-          return e;
-        }
+        if (enemies[i].x === x && enemies[i].y === y) return enemies[i];
       }
       return null;
+    },
+    /* D-15：胜利结算时移除该格敌人（唯一的删除入口，且只在 win 通道调用） */
+    removeEnemyAt: function (x, y) {
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].x === x && enemies[i].y === y) {
+          enemies.splice(i, 1);
+          return true;
+        }
+      }
+      return false;
     },
     getEnemies: function () { return enemies; },
 
@@ -578,6 +659,43 @@
 
     /* S-05：取本层密室（可能为 0 间） */
     getRooms: function () { return rooms; },
+
+    /* D-15：导出本局地图状态（写进存档）。结构直接复用 floorCache 的快照：
+     * { floorIndex, floors: { "<层索引>": {grid,enemies,details,decor,traps,rooms,spawn,patrols} } }
+     * 只导出玩家实际到过的层；返回深拷贝，调用方随即可安全 JSON 序列化。 */
+    exportState: function () {
+      var out = {};
+      for (var k in floorCache) {
+        if (!Object.prototype.hasOwnProperty.call(floorCache, k)) continue;
+        out[k] = cloneEntry(floorCache[k]);
+      }
+      return { floorIndex: floorIndex, floors: out };
+    },
+
+    /* D-15：从存档恢复地图状态。任何校验不过一律返回 false（调用方按旧档降级重新生成）。
+     * 只替换 floorCache 与 floorIndex，不做生成；调用方随后 generate() 会命中缓存分支
+     * （含 AI.setPatrols 回填），从而恢复"已开箱 / 已杀怪 / 已触发陷阱"的现场。 */
+    importState: function (st) {
+      if (!cfg || !st || typeof st !== 'object') return false;
+      var src = st.floors;
+      if (!src || typeof src !== 'object') return false;
+      var fi = (typeof st.floorIndex === 'number') ? Math.floor(st.floorIndex) : -1;
+      if (fi < 0 || fi >= cfg.floors) return false;
+      var out = {};
+      for (var k in src) {
+        if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+        var idx = parseInt(k, 10);
+        if (!(idx >= 0 && idx < cfg.floors)) return false;
+        var e = src[k];
+        if (!e || !isGrid(e.grid) || !Array.isArray(e.enemies)) return false;
+        if (!isGrid(e.details) || !isGrid(e.decor)) return false;
+        out[idx] = cloneEntry(e);
+      }
+      if (!out[fi]) return false; /* 存档层没有快照 → 落点/地图无法复现，按降级处理 */
+      floorCache = out;
+      floorIndex = fi;
+      return true;
+    },
 
     /* M9-1：拾取宝箱——chest / room_chest 可拾取，成功后置空并 emit 'decor:taken'
      * 金币走 Player.gold，道具走 Inventory.add，不新增数值系统 */
