@@ -1,0 +1,98 @@
+{
+  "at": "2026-11-12",
+  "case": "D-32 阶段 B1 归位（只搬过程产物，不搬验证页）",
+  "hash": "fnv1a-32 over LF-normalized UTF-8 text（报告正文）/ raw bytes（PNG）",
+  "reports": [
+    {
+      "old": "自检报告.md",
+      "next": "docs/process/自检报告.md",
+      "bytes": 14998,
+      "hash": "0d57e663"
+    },
+    {
+      "old": "修复报告.md",
+      "next": "docs/process/修复报告.md",
+      "bytes": 10873,
+      "hash": "2ccbd769"
+    },
+    {
+      "old": "诊断报告.md",
+      "next": "docs/process/诊断报告.md",
+      "bytes": 10722,
+      "hash": "d4fb3766"
+    },
+    {
+      "old": "对标自检报告.md",
+      "next": "docs/process/对标自检报告.md",
+      "bytes": 14856,
+      "hash": "61b0eba9"
+    }
+  ],
+  "shots": {
+    "oldDir": "preflight/shots_resize",
+    "newDir": "preflight/artifacts/shots_resize",
+    "count": 12,
+    "files": [
+      {
+        "name": "shot_1280x720.png",
+        "bytes": 134676,
+        "hash": "e4766d97"
+      },
+      {
+        "name": "shot_1280x720_npc.png",
+        "bytes": 115921,
+        "hash": "c18b61ef"
+      },
+      {
+        "name": "shot_1920x1080.png",
+        "bytes": 240163,
+        "hash": "402b704e"
+      },
+      {
+        "name": "shot_1920x1080_victory.png",
+        "bytes": 76137,
+        "hash": "436b038b"
+      },
+      {
+        "name": "shot_2560x1440.png",
+        "bytes": 373489,
+        "hash": "106c5102"
+      },
+      {
+        "name": "shot_2560x1440_npc.png",
+        "bytes": 344583,
+        "hash": "1a656726"
+      },
+      {
+        "name": "shot_320x568.png",
+        "bytes": 32718,
+        "hash": "19aa8f08"
+      },
+      {
+        "name": "shot_320x568_inventory.png",
+        "bytes": 27641,
+        "hash": "4f36329c"
+      },
+      {
+        "name": "shot_320x568_npc.png",
+        "bytes": 28504,
+        "hash": "edd671b4"
+      },
+      {
+        "name": "shot_320x568_quests.png",
+        "bytes": 28385,
+        "hash": "d632faf1"
+      },
+      {
+        "name": "shot_320x568_victory.png",
+        "bytes": 12301,
+        "hash": "b429349b"
+      },
+      {
+        "name": "shot_768x1024.png",
+        "bytes": 88759,
+        "hash": "7d9035fa"
+      }
+    ]
+  }
+}

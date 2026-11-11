@@ -61,7 +61,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 207 张、验证页 73 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 207 张、验证页 74 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -97,10 +97,12 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 73 个 headless 验证页（M1 至今）+ selfcheck/ 回归产物与自检脚本
+├── preflight/            # 74 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
+├── preflight/artifacts/  # 证据截图（D-32 起：shots_resize/ 12 张响应式截图，来源见同目录 README.md）
 ├── docs/                 # 答辩讲稿
 ├── docs/tasks/           # 里程碑任务卡（每卡一份，含契约与验收）
+├── docs/process/         # 过程报告（自检 / 修复 / 诊断 / 对标自检，D-32 从根目录迁入，正文未改）
 ├── CHANGELOG.md          # 更新日志（每条带可机器校验的代码锚点）
 ├── THIRD-PARTY-NOTICES.md # 第三方组件许可（含 rot.js BSD-3 全文）
 ├── PLAN.md               # 开发规划书（AI 协作模式 + 完整版扩展规划）
@@ -109,7 +111,7 @@ ai-dungeon-rpg/
 └── .gitignore
 ```
 
-**文档索引**：玩法与运行看本文件 → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
+**文档索引**：玩法与运行看本文件 → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 过程报告（自检 / 修复 / 诊断 / 对标）看 `docs/process/` → 目录归位与 B2 取舍看 `docs/process/D-32-归档决定.md` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
 
 ## 组件来源声明（站在巨人的肩膀上）
 

@@ -22,10 +22,9 @@ desktop.ini
 
 # D-03：本地临时产物（不删除，仅忽略，保持 git status 干净）
 .screenshots/
-# D-31：以下两处原先被忽略，与「过程文档 / 证据截图一律入库」的规则冲突，已取消忽略并入库
-# （目录归位留待阶段 B，本卡不搬目录）
-# preflight/shots_resize/
-# 自检报告.md
+# D-31：过程文档 / 证据截图一律入库（原先被忽略的两处已取消忽略）
+# D-32：阶段 B1 已归位——证据截图在 preflight/artifacts/shots_resize/，过程报告在 docs/process/；
+#       归位只换目录、不取消入库，因此这里不需要任何忽略规则
 
 # D-05：证据截图一律入库；仅忽略 D-01 / D-01b 两张早期交接截图
 preflight/selfcheck/shots/D-01*.png

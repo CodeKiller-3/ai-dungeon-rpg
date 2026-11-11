@@ -39,7 +39,7 @@
 
 ### 工具
 
-- 回归批跑：72 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：74 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->
@@ -51,3 +51,8 @@
 - 任务卡体系：每张卡一份 `docs/tasks/*.md`，含契约与验收。<!-- 锚点: docs/tasks/S3-3-modal.md#弹窗 -->
 - 第三方许可：`THIRD-PARTY-NOTICES.md`（含 rot.js BSD-3 全文）与 `assets/sprites/LICENSE.md`。<!-- 锚点: THIRD-PARTY-NOTICES.md#rot.js -->
 - 本更新日志与版本号收敛：`index.html` meta 为唯一版本源。<!-- 锚点: CHANGELOG.md#锚点 -->
+
+### 归档
+
+- 阶段 B1 目录归位：根目录 4 份过程报告迁入 `docs/process/`（正文逐字节保留，各加一行来源说明），12 张响应式截图迁入 `preflight/artifacts/shots_resize/`；`PLAN.md` / `README.md` / `CHANGELOG.md` / `THIRD-PARTY-NOTICES.md` / `规划-对标补齐.md` 与全部验证页原地不动。<!-- 锚点: README.md#目录结构 -->
+- 阶段 B2（搬 `js/` 与 `preflight/verify_*.html`）**永久不做**：实测要改 ≥11 个硬编码 `preflight/` 路径的工具、67 个验证页里的 1375 处 `../js/` 引用，收益与风险不成比例；决定与依据见 `docs/process/D-32-归档决定.md`。<!-- 锚点: README.md#文档索引 -->
