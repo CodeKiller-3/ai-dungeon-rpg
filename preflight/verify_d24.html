@@ -267,7 +267,10 @@
 
     var guideLines = (R.guideLines && R.guideLines()) || [];
     var guideTeaches = guideTeachesEquip(guideLines);
-    rec('C2_guideDoesNotTeachEquip', guideLines.length > 0 && guideTeaches === false,
+    /* D-25 规格变更：D-24 的结论是"引导页 13 行里没有装备教学"（当时的事实），
+     * D-25 明确要求补这一行，故本条断言的期望值随规格翻转为"必须教"——检测器本身不变，
+     * 仍是同一个 guideTeachesEquip()，不是放宽，而是被测规格变了。 */
+    rec('C2_guideTeachesEquipAfterD25', guideLines.length > 0 && guideTeaches === true,
       '引导页 ' + guideLines.length + ' 行，含装备教学=' + guideTeaches + '；' +
       guideLines.map(function (t) { return t.replace(/\s+/g, ' ').slice(0, 22); }).join(' | '));
 
@@ -277,10 +280,14 @@
     rec('C3_keymapHasInventoryKey', !!bRow && /背包/.test(bRow.name || ''),
       bRow ? 'KEYMAP.explore: ' + bRow.label + ' → ' + bRow.name : 'KEYMAP 缺 B 背包');
 
-    /* 负例：检测器本身有效——塞一行"教学"必须被判为 true */
+    /* 负例：检测器本身有效——塞一行"教学"必须判 true，塞一行"只提背包不提装备"必须判 false。
+     * D-25 起真实引导页已是"教了"，所以这条改成双向灵敏度校验（比原来只验 true 更严）。 */
     var fakeTeach = guideTeachesEquip(['按 B 打开背包，Enter 装备武器']);
-    rec('C4_negativeDetectorCatchesTeaching', fakeTeach === true && guideTeaches === false,
-      '合成教学行被识别=' + fakeTeach + '、真实引导页被识别=' + guideTeaches);
+    var fakeNoTeach = guideTeachesEquip(['背包里可以放很多东西']);
+    rec('C4_negativeDetectorCatchesTeaching', fakeTeach === true && fakeNoTeach === false &&
+      guideTeaches === true,
+      '合成教学行=' + fakeTeach + '、只提背包不提装备=' + fakeNoTeach +
+      '、真实引导页=' + guideTeaches);
 
     /* ══ B. 问题 2：bot 到底装没装（50 局逐局埋点）══════════════ */
     var live = probeEquip(seedsOf(1001, 1050), false);

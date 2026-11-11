@@ -334,7 +334,14 @@
         why2: { file: 'js/systems/battle.js', re: /Math\.random\(\)\s*<\s*0\.5[\s\S]{0,300}?你成功逃离了战斗/ } },
       { id: 'B6_autosave', text: '自动存档：换层、开箱、战斗结束时',
         file: 'js/core/main.js', re: /Save\.save\(\)[\s\S]*Save\.save\(\)[\s\S]*Save\.save\(\)/,
-        why: '换层 / 战斗结束 / 开箱三处及以上自动写档' }
+        why: '换层 / 战斗结束 / 开箱三处及以上自动写档' },
+      /* D-25：规格变更——引导页新增「怎么装备」一行，机制清单由 6 条变 7 条。
+       * 该行写的每个动作都要有代码兜底：B → 背包已由 A1/A4 真实回放覆盖；
+       * ↑↓/Enter 使用/装备 与行尾「攻击+/防御+」取背包面板的实绘文案（modal.js）。 */
+      { id: 'B7_equipHowTo', text: '装备：捡到或买到武器/护甲后',
+        file: 'js/systems/modal.js', re: /return '攻击\+'[\s\S]{0,200}?return '防御\+'/,
+        why: '行尾「攻击+/防御+」与背包行文案同源（itemDesc）',
+        why2: { file: 'js/systems/modal.js', re: /↑↓ 选择 · Enter 使用\/装备/ } }
     ];
     var mechOk = 0, mechDetail = [];
     for (var mi = 0; mi < MECHS.length; mi++) {
@@ -347,7 +354,9 @@
       mechDetail.push(mech.id + (textOk ? ' 文案✓' : ' 文案✗') + (codeOk ? '代码✓' : '代码✗'));
       rec(mech.id, textOk && codeOk, mech.id + '：文案=' + textOk + '，代码=' + codeOk + '（' + mech.why + '）');
     }
-    rec('B0_sixMechanicsCovered', mechOk === 6, mechOk + '/6：' + mechDetail.join(' | '));
+    /* D-25：机制条数随引导页规格变化（原 6 条 → 7 条），断言改为"清单全绿"而不是写死 6 */
+    rec('B0_allMechanicsCovered', mechOk === MECHS.length,
+      mechOk + '/' + MECHS.length + '：' + mechDetail.join(' | '));
 
     /* ══ C. 术语冻结 ═══════════════════════════════════════════ */
     var TEXT_FILES = ['js/core/render.js', 'js/core/main.js', 'js/systems/battle.js',

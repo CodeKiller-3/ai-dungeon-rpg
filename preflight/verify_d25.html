@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-25 引导页补「怎么装备」</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-25 · 引导页装备说明：文案 ↔ 背包面板 ↔ 真实按键 ↔ 两档分辨率布局</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, R = Game.Core.Render, Modal = Game.Modal, P = Game.Data.Player;
+
+  Game.Core.Input.bind();
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function src(path) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', '../' + path, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function segOf(text, startMark, endMark) {
+    var i = text.indexOf(startMark);
+    if (i < 0) return '';
+    var j = text.indexOf(endMark, i + startMark.length);
+    return text.substring(i, j > i ? j : text.length);
+  }
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); }
+  function lines() { return (R.guideLines && R.guideLines()) || []; }
+
+  /* 「怎么装备」那一行的检测器：必须同时出现来源（武器/护甲）、键（按 B）、背包、↑↓、Enter、两种加成格式 */
+  function equipLineOf(ls) {
+    for (var i = 0; i < ls.length; i++) {
+      var t = String(ls[i] || '');
+      if (t.indexOf('装备') >= 0 && t.indexOf('背包') >= 0 && t.indexOf('↑↓') >= 0 &&
+          t.indexOf('Enter') >= 0 && t.indexOf('武器/护甲') >= 0) return t;
+    }
+    return null;
+  }
+  function equipLineOk(ls) {
+    var t = equipLineOf(ls);
+    return !!t && /按 B/.test(t) && /攻击\+N/.test(t) && /防御\+N/.test(t);
+  }
+
+  /* 假 ctx：只为抓 Modal.draw 真正写出的文本（与 verify_d24 C1 同法） */
+  function fakeCtx(sink) {
+    var o = {};
+    var noop = function () {};
+    var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+      'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'arc', 'rect', 'roundRect',
+      'setTransform', 'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+    for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+    o.createLinearGradient = function () { return { addColorStop: noop }; };
+    o.createRadialGradient = o.createLinearGradient;
+    o.createPattern = function () { return {}; };
+    o.measureText = function (t) { return { width: String(t).length * 7 }; };
+    o.fillText = function (t) { sink.push(String(t)); };
+    o.strokeText = o.fillText;
+    o.getImageData = function () { return { data: [] }; };
+    return o;
+  }
+
+  /* 两档分辨率（窗口 CSS 尺寸）→ 逻辑视口 → 引导页实际排版几何 */
+  function measure(winW, winH) {
+    var scale = R._computeScale(winW, winH);
+    var W = winW / scale, H = winH / scale;
+    var oldW = R.cssW, oldH = R.cssH;
+    R.cssW = W; R.cssH = H;
+    var mt = R._guideMetrics(), lay = R._guideLayout(), rect = R._guideRect();
+    var ctx = R._ctx, maxW = 0, maxLine = '';
+    try {
+      for (var i = 0; i < lay.length; i++) {
+        ctx.font = lay[i].head ? 'bold 14px monospace' : '13px monospace';
+        var w = ctx.measureText(lay[i].text).width;
+        if (w > maxW) { maxW = w; maxLine = lay[i].text; }
+      }
+    } catch (e) { /* 降级 */ }
+    R.cssW = oldW; R.cssH = oldH;
+    return {
+      win: winW + 'x' + winH, scale: scale, W: Math.round(W), H: Math.round(H),
+      startY: mt.startY, lineH: mt.lineH, rows: lay.length,
+      lastY: lay.length ? lay[lay.length - 1].y : 0,
+      btnY: rect.y, btnBottom: rect.y + rect.h, hintY: rect.y + rect.h + 26,
+      maxTextW: Math.round(maxW), widest: maxLine.slice(0, 16) + '…'
+    };
+  }
+
+  try {
+    M.init();
+    M.closeGuide();
+    M.restart();
+
+    /* 新档状态（用于"文案不许写起手有武器"的反向核对） */
+    var freshGear = { w: P.equipment.weapon, a: P.equipment.armor };
+
+    /* ══ A1. 引导页含装备说明，且位于「你需要知道的事」块内 ═════ */
+    var all = lines();
+    var eq = equipLineOf(all);
+    var headAt = -1;
+    for (var i = 0; i < all.length; i++) if (all[i] === '你需要知道的事') headAt = i;
+    var eqIdx = eq ? all.indexOf(eq) : -1;
+    rec('A1_guideHasEquipLine', equipLineOk(all) && eqIdx > headAt && headAt >= 0,
+      '第 ' + (eqIdx + 1) + '/' + all.length + ' 行（机制块起点 ' + (headAt + 1) + '）：「' + (eq || '无') + '」');
+
+    /* ══ A2. 说明文本 ↔ 背包面板实绘文案一致 ═════════════════════ */
+    var sink = [], realCtx = R._ctx, drawErr = null;
+    try {
+      R._ctx = fakeCtx(sink);
+      P.inventory = { knife: 1, armor_leather: 1 };
+      Modal.open('inventory');
+      Modal.draw();
+      Modal.close();
+    } catch (e) { drawErr = String(e); }
+    R._ctx = realCtx;
+
+    var hintText = null, wRow = null, aRow = null;
+    for (var s = 0; s < sink.length; s++) {
+      var t2 = sink[s];
+      if (t2.indexOf('使用/装备') >= 0) hintText = t2;
+      if (/^匕首 x1/.test(t2)) wRow = t2;
+      if (/^皮革甲 x1/.test(t2)) aRow = t2;
+    }
+    var PANEL_HINT = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
+    var wFmt = wRow && /攻击\+\d+/.exec(wRow);
+    var aFmt = aRow && /防御\+\d+/.exec(aRow);
+    var a2ok = !drawErr && hintText === PANEL_HINT && wRow === '匕首 x1   攻击+1' &&
+      aRow === '皮革甲 x1   防御+3' && !!wFmt && !!aFmt &&
+      !!eq && eq.indexOf('↑↓ 选择') >= 0 && eq.indexOf('Enter 使用/装备') >= 0 &&
+      eq.indexOf('攻击+' + 'N') >= 0 && eq.indexOf('防御+' + 'N') >= 0;
+    rec('A2_equipTextMatchesPanel', a2ok,
+      drawErr ? '绘制抛错：' + drawErr :
+        '面板底栏「' + (hintText || '无') + '」，武器行「' + (wRow || '无') + '」，护甲行「' +
+        (aRow || '无') + '」；引导行含「↑↓ 选择」「Enter 使用/装备」「攻击+N」「防御+N」=' +
+        [!!eq && eq.indexOf('↑↓ 选择') >= 0, !!eq && eq.indexOf('Enter 使用/装备') >= 0,
+         !!eq && eq.indexOf('攻击+N') >= 0, !!eq && eq.indexOf('防御+N') >= 0].join('/'));
+
+    /* ══ A3. 真实按键：B 开背包 → Enter 装备 → ↓ 换一行 → Enter 装护甲 ══ */
+    P.inventory = { knife: 1, armor_leather: 1 };
+    P.equipment = { weapon: null, armor: null };
+    if (Modal.isOpen()) Modal.close();
+    M._guideVisible = false;
+    M._scene = 'explore';
+    var order = Game.Systems.Inventory.list().map(function (e) { return e.id; });
+    var keyErr = null, w1 = null, a1 = null, opened = false;
+    try {
+      kd('KeyB'); M._updateExplore(1e9); ku('KeyB');
+      opened = (Modal.current() === 'inventory');
+      kd('Enter'); ku('Enter');
+      w1 = P.equipment.weapon;
+      kd('ArrowDown'); ku('ArrowDown');
+      kd('Enter'); ku('Enter');
+      a1 = P.equipment.armor;
+    } catch (e2) { keyErr = String(e2); }
+    if (Modal.isOpen()) Modal.close();
+    rec('A3_keysEquipForReal', !keyErr && opened && order[0] === 'knife' && order[1] === 'armor_leather' &&
+      w1 === 'knife' && a1 === 'armor_leather',
+      keyErr ? '回放抛错：' + keyErr :
+        '背包序 ' + JSON.stringify(order) + '；B 打开=' + opened + '；Enter 后武器=' + w1 +
+        '；↓+Enter 后护甲=' + a1);
+
+    /* ══ A4. 行数 13 → 14（结构：3 标题 + 11 正文） ═════════════ */
+    var rows = R.guideRows(), heads = 0;
+    for (var r = 0; r < rows.length; r++) if (rows[r].head) heads++;
+    var lay = R._guideLayout();
+    rec('A4_fourteenRows', all.length === 14 && rows.length === 14 && lay.length === 14 &&
+      heads === 3 && rows.length - heads === 11,
+      'guideLines/guideRows/_guideLayout = ' + all.length + '/' + rows.length + '/' + lay.length +
+      '；标题 ' + heads + '、正文 ' + (rows.length - heads));
+
+    /* ══ A5. 两档分辨率：14 行全部在框内、不溢出、字号未缩 ═══════ */
+    var g1 = measure(1280, 800), g2 = measure(1024, 640);
+    function fits(g) {
+      return g.lastY + 6 < g.btnY && g.btnBottom <= g.H - 20 && g.hintY <= g.H - 6 &&
+        g.maxTextW <= g.W - 40;
+    }
+    var rsrc = src('js/core/render.js');
+    var seg = segOf(rsrc, 'drawGuide: function', '_guideMetrics: function');
+    var fsz = [], fm;
+    var fre = /(\d+)px monospace/g;
+    while ((fm = fre.exec(seg))) fsz.push(parseInt(fm[1], 10));
+    var minFont = fsz.length ? Math.min.apply(null, fsz) : 0;
+    var fontOk = minFont >= 11 && seg.indexOf("'13px monospace'") >= 0 && seg.indexOf("'12px monospace'") >= 0;
+    var gDetail = [g1, g2].map(function (g) {
+      return g.win + '→逻辑 ' + g.W + 'x' + g.H + '(scale ' + g.scale + ')：行 ' + g.rows +
+        '，末行 y=' + g.lastY + '，按钮 y=' + g.btnY + '~' + g.btnBottom +
+        '，底部提示 y=' + g.hintY + '，最宽行 ' + g.maxTextW + 'px（上限 ' + (g.W - 40) + '）';
+    }).join('；');
+    rec('A5_fitsTwoResolutions', fits(g1) && fits(g2) && fontOk &&
+      g1.lineH === 22 && g2.lineH === 22,
+      gDetail + '；引导页字号 ' + JSON.stringify(fsz) + '（最小 ' + minFont +
+      'px，D-20 锁 11px，未改 13px 正文/12px 底注）');
+
+    /* ══ A6. 负例：删掉装备那一行，同一判定必须 FAIL ════════════ */
+    var without = all.filter(function (t3) { return t3 !== eq; });
+    var negLine = equipLineOf(without);
+    var negOk = equipLineOk(without);
+    var negByIdx = all.length === 14 && without.length === 13 && !negLine && !negOk && equipLineOk(all);
+    rec('A6_negativeDropLineFails', negByIdx,
+      '删行后 ' + without.length + ' 行、检测器命中=' + (negLine ? '是' : '否') +
+      '、判定=' + negOk + '（原 ' + all.length + ' 行判定=' + equipLineOk(all) + '）');
+
+    /* ══ A7. 不许写当前不成立的话（起手有武器等） ═══════════════ */
+    var combined = all.join('\n');
+    var FORBID = ['起手', '开局', '自带', '初始武器', '初始装备', '默认装备'];
+    var hits = FORBID.filter(function (w) { return combined.indexOf(w) >= 0; });
+    rec('A7_noFalseStartingGearClaim', hits.length === 0 && freshGear.w === null && freshGear.a === null,
+      '禁词命中 ' + JSON.stringify(hits) + '；新档实测 weapon=' + freshGear.w + '、armor=' + freshGear.a +
+      '（与"捡到或买到后才有得装"一致）');
+
+  } catch (e) {
+    rec('X0_exception', false, String(e && (e.stack || e.message) || e));
+  }
+
+  var pre = document.getElementById('result');
+  pre.textContent = JSON.stringify(out, null, 2);
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>
