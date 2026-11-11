@@ -154,9 +154,12 @@
     collectText('../docs/process/自检报告.md');
 
     TOTAL = textQ.length + binQ.length + 3; /* +3：三份 meta 已取过 */
-    runAll(textQ, fetchText, function () {
-      runAll(binQ, fetchBin, assertAll);
-    });
+    /* 文本与二进制两拨**同时**发：串行两波时，第二波要等第一波全完才开始，
+     * 线上（235 份文本 + 13 张图）会把时间轴拖成两倍。 */
+    var waves = 2;
+    function waveDone() { waves--; if (waves === 0) assertAll(); }
+    runAll(textQ, fetchText, waveDone);
+    runAll(binQ, fetchBin, waveDone);
   }
 
   function assertAll() {
