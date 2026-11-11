@@ -309,7 +309,7 @@
     if (p.hp <= 0) {
       logPush('你被击败了…');
       Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
-      Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+      Game.Core.EventBus.emit('battle:end', loseTelemetry());
     }
   }
 
@@ -420,7 +420,7 @@
       }
       if (res.length && p.hp <= 0) {
         Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
-        Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+        Game.Core.EventBus.emit('battle:end', loseTelemetry());
       }
       return res;
     }
@@ -444,7 +444,55 @@
     if (state.dying) state.phase = 'dead';
   }
 
+  /* ── D-23：死亡归因遥测（纯只读）──────────────────────────────
+   * 只把"死亡当场已经存在的状态"复制成事件字段：不参与命中/伤害/回合顺序判断，
+   * 不写存档、不加 UI。取不到的字段一律 null（键始终存在，不抛错、不省略）。
+   * over：非战斗致死（陷阱）显式把战斗相关字段压成 null，避免把上一场残留的怪
+   *       错记成本次凶手——宁可写 null，也不编。 */
+  function numOrNull(v) { return (typeof v === 'number' && isFinite(v)) ? v : null; }
+  function idOrNull(v) { return (typeof v === 'string' && v) ? v : null; }
+  function healPotionCount() {
+    var inv = (Game.Data.Player && Game.Data.Player.inventory) || {};
+    var n = 0;
+    for (var id in inv) {
+      if (!Object.prototype.hasOwnProperty.call(inv, id)) continue;
+      var qty = inv[id];
+      var it = Game.Data.ITEMS && Game.Data.ITEMS[id];
+      if (!it || it.type !== 'consumable' || it.scroll === true) continue;
+      if (!(it.effect && it.effect.hp > 0)) continue;
+      if (typeof qty !== 'number' || qty <= 0) continue;
+      n += qty;
+    }
+    return n;
+  }
+  function loseTelemetry(over) {
+    var p = (Game.Data && Game.Data.Player) || null;
+    var m = (state && state.monster) ? state.monster : null;
+    var eq = (p && p.equipment) || {};
+    var t = {
+      result: 'lose',
+      source: m ? 'battle' : 'other',
+      monsterId: m ? idOrNull(m.id) : null,
+      monsterName: m ? idOrNull(m.name) : null,
+      floor: numOrNull(p && p.floor),
+      playerLevel: numOrNull(p && p.level),
+      roundNo: state ? numOrNull(state.roundNo) : null,
+      hpAtDeath: numOrNull(p && p.hp),
+      maxHp: numOrNull(p && p.maxHp),
+      potionsLeft: healPotionCount(),
+      weaponId: idOrNull(eq.weapon),
+      armorId: idOrNull(eq.armor)
+    };
+    if (over) {
+      for (var k in over) if (Object.prototype.hasOwnProperty.call(over, k)) t[k] = over[k];
+    }
+    return t;
+  }
+
   Game.Systems.Battle = {
+    /* D-23：暴露只读快照构造器（验证页用它构造空值场景；游戏内只由下面两处 lose 调用） */
+    loseTelemetry: loseTelemetry,
+
     /* D-16：时间轴参数（只读；验证页据此断言预算） */
     timeline: function () { return { seg1: TL.seg1, lock: TL.lock, total: TL.total }; },
 

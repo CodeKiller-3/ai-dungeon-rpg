@@ -295,6 +295,7 @@
       noShop: false,
       startPos: '', endPos: '',
       lastMonster: null, lastTrapAt: -1, diedInBattle: false, noPotionAtDeath: null,
+      death: null, /* D-23：死亡归因快照（battle:end lose 的 payload 副本；只读） */
       gold: 0, level: 1, hp: 0, equip: 0, quests: {}
     };
   }
@@ -484,6 +485,23 @@
         if (cur.lastMonster === 'goblin') cur.goblinKills++;
       } else if (e && e.result === 'lose') {
         cur.diedInBattle = true;
+        /* D-23：死亡归因——只复制 payload 字段（纯观测，不参与决策，不消耗随机数）。
+         * 缺字段一律 null、键始终存在；source=trap 时怪/回合字段由产生方置 null。 */
+        var pick = function (k) { return (e[k] !== undefined) ? e[k] : null; };
+        cur.death = {
+          at: cur.actions,
+          source: pick('source'),
+          monsterId: pick('monsterId'),
+          monsterName: pick('monsterName'),
+          floor: pick('floor'),
+          playerLevel: pick('playerLevel'),
+          roundNo: pick('roundNo'),
+          hpAtDeath: pick('hpAtDeath'),
+          maxHp: pick('maxHp'),
+          potionsLeft: pick('potionsLeft'),
+          weaponId: pick('weaponId'),
+          armorId: pick('armorId')
+        };
       }
     });
     EB.on('trap:triggered', function (e) {

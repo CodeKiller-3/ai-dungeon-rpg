@@ -721,7 +721,12 @@
       Game.Core.EventBus.emit('trap:triggered', { x: x, y: y, id: tr.id, dmg: res.dmg });
       if (p.hp <= 0) {
         Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
-        Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+        /* D-23：陷阱致死不是战斗致死——怪/回合显式置 null，只保留楼层与死时状态 */
+        var tb = Game.Systems.Battle;
+        var tp = (tb && typeof tb.loseTelemetry === 'function')
+          ? tb.loseTelemetry({ source: 'trap', monsterId: null, monsterName: null, roundNo: null })
+          : { result: 'lose' };
+        Game.Core.EventBus.emit('battle:end', tp);
       }
       return res;
     },

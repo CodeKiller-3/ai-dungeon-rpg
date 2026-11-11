@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-23：本页读取 preflight/selfcheck/d19-report.json（D-19 基线）与 d23-report.json（本轮产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-23 死亡归因遥测</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-23 · battle:end(lose) 归因字段 / 纯观测 / 空值安全 / 存档未污染</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player, Bot = Game.Bot;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* file:// 下同步读同目录文本（run-all 启动 Edge 时带 --allow-file-access-from-files） */
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+
+  /* ── 字段契约（D-23）─────────────────────────────────────────────
+   * 12 个键必须"存在"；数值键允许 number，空值场景下允许 null（C 组证明不抛错）；
+   * 字符串键允许 string，拿不到时 null。负例会删键 / 改类型，必须被抓到。 */
+  var DEATH_KEYS = ['result', 'source', 'monsterId', 'monsterName', 'floor', 'playerLevel',
+    'roundNo', 'hpAtDeath', 'maxHp', 'potionsLeft', 'weaponId', 'armorId'];
+  var NUM_KEYS = ['floor', 'playerLevel', 'roundNo', 'hpAtDeath', 'maxHp', 'potionsLeft'];
+  var STR_KEYS = ['monsterId', 'monsterName', 'weaponId', 'armorId'];
+
+  function hasAllKeys(e) {
+    if (!e || typeof e !== 'object') return DEATH_KEYS.slice();
+    var miss = [];
+    for (var i = 0; i < DEATH_KEYS.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(e, DEATH_KEYS[i])) miss.push(DEATH_KEYS[i]);
+    }
+    return miss;
+  }
+  function checkDeath(e) {
+    var bad = [];
+    if (!e || typeof e !== 'object') return { ok: false, bad: ['payload:notObject'] };
+    var miss = hasAllKeys(e);
+    for (var i = 0; i < miss.length; i++) bad.push(miss[i] + ':missing');
+    if (e.result !== 'lose') bad.push('result:notLose');
+    if (typeof e.source !== 'string' || !e.source) bad.push('source:notString');
+    for (var j = 0; j < NUM_KEYS.length; j++) {
+      var v = e[NUM_KEYS[j]];
+      if (!((typeof v === 'number' && isFinite(v)) || v === null)) bad.push(NUM_KEYS[j] + ':notNumberOrNull');
+    }
+    for (var k = 0; k < STR_KEYS.length; k++) {
+      var s = e[STR_KEYS[k]];
+      if (!(typeof s === 'string' || s === null)) bad.push(STR_KEYS[k] + ':notStringOrNull');
+    }
+    return { ok: bad.length === 0, bad: bad };
+  }
+
+  /* ── 测试时钟（同 D-16/D-19）：让回合时间轴可整除推进 ─────────── */
+  var T = 100000;
+  function step(ms) { T += ms; B.tick(); }
+  function useClock() { B._setClock(function () { return T; }); }
+  function freeClock() { B._setClock(null); }
+
+  function eqArr(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  var SAVE_KEY = 'ai_dungeon_rpg_save_v1';
+  /* 归因遥测专属键：不得出现在存档顶层/player 里（floor 是存档既有键，故不列入） */
+  var TELEM_ONLY = ['monsterId', 'monsterName', 'playerLevel', 'roundNo', 'hpAtDeath',
+    'potionsLeft', 'weaponId', 'armorId'];
+  function saveSnap() {
+    var raw = localStorage.getItem(SAVE_KEY);
+    if (raw === null) return { present: false, top: [], player: [] };
+    var o = null;
+    try { o = JSON.parse(raw); } catch (e) { return { present: false, top: [], player: [] }; }
+    return { present: true, top: Object.keys(o || {}).sort(), player: Object.keys((o && o.player) || {}).sort() };
+  }
+
+  try {
+    Game.Core.Input.bind();
+    M.init();
+    M.closeGuide();
+
+    /* 采集前存档快照（显式存一次，保证有基线可比） */
+    Game.Systems.Save.save();
+    var saveBefore = saveSnap();
+
+    /* ══ A. 真实失败战斗 → payload 字段齐全 + 负例 ═══════════════ */
+    var got = null;
+    Game.Core.EventBus.on('battle:end', function (e) {
+      if (e && e.result === 'lose' && !got) got = e;
+    });
+    useClock();
+    T = 100000;
+    P.hp = 1; P.maxHp = 100; P.mp = 50; P.maxMp = 50;
+    P.floor = 3; P.level = 4; P.atk = 10; P.def = 0; P.upg = {};
+    P.equipment = { weapon: 'sword_rusty', armor: 'armor_leather' };
+    P.inventory = { potion_small: 2, scroll_upgrade: 1 };
+    B.start('slime');
+    var stA = B.getState();
+    stA.monster.hp = 9999; stA.monster.maxHp = 9999; stA.monster.atk = 50;
+    B.playerAction('attack');
+    for (var i = 0; i < 600 && !got; i++) step(1);
+
+    var chkA = checkDeath(got);
+    rec('A1_fieldsPresentAndTyped', !!got && chkA.ok,
+      got ? 'payload 键 ' + Object.keys(got).length + ' 个；校验=' + (chkA.ok ? 'OK' : chkA.bad.join('|')) +
+        '；' + JSON.stringify(got) : '未捕获到 battle:end lose（' + chkA.bad.join('|') + '）');
+
+    var monName = (Game.Data.MONSTERS.slime && Game.Data.MONSTERS.slime.name) || null;
+    rec('A2_valuesMatchDeathState',
+      !!got && got.monsterId === 'slime' && got.monsterName === monName &&
+      got.floor === 3 && got.playerLevel === 4 &&
+      typeof got.roundNo === 'number' && got.roundNo >= 1 &&
+      got.hpAtDeath === 0 && got.maxHp === 100 && got.potionsLeft === 2 &&
+      got.weaponId === 'sword_rusty' && got.armorId === 'armor_leather' &&
+      got.source === 'battle',
+      got ? 'monster=' + got.monsterId + '/' + got.monsterName + '、floor=' + got.floor +
+        '、lv=' + got.playerLevel + '、round=' + got.roundNo + '、hp=' + got.hpAtDeath + '/' + got.maxHp +
+        '、potionsLeft=' + got.potionsLeft + '（卷轴不计）、weapon=' + got.weaponId +
+        '、armor=' + got.armorId + '、source=' + got.source : '无 payload');
+
+    /* 负例：删键 / 改类型必须 FAIL（同一个校验函数） */
+    var clone = function () { return JSON.parse(JSON.stringify(got || {})); };
+    var n1 = clone(); delete n1.monsterId;
+    var n2 = clone(); n2.potionsLeft = '2';
+    var n3 = clone(); n3.floor = undefined;
+    var r1 = checkDeath(n1), r2 = checkDeath(n2), r3 = checkDeath(n3);
+    rec('A3_negativeDeleteMonsterIdFails',
+      !!got && r1.ok === false && r1.bad.join(',').indexOf('monsterId:missing') >= 0 &&
+      r2.ok === false && r3.ok === false,
+      '删 monsterId → ' + (r1.ok ? 'PASS（漏检！）' : 'FAIL[' + r1.bad.join('|') + ']') +
+      '；potionsLeft 改成字符串 → ' + (r2.ok ? 'PASS（漏检！）' : 'FAIL') +
+      '；floor=undefined → ' + (r3.ok ? 'PASS（漏检！）' : 'FAIL'));
+
+    freeClock();
+
+    /* ══ B. 纯观测：同 10 种子，逐局与 D-19 记录一致 ════════════ */
+    var d19 = readJson('selfcheck/d19-report.json');
+    var base = {};
+    var refRuns = (d19 && d19.runs) || [];
+    for (var b = 0; b < refRuns.length; b++) base[refRuns[b].seed] = refRuns[b];
+
+    var seeds = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010];
+    var res = Bot.batch(seeds, { maxActions: 2500 });
+    var mine = (res && res.runs) || [];
+    var refMiss = [], outMis = [], actMis = [], flrMis = [], cauMis = [], lines = [];
+    for (var m = 0; m < mine.length; m++) {
+      var g = mine[m], o = base[g.seed];
+      if (!o) { refMiss.push(g.seed); continue; }
+      if (g.outcome !== o.outcome) outMis.push(g.seed + ':' + g.outcome + '≠' + o.outcome);
+      if (g.actions !== o.actions) actMis.push(g.seed + ':' + g.actions + '≠' + o.actions);
+      if ((g.deathFloor || 0) !== (o.deathFloor || 0)) flrMis.push(g.seed + ':' + g.deathFloor + '≠' + o.deathFloor);
+      if ((g.deathCause || '') !== (o.deathCause || '')) cauMis.push(g.seed + ':' + g.deathCause + '≠' + o.deathCause);
+      lines.push(g.seed + '=' + g.outcome + '/' + g.actions + 'act/F' + (g.deathFloor || '-') +
+        '/' + (g.death && g.death.monsterId ? g.death.monsterId : '-'));
+    }
+    rec('B1_sameOutcomeAsD19',
+      mine.length === 10 && refMiss.length === 0 && outMis.length === 0,
+      '局数 ' + mine.length + '；D-19 参考缺失 ' + (refMiss.join(',') || '0') +
+      '；胜负不一致 ' + (outMis.join(',') || '0') + '；逐局 ' + lines.join(' '));
+
+    rec('B2_sameActionsFloorCauseAsD19',
+      mine.length === 10 && refMiss.length === 0 && actMis.length === 0 && flrMis.length === 0 && cauMis.length === 0,
+      '动作数不一致 ' + (actMis.join(',') || '0') + '；死亡层不一致 ' + (flrMis.join(',') || '0') +
+      '；死因不一致 ' + (cauMis.join(',') || '0') + '（采集只读，不改判定/顺序/随机数）');
+
+    /* ══ C. 空值安全：拿不到就 null，不抛错、不丢键 ══════════════ */
+    var stC = B.getState();
+    var mon0 = stC.monster;
+    stC.monster = null;
+    var c1 = null, c1err = null;
+    try { c1 = B.loseTelemetry(); } catch (e) { c1err = String(e); }
+    stC.monster = mon0;
+    rec('C1_noBattleNullsNoThrow',
+      !c1err && !!c1 && hasAllKeys(c1).length === 0 && c1.monsterId === null && c1.monsterName === null &&
+      c1.source === 'other' && checkDeath(c1).ok,
+      c1err ? '抛错：' + c1err : 'monster=null → monsterId/Name 均为 null、source=' +
+        (c1 ? c1.source : '-') + '、12 键齐全=' + (c1 ? hasAllKeys(c1).length === 0 : false));
+
+    var eq0 = P.equipment, fl0 = P.floor, lv0 = P.level;
+    P.equipment = {}; P.floor = undefined; P.level = undefined;
+    var c2 = null, c2err = null;
+    try { c2 = B.loseTelemetry(); } catch (e) { c2err = String(e); }
+    P.equipment = eq0; P.floor = fl0; P.level = lv0;
+    rec('C2_missingEquipmentFloorNullsNoThrow',
+      !c2err && !!c2 && hasAllKeys(c2).length === 0 &&
+      c2.weaponId === null && c2.armorId === null && c2.floor === null && c2.playerLevel === null,
+      c2err ? '抛错：' + c2err : '装备缺省 → weapon/armor=null；floor/level 缺省 → null；12 键齐全=' +
+        (c2 ? hasAllKeys(c2).length === 0 : false));
+
+    var c3 = null, c3err = null;
+    try {
+      c3 = B.loseTelemetry({ source: 'trap', monsterId: null, monsterName: null, roundNo: null });
+    } catch (e) { c3err = String(e); }
+    rec('C3_trapSourceExplicitNulls',
+      !c3err && !!c3 && c3.source === 'trap' && c3.monsterId === null && c3.roundNo === null && checkDeath(c3).ok,
+      c3err ? '抛错：' + c3err : '陷阱致死：source=trap、monster/round 显式 null（不把上一场残留怪算成本次凶手）、校验=' +
+        (c3 && checkDeath(c3).ok ? 'OK' : 'FAIL'));
+
+    /* 消费端（bot 记账）遇到字段缺失不抛错：空 payload 也照收 */
+    var crashes0 = Bot.spy().crashes;
+    var c4threw = null;
+    try {
+      Game.Core.EventBus.emit('battle:end', { result: 'lose' });
+      Game.Core.EventBus.emit('battle:end', null);
+    } catch (e) { c4threw = String(e); }
+    rec('C4_consumerToleratesMissingFields',
+      !c4threw && Bot.spy().crashes === crashes0,
+      c4threw ? '抛错：' + c4threw : '空 payload / null payload 均未抛错；crashes ' +
+        crashes0 + '→' + Bot.spy().crashes);
+
+    /* ══ D. 存档未被污染：ai_dungeon_rpg_save_v1 键集合不变 ══════ */
+    Game.Systems.Save.save();
+    var saveAfter = saveSnap();
+    var leaked = [];
+    for (var t = 0; t < TELEM_ONLY.length; t++) {
+      if (saveAfter.top.indexOf(TELEM_ONLY[t]) >= 0 || saveAfter.player.indexOf(TELEM_ONLY[t]) >= 0) {
+        leaked.push(TELEM_ONLY[t]);
+      }
+    }
+    rec('D1_saveKeySetUnchanged',
+      saveBefore.present && saveAfter.present &&
+      eqArr(saveBefore.top, saveAfter.top) && eqArr(saveBefore.player, saveAfter.player) &&
+      leaked.length === 0,
+      '顶层 [' + saveBefore.top.join(',') + '] → [' + saveAfter.top.join(',') + ']；player [' +
+      saveBefore.player.join(',') + '] → [' + saveAfter.player.join(',') + ']；遥测字段泄漏=' +
+      (leaked.join(',') || '无'));
+
+    /* ══ E. 产物自证：回归用的归因表字段完整（不静默丢字段）════════ */
+    var d23 = readJson('selfcheck/d23-report.json');
+    var recKeys = ['at', 'source', 'monsterId', 'monsterName', 'floor', 'playerLevel',
+      'roundNo', 'hpAtDeath', 'maxHp', 'potionsLeft', 'weaponId', 'armorId'];
+    var incomplete = [], deadWithDeath = 0, runsE = (d23 && d23.runs) || [];
+    for (var e2 = 0; e2 < runsE.length; e2++) {
+      var r = runsE[e2];
+      if (!r.death) continue;
+      deadWithDeath++;
+      for (var q = 0; q < recKeys.length; q++) {
+        if (!Object.prototype.hasOwnProperty.call(r.death, recKeys[q])) {
+          incomplete.push(r.seed + ':' + recKeys[q]);
+        }
+      }
+    }
+    rec('E1_reportDeathsComplete',
+      !!d23 && d23.ok === true && !!d23.attribution &&
+      d23.attribution.noTelemetry === 0 && d23.summary &&
+      d23.summary.runs >= 10 && deadWithDeath === d23.attribution.deadRuns &&
+      incomplete.length === 0,
+      'runs=' + (d23 && d23.summary ? d23.summary.runs : '-') +
+      '、deadRuns=' + (d23 && d23.attribution ? d23.attribution.deadRuns : '-') +
+      '、带死亡快照=' + deadWithDeath +
+      '、noTelemetry=' + (d23 && d23.attribution ? d23.attribution.noTelemetry : '-') +
+      '、缺字段=' + (incomplete.join(',') || '无'));
+
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  document.getElementById('result').textContent =
+    (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out) + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+})();
+</script>
+</body>
+</html>

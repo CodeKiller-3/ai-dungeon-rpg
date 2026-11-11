@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-23 bot 死亡归因批量跑局</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-23 · bot 死亡归因跑局（本页不参与 run-all 回归，只产出 d23-report.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-23 死亡归因跑局：种子 1001~1050、maxActions 2500，参数与 D-17/D-18/D-19 完全一致。
+ * 唯一差别：bot 在 battle:end lose 时把 payload 副本记进 run.death（纯观测）。
+ * 产物另存 d23-report.json，旧报告一律不覆盖。 */
+(function () {
+  var out = { ok: false, env: {}, summary: null, attribution: null, runs: [] };
+  var FIELDS = ['source', 'monsterId', 'monsterName', 'floor', 'playerLevel', 'roundNo',
+    'hpAtDeath', 'maxHp', 'potionsLeft', 'weaponId', 'armorId'];
+
+  function killerKey(d) {
+    if (!d) return '(no-telemetry)';
+    if (d.source === 'trap') return '(trap)';
+    if (d.monsterId) return d.monsterId;
+    return '(unknown)';
+  }
+  function killerName(d) {
+    if (!d) return '未记录';
+    if (d.source === 'trap') return '陷阱';
+    return d.monsterName || d.monsterId || '未知';
+  }
+  function avg(a) {
+    return a.length ? Math.round((a.reduce(function (s, v) { return s + v; }, 0) / a.length) * 10) / 10 : null;
+  }
+  function topOf(map) {
+    var best = null, n = -1;
+    for (var k in map) { if (map.hasOwnProperty(k) && map[k] > n) { n = map[k]; best = k; } }
+    return best;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var seeds = [];
+    var m = /n=(\d+)/.exec(location.search || '');
+    var n = m ? Math.max(1, Math.min(200, +m[1])) : 50;
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    var t0 = Date.now();
+    var res = Game.Bot.batch(seeds, { maxActions: 2500 });
+    out.wallMs = Date.now() - t0;
+    out.env = {
+      ua: navigator.userAgent,
+      stepMs: Game.Bot.STEP_MS,
+      actionSec: Game.Bot.ACTION_SEC,
+      seeds: 'seed 1001..' + (1000 + n) + ' (固定)',
+      maxActions: 2500
+    };
+    out.summary = res.summary;
+
+    /* ── 归因聚合（全部只读 rec.death） ─────────────────────── */
+    var byKiller = {}, byFloor = {}, byCause = {}, byKey = {}, missing = {}, noTel = 0;
+    var deaths = 0;
+    res.runs.forEach(function (r) {
+      out.runs.push({
+        seed: r.seed, outcome: r.outcome, actions: r.actions, level: r.level, hp: r.hp,
+        deathCause: r.deathCause, deathFloor: r.deathFloor, death: r.death || null
+      });
+      if (r.outcome !== 'dead') return;
+      var d = r.death;
+      if (!d) { noTel++; return; }
+      deaths++;
+      var k = killerKey(d);
+      byKiller[k] = (byKiller[k] || 0) + 1;
+      byFloor[String(d.floor)] = (byFloor[String(d.floor)] || 0) + 1;
+      byCause[r.deathCause || '?'] = (byCause[r.deathCause || '?'] || 0) + 1;
+      if (!byKey[k]) {
+        byKey[k] = { key: k, name: killerName(d), count: 0, lv: [], rnd: [], pot: [], hpPct: [], wp: {}, ar: {} };
+      }
+      var b = byKey[k];
+      b.count++;
+      if (typeof d.playerLevel === 'number') b.lv.push(d.playerLevel);
+      if (typeof d.roundNo === 'number') b.rnd.push(d.roundNo);
+      if (typeof d.potionsLeft === 'number') b.pot.push(d.potionsLeft);
+      if (typeof d.hpAtDeath === 'number' && typeof d.maxHp === 'number' && d.maxHp > 0) {
+        b.hpPct.push(Math.round(d.hpAtDeath / d.maxHp * 100));
+      }
+      var w = d.weaponId || '(无)', a = d.armorId || '(无)';
+      b.wp[w] = (b.wp[w] || 0) + 1;
+      b.ar[a] = (b.ar[a] || 0) + 1;
+      FIELDS.forEach(function (f) {
+        if (!(f in d) || d[f] === undefined) missing[f] = (missing[f] || 0) + 1;
+        else if (d[f] === null) missing[f + ':null'] = (missing[f + ':null'] || 0) + 1;
+      });
+    });
+    var rows = [];
+    for (var kk in byKey) if (byKey[kk].hasOwnProperty('key')) {
+      var x = byKey[kk];
+      rows.push({
+        key: x.key, name: x.name, count: x.count,
+        pct: deaths ? Math.round(x.count / deaths * 1000) / 10 : null,
+        avgLevel: avg(x.lv), avgRound: avg(x.rnd),
+        avgPotionsLeft: avg(x.pot), avgHpPct: avg(x.hpPct),
+        topWeapon: topOf(x.wp), topArmor: topOf(x.ar)
+      });
+    }
+    rows.sort(function (p, q) { return q.count - p.count || (p.key < q.key ? -1 : 1); });
+    var floors = [];
+    for (var f in byFloor) if (byFloor.hasOwnProperty(f)) floors.push({ floor: +f, count: byFloor[f] });
+    floors.sort(function (p, q) { return p.floor - q.floor; });
+
+    out.attribution = {
+      deadRuns: deaths,
+      noTelemetry: noTel,
+      trapDeaths: byKiller['(trap)'] || 0,
+      top3: rows.slice(0, 3).map(function (r) { return { key: r.key, name: r.name, count: r.count, pct: r.pct }; }),
+      byKiller: rows,
+      byFloor: floors,
+      byCause: byCause,
+      missingFieldCounts: missing
+    };
+    out.ok = true;
+    document.title = 'BATCH_DONE runs=' + res.runs.length + ' dead=' + res.summary.dead +
+      ' deaths=' + deaths + ' trap=' + (byKiller['(trap)'] || 0) +
+      ' noTel=' + noTel + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D23__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out, null, 1);
+})();
+</script>
+</body>
+</html>
