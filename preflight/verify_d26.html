@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-26：本页读取 preflight/selfcheck/d26-online-verify.json（本轮线上核验产物）与
+     page-baseline.json（页数唯一来源），因此声明为元页面（preflight-meta）。
+     口径：产物缺失 / 字段不合格 / 覆盖不全 / 计数不自洽 / 产物落后于基线（新增页后未重跑线上核验）
+     一律 FAIL；同时断言「入口页可达 + 最新若干页线上可判定」。 -->
+<meta name="preflight-meta" content="1">
+<title>D-26 线上核验欠账清零</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-26 · 线上核验产物一致性 / 覆盖 / 计数自洽 / 失败归因 / 产物新鲜度 / 负例</h1>
+<pre id="result">RUNNING</pre>
+<script>
+(function () {
+  'use strict';
+  var SELF = 'verify_d26';
+  var out = { ok: true, sub: {} };
+
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+
+  /* file:// 下同步读同目录文本（run-all 启动 Edge 时带 --allow-file-access-from-files） */
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function clone(x) { return JSON.parse(JSON.stringify(x)); }
+  function names(p) {
+    var a = (p && p.pages) || [], r = [];
+    for (var i = 0; i < a.length; i++) r.push(a[i].page);
+    return r;
+  }
+  function asSet(a) { var o = {}, i; for (i = 0; i < a.length; i++) o[a[i]] = 1; return o; }
+  function uniq(a) {
+    var o = {}, r = [], i;
+    for (i = 0; i < a.length; i++) { if (!o[a[i]]) { o[a[i]] = 1; r.push(a[i]); } }
+    return r;
+  }
+  function verdictOf(p, name) {
+    var a = (p && p.pages) || [];
+    for (var i = 0; i < a.length; i++) if (a[i].page === name) return a[i];
+    return null;
+  }
+
+  /* ══ 检查项：真实产物与负例共用同一批函数 ═════════════════════ */
+  function chkBaseline(b) {
+    if (!b || !Array.isArray(b.pages)) return { ok: false, d: 'page-baseline.json 不可读或 pages 非数组' };
+    var dup = b.pages.length !== uniq(b.pages).length;
+    return {
+      ok: b.count === b.pages.length && b.count > 60 && !dup,
+      d: 'count=' + b.count + '，清单 ' + b.pages.length + ' 条，重复=' + dup
+    };
+  }
+
+  function chkShape(p) {
+    if (!p || typeof p !== 'object') return { ok: false, d: '产物不可读/缺失' };
+    var bad = [];
+    if (p.version !== 1) bad.push('version=' + p.version);
+    if (!/^[0-9a-f]{7,40}$/.test(String(p.commit || ''))) bad.push('commit=' + p.commit);
+    if (isNaN(Date.parse(String(p.generatedAt || '')))) bad.push('generatedAt=' + p.generatedAt);
+    if (typeof p.channel !== 'string' || p.channel.length < 5) bad.push('channel 缺失');
+    if (typeof p.method !== 'string' || p.method.length < 10) bad.push('method 缺失');
+    if (typeof p.httpNote !== 'string' || p.httpNote.length < 10) bad.push('httpNote 缺失（须写明为何没有状态码）');
+    if (!Array.isArray(p.pages) || !p.pages.length) bad.push('pages 为空');
+    return {
+      ok: bad.length === 0,
+      d: bad.length ? '不合格：' + bad.join('；') :
+        'version=1、commit=' + p.commit + '、generatedAt=' + p.generatedAt + '、pages=' + p.pages.length
+    };
+  }
+
+  function chkCoverage(p, b) {
+    if (!p || !b || !Array.isArray(p.pages)) return { ok: false, d: '产物/基线缺失' };
+    var listed = asSet(b.pages), mine = asSet(names(p));
+    var missing = b.pages.filter(function (n) { return n !== SELF && !mine[n]; });
+    var extra = names(p).filter(function (n) { return !listed[n] || n === SELF; });
+    var dup = names(p).length !== uniq(names(p)).length;
+    return {
+      ok: missing.length === 0 && extra.length === 0 && !dup,
+      d: '基线 ' + b.pages.length + ' 页（含本页）；产物 ' + p.pages.length + ' 页；缺 ' +
+        (missing.join(',') || '0') + '；多出/越界 ' + (extra.join(',') || '0') + '；重复=' + dup
+    };
+  }
+
+  function chkCounts(p) {
+    if (!p || !p.summary || !Array.isArray(p.pages)) return { ok: false, d: 'summary/pages 缺失' };
+    var s = p.summary, cnt = { PASS: 0, FAIL: 0, NONE: 0, MIXED: 0 }, meta = 0, badV = [];
+    p.pages.forEach(function (x) {
+      if (!(x.verdict in cnt)) { badV.push(x.page + ':' + x.verdict); return; }
+      cnt[x.verdict]++;
+      if (x.meta) meta++;
+    });
+    var groups = (s.failStaleSubresource || 0) + (s.failMetaDependent || 0) + (s.failEnvironmentSensitive || 0);
+    var bad = [];
+    if (badV.length) bad.push('未知裁决 ' + badV.slice(0, 3).join(','));
+    if (s.total !== p.pages.length) bad.push('total ' + s.total + '≠页数 ' + p.pages.length);
+    if (s.total !== p.baselineCount) bad.push('total ' + s.total + '≠baselineCount ' + p.baselineCount);
+    if (s.pass !== cnt.PASS) bad.push('pass ' + s.pass + '≠' + cnt.PASS);
+    if (s.fail !== cnt.FAIL) bad.push('fail ' + s.fail + '≠' + cnt.FAIL);
+    if (s.none !== cnt.NONE) bad.push('none ' + s.none + '≠' + cnt.NONE);
+    if (cnt.MIXED !== 0) bad.push('MIXED=' + cnt.MIXED + '（同页双裁决必须为 0）');
+    if ((s.metaTagged || 0) !== meta) bad.push('metaTagged ' + s.metaTagged + '≠' + meta);
+    if (groups !== s.fail) bad.push('三类失败合计 ' + groups + '≠fail ' + s.fail);
+    return {
+      ok: bad.length === 0,
+      d: bad.length ? bad.join('；') :
+        'PASS ' + cnt.PASS + ' / FAIL ' + cnt.FAIL + ' / NONE ' + cnt.NONE + ' / MIXED 0；' +
+        '元页面 ' + meta + '；三类失败 ' + groups + '＝fail ' + s.fail
+    };
+  }
+
+  function chkEntry(p) {
+    if (!p || !p.entry) return { ok: false, d: 'entry 缺失' };
+    var e = p.entry, bad = [];
+    if (e.reachable !== true) bad.push('reachable=' + e.reachable);
+    if (e.http !== null) bad.push('http=' + e.http + '（本机无外网，不许伪造状态码）');
+    if (typeof e.jsErrorsNote !== 'string' || e.jsErrorsNote.length < 10) bad.push('jsErrorsNote 缺失/过短');
+    if (e.smokeVerdict !== 'PASS') bad.push('smokeVerdict=' + e.smokeVerdict);
+    if (typeof e.url !== 'string' || e.url.indexOf('index.html') < 0) bad.push('entry.url 不是入口页');
+    return {
+      ok: bad.length === 0,
+      d: bad.length ? bad.join('；') :
+        '入口 ' + e.url + ' 可达；JS_ERRORS 替代证据＝同源 ' + e.smokePage + ' 线上 ' + e.smokeVerdict +
+        '（取证通道不暴露 console/pageerror，已在 jsErrorsNote 写明）'
+    };
+  }
+
+  function chkNewest(p) {
+    var need = ['verify_d23', 'verify_d24', 'verify_d25'];
+    var missing = [], undecided = [], pass = 0, got = [];
+    need.forEach(function (n) {
+      var x = verdictOf(p, n);
+      if (!x) { missing.push(n); return; }
+      got.push(n.replace('verify_', '') + '=' + x.verdict);
+      if (x.verdict === 'PASS') pass++;
+      if (x.verdict !== 'PASS' && x.verdict !== 'FAIL') undecided.push(n + ':' + x.verdict);
+    });
+    var e = (p && p.entry) || {};
+    var ok = missing.length === 0 && undecided.length === 0 && pass >= 1 && e.reachable === true;
+    return {
+      ok: ok,
+      d: '最新页 ' + got.join(' / ') + '（缺 ' + (missing.join(',') || '0') +
+        '；无裁决 ' + (undecided.join(',') || '0') + '；PASS ' + pass + ' 页）；入口可达=' + e.reachable
+    };
+  }
+
+  function chkClassification(p) {
+    if (!p || !p.findings) return { ok: false, d: 'findings 缺失' };
+    var bad = [], gset = {};
+    var groups = ['staleSubresource', 'metaDependent', 'environmentSensitive', 'unreachable'];
+    groups.forEach(function (g) {
+      var f = p.findings[g];
+      if (!f || !Array.isArray(f.pages) || typeof f.reason !== 'string' || f.reason.length < 10) {
+        bad.push(g + ' 缺 reason/pages');
+        return;
+      }
+      f.pages.forEach(function (n) { (gset[n] = gset[n] || []).push(g); });
+    });
+    var clsMap = { stale: 'staleSubresource', meta: 'metaDependent', env: 'environmentSensitive', unreachable: 'unreachable' };
+    p.pages.forEach(function (x) {
+      if (x.verdict === 'PASS') {
+        if (x.cls !== 'ok') bad.push(x.page + ' PASS 但 cls=' + x.cls);
+        return;
+      }
+      if (x.verdict === 'MIXED') { bad.push(x.page + ' 出现 MIXED'); return; }
+      var want = clsMap[x.cls];
+      if (!want) { bad.push(x.page + ' 未知 cls=' + x.cls); return; }
+      if ((gset[x.page] || []).indexOf(want) < 0) bad.push(x.page + ' 未登记到 ' + want);
+      if (!Array.isArray(x.failing) || (x.verdict === 'FAIL' && !x.failing.length)) bad.push(x.page + ' 无 failing 明细');
+      if (typeof x.evidence !== 'string' || !x.evidence) bad.push(x.page + ' 无 evidence');
+    });
+    /* 卡片点名：旧子资源缓存伪影必须含 d20/d24/d25，且每个都写清"线上未回退"的证据链 */
+    var stale = (p.findings.staleSubresource && p.findings.staleSubresource.pages) || [];
+    ['verify_d20', 'verify_d24', 'verify_d25'].forEach(function (n) {
+      if (stale.indexOf(n) < 0) bad.push('staleSubresource 缺 ' + n);
+    });
+    /* 元页面一类不得被算成"线上真的坏了"：meta 组必须单独成组且有 reason */
+    if (!p.findings.metaDependent || p.findings.metaDependent.pages.length < 3) {
+      bad.push('metaDependent 页数 < 3（元页面须单独成类）');
+    }
+    return {
+      ok: bad.length === 0,
+      d: bad.length ? bad.slice(0, 6).join('；') :
+        '四组归因齐全（stale ' + (p.findings.staleSubresource.pages.length) +
+        ' / meta ' + (p.findings.metaDependent.pages.length) +
+        ' / env ' + (p.findings.environmentSensitive.pages.length) +
+        ' / unreachable ' + (p.findings.unreachable.pages.length) +
+        '）；stale 含 d20/d24/d25；meta 组独立，不计入线上失败'
+    };
+  }
+
+  function chkFreshness(p, b) {
+    if (!p || !b) return { ok: false, d: '产物/基线缺失' };
+    var inProduct = !!asSet(names(p))[SELF];
+    var diff = b.count - p.baselineCount;
+    return {
+      ok: diff === 1 && b.count === b.pages.length && !inProduct,
+      d: '产物 baselineCount=' + p.baselineCount + '，当前基线 ' + b.count + '（差 ' + diff +
+        '，应为 1＝仅新增本页）；本页出现在产物中=' + inProduct +
+        '（若差 >1，说明新增验证页后未重跑线上核验，产物过期）'
+    };
+  }
+
+  var product = readJson('selfcheck/d26-online-verify.json');
+  var baseline = readJson('selfcheck/page-baseline.json');
+
+  try {
+    /* ══ A1. 产物与基线都在 ═══════════════════════════════════════ */
+    rec('A1_artifactsLoad', !!product && !!baseline,
+      'd26-online-verify.json=' + (product ? 'OK' : '缺失') + '；page-baseline.json=' + (baseline ? 'OK' : '缺失'));
+
+    /* ══ A2. 基线自洽（count 与清单一致） ════════════════════════ */
+    var rB = chkBaseline(baseline);
+    rec('A2_baselineSelfConsistent', rB.ok, rB.d);
+
+    /* ══ A3. 产物字段合格（版本/commit/时间/渠道/不伪造状态码） ═══ */
+    var rS = chkShape(product);
+    rec('A3_productShape', rS.ok, rS.d);
+
+    /* ══ A4. 覆盖：基线除本页外全部有记录，且无越界/重复 ═════════ */
+    var rC = chkCoverage(product, baseline);
+    rec('A4_coverageComplete', rC.ok, rC.d);
+
+    /* ══ A5. 计数自洽（与逐页裁决、元页面标记互相对得上） ═══════ */
+    var rN = chkCounts(product);
+    rec('A5_countsSelfConsistent', rN.ok, rN.d);
+
+    /* ══ A6. 入口页可达 + JS_ERRORS 有替代证据 ═══════════════════ */
+    var rE = chkEntry(product);
+    rec('A6_entryReachableNoFakeHttp', rE.ok, rE.d);
+
+    /* ══ A7. 最新若干页线上可判定（裁决行拿到了，不是 NONE） ═════ */
+    var rW = chkNewest(product);
+    rec('A7_newestPagesDecidable', rW.ok, rW.d);
+
+    /* ══ A8. 失败归因：四类分清楚，元页面不背"线上坏了"的锅 ═════ */
+    var rF = chkClassification(product);
+    rec('A8_failureClassified', rF.ok, rF.d);
+
+    /* ══ A9. 产物新鲜度：基线只比产物多本页，否则视为过期 ═══════ */
+    var rR = chkFreshness(product, baseline);
+    rec('A9_productFresh', rR.ok, rR.d);
+
+    /* ══ A10. 负例：同一批检查函数必须抓住 6 种篡改 ══════════════ */
+    var muts = [];
+    function mut(name, fn, check, base) {
+      var p2 = clone(product);
+      fn(p2);
+      var r = check(p2, base === 'fresh' ? null : baseline);
+      muts.push({ n: name, caught: !r.ok });
+    }
+    mut('删掉 verify_d23 一页', function (p2) {
+      p2.pages = p2.pages.filter(function (x) { return x.page !== 'verify_d23'; });
+    }, chkCoverage);
+    mut('summary.pass 自行加一', function (p2) { p2.summary.pass = p2.summary.pass + 1; }, chkCounts);
+    mut('入口标成不可达', function (p2) { p2.entry.reachable = false; }, chkEntry);
+    mut('最新页裁决改成 NONE', function (p2) {
+      p2.pages.forEach(function (x) { if (x.page === 'verify_d25') { x.verdict = 'NONE'; x.cls = 'unreachable'; } });
+    }, chkNewest);
+    mut('stale 组漏掉 verify_d25', function (p2) {
+      p2.findings.staleSubresource.pages = p2.findings.staleSubresource.pages.filter(function (n) { return n !== 'verify_d25'; });
+    }, chkClassification);
+    mut('commit 写成非十六进制', function (p2) { p2.commit = 'zzz'; }, chkShape);
+
+    var b2 = clone(baseline);
+    b2.count = b2.count + 1;
+    b2.pages.push('verify_d27');
+    var rFreshMut = chkFreshness(product, b2);
+    muts.push({ n: '基线新增一页但产物未重跑', caught: !rFreshMut.ok });
+
+    var missed = muts.filter(function (m) { return !m.caught; }).map(function (m) { return m.n; });
+    rec('A10_negativeMutantsCaught', muts.length === 7 && missed.length === 0,
+      muts.length + ' 个篡改样本，抓住 ' + (muts.length - missed.length) +
+      ' 个' + (missed.length ? '；漏检：' + missed.join('、') : '（覆盖/计数/入口/最新页/归因/字段/新鲜度）'));
+
+  } catch (e) {
+    rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+  document.getElementById('result').textContent = text + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = text;
+})();
+</script>
+</body>
+</html>
