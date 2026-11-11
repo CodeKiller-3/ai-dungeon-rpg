@@ -243,7 +243,8 @@
     }
     function bagHasEquip() {
       var t = sink.join('\n');
-      return t.indexOf('已装备：匕首（攻击+1）') >= 0 && t.indexOf('护甲：无') >= 0;
+      /* D-28 规格变更：摘要扩写为「已装备：<名>+<强化>（<数值>） · 护甲：… · 合计 …」 */
+      return t.indexOf('已装备：匕首+0（攻击+1）') >= 0 && t.indexOf('护甲：无') >= 0;
     }
     clearSave(); M.restart();
     sink.length = 0; drawBag();

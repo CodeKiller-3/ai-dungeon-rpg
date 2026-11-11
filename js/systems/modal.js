@@ -70,7 +70,17 @@
     return Math.max(1, Math.min(MAX_VISIBLE, byH));
   }
 
-  function itemDesc(item) {
+  /* D-28：强化后的实际数值——与 Inventory.effValue 同一公式。
+   * modal.js 先于 inventory.js 加载，故运行时取；缺失时按同式兜底（不产生第二套口径）。 */
+  function effOf(base, plus) {
+    var I = Game.Systems && Game.Systems.Inventory;
+    if (I && typeof I.effValue === 'function') return I.effValue(base, plus);
+    var b = Number(base) || 0;
+    var n = Math.min(Math.max(Number(plus) || 0, 0), 5);
+    return b + (b ? Math.ceil(b * n * 0.1) : 0);
+  }
+
+  function itemDesc(item, plus) {
     if (!item) return '';
     var hp = (item.effect && item.effect.maxHp) ? (' 生命+' + item.effect.maxHp) : '';
     if (item.type === 'consumable') {
@@ -81,8 +91,9 @@
       if (item.effect && item.effect.mp) parts.push('恢复MP+' + item.effect.mp);
       return parts.length ? parts.join(' ') : '回复道具';
     }
-    if (item.type === 'weapon') return '攻击+' + ((item.effect && item.effect.atk) || 0) + hp;
-    if (item.type === 'armor') return '防御+' + ((item.effect && item.effect.def) || 0) + hp;
+    /* D-28：plus 只在背包上下文传入；商店/图鉴不传（默认 0）→ 仍显示原始基础值 */
+    if (item.type === 'weapon') return '攻击+' + effOf((item.effect && item.effect.atk) || 0, plus) + hp;
+    if (item.type === 'armor') return '防御+' + effOf((item.effect && item.effect.def) || 0, plus) + hp;
     return '';
   }
 
@@ -143,6 +154,8 @@
   }
 
   Game.Modal = {
+    /* D-28：供验证页断言"背包上下文传强化等级 / 商店图鉴走基础值"的只读入口 */
+    _itemDesc: function (item, plus) { return itemDesc(item, plus); },
     open: function (k, stats) {
       if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover') return;
       /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
@@ -726,7 +739,20 @@
           var riy = ry + Math.floor((ROW_H - 16) / 2);
           c.drawImage(ric, px + 14 + 2, riy, 16, 16);
         }
-        c.fillText(this._fitRow(c, this._rowText(entry), rowMaxW), rowTextX, ry + 20);
+        /* D-28：行尾徽标独立绘制（已装备 / 强化后数值），行串本身不变 */
+        var badge = this._rowBadges(kind, entry);
+        var badgeW = 0;
+        if (badge) {
+          c.font = '11px monospace';
+          badgeW = Math.round(c.measureText(badge.text).width) + 14;
+        }
+        c.fillText(this._fitRow(c, this._rowText(entry), rowMaxW - badgeW), rowTextX, ry + 20);
+        if (badge) {
+          c.fillStyle = badge.color;
+          c.textAlign = 'right';
+          c.fillText(badge.text, px + w - 14, ry + 20);
+          c.textAlign = 'left';
+        }
       }
       /* M9-5：空状态——居中灰字提示（背包/任务各自文案） */
       if (data.length === 0) {
@@ -741,44 +767,94 @@
         c.textAlign = 'left';
       }
 
-      /* 底部操作提示（窄屏缩字号，避免 320 宽溢出） */
+      /* 底部操作提示（窄屏缩字号，避免 320 宽溢出；D-28：溢出时折两行且保留操作指导） */
       c.fillStyle = '#9bbbf4';
+      var hintInfo = this._hintFor(c, kind, cw, sz);
+      if (hintInfo.lines.length > 1) {
+        c.fillText(hintInfo.lines[0], px + 14, py + h - 25);
+        c.fillText(hintInfo.lines[1], px + 14, py + h - 10);
+      } else {
+        c.fillText(hintInfo.lines[0], px + 14, py + h - 12);
+      }
+    },
+
+    /* D-28：底栏提示文本——非溢出态返回原串（逐字节不变，D-25 精确比对依赖它）；
+     * 溢出态（320 逻辑宽实测）保留「Enter 使用/装备」，把 Esc 提示折到第二行，
+     * 丢掉的是浏览计数那一侧，不是操作指导。 */
+    _hintFor: function (c, kind, cw, sz) {
       c.font = (cw < 420 ? '11px monospace' : '12px monospace');
       var hint;
       if (kind === 'inventory') hint = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
-      /* P2-3b/C-03：列表滚动时底部显示当前位置 (sel+1)/total（窄屏用短文案避免溢出） */
-      if (data.length > visibleRowCount(sz)) {
+      /* P2-3b/C-03：列表滚动时底部显示当前位置 (sel+1)/total */
+      var scrolling = data.length > visibleRowCount(sz);
+      if (scrolling) {
         hint = '↑↓ 浏览 · ' + (sel + 1) + '/' + data.length + ' · ' +
           (kind === 'quests' ? 'Tab 切页 · ' : '') + 'Esc 关闭';
       }
-      c.fillText(hint, px + 14, py + h - 12);
+      var maxW = Math.min(cw * W_RATIO, MAX_W) - 28;
+      var hintW = c.measureText(hint).width;
+      /* 字宽随环境字体 fallback 浮动，留 24px 安全边距；320 逻辑宽实测触发两行，1024 不触发 */
+      var overflow = hintW > (maxW - 24);
+      if (overflow && kind === 'inventory') {
+        return {
+          lines: [(scrolling ? '↑↓ 浏览 · ' : '↑↓ 选择 · ') + 'Enter 使用/装备', 'Esc/点遮罩关闭'],
+          full: hint, overflow: true, width: hintW, maxW: maxW
+        };
+      }
+      return { lines: [hint], full: hint, overflow: overflow, width: hintW, maxW: maxW };
     },
 
-    /* D-27：背包页头装备摘要（独立小函数，后续 UI 重做时替换/扩写它即可）。
-     * 只读 Player.equipment + ITEMS + upg：没有护甲就写"无"，不留占位符；
-     * 数值按"基础 + 强化加成"计算，与 Inventory.recalcEquip 的口径一致。 */
+    /* D-28：背包页头装备摘要（在 D-27 的函数上扩写，不另造第二套）。
+     * 两槽各带强化等级与强化后数值；护甲为空显式写"无"；末尾给两槽合计加成。 */
     equipSummary: function () {
       var p = Game.Data.Player || {};
       var IT = Game.Data.ITEMS || {};
       var eq = p.equipment || {};
       var upg = p.upg || {};
-      function itemText(id, field) {
-        if (!id) return '无';
+      function slot(id, field, label) {
+        if (!id) return label + '无';
         var it = IT[id];
-        if (!it) return id;
+        if (!it) return label + id;
         var base = (it.effect && it.effect[field]) ? it.effect[field] : 0;
         var n = Math.min(Math.max(upg[id] || 0, 0), 5);
-        var v = base + (base ? Math.ceil(base * n * 0.1) : 0);
-        return it.name + '（' + (field === 'atk' ? '攻击+' : '防御+') + v + '）';
+        return label + it.name + '+' + n + '（' + (field === 'atk' ? '攻击+' : '防御+') + effOf(base, n) + '）';
       }
-      return '已装备：' + itemText(eq.weapon, 'atk') + ' · 护甲：' + itemText(eq.armor, 'def');
+      var wIt = IT[eq.weapon], aIt = IT[eq.armor];
+      var wAdd = wIt ? effOf((wIt.effect && wIt.effect.atk) || 0, upg[eq.weapon] || 0) : 0;
+      var aAdd = aIt ? effOf((aIt.effect && aIt.effect.def) || 0, upg[eq.armor] || 0) : 0;
+      return '已装备：' + slot(eq.weapon, 'atk', '') +
+        ' · ' + slot(eq.armor, 'def', '护甲：') +
+        ' · 合计 攻+' + wAdd + ' 防+' + aAdd;
+    },
+
+    /* D-28：背包行尾徽标（独立绘制元素，绝不拼进 _rowText 串）。
+     * - 已装备：把总数拆成「已装备 1｜背包 N」——equip() 不扣物品，
+     *   所以 x2 里有一件在身上，N=count-1 明确指出背包里还剩几件，杜绝误读
+     * - 强化：画强化后的实际数值（攻击+4）；商店/图鉴不画，仍用基础值 */
+    _rowBadges: function (kind, entry) {
+      if (kind !== 'inventory' || !entry || !entry.id) return null;
+      var IT = Game.Data.ITEMS || {};
+      var it = IT[entry.id];
+      if (!it || (it.type !== 'weapon' && it.type !== 'armor')) return null;
+      var p = Game.Data.Player || {};
+      var eq = p.equipment || {};
+      var equipped = (eq.weapon === entry.id) || (eq.armor === entry.id);
+      var plus = Math.min(Math.max((p.upg && p.upg[entry.id]) || 0, 0), 5);
+      var field = it.type === 'weapon' ? 'atk' : 'def';
+      var base = (it.effect && it.effect[field]) ? it.effect[field] : 0;
+      var parts = [];
+      if (equipped) parts.push('已装备 1｜背包 ' + Math.max((entry.count || 1) - 1, 0));
+      if (plus > 0) parts.push((field === 'atk' ? '攻击+' : '防御+') + effOf(base, plus));
+      if (!parts.length) return null;
+      return { text: parts.join(' · '), color: equipped ? '#ffcf6e' : '#7fd1ff' };
     },
 
     /* 自适应：单行文本超宽时按实际字宽截断并加省略号（调用前已设好字体） */
-    _fitRow: function (c, text, maxW) {      var str = String(text);
+    _fitRow: function (c, text, maxW) {
+      var str = String(text);
       if (!c || c.measureText(str).width <= maxW) return str;
       var ell = '…';
       while (str.length > 0 && c.measureText(str + ell).width > maxW) {

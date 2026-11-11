@@ -14,7 +14,16 @@
     });
   }
 
+  /* D-28：强化后的实际数值——基础值 + 每级 10%、向上取整，等级 n∈[0,5]。
+   * recalcEquip 与弹窗（背包行徽标 / 页头摘要）共用这一份公式，避免两处漂移。 */
+  function effValue(base, plus) {
+    var b = Number(base) || 0;
+    var n = Math.min(Math.max(Number(plus) || 0, 0), 5);
+    return b + (b ? Math.ceil(b * n * 0.1) : 0);
+  }
+
   Game.Systems.Inventory = {
+    effValue: effValue,
     /* 使用消耗品（P2-2：新增 effect.mp 回蓝分支，与 hp 同构；满 MP 时拒绝使用蓝瓶）
      * S-03：scroll:true 的卷轴走 upgrade()，不消耗血量逻辑 */
     use: function (id) {
@@ -104,10 +113,8 @@
       var aN = a ? Math.min(Math.max(p.upg[a.id] || 0, 0), 5) : 0;
       var wAtk = (w && w.effect.atk) ? w.effect.atk : 0;
       var aDef = (a && a.effect.def) ? a.effect.def : 0;
-      var wAdd = wAtk ? Math.ceil(wAtk * wN * 0.1) : 0;
-      var aAdd = aDef ? Math.ceil(aDef * aN * 0.1) : 0;
-      p.atk = baseAtk + wAtk + wAdd;
-      p.def = baseDef + aDef + aAdd;
+      p.atk = baseAtk + effValue(wAtk, wN);
+      p.def = baseDef + effValue(aDef, aN);
       p.maxHp = baseMaxHp +
         (w && w.effect.maxHp ? w.effect.maxHp : 0) +
         (a && a.effect.maxHp ? a.effect.maxHp : 0);

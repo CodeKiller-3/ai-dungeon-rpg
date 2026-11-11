@@ -54,6 +54,9 @@
 | Esc | 返回 / 关闭面板 |
 | R | 通关画面 / 死亡结算：重新开始 |
 
+- 面板布局边界：单列、最大宽 520 逻辑像素；左右最小余量 195px（1366×768），
+  逻辑宽 < 700 时必须回退单列（不做双栏）；面板正文字号不低于 11px。
+
 ## 技术栈
 
 原生 JavaScript · Canvas 2D · Web Audio API · localStorage · DeepSeek API（可选）· GitHub Pages

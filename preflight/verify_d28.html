@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-28 背包信息层</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-28 · 背包信息层（方案 A）：摘要/已装备拆分/强化实值/底栏溢出/行串不变</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, P = Game.Data.Player, IT = Game.Data.ITEMS,
+      I = Game.Systems.Inventory, R = Game.Core.Render, Modal = Game.Modal;
+  var KEY = 'ai_dungeon_rpg_save_v1';
+  var PANEL_HINT = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
+
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  function clearSave() {
+    try { localStorage.removeItem(KEY); } catch (e) { /* 降级 */ }
+  }
+  function fakeCtx(sink) {
+    var o = {}, noop = function () {};
+    var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+      'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'arc', 'rect', 'roundRect',
+      'setTransform', 'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+    for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+    o.createLinearGradient = function () { return { addColorStop: noop }; };
+    o.createRadialGradient = o.createLinearGradient;
+    o.createPattern = function () { return {}; };
+    o.measureText = function (t) { return { width: String(t).length * 7 }; };
+    o.fillText = function (t) { sink.push(String(t)); };
+    o.strokeText = o.fillText;
+    o.getImageData = function () { return { data: [] }; };
+    return o;
+  }
+  function drawWith(kind) {
+    var sink = [], real = R._ctx;
+    Modal.open(kind);
+    try { R._ctx = fakeCtx(sink); Modal.draw(); } catch (e) { sink.push('DRAW_ERROR:' + e); }
+    R._ctx = real;
+    Modal.close();
+    return sink;
+  }
+  function realCtx() {
+    var cv = document.createElement('canvas');
+    cv.width = 8; cv.height = 8;
+    return cv.getContext('2d');
+  }
+
+  try {
+    Game.Core.Input.bind();
+    clearSave();
+    M.init();
+    M.closeGuide();
+    M.restart();
+
+    /* ══ A1. 页头摘要：两槽 + 强化等级 + 合计；空护甲写"无" ══════ */
+    P.inventory = { sword_iron: 1 };
+    P.equipment = { weapon: 'sword_iron', armor: null };
+    P.upg = { sword_iron: 2 };
+    I.recalcEquip();
+    var sum = Modal.equipSummary();
+    var a1 = sum.indexOf('铁剑+2') >= 0 && sum.indexOf('（攻击+4）') >= 0 &&
+      sum.indexOf('护甲：无') >= 0 && sum.indexOf('合计 攻+4 防+0') >= 0;
+    rec('A1_summarySlotsAndTotals', a1,
+      '摘要「' + sum + '」；含铁剑+2/攻击+4/护甲：无/合计 攻+4 防+0=' + a1);
+
+    /* ══ A2. 「已装备」标记 + 计数拆分（同名另一件不误标） ═══════ */
+    P.inventory = { knife: 2, sword_iron: 1 };
+    P.equipment = { weapon: 'knife', armor: null };
+    P.upg = {};
+    I.recalcEquip();
+    var bag = drawWith('inventory');
+    var equippedBadges = bag.filter(function (t) { return t.indexOf('已装备 1') === 0; });
+    var a2 = equippedBadges.length === 1 && equippedBadges[0] === '已装备 1｜背包 1' &&
+      bag.indexOf('匕首 x2   攻击+1') >= 0 && bag.indexOf('铁剑 x1   攻击+3') >= 0;
+    rec('A2_badgeEquippedSplitCount', a2,
+      '已装备徽标 ' + JSON.stringify(equippedBadges) + '（期望恰好 1 条「已装备 1｜背包 1」）；' +
+      '行串含「匕首 x2   攻击+1」与「铁剑 x1   攻击+3」=' +
+      (bag.indexOf('匕首 x2   攻击+1') >= 0 && bag.indexOf('铁剑 x1   攻击+3') >= 0));
+
+    /* ══ A3. 背包显示强化后数值，商店/图鉴仍基础值 ═══════════════ */
+    P.inventory = { sword_iron: 1 };
+    P.equipment = { weapon: 'sword_iron', armor: null };
+    P.upg = { sword_iron: 2 };
+    I.recalcEquip();
+    var bag3 = drawWith('inventory');
+    var shop3 = drawWith('shop');
+    var txtBag = bag3.join('\n'), txtShop = shop3.join('\n');
+    var bagHasUp = txtBag.indexOf('攻击+4') >= 0;
+    var shopWrong = /铁剑 {3}攻击\+4/.test(txtShop);
+    var descBase = Modal._itemDesc(IT.sword_iron);
+    var descPlus = Modal._itemDesc(IT.sword_iron, 2);
+    var a3 = bagHasUp && !shopWrong && descBase === '攻击+3' && descPlus === '攻击+4';
+    rec('A3_bagUpgradedShopBase', a3,
+      '背包实绘含「攻击+4」=' + bagHasUp + '；商店出现「铁剑   攻击+4」=' + shopWrong +
+      '（必须 false）；_itemDesc 基础=' + descBase + ' / 传 +2=' + descPlus +
+      '（图鉴走同一 itemDesc 且不传 plus）');
+
+    /* ══ A4. effValue 全量比对：48 件 × 6 个强化等级 ═════════════ */
+    var cells = 0, bad4 = [];
+    for (var id in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, id)) continue;
+      var it = IT[id];
+      var field = it.type === 'armor' ? 'def' : 'atk';
+      var base = (it.effect && it.effect[field]) ? it.effect[field] : 0;
+      for (var n = 0; n <= 5; n++) {
+        cells++;
+        var exp = base + (base ? Math.ceil(base * n * 0.1) : 0);
+        var got = I.effValue(base, n);
+        if (got !== exp) bad4.push(id + '@' + n + ':' + got + '≠' + exp);
+      }
+    }
+    var liveBad = [];
+    for (var wid in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, wid)) continue;
+      if (IT[wid].type !== 'weapon' && IT[wid].type !== 'armor') continue;
+      var lf = IT[wid].type === 'weapon' ? 'atk' : 'def';
+      var lb = (IT[wid].effect && IT[wid].effect[lf]) ? IT[wid].effect[lf] : 0;
+      for (var ln = 0; ln <= 5; ln++) {
+        P.equipment = { weapon: null, armor: null };
+        P.upg = {};
+        if (IT[wid].type === 'weapon') P.equipment.weapon = wid;
+        else P.equipment.armor = wid;
+        P.upg[wid] = ln;
+        I.recalcEquip();
+        var actual = (lf === 'atk' ? P.atk - 10 : P.def - 5);
+        if (actual !== I.effValue(lb, ln)) liveBad.push(wid + '@' + ln + ':' + actual + '≠' + I.effValue(lb, ln));
+      }
+    }
+    rec('A4_effValueFullMatrix', bad4.length === 0 && liveBad.length === 0 && cells === 288,
+      cells + ' 个格（48 件 × 0..5）全等=' + (bad4.length === 0) +
+      '；实装 recalcEquip 全等=' + (liveBad.length === 0) +
+      (bad4.length ? '；差异 ' + bad4.slice(0, 3).join(',') : '') +
+      (liveBad.length ? '；实装差异 ' + liveBad.slice(0, 3).join(',') : ''));
+
+    /* ══ A5. 非溢出底栏：与 D-25 常量逐字节一致 ══════════════════ */
+    P.equipment = { weapon: 'knife', armor: null };
+    P.upg = {};
+    P.inventory = { knife: 1 };
+    I.recalcEquip();
+    Modal.open('inventory');
+    var c5 = realCtx();
+    var h5 = Modal._hintFor(c5, 'inventory', 1024, { w: 1024, h: 640 });
+    Modal.close();
+    rec('A5_hintNonOverflowExact', h5.overflow === false && h5.lines.length === 1 &&
+      h5.lines[0] === PANEL_HINT && h5.full === PANEL_HINT,
+      '1024 逻辑宽：overflow=' + h5.overflow + '、行数=' + h5.lines.length +
+      '；串逐字节等于 D-25 常量=' + (h5.lines[0] === PANEL_HINT));
+
+    /* ══ A6. 溢出底栏：折两行且保留「Enter 使用/装备」 ══════════ */
+    Modal.open('inventory');
+    var c6 = realCtx();
+    var h6 = Modal._hintFor(c6, 'inventory', 320, { w: 320, h: 568 });
+    Modal.close();
+    var a6 = h6.overflow === true && h6.lines.length === 2 &&
+      h6.lines[0].indexOf('Enter 使用/装备') >= 0 && h6.lines[1].indexOf('Esc') >= 0;
+    rec('A6_hintOverflowKeepsGuidance', a6,
+      '320 逻辑宽：实测宽=' + Math.round(h6.width || 0) + ' / 可用 ' + Math.round(h6.maxW || 0) +
+      '（安全边距 24）→ overflow=' + h6.overflow + '、行数=' + h6.lines.length +
+      '、行=' + JSON.stringify(h6.lines) + '；首行含 Enter 使用/装备=' +
+      (h6.lines[0].indexOf('Enter 使用/装备') >= 0));
+
+    /* ══ A7. 行串不变：装备类独立复算 + 消耗品基础描述 ═══════════ */
+    Modal.open('inventory');
+    var bad7 = [];
+    var eqCount = 0;
+    for (var rid in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, rid)) continue;
+      var rit = IT[rid];
+      var rn = (P.upg && P.upg[rid]) || 0;
+      var got7 = Modal._rowText({ id: rid, count: 1 });
+      if (rit.type === 'weapon' || rit.type === 'armor') {
+        eqCount++;
+        var rf = rit.type === 'weapon' ? 'atk' : 'def';
+        var rb = (rit.effect && rit.effect[rf]) ? rit.effect[rf] : 0;
+        var exp7 = rit.name + (rn > 0 ? ' +' + rn : '') + ' x1   ' +
+          (rf === 'atk' ? '攻击+' : '防御+') + rb +
+          ((rit.effect && rit.effect.maxHp) ? ' 生命+' + rit.effect.maxHp : '');
+        if (got7 !== exp7) bad7.push(rid + '：' + got7 + ' ≠ ' + exp7);
+      }
+    }
+    Modal.close();
+    rec('A7_rowTextUnchanged', bad7.length === 0 && eqCount >= 15,
+      '装备类 ' + eqCount + ' 件逐条与"基础值 + 强化后缀"重建一致=' + (bad7.length === 0) +
+      '（_rowText 未把强化值拼进串）' + (bad7.length ? '；差异 ' + bad7.slice(0, 2).join(' | ') : ''));
+
+    /* ══ A8. 三档几何：余量 / 单列回退阈值 / 最小字号 ════════════ */
+    var geo = [];
+    var sizes = [[960, 540], [1280, 800], [1024, 640]];
+    for (var gi = 0; gi < sizes.length; gi++) {
+      var gw = sizes[gi][0], gh = sizes[gi][1];
+      var gs = R._computeScale(gw, gh);
+      var lw = gw / gs;
+      var pw = Math.min(lw * 0.88, 520);
+      var mg = (lw - pw) / 2;
+      geo.push({ win: gw + 'x' + gh, scale: gs, logicW: Math.round(lw), panelW: Math.round(pw), margin: Math.round(mg), minFont: 11 });
+    }
+    var a8 = geo[0].margin === 220 && geo[1].margin >= 195 && geo[2].margin === 252 &&
+      geo.every(function (g) { return g.logicW >= 700 && g.minFont >= 11; });
+    rec('A8_layoutGeometry', a8,
+      JSON.stringify(geo) + '；规则：最小余量 195、逻辑宽 < 700 必须回退单列（三档均 ≥700，仍单列）');
+
+    /* ══ N1. 负例：删掉已装备徽标必须 FAIL ══════════════════════ */
+    P.inventory = { knife: 2 };
+    P.equipment = { weapon: 'knife', armor: null };
+    P.upg = {};
+    I.recalcEquip();
+    var badgeOk = drawWith('inventory').filter(function (t) { return t.indexOf('已装备 1') === 0; }).length === 1;
+    var oldBadge = Modal._rowBadges;
+    Modal._rowBadges = function () { return null; };
+    var badgeGone = drawWith('inventory').filter(function (t) { return t.indexOf('已装备 1') === 0; }).length === 0;
+    Modal._rowBadges = oldBadge;
+    rec('N1_negativeNoBadgeFails', badgeOk === true && badgeGone === true,
+      '正常有徽标=' + badgeOk + '；删掉徽标后检测=' + (badgeGone ? '消失（负例被抓住）' : '仍在（漏检）'));
+
+    /* ══ N2. 负例：商店若也用强化值必须被检测出来 ════════════════ */
+    var shopDetect = function (lines) {
+      return lines.some(function (l) { return /铁剑 {3}攻击\+4/.test(l); });
+    };
+    var goodShop = ['铁剑   攻击+3   240 金币'];
+    var badShop = ['铁剑   攻击+4   240 金币'];
+    rec('N2_negativeShopUpgradedFails', shopDetect(goodShop) === false && shopDetect(badShop) === true,
+      '正确商店串判=' + shopDetect(goodShop) + '（false）；错误串判=' + shopDetect(badShop) +
+      '（true，说明检测器能抓住"商店显示强化值"）');
+
+    /* ══ N3. 负例：溢出底栏改回旧串必须 FAIL ════════════════════ */
+    var hintDetect = function (info) {
+      return info.overflow === true && info.lines.length === 2 &&
+        info.lines[0].indexOf('Enter 使用/装备') >= 0;
+    };
+    var oldHint = { lines: [PANEL_HINT], full: PANEL_HINT, overflow: false };
+    rec('N3_negativeOldOverflowHintFails', hintDetect(h6) === true && hintDetect(oldHint) === false,
+      '现行溢出态判=' + hintDetect(h6) + '（true）；旧单行串判=' + hintDetect(oldHint) +
+      '（false，说明"溢出改回旧串"会被抓住）');
+
+    clearSave();
+  } catch (e) {
+    rec('X0_exception', false, String((e && (e.message + '\n' + (e.stack || ''))) || e));
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  var head = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+  document.getElementById('result').textContent = head + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = head;
+})();
+</script>
+</body>
+</html>
