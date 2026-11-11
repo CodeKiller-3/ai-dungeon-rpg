@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>D-13 证据采集</title></head>
+<body>
+<div id="state">RUNNING</div>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-13 证据采集页（不进 run-all；由 preflight/d13_run.js 用 CDP 驱动，落盘 selfcheck/d13-evidence.json）。
+     加载顺序与主游戏一致（main 最后，不设 NO_AUTOSTART → 启动即生成首图）。
+     同一轮内测四组口径，全部使用 7 张固定种子地图 101/202/303/404/505/606/707：
+       ① training：每图独立 learner 实例，ε 从 0.4 起、训练 3000 步，getStats().successRate
+          （训练期含探索的累计成功率，与 C-05 的 Q 组协议完全相同）
+       ② greedy  ：训练后 ε=0、Q 冻结、独立随机起点，60 步上限，argmax 选动作
+       ③ R1      ：4 动作均匀、撞墙算一步（对应「玩家乱按方向键」）
+       ④ R2      ：合法动作里均匀（标准 random policy）
+     另附 TD 手算断言与「旧写法变异」负例结果，供 verify_d13 逐值比对。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/rl-baselines.js"></script>
+<script src="lib/rl-td-check.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = Game.Systems.Map;
+  var B = window.RlBaselines, T = window.RlTdCheck;
+  var SEEDS = [101, 202, 303, 404, 505, 606, 707];
+  var TRAIN_STEPS = 3000;          /* 与 verify_c05 同协议 */
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function withSeed(seed, fn) {
+    var orig = Math.random;
+    Math.random = B.mulberry32(seed);
+    try { return fn(); } finally { Math.random = orig; }
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function hashGrid(g) {
+    var rows = [];
+    for (var y = 0; y < g.length; y++) rows.push(g[y].join(''));
+    return fnv1a(rows.join('|'));
+  }
+
+  var SRC = readDoc('../js/systems/learner.js');
+  var INSTR = T.instrument(SRC);
+  function freshLearner() { return T.loadLearner(INSTR, 'd13'); }
+
+  var out = {
+    at: new Date().toISOString(),
+    page: 'preflight/d13_harness.html',
+    protocol: {
+      seeds: SEEDS,
+      trainSteps: TRAIN_STEPS,
+      maxSteps: B.MAX_STEPS,
+      epsilon: { initial: 0.4, decay: '-0.006 / episode', floor: 0.05 },
+      alpha: 0.8, gamma: 0.9,
+      episodesPerMap: '该图训练期实际 episode 数（四组共用同一批起点数量）',
+      r1: '每步 4 动作均匀随机，撞墙算一步（种子 seed*7+11，与 verify_c05 随机组同种子）',
+      r2: '每步在合法动作（目标格或可通行格）里均匀随机（种子 seed*13+7）',
+      greedy: '训练后 ε=0、Q 冻结、独立随机起点，argmax 并列取最小下标（种子 seed*17+3）',
+      success: '60 步内从随机起点走到目标格即成功；起点采样与 learner.randomOpen 同算法',
+      training: '每图独立 learner 实例，init 后 tick(1)×3000，取 getStats().successRate'
+    },
+    source: {
+      hasNewUpdate: SRC.indexOf(T.NEW_UPDATE) >= 0,
+      hasOldUpdate: SRC.indexOf(T.OLD_UPDATE) >= 0
+    }
+  };
+  var rows = [];
+
+  try {
+    for (var i = 0; i < SEEDS.length; i++) {
+      var seed = SEEDS[i];
+      var g = withSeed(seed, function () { return M.setFloor(1); });
+      var lr = freshLearner();
+      var stats = withSeed(seed * 7 + 11, function () {
+        lr.L.init(g);
+        for (var t = 0; t < TRAIN_STEPS; t++) lr.L.tick(1);
+        return lr.L.getStats();
+      });
+      var Q = lr.hook.getQ();
+      var st = lr.hook.getState();
+      lr.L.stop();
+      var eps = stats.episode;
+      rows.push({
+        seed: seed, gridHash: hashGrid(g),
+        target: { x: stats.target.x, y: stats.target.y },
+        start: st.agent,
+        episodes: eps,
+        training: { successes: stats.successes, rate: stats.successRate, epsilonEnd: stats.epsilon },
+        greedy: B.runGreedy(g, stats.target, Q, eps, seed * 17 + 3),
+        R1: B.runR1(g, stats.target, eps, seed * 7 + 11),
+        R2: B.runR2(g, stats.target, eps, seed * 13 + 7)
+      });
+    }
+
+    out.maps = rows;
+    out.summary = {
+      training: B.summarize(rows.map(function (r) { return r.training.rate; })),
+      greedy: B.summarize(rows.map(function (r) { return r.greedy.rate; })),
+      R1: B.summarize(rows.map(function (r) { return r.R1.rate; })),
+      R2: B.summarize(rows.map(function (r) { return r.R2.rate; }))
+    };
+
+    /* 演示页同协议的单图快照：固定种子 909 的地图、顺序训练到第 88 轮（训练期含探索）。 */
+    var DEMO_SEED = 909, DEMO_EPISODES = 88;
+    var dg = withSeed(DEMO_SEED, function () { return M.setFloor(1); });
+    var dl = freshLearner();
+    var dstats = withSeed(DEMO_SEED * 7 + 5, function () {
+      dl.L.init(dg);
+      var guard = 0;
+      while (dl.L.getStats().episode < DEMO_EPISODES && guard < 100000) { dl.L.tick(1); guard++; }
+      return dl.L.getStats();
+    });
+    dl.L.stop();
+    out.demo = {
+      mapSeed: DEMO_SEED, gridHash: hashGrid(dg),
+      target: { x: dstats.target.x, y: dstats.target.y },
+      episodes: dstats.episode, successes: dstats.successes,
+      rate: dstats.successRate, epsilonEnd: dstats.epsilon,
+      note: '单张地图顺序训练到第 88 轮（训练期含探索）；与四组离线口径分开报告'
+    };
+
+    /* TD 手算断言 + 旧写法负例（同一份源码、同一组断言） */
+    out.td = {
+      correct: T.evaluate(INSTR),
+      mutant: (function () {
+        var mut = INSTR.replace(T.NEW_UPDATE, T.OLD_UPDATE);
+        return { replaced: mut !== INSTR && mut.indexOf(T.OLD_UPDATE) >= 0, result: T.evaluate(mut) };
+      })()
+    };
+
+    out.ok = out.source.hasNewUpdate && !out.source.hasOldUpdate &&
+      rows.length === SEEDS.length && out.td.correct.ok === true &&
+      out.td.mutant.result.ok === false;
+    window.__D13_RESULT__ = out;
+    document.getElementById('state').textContent = (out.ok ? 'PASS ' : 'FAIL ') + 'D13 evidence ready';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && e.stack) || e);
+    window.__D13_RESULT__ = out;
+    document.getElementById('state').textContent = 'FAIL ' + out.err;
+  }
+  window.__D13_DONE__ = true;
+})();
+</script>
+</body>
+</html>

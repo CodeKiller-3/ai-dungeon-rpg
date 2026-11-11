@@ -72,6 +72,9 @@
     } else {
       action = bestAction(agent.x, agent.y);
     }
+    /* TD 更新要用「选动作时」的状态 s：先存下来，后面移动改的是 s' */
+    var sx = agent.x;
+    var sy = agent.y;
     var oldDist = dist(agent.x, agent.y, target.x, target.y);
     var nx = agent.x + ACTIONS[action][0];
     var ny = agent.y + ACTIONS[action][1];
@@ -90,10 +93,14 @@
     } else {
       reward = -1;   /* 撞墙惩罚 */
     }
-    /* TD 更新 */
-    var q = Q[agent.y][agent.x];
-    var maxQ = done ? 0 : q[bestAction(agent.x, agent.y)];
-    Q[agent.y][agent.x][action] = Q[agent.y][agent.x][action] + alpha * (reward + gamma * maxQ - Q[agent.y][agent.x][action]);
+    /* TD 更新：Q(s,a) ← Q(s,a) + α·[r + γ·max_a' Q(s',a') − Q(s,a)]
+     * 更新对象必须是「选动作时」的 s（sy/sx），max 取「执行后」的 s'（agent）。
+     * · 撞墙：s' 与 s 相同，转移退化为自环，公式不变；
+     * · 到达目标：终止转移没有后继价值，maxQ 记 0；
+     * · max 仍在 4 个动作上取：「撞墙」在本实现里是可执行、也会被更新的动作
+     *   （reward −1、自环），属于动作集的一部分，改成只取合法动作会改变 MDP 语义。 */
+    var maxQ = done ? 0 : Q[agent.y][agent.x][bestAction(agent.x, agent.y)];
+    Q[sy][sx][action] = Q[sy][sx][action] + alpha * (reward + gamma * maxQ - Q[sy][sx][action]);
     if (done) reset();
   }
 

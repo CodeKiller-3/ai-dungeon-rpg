@@ -89,6 +89,26 @@
   }
   var LEARNER_SRC = readDoc('../js/systems/learner.js');
 
+  /* D-13：README 现在按「训练期 / greedy / R1 / R2 / 演示快照」五个口径分列数字。
+   * C5-5 的必填六值仍是 Q 训练期中位数+区间端点、R1 中位数+区间端点（本页实测）；
+   * 其余口径的数值从 D-13 证据 JSON 读取后加入白名单——白名单仍只放"已落盘的实测值"，
+   * 任何未实测的百分数照样判 FAIL。 */
+  var D13_EVIDENCE = (function () {
+    try { return JSON.parse(readDoc('../preflight/selfcheck/d13-evidence.json')); } catch (e) { return null; }
+  })();
+  function demoAllow() {
+    var allow = [];
+    var r = D13_EVIDENCE && D13_EVIDENCE.result;
+    if (r) {
+      ['greedy', 'R2'].forEach(function (k) {
+        var s = r.summary && r.summary[k];
+        if (s) [s.median, s.min, s.max].forEach(function (v) { allow.push(v); });
+      });
+      if (r.demo && typeof r.demo.rate === 'number') allow.push(r.demo.rate);
+    }
+    return allow;
+  }
+
   /* 每张图使用全新 learner 模块实例（= 同一份源码、同一组超参，但 ε 从 0.4 起、Q 表为空），
    * 避免"7 张图顺序训练时 ε 单调衰减到 0.05"带来的顺序效应，保证逐图条件一致。 */
   function freshLearner() {
@@ -251,7 +271,7 @@
     var c55 = AssertData.checkC55(readme, speech, {
       qMedian: qMed, qMin: qMin, qMax: qMax,
       rMedian: rMed, rMin: rMin, rMax: rMax,
-      demoAllow: [17]
+      demoAllow: demoAllow()
     });
     var planOk5 = plan.indexOf('C-05') >= 0 && plan.indexOf('44/44') >= 0 &&
       plan.indexOf('中位数 ' + qMed + '%') >= 0 && plan.indexOf('中位数 ' + rMed + '%') >= 0;

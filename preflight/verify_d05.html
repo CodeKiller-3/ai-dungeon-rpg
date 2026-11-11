@@ -88,7 +88,22 @@
     var rewordedSpeech = '**4. Q-learning 寻宝鼠**\n- Q 的中位数是 22%，区间从 9% 到 31%；' +
       '随机策略中位数 5%，区间从 2% 到 12%；演示页 17%。\n\n## 四、下一节\n';
     var rw = A.checkC55(rewordedReadme, rewordedSpeech);
-    var real = A.checkC55(readme, speech, { demoAllow: [17] });
+    /* D-13：真实文档已按四组实测口径重写，必填六值与白名单全部从 D-13 证据 JSON 取，
+       这样「文档数字 = 落盘实测值」仍被强校验；JSON 缺失时 real.ok 必为 false。 */
+    var d13r = null;
+    try { d13r = JSON.parse(readDoc('../preflight/selfcheck/d13-evidence.json')).result; } catch (e) { d13r = null; }
+    var realOpt = { demoAllow: [] };
+    if (d13r && d13r.summary) {
+      var st = d13r.summary.training, sr = d13r.summary.R1;
+      realOpt.qMedian = st.median; realOpt.qMin = st.min; realOpt.qMax = st.max;
+      realOpt.rMedian = sr.median; realOpt.rMin = sr.min; realOpt.rMax = sr.max;
+      ['greedy', 'R2'].forEach(function (k) {
+        var s = d13r.summary[k];
+        if (s) [s.median, s.min, s.max].forEach(function (v) { realOpt.demoAllow.push(v); });
+      });
+      if (d13r.demo && typeof d13r.demo.rate === 'number') realOpt.demoAllow.push(d13r.demo.rate);
+    }
+    var real = A.checkC55(readme, speech, realOpt);
     var evD53 = ev && ev.d53 ? ev.d53 : null;
     sub.d53_c55ParsesNumbers = rw.ok && real.ok && !!evD53 &&
       evD53.verdict === 'PASS' && evD53.c55 === true;

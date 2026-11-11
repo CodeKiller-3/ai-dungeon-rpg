@@ -101,9 +101,15 @@
     ok = ok && sub.d21_trapsAndRoomsListed;
 
     /* ── D2-2 rlTwoProtocols ───────────────────────────── */
+    /* D-13：演示快照数字改从 d13-evidence.json 读取（TD 修正后重测），不再硬编码 D-02 旧值 */
+    var ev13 = null;
+    try { ev13 = JSON.parse(readDoc('../preflight/selfcheck/d13-evidence.json')).result; } catch (e) { ev13 = null; }
+    var S13 = ev13 && ev13.summary;
+    var DEMO = ev13 && ev13.demo ? { episode: ev13.demo.episodes, rate: ev13.demo.rate } : { episode: 0, rate: -1 };
     var demoCond = ['演示页', '单张地图', '顺序训练'];
     var offCond = ['7 张固定种子地图', '每图独立 learner 实例', '60 步上限'];
-    var valCond = ['中位数 22%', '中位数 5%', '88 轮', '17%'];
+    var valCond = ['中位数 ' + (S13 ? S13.training.median : -1) + '%',
+      '中位数 ' + (S13 ? S13.R1.median : -2) + '%', DEMO.episode + ' 轮', DEMO.rate + '%'];
     var twoRows = [
       { doc: 'README.md', demo: hasAll(readme, demoCond), offline: hasAll(readme, offCond), values: hasAll(readme, valCond) },
       { doc: 'docs/答辩讲稿.md', demo: hasAll(script, demoCond), offline: hasAll(script, offCond), values: hasAll(script, valCond) }
@@ -127,31 +133,34 @@
     ok = ok && sub.d23_notComparableStated;
 
     /* ── D2-4 numbersMatchMeasured ─────────────────────── */
-    var Q_RAW = [28, 22, 18, 9, 24, 13, 31];       /* C-05 verify_c05.html 逐图原始值 */
-    var R_RAW = [8, 3, 4, 6, 12, 2, 5];
-    var qMed = median(Q_RAW), rMed = median(R_RAW);
-    var qRange = Math.min.apply(null, Q_RAW) + '%~' + Math.max.apply(null, Q_RAW) + '%';
-    var rRange = Math.min.apply(null, R_RAW) + '%~' + Math.max.apply(null, R_RAW) + '%';
-    var DEMO = { episode: 88, rate: 17 };          /* 本卡实机截图同一运行的读数 */
+    /* D-13：逐图原始值全部来自 d13-evidence.json（TD 修正后 7 图实测），不再写死 */
+    var Q_RAW = S13 ? S13.training.values.slice() : [];   /* 训练期含探索 */
+    var R_RAW = S13 ? S13.R1.values.slice() : [];         /* R1 基线 */
+    var qMed = Q_RAW.length ? median(Q_RAW) : -1, rMed = R_RAW.length ? median(R_RAW) : -2;
+    var qRange = Q_RAW.length ? Math.min.apply(null, Q_RAW) + '%~' + Math.max.apply(null, Q_RAW) + '%' : 'x';
+    var rRange = R_RAW.length ? Math.min.apply(null, R_RAW) + '%~' + Math.max.apply(null, R_RAW) + '%' : 'y';
     var numChecks = [
-      { label: 'Q 中位数', token: '中位数 ' + qMed + '%', from: 'Q 原始值 ' + Q_RAW.join('/') },
-      { label: '随机中位数', token: '中位数 ' + rMed + '%', from: '随机原始值 ' + R_RAW.join('/') },
-      { label: 'Q 区间', token: qRange, from: 'Q 原始值 min/max' },
-      { label: '随机区间', token: rRange, from: '随机原始值 min/max' },
-      { label: '演示页轮次', token: DEMO.episode + ' 轮', from: '实机截图 shots/D02-learner-demo.png' },
-      { label: '演示页成功率', token: DEMO.rate + '%', from: '实机截图同一次运行读数' }
+      { label: '训练期中位数', token: '中位数 ' + qMed + '%', from: 'd13 训练期原始值 ' + Q_RAW.join('/') },
+      { label: 'R1 中位数', token: '中位数 ' + rMed + '%', from: 'd13 R1 原始值 ' + R_RAW.join('/') },
+      { label: '训练期区间', token: qRange, from: 'd13 训练期 min/max' },
+      { label: 'R1 区间', token: rRange, from: 'd13 R1 min/max' },
+      { label: '演示页轮次', token: DEMO.episode + ' 轮', from: 'd13-evidence.json demo.episodes' },
+      { label: '演示页成功率', token: DEMO.rate + '%', from: 'd13-evidence.json demo.rate' }
     ];
     var numRows = numChecks.map(function (c) {
       return { label: c.label, token: c.token, from: c.from,
         readme: readme.indexOf(c.token) >= 0, script: script.indexOf(c.token) >= 0 };
     });
-    var numsOk = numRows.every(function (r) { return r.readme && r.script; });
+    var numsOk = S13 && numRows.every(function (r) { return r.readme && r.script; });
 
-    /* Q-learning 段落内百分数白名单 */
+    /* Q-learning 段落内百分数白名单：四组口径的全部实测值 + 演示快照 */
     var ALLOW = {};
-    [qMed, rMed, Math.min.apply(null, Q_RAW), Math.max.apply(null, Q_RAW),
-      Math.min.apply(null, R_RAW), Math.max.apply(null, R_RAW), DEMO.rate]
-      .forEach(function (v) { ALLOW[String(v)] = true; });
+    if (S13) {
+      ['training', 'greedy', 'R1', 'R2'].forEach(function (k) {
+        [S13[k].median, S13[k].min, S13[k].max].forEach(function (v) { ALLOW[String(v)] = true; });
+      });
+    }
+    ALLOW[String(DEMO.rate)] = true;
     function pctIn(txt, seg) {
       var re = /(\d+(?:\.\d+)?)\s*%/g, m, bad = [];
       while ((m = re.exec(seg)) !== null) if (!ALLOW[m[1]]) bad.push(m[1] + '%');

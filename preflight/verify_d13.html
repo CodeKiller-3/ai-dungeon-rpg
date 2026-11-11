@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>D-13 Q-learning 正确性、基线口径与文档一致性</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  #result { border-left:3px solid #7fd1ff; padding-left:8px; }
+  table { border-collapse:collapse; margin-top:8px; }
+  td, th { border:1px solid #333; padding:3px 8px; font-size:12px; }
+  th { color:#9ad; }
+</style>
+</head>
+<body>
+<h1>D-13 · TD 目标正确性 / R1·R2·greedy 双基线 / 文档口径一致性</h1>
+<pre id="result">RUNNING</pre>
+<div id="table"></div>
+<canvas id="game" width="400" height="300"></canvas>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/assert-data.js"></script>
+<script src="lib/rl-baselines.js"></script>
+<script src="lib/rl-td-check.js"></script>
+<script src="lib/meta.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Systems.Map;
+  var B = window.RlBaselines, T = window.RlTdCheck, A = window.AssertData;
+
+  var SEEDS = [101, 202, 303, 404, 505, 606, 707];
+  var TRAIN_STEPS = 3000;
+  var DEMO_SEED = 909, DEMO_EPISODES = 88;
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function withSeed(seed, fn) {
+    var orig = Math.random;
+    Math.random = B.mulberry32(seed);
+    try { return fn(); } finally { Math.random = orig; }
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function hashGrid(g) {
+    var rows = [];
+    for (var y = 0; y < g.length; y++) rows.push(g[y].join(''));
+    return fnv1a(rows.join('|'));
+  }
+
+  var SRC = readDoc('../js/systems/learner.js');
+  var INSTR = T.instrument(SRC);
+  function freshLearner() { return T.loadLearner(INSTR, 'd13v'); }
+
+  /* 与 d13_harness.html 完全同协议复算（供与证据 JSON 逐值比对） */
+  function computeAll() {
+    var rows = [];
+    for (var i = 0; i < SEEDS.length; i++) {
+      var seed = SEEDS[i];
+      var g = withSeed(seed, function () { return M.setFloor(1); });
+      var lr = freshLearner();
+      var stats = withSeed(seed * 7 + 11, function () {
+        lr.L.init(g);
+        for (var t = 0; t < TRAIN_STEPS; t++) lr.L.tick(1);
+        return lr.L.getStats();
+      });
+      var Q = lr.hook.getQ();
+      lr.L.stop();
+      var eps = stats.episode;
+      rows.push({
+        seed: seed, gridHash: hashGrid(g), target: { x: stats.target.x, y: stats.target.y },
+        episodes: eps,
+        training: { successes: stats.successes, rate: stats.successRate },
+        greedy: B.runGreedy(g, stats.target, Q, eps, seed * 17 + 3),
+        R1: B.runR1(g, stats.target, eps, seed * 7 + 11),
+        R2: B.runR2(g, stats.target, eps, seed * 13 + 7)
+      });
+    }
+    var dg = withSeed(DEMO_SEED, function () { return M.setFloor(1); });
+    var dl = freshLearner();
+    var ds = withSeed(DEMO_SEED * 7 + 5, function () {
+      dl.L.init(dg);
+      var guard = 0;
+      while (dl.L.getStats().episode < DEMO_EPISODES && guard < 100000) { dl.L.tick(1); guard++; }
+      return dl.L.getStats();
+    });
+    dl.L.stop();
+    return {
+      rows: rows,
+      summary: {
+        training: B.summarize(rows.map(function (r) { return r.training.rate; })),
+        greedy: B.summarize(rows.map(function (r) { return r.greedy.rate; })),
+        R1: B.summarize(rows.map(function (r) { return r.R1.rate; })),
+        R2: B.summarize(rows.map(function (r) { return r.R2.rate; }))
+      },
+      demo: { mapSeed: DEMO_SEED, gridHash: hashGrid(dg), episodes: ds.episode,
+        successes: ds.successes, rate: ds.successRate }
+    };
+  }
+
+  function renderTable(ev, live) {
+    var keys = ['training', 'greedy', 'R1', 'R2'];
+    var names = { training: '训练期(含探索)', greedy: 'greedy(ε=0)', R1: 'R1 4动作均匀', R2: 'R2 合法动作均匀' };
+    var html = '<table><tr><th>seed</th><th>episodes</th>' +
+      keys.map(function (k) { return '<th>' + names[k] + '</th>'; }).join('') + '<th>gridHash</th></tr>';
+    live.rows.forEach(function (r) {
+      html += '<tr><td>' + r.seed + '</td><td>' + r.episodes + '</td>' +
+        keys.map(function (k) { return '<td>' + r[k].rate + '%</td>'; }).join('') +
+        '<td>' + r.gridHash + '</td></tr>';
+    });
+    html += '<tr><th>中位数</th><th>-</th>' + keys.map(function (k) {
+      return '<th>' + live.summary[k].median + '%</th>';
+    }).join('') + '<th>-</th></tr>';
+    html += '<tr><th>区间</th><th>-</th>' + keys.map(function (k) {
+      return '<th>' + live.summary[k].min + '%~' + live.summary[k].max + '%</th>';
+    }).join('') + '<th>-</th></tr></table>';
+    html += '<p>demo(seed ' + live.demo.mapSeed + ', ' + live.demo.episodes + ' 轮) = ' +
+      live.demo.rate + '%（证据 ' + (ev.demo ? ev.demo.rate + '%' : '缺失') + '）</p>';
+    document.getElementById('table').innerHTML = html;
+  }
+
+  try {
+    var evDoc = null;
+    try { evDoc = JSON.parse(readDoc('../preflight/selfcheck/d13-evidence.json')); } catch (e) { evDoc = null; }
+    var ev = evDoc && evDoc.result ? evDoc.result : null;
+    out.sub.evidenceLoaded = !!ev;
+    if (!ev) throw new Error('缺少 preflight/selfcheck/d13-evidence.json（先跑 node preflight/d13_run.js）');
+
+    /* ── D13-1 源码形态：新写法在、旧写法不在 ───────────── */
+    var srcNew = SRC.indexOf(T.NEW_UPDATE) >= 0;
+    var srcOld = SRC.indexOf(T.OLD_UPDATE) >= 0;
+    out.sub.d131_sourceForm = { ok: srcNew && !srcOld, hasNew: srcNew, hasOld: srcOld };
+
+    /* ── D13-2/3/4 手算断言（真实源码 + 注入观测口） ─────── */
+    var tdLive = T.evaluate(INSTR);
+    out.sub.d132_oneStep = { ok: !!tdLive.cases.oneStep, expect: 'Q[s][1]=3.64 且 Q[s\'][1] 保持 2' };
+    out.sub.d133_twoStep = { ok: !!tdLive.cases.twoStep, expect: 'Q[s0][1]=4.36 且 Q[s1][1]=4.68' };
+    out.sub.d134_wallAndTerminal = {
+      ok: !!tdLive.cases.wall && !!tdLive.cases.terminal,
+      expect: '撞墙 Q[s][0]=3.8；终止 Q[s][1]=9 且目标格 Q 不变'
+    };
+
+    /* ── D13-5 负例：改回 Q[s\',a] 时同一组断言必须 FAIL ─── */
+    var mutant = INSTR.replace(T.NEW_UPDATE, T.OLD_UPDATE);
+    var mutLive = T.evaluate(mutant);
+    var mutantStillPass = !!mutLive.ok;
+    var negOk = mutant !== INSTR && mutant.indexOf(T.OLD_UPDATE) >= 0 &&
+      mutLive.cases.oneStep === false && mutLive.cases.twoStep === false &&
+      mutLive.cases.terminal === false && mutantStillPass === false;
+    out.sub.d135_mutantMustFail = {
+      ok: negOk, replaced: mutant !== INSTR,
+      oneStep: mutLive.cases.oneStep, twoStep: mutLive.cases.twoStep,
+      wall: mutLive.cases.wall, terminal: mutLive.cases.terminal
+    };
+
+    /* ── D13-6 四组实测复算 = 证据 JSON ─────────────────── */
+    var live = computeAll();
+    renderTable(ev, live);
+    var numsSame = JSON.stringify(live.summary) === JSON.stringify(ev.summary);
+    var mapsSame = ev.maps && ev.maps.length === live.rows.length && ev.maps.every(function (m, i) {
+      var r = live.rows[i];
+      return m.seed === r.seed && m.gridHash === r.gridHash && m.episodes === r.episodes &&
+        m.training.rate === r.training.rate && m.greedy.rate === r.greedy.rate &&
+        m.R1.rate === r.R1.rate && m.R2.rate === r.R2.rate;
+    });
+    var demoSame = !!ev.demo && ev.demo.episodes === live.demo.episodes &&
+      ev.demo.rate === live.demo.rate && ev.demo.gridHash === live.demo.gridHash;
+    out.sub.d136_recomputeMatchesEvidence = {
+      ok: numsSame && mapsSame && demoSame,
+      summarySame: numsSame, mapsSame: mapsSame, demoSame: demoSame,
+      summary: live.summary, demo: live.demo
+    };
+
+    /* ── D13-7 证据自身自洽（正例过 / 负例挂） ──────────── */
+    var evSelfOk = ev.ok === true && ev.td && ev.td.correct && ev.td.correct.ok === true &&
+      ev.td.mutant && ev.td.mutant.result && ev.td.mutant.result.ok === false &&
+      ev.source && ev.source.hasNewUpdate === true && ev.source.hasOldUpdate === false;
+    out.sub.d137_evidenceSelfConsistent = { ok: !!evSelfOk };
+
+    /* ── D13-8 文档数字 = 证据（README / 讲稿） ─────────── */
+    var readme = readDoc('../README.md');
+    var speech = readDoc('../docs/答辩讲稿.md');
+    var demoAllow = [ev.demo.rate];
+    ['greedy', 'R2'].forEach(function (k) {
+      [ev.summary[k].median, ev.summary[k].min, ev.summary[k].max].forEach(function (v) { demoAllow.push(v); });
+    });
+    var c55 = A.checkC55(readme, speech, {
+      qMedian: ev.summary.training.median, qMin: ev.summary.training.min, qMax: ev.summary.training.max,
+      rMedian: ev.summary.R1.median, rMin: ev.summary.R1.min, rMax: ev.summary.R1.max,
+      demoAllow: demoAllow
+    });
+    var demoToken = ev.demo.episodes + ' 轮';
+    var demoPct = ev.demo.rate + '%';
+    var demoInDocs = readme.indexOf(demoToken) >= 0 && speech.indexOf(demoToken) >= 0 &&
+      readme.indexOf(demoPct) >= 0 && speech.indexOf(demoPct) >= 0;
+    var stale = ['中位数 22%', '9%~31%', '17%'];
+    var staleHits = stale.filter(function (s) {
+      return readme.indexOf(s) >= 0 || speech.indexOf(s) >= 0;
+    });
+    out.sub.d138_docsMatchEvidence = {
+      ok: c55.ok && demoInDocs && staleHits.length === 0,
+      c55: c55, demoInDocs: demoInDocs, staleHits: staleHits
+    };
+
+    /* ── D13-9 四组并列，不设"必须优于"断言 ────────────── */
+    out.sub.d139_noSuperiorityClaim = {
+      ok: true,
+      note: 'R1/R2/greedy/训练期四组并列报告；本页不断言 greedy 必须优于随机，避免为好看的数改口径'
+    };
+
+    out.ok = out.sub.d131_sourceForm.ok && out.sub.d132_oneStep.ok && out.sub.d133_twoStep.ok &&
+      out.sub.d134_wallAndTerminal.ok && out.sub.d135_mutantMustFail.ok &&
+      out.sub.d136_recomputeMatchesEvidence.ok && out.sub.d137_evidenceSelfConsistent.ok &&
+      out.sub.d138_docsMatchEvidence.ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>

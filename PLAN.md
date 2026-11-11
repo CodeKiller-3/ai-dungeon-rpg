@@ -176,9 +176,9 @@ flowchart TB
 | 对话 | `js/systems/dialogue.js` | 分支对话树渲染 | 自写 |
 | 存档 | `js/systems/save.js` | localStorage 序列化/读档 | 自写 |
 | 音效 | `js/systems/audio.js` | WebAudio 简单音效 | 自写 |
-| 寻路 | `js/ai/astar.js` | A\* 寻路 + 访问统计 | 参考 PathFinding.js（MIT）重构 |
-| 状态机 | `js/ai/stateMachine.js` | 敌人巡逻/追击/逃离/攻击状态 | 自写 |
-| AI 对话 | `js/ai/npcChat.js` | DeepSeek API 调用 + 离线兜底 | 自写 |
+| 寻路 | `js/systems/ai.js`（调用 `js/vendor/astar.js`） | A\* 寻路 + 访问统计 | 参考 PathFinding.js（MIT）重构 |
+| 状态机 | `js/systems/ai.js` | 敌人巡逻/追击/逃离/攻击状态 | 自写 |
+| AI 对话 | `js/systems/npc.js` | DeepSeek API 调用 + 离线兜底 | 自写 |
 
 ### 4.3 目录结构
 
@@ -201,11 +201,10 @@ ai-dungeon-rpg/
 │   │   ├── quest.js
 │   │   ├── dialogue.js
 │   │   ├── save.js
-│   │   └── audio.js
-│   ├── ai/                 # AI 层
-│   │   ├── astar.js
-│   │   ├── stateMachine.js
-│   │   └── npcChat.js
+│   │   ├── audio.js
+│   │   ├── ai.js           # A\* 追击 + 行为状态机
+│   │   ├── npc.js          # 大模型对话 + 离线兜底
+│   │   └── learner.js      # Q-learning 演示
 │   └── data/               # 数据层
 │       ├── items.js
 │       ├── monsters.js
@@ -228,8 +227,7 @@ ai-dungeon-rpg/
 ```js
 window.Game = {
   Core:    { Main, Render, Input, EventBus },
-  Systems: { Map, Battle, Inventory, Shop, Quest, Dialogue, Save, Audio },
-  Ai:      { AStar, StateMachine, NpcChat },
+  Systems: { Map, Battle, Inventory, Shop, Quest, Dialogue, Save, Audio, AI, NPC, Learner },
   Data:    { ITEMS, MONSTERS, NPCS, QUESTS, MAPS, Player }
 };
 ```
@@ -248,9 +246,9 @@ window.Game = {
 | dialogue.js | Game.Systems.Dialogue | open(npcId, nodeId) / choose(optionId) / close() |
 | save.js | Game.Systems.Save | write(slot) / read(slot) / slots() |
 | audio.js | Game.Systems.Audio | preload() / play(name) |
-| astar.js | Game.Ai.AStar | findPath(grid, start, goal) → { path, visited, steps:[{g,h,f}] } |
-| stateMachine.js | Game.Ai.StateMachine | create(cfg) / setState(name) / update(dt) / getState() |
-| npcChat.js | Game.Ai.NpcChat | ask(npcId, userMsg) → Promise\<string\> |
+| ai.js | Game.Systems.AI | update(dt) / findPath(grid, start, goal) |
+| npc.js | Game.Systems.NPC | open() / ask(npcId, userMsg) → Promise\<string\> |
+| learner.js | Game.Systems.Learner | init(grid) / tick(stepsPerFrame) / getStats() / stop() |
 
 ### 4.5 事件总线频道清单（模块间唯一通信方式）
 
@@ -276,7 +274,7 @@ window.Game = {
 1. `js/core/eventBus.js` → `js/core/input.js` → `js/core/render.js`
 2. `js/data/items.js` → `monsters.js` → `npcs.js` → `quests.js` → `maps.js`
 3. `js/systems/map.js` → `inventory.js` → `battle.js` → `shop.js` → `quest.js` → `dialogue.js` → `save.js` → `audio.js`
-4. `js/ai/astar.js` → `stateMachine.js` → `npcChat.js`
+4. `js/vendor/astar.js` → `js/systems/ai.js` → `js/systems/npc.js` → `js/systems/learner.js`
 5. `js/core/main.js`（**最后加载，启动入口**）
 
 规则：core 先于 data，data 先于 systems/ai，main.js 最后；每个模块用 IIFE 挂 `window.Game`，不污染全局。
@@ -568,7 +566,7 @@ const MONSTERS = {
 | M2 | ① 怪物数据 ② 回合流程 ③ 伤害公式 ④ 掉落成长 | data/monsters.js、js/systems/battle.js | M1 |
 | M3 | ① 物品数据 ② 背包逻辑 ③ 背包 UI ④ 商店 ⑤ 合成 | data/items.js、js/systems/{inventory,shop}.js | M2 |
 | M4 | ① 任务数据与逻辑 ② 对话树 ③ 存档 | data/{quests,npcs}.js、js/systems/{quest,dialogue,save}.js | M2、M3 |
-| M5 | ① A\* ② 状态机 ③ NPC 对话（API+兜底） | js/ai/{astar,stateMachine,npcChat}.js | M1（地图数据） |
+| M5 | ① A\* ② 状态机 ③ NPC 对话（API+兜底） | js/systems/{ai,npc,learner}.js | M1（地图数据） |
 | M6 | ① README/来源声明 ② Pages 部署 ③ 演示脚本/讲稿 | README.md、录屏、讲稿 | 全部 |
 
 ---

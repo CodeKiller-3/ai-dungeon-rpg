@@ -1,0 +1,367 @@
+{
+  "at": "2026-11-11T02:21:52.314Z",
+  "page": "preflight/d13_harness.html",
+  "commit": "",
+  "result": {
+    "at": "2026-11-11T02:21:52.110Z",
+    "page": "preflight/d13_harness.html",
+    "protocol": {
+      "seeds": [
+        101,
+        202,
+        303,
+        404,
+        505,
+        606,
+        707
+      ],
+      "trainSteps": 3000,
+      "maxSteps": 60,
+      "epsilon": {
+        "initial": 0.4,
+        "decay": "-0.006 / episode",
+        "floor": 0.05
+      },
+      "alpha": 0.8,
+      "gamma": 0.9,
+      "episodesPerMap": "该图训练期实际 episode 数（四组共用同一批起点数量）",
+      "r1": "每步 4 动作均匀随机，撞墙算一步（种子 seed*7+11，与 verify_c05 随机组同种子）",
+      "r2": "每步在合法动作（目标格或可通行格）里均匀随机（种子 seed*13+7）",
+      "greedy": "训练后 ε=0、Q 冻结、独立随机起点，argmax 并列取最小下标（种子 seed*17+3）",
+      "success": "60 步内从随机起点走到目标格即成功；起点采样与 learner.randomOpen 同算法",
+      "training": "每图独立 learner 实例，init 后 tick(1)×3000，取 getStats().successRate"
+    },
+    "source": {
+      "hasNewUpdate": true,
+      "hasOldUpdate": false
+    },
+    "maps": [
+      {
+        "seed": 101,
+        "gridHash": "b8a46448",
+        "target": {
+          "x": 9,
+          "y": 1
+        },
+        "start": {
+          "x": 19,
+          "y": 2
+        },
+        "episodes": 58,
+        "training": {
+          "successes": 12,
+          "rate": 21,
+          "epsilonEnd": 0.05199999999999973
+        },
+        "greedy": {
+          "episodes": 58,
+          "successes": 12,
+          "rate": 21
+        },
+        "R1": {
+          "episodes": 58,
+          "successes": 5,
+          "rate": 9
+        },
+        "R2": {
+          "episodes": 58,
+          "successes": 5,
+          "rate": 9
+        }
+      },
+      {
+        "seed": 202,
+        "gridHash": "ff3ee8d8",
+        "target": {
+          "x": 11,
+          "y": 5
+        },
+        "start": {
+          "x": 18,
+          "y": 3
+        },
+        "episodes": 55,
+        "training": {
+          "successes": 8,
+          "rate": 15,
+          "epsilonEnd": 0.06999999999999973
+        },
+        "greedy": {
+          "episodes": 55,
+          "successes": 13,
+          "rate": 24
+        },
+        "R1": {
+          "episodes": 55,
+          "successes": 1,
+          "rate": 2
+        },
+        "R2": {
+          "episodes": 55,
+          "successes": 7,
+          "rate": 13
+        }
+      },
+      {
+        "seed": 303,
+        "gridHash": "d565b274",
+        "target": {
+          "x": 11,
+          "y": 13
+        },
+        "start": {
+          "x": 11,
+          "y": 3
+        },
+        "episodes": 54,
+        "training": {
+          "successes": 7,
+          "rate": 13,
+          "epsilonEnd": 0.07599999999999973
+        },
+        "greedy": {
+          "episodes": 54,
+          "successes": 2,
+          "rate": 4
+        },
+        "R1": {
+          "episodes": 54,
+          "successes": 2,
+          "rate": 4
+        },
+        "R2": {
+          "episodes": 54,
+          "successes": 4,
+          "rate": 7
+        }
+      },
+      {
+        "seed": 404,
+        "gridHash": "e96871f0",
+        "target": {
+          "x": 11,
+          "y": 7
+        },
+        "start": {
+          "x": 9,
+          "y": 11
+        },
+        "episodes": 56,
+        "training": {
+          "successes": 10,
+          "rate": 18,
+          "epsilonEnd": 0.06399999999999972
+        },
+        "greedy": {
+          "episodes": 56,
+          "successes": 14,
+          "rate": 25
+        },
+        "R1": {
+          "episodes": 56,
+          "successes": 3,
+          "rate": 5
+        },
+        "R2": {
+          "episodes": 56,
+          "successes": 3,
+          "rate": 5
+        }
+      },
+      {
+        "seed": 505,
+        "gridHash": "460ff998",
+        "target": {
+          "x": 5,
+          "y": 11
+        },
+        "start": {
+          "x": 8,
+          "y": 1
+        },
+        "episodes": 52,
+        "training": {
+          "successes": 4,
+          "rate": 8,
+          "epsilonEnd": 0.08799999999999975
+        },
+        "greedy": {
+          "episodes": 52,
+          "successes": 2,
+          "rate": 4
+        },
+        "R1": {
+          "episodes": 52,
+          "successes": 7,
+          "rate": 13
+        },
+        "R2": {
+          "episodes": 52,
+          "successes": 4,
+          "rate": 8
+        }
+      },
+      {
+        "seed": 606,
+        "gridHash": "6d15856c",
+        "target": {
+          "x": 17,
+          "y": 1
+        },
+        "start": {
+          "x": 15,
+          "y": 1
+        },
+        "episodes": 52,
+        "training": {
+          "successes": 3,
+          "rate": 6,
+          "epsilonEnd": 0.08799999999999975
+        },
+        "greedy": {
+          "episodes": 52,
+          "successes": 1,
+          "rate": 2
+        },
+        "R1": {
+          "episodes": 52,
+          "successes": 1,
+          "rate": 2
+        },
+        "R2": {
+          "episodes": 52,
+          "successes": 1,
+          "rate": 2
+        }
+      },
+      {
+        "seed": 707,
+        "gridHash": "4486d74c",
+        "target": {
+          "x": 11,
+          "y": 8
+        },
+        "start": {
+          "x": 11,
+          "y": 5
+        },
+        "episodes": 62,
+        "training": {
+          "successes": 16,
+          "rate": 26,
+          "epsilonEnd": 0.05
+        },
+        "greedy": {
+          "episodes": 62,
+          "successes": 8,
+          "rate": 13
+        },
+        "R1": {
+          "episodes": 62,
+          "successes": 3,
+          "rate": 5
+        },
+        "R2": {
+          "episodes": 62,
+          "successes": 4,
+          "rate": 6
+        }
+      }
+    ],
+    "summary": {
+      "training": {
+        "values": [
+          21,
+          15,
+          13,
+          18,
+          8,
+          6,
+          26
+        ],
+        "median": 15,
+        "min": 6,
+        "max": 26
+      },
+      "greedy": {
+        "values": [
+          21,
+          24,
+          4,
+          25,
+          4,
+          2,
+          13
+        ],
+        "median": 13,
+        "min": 2,
+        "max": 25
+      },
+      "R1": {
+        "values": [
+          9,
+          2,
+          4,
+          5,
+          13,
+          2,
+          5
+        ],
+        "median": 5,
+        "min": 2,
+        "max": 13
+      },
+      "R2": {
+        "values": [
+          9,
+          13,
+          7,
+          5,
+          8,
+          2,
+          6
+        ],
+        "median": 7,
+        "min": 2,
+        "max": 13
+      }
+    },
+    "demo": {
+      "mapSeed": 909,
+      "gridHash": "ee264c64",
+      "target": {
+        "x": 11,
+        "y": 11
+      },
+      "episodes": 88,
+      "successes": 3,
+      "rate": 3,
+      "epsilonEnd": 0.05,
+      "note": "单张地图顺序训练到第 88 轮（训练期含探索）；与四组离线口径分开报告"
+    },
+    "td": {
+      "correct": {
+        "ok": true,
+        "cases": {
+          "oneStep": true,
+          "twoStep": true,
+          "wall": true,
+          "terminal": true
+        }
+      },
+      "mutant": {
+        "replaced": true,
+        "result": {
+          "ok": false,
+          "cases": {
+            "oneStep": false,
+            "twoStep": false,
+            "wall": true,
+            "terminal": false
+          }
+        }
+      }
+    },
+    "ok": true
+  }
+}
