@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d22</title>
+</head>
+<body>
+<canvas id="game" width="400" height="300"></canvas>
+<!-- D-22 验证页：run-all.ps1 的「空跑全绿」防线（页数兜底 + 空集防线）。
+     证据分两路，都不依赖「本轮自己算出来的期望值」：
+       1) selfcheck/d22-selftest.json —— 由 run-all.ps1 -SelfTest 用**子进程真实调用 -GuardProbe** 生成，
+          记录的是真实退出码（不是页内推断）；临时目录里只放空 .html 占位，不碰项目验证页。
+       2) selfcheck/current-run.json —— 本轮台账（run-all 每页结束即写），用于证明本轮已完成页
+          逐行 PASS 且页名与基线一一对应。本页不自证「本轮总数」，因为本页结束时本轮还没跑完。
+     期望页数的唯一来源是 selfcheck/page-baseline.json（人工维护的静态清单）。
+     本页故意**不读** regression-result.json，因此不声明元页面标记（preflight-meta）：
+     它不消费上一轮产物，首轮即可 PASS，不需要「跑两轮才收敛」。
+     注：基线 63 页 + 本页 verify_d22 = 64 页（本页已登记在基线里）。 -->
+<script src="lib/meta.js"></script>
+<script>
+(function () {
+  'use strict';
+  var PM = window.PreflightMeta;
+  var out = { loaded: false, ok: false };
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function fnvStr(s) { return PM.fnv1a(s); }
+  function sliceFn(src, head) {
+    var i = src.indexOf(head);
+    if (i < 0) return '';
+    var j = src.indexOf('\n}', i);
+    return j > i ? src.slice(i, j + 2).replace(/\r\n/g, '\n') : '';
+  }
+  function guardVals(c) {
+    var m = /expected=(-?\d+) actual=(\d+) missing=(\d+) extra=(\d+)/.exec((c && c.line) || '');
+    return m ? { expected: +m[1], actual: +m[2], missing: +m[3], extra: +m[4] } : null;
+  }
+  function finish() {
+    out.ok = !!(out.loaded && out.ok);
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var sub = {}, ok = true;
+  function rec(id, cond, detail) {
+    sub[id] = { ok: !!cond, detail: detail === undefined ? null : detail };
+    ok = ok && !!cond;
+  }
+
+  try {
+    var script = readDoc('selfcheck/run-all.ps1').replace(/^\uFEFF/, '');
+    var st = readJson('selfcheck/d22-selftest.json');
+    var baseline = readJson('selfcheck/page-baseline.json');
+    var led = readJson('selfcheck/current-run.json');
+    var myRun = PM.runIdFromSearch(location.search);
+    out.loaded = script.length > 0 && !!st && !!baseline && !!led;
+    out.note = '基线 63 页 + 本页 verify_d22 = 64 页';
+
+    var pages = (baseline && baseline.pages) || [];
+    var cases = (st && st.cases) || [];
+    var byId = {};
+    cases.forEach(function (c) { byId[c.id] = c; });
+
+    /* ── A 正常跑：本轮已完成的页「真的跑了」，且与基线一一对应 ──
+     * 台账由 run-all 在**本次运行中**逐页写入（runId 与本页 ?run= 相同）。
+     * 这里**故意不断言「其它页都 PASS」**：本页只负责 D-22 的命题（页数/空集），
+     * 若把自己的生死挂在别人的裁决上，一旦别页失败就会形成「本页 FAIL → 元页面 FAIL →
+     * 本页跟着 FAIL」的死锁。别人的质量由 summary 与各页自己的断言负责。
+     * 也不校验「本轮总数」——本页自己结束时本轮还没跑完，那是自欺。 */
+    var before = pages.filter(function (p) { return p < 'verify_d22'; });
+    var ledRows = (led && led.rows) || [];
+    var ledPages = ledRows.map(function (r) { return r.page; });
+    var seen = {};
+    ledPages.forEach(function (p) { seen[p] = 1; });
+    var notYet = before.filter(function (p) { return !seen[p]; });
+    var offBaseline = ledPages.filter(function (p) { return pages.indexOf(p) < 0; });
+    var vcount = { PASS: 0, FAIL: 0, NONE: 0, MIXED: 0 };
+    ledRows.forEach(function (r) {
+      if (vcount[r.verdict] === undefined) { vcount[r.verdict] = 0; }
+      vcount[r.verdict]++;
+    });
+    rec('A1_ledgerCurrentRunPages', !!myRun && !!led && led.runId === myRun &&
+      ledRows.length === before.length && notYet.length === 0 && offBaseline.length === 0 &&
+      ledRows.every(function (r) { return r.source === 'current-run'; }),
+      { myRun: myRun || '(none)', ledgerRun: led && led.runId, rows: ledRows.length,
+        expectedRows: before.length, notYet: notYet, offBaseline: offBaseline, verdicts: vcount });
+
+    /* ── A2 探针在真实目录：GUARD=OK 且 expected=actual=基线页数 ── */
+    var A = byId.A_normal, bA = guardVals(A);
+    rec('A2_probeRealDirOk', !!A && A.exit === 0 && A.wantExit === 0 && A.ok === true &&
+      /GUARD=OK/.test(A.line || '') && !!bA &&
+      bA.expected === pages.length && bA.actual === pages.length &&
+      bA.missing === 0 && bA.extra === 0 && A.scanDir === '<preflight>',
+      { line: A && A.line, baseline: pages.length });
+
+    /* ── A3 判定口径未变：Get-PageVerdict 函数体 785 字符 / FNV d1f2c95f ── */
+    var vbody = sliceFn(script, 'function Get-PageVerdict');
+    var vhash = vbody ? fnvStr(vbody) : '';
+    rec('A3_verdictUntouched', vbody.length === 785 && vhash === 'd1f2c95f',
+      { len: vbody.length, fnv: vhash, expectLen: 785, expectFnv: 'd1f2c95f' });
+
+    /* ── A4 加固是「后置只读」：guard 在页面循环之后，且不再改任何行/裁决 ──
+     * 这是「判定与不加兜底时逐行一致」的机器证据：guard 出现的位置之后
+     * 既不追加 $rows、也不再调用 Get-PageVerdict / 给 $verdict 赋值。 */
+    var gi = script.indexOf('$guard = Get-PageGuard');
+    var li = script.indexOf('foreach ($t in $targets)');
+    var tail = gi >= 0 ? script.slice(gi) : '';
+    rec('A4_guardPostLoopReadOnly', li >= 0 && gi > li &&
+      tail.indexOf('$rows +=') < 0 && tail.indexOf('Get-PageVerdict') < 0 &&
+      tail.indexOf('$verdict =') < 0,
+      { guardAt: gi, loopAt: li });
+
+    /* ── A5 主流程退出码接线：空集/兜底失败一律 exit 2，正常仍 exit $fail ── */
+    rec('A5_mainExitWiring',
+      script.indexOf('if (@($rows).Count -eq 0) { "GUARD_EXIT=EMPTY"; exit 2 }') >= 0 &&
+      script.indexOf('if (-not $guard.ok) { "GUARD_EXIT=FAIL"; exit 2 }') >= 0 &&
+      /exit \$fail\s*$/.test(script),
+      { hasEmpty2: script.indexOf('GUARD_EXIT=EMPTY"; exit 2') >= 0,
+        hasGuard2: script.indexOf('GUARD_EXIT=FAIL"; exit 2') >= 0 });
+
+    /* ── B 负例·少页：期望页数 = 实际 + 1 → FAIL，退出码 2 ─────── */
+    var B = byId.B_fewByExpect, bB = guardVals(B);
+    rec('B_fewPagesFails', !!B && B.exit === 2 && B.wantExit === 2 && B.ok === true &&
+      /GUARD=FAIL/.test(B.line || '') && !!bB &&
+      bB.expected === bB.actual + 1 && bB.missing === 0,
+      { exit: B && B.exit, line: B && B.line });
+
+    /* ── C 负例·空集：扫描目录为空 → 必须有页数判定失败，且不许以成功码退出 ── */
+    var C = byId.C_emptyDir, bC = guardVals(C);
+    rec('C_emptySetFails', !!C && C.exit === 2 && C.wantExit === 2 &&
+      C.emptySet === true && /GUARD_EMPTY_SET=1/.test(C.output || '') &&
+      /GUARD=FAIL/.test(C.line || '') && !!bC && bC.actual === 0,
+      { exit: C && C.exit, output: C && C.output });
+
+    /* ── D 负例·多页：多一页 → PASS(WARN)，必须提示基线需更新 ─────
+     * 裁决为「通过但告警」而不是 FAIL，理由：
+     *   多跑一页不会造成「一页没跑却全绿」的假象（所有基线页都确实跑到了）；
+     *   新增验证页本身是正常开发行为，若硬 FAIL 会让每次新增页都阻断一次全量回归。
+     * 但绝不静默：打印 BASELINE_STALE、stale=true 落进 regression-result.json.guard.extra，
+     * 提醒把新页登记进基线——否则下一轮「少一页」就没人能发现。 */
+    var D = byId.D_extraPage, bD = guardVals(D);
+    rec('D_extraPageWarns', !!D && D.exit === 0 && D.wantExit === 0 && D.stale === true &&
+      /BASELINE_STALE=1/.test(D.output || '') && /verify_zz/.test(D.output || '') &&
+      !!bD && bD.extra === 1 && bD.missing === 0,
+      { verdict: 'PASS(WARN)', exit: D && D.exit, output: D && D.output });
+
+    /* ── E 负例·缺页：少一页 → FAIL，且点名缺的是哪页 ─────────── */
+    var E = byId.E_missingPage, bE = guardVals(E);
+    rec('E_missingPageFails', !!E && E.exit === 2 && E.wantExit === 2 && !!bE &&
+      bE.missing === 1 && /GUARD_MISSING=verify_/.test(E.output || ''),
+      { exit: E && E.exit, output: E && E.output });
+
+    /* ── G 负例·空集（主流程，不只是探针）─────────────────────
+     * 在**临时副本**上跑真脚本、扫描空目录：必须打印 TOTAL=0 却 exit 2。
+     * 这是「TOTAL=0 还成功」这条原缺陷的直接反证；副本的产物写在临时目录，不碰项目文件。 */
+    var G = byId.F_emptyMainFlow;
+    rec('G_emptyMainFlowFails', !!G && G.exit === 2 && G.wantExit === 2 && G.ok === true &&
+      G.emptySet === true && /TOTAL=0\b/.test(G.output || '') &&
+      /GUARD_EXIT=EMPTY/.test(G.output || ''),
+      { exit: G && G.exit, output: G && G.output });
+
+    /* ── F 反自举：期望值不来自本轮产物 ─────────────────────────
+     * 若期望页数取「本轮扫到多少」或「上一轮结果有几行」，0 页也会自洽通过。
+     * 这里用源码证据固定：Get-PageGuard 只吃目录与基线清单，不碰 $rows /
+     * current-run.json / regression-result.json。 */
+    var gbody = sliceFn(script, 'function Get-PageGuard');
+    rec('F1_expectNotFromArtifacts', gbody.length > 0 &&
+      gbody.indexOf('$rows') < 0 && gbody.indexOf('current-run') < 0 &&
+      gbody.indexOf('regression-result') < 0 &&
+      script.indexOf("'page-baseline.json'") >= 0 &&
+      script.indexOf('$baselinePages = @(Read-PageBaseline -Path $baselinePath)') >= 0,
+      { guardBodyLen: gbody.length,
+        usesBaseline: script.indexOf("'page-baseline.json'") >= 0 });
+
+    /* F2 自测产物必须对得上「当前这份脚本」——防止拿旧产物冒充新证据。
+       页面侧只能拿 responseText（浏览器会吃掉 BOM、file:// 下 arraybuffer 不可靠），
+       因此比对的是按 UTF-16 码元算的文本指纹（-SelfTest 与 PM.fnv1a 用同一算法）。 */
+    var curFnv = script.length ? PM.fnv1a(script) : '';
+    var fresh = !!st && curFnv.length > 0 && st.scriptTextFnv === curFnv &&
+      st.scriptTextLen === script.length;
+    rec('F2_selftestMatchesThisScript', fresh,
+      { artifact: st && st.scriptTextFnv, computed: curFnv,
+        artifactLen: st && st.scriptTextLen, len: script.length,
+        byteFnv: st && st.scriptFnv, byteLen: st && st.scriptLen });
+
+    /* F3 脚本 BOM 仍为 239,187,191（字节事实由同一份自测产物给出；上面已确认它没过期） */
+    rec('F3_bomKept', fresh && !!st && st.bomBytes === '239,187,191',
+      { artifact: st && st.bomBytes, fresh: fresh });
+
+    /* F4 基线是静态清单：条数自洽、无重复、有字面量日期，且不少于 D-22 落卡时的 64 页 */
+    var uniq = {};
+    pages.forEach(function (p) { uniq[p] = 1; });
+    rec('F4_baselineStatic', !!baseline && baseline.count === pages.length &&
+      pages.length >= 64 && Object.keys(uniq).length === pages.length &&
+      pages.indexOf('verify_d22') >= 0 &&
+      /^\d{4}-\d{2}-\d{2}$/.test(baseline.updatedAt || ''),
+      { count: baseline && baseline.count, pages: pages.length,
+        updatedAt: baseline && baseline.updatedAt });
+
+    /* F5 基线缺失时必须 FAIL（source=MISSING 且期望值 <0 一律不 ok） */
+    rec('F5_missingBaselineFails',
+      script.indexOf("$source = 'MISSING'") >= 0 &&
+      script.indexOf('$ok = (-not $empty) -and ($expected -ge 0)') >= 0,
+      { missingBranch: script.indexOf("$source = 'MISSING'") >= 0 });
+
+    /* F6 自测六个用例全部符合预期 */
+    rec('F6_selftestAllAsExpected', !!st && st.allAsExpected === true && cases.length === 6 &&
+      cases.every(function (c) { return c.ok === true; }),
+      { allAsExpected: st && st.allAsExpected, n: cases.length });
+
+    out.sub = sub;
+    out.ok = ok;
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  finish();
+})();
+</script>
+</body>
+</html>
