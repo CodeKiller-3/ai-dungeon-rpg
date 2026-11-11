@@ -66,35 +66,44 @@
   /* ── 取数：先并行拉全部文件再判（本页要读 200+ 份，同步 XHR 在静态托管上会串行拖死）── */
   var CACHE = {};
   var textQ = [], binQ = [];
+  var LOADED = 0, TOTAL = 0, FINISHED = false;
+  function tick() {
+    LOADED++;
+    if (!FINISHED) document.getElementById('result').textContent = 'LOADING ' + LOADED + '/' + TOTAL;
+  }
   function collectText(p) { if (!(p in CACHE)) { CACHE[p] = ''; textQ.push(p); } }
   function collectBin(p) { if (!(p in CACHE)) { CACHE[p] = null; binQ.push(p); } }
   function read(p) { return CACHE[p] || ''; }
   function readBin(p) { return CACHE[p] || null; }
   function fetchText(p, cb) {
-    var x = new XMLHttpRequest();
-    x.open('GET', p, true);
-    x.onload = x.onerror = function () { CACHE[p] = x.responseText || ''; cb(); };
-    x.send(null);
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', p, true);
+      x.onload = x.onerror = x.ontimeout = function () { CACHE[p] = x.responseText || ''; cb(); };
+      x.send(null);
+    } catch (e) { CACHE[p] = ''; cb(); }
   }
   function fetchBin(p, cb) {
     /* Window 下同步 XHR 不允许 responseType='arraybuffer'，用 x-user-defined 拿字节 */
-    var x = new XMLHttpRequest();
-    x.open('GET', p, true);
-    try { x.overrideMimeType('text/plain; charset=x-user-defined'); } catch (e) { /* noop */ }
-    x.onload = x.onerror = function () {
-      var s = x.responseText || '';
-      if (!s) { CACHE[p] = null; return cb(); }
-      var u8 = new Uint8Array(s.length);
-      for (var i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i) & 0xff;
-      CACHE[p] = u8; cb();
-    };
-    x.send(null);
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', p, true);
+      try { x.overrideMimeType('text/plain; charset=x-user-defined'); } catch (e2) { /* noop */ }
+      x.onload = x.onerror = x.ontimeout = function () {
+        var s = x.responseText || '';
+        if (!s) { CACHE[p] = null; return cb(); }
+        var u8 = new Uint8Array(s.length);
+        for (var i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i) & 0xff;
+        CACHE[p] = u8; cb();
+      };
+      x.send(null);
+    } catch (e) { CACHE[p] = null; cb(); }
   }
   function runAll(list, fn, cb) {
     var n = list.length;
     if (!n) return cb();
     list.forEach(function (p) {
-      fn(p, function () { n--; if (n === 0) cb(); });
+      fn(p, function () { tick(); n--; if (n === 0) cb(); });
     });
   }
 
@@ -144,12 +153,14 @@
     collectText('../CHANGELOG.md');
     collectText('../docs/process/自检报告.md');
 
+    TOTAL = textQ.length + binQ.length + 3; /* +3：三份 meta 已取过 */
     runAll(textQ, fetchText, function () {
       runAll(binQ, fetchBin, assertAll);
     });
   }
 
   function assertAll() {
+  FINISHED = true;
 
   /* ══ A1. 新路径逐份存在 ═══════════════════════════════════════ */
   var a1miss = [];
@@ -209,7 +220,7 @@
     '扫描 ' + SCANNED.length + ' 份源码/文档（清单 ' + (SCAN ? SCAN.count : 0) +
     '）；功能性残留=' + (rs.v.length ? rs.v.slice(0, 5).join(',') + '…' : '0') +
     '；允许域：历史存档 docs/tasks/** ' + rs.arch + ' 处、过程报告同目录兄弟引用 docs/process/** ' + rs.sib +
-    ' 处、D-31 冻结断言页说明文字 ' + rs.frozen + ' 处');
+    ' 处、D-31 冻结断言页说明文字 ' + rs.frozen + ' 处；取数 ' + LOADED + '/' + TOTAL);
 
   /* ══ A4. 防过度搬运：4 个核心文件仍在根目录 ═══════════════════ */
   function coreCheck(map) {
