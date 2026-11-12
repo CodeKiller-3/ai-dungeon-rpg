@@ -12,10 +12,13 @@
 
   var ACTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; /* 上右下左 */
 
+  var ROLL = 20;      /* D-36：走势图口径 = 最近 20 个 episode 的滚动成功率 */
+  var EPS_INIT = 0.4; /* D-36：每次 init 必须回到这个初始探索率 */
+
   var Q = null;       /* Q[h][w][4] */
   var alpha = 0.8;
   var gamma = 0.9;
-  var epsilon = 0.4;  /* 探索率：随训练衰减 */
+  var epsilon = EPS_INIT;  /* 探索率：随训练衰减 */
   var grid = null;
   var w = 0;
   var h = 0;
@@ -25,7 +28,9 @@
   var step = 0;
   var maxSteps = 60;
   var successes = 0;
-  var history = [];   /* 每 episode 成功率采样 */
+  var history = [];   /* 每 episode 一条 { episode, rate }，rate=最近 ROLL 轮滚动成功率 */
+  var recent = [];    /* 最近 ROLL 个 episode 的成败（1/0），history.rate 的唯一数据源 */
+  var episodeWon = false;
   var running = false;
 
   function dist(ax, ay, bx, by) { return Math.abs(ax - bx) + Math.abs(ay - by); }
@@ -48,7 +53,22 @@
     return best;
   }
 
+  function rollingRate() {
+    if (!recent.length) return 0;
+    var s = 0;
+    for (var i = 0; i < recent.length; i++) s += recent[i];
+    return Math.round((s * 100) / recent.length);
+  }
+
   function reset() {
+    /* D-36：先结算"刚结束的那个 episode"的成败，再写走势图采样。
+     * 旧实现写的是累计成功率 successes/episode，图下标却写"近 20 轮"——展示层口径说谎；
+     * 现在 rate 由 recent 窗口（最近 ROLL 个 episode 的 1/0）算出，与标签同口径。 */
+    if (episode > 0) {
+      recent.push(episodeWon ? 1 : 0);
+      if (recent.length > ROLL) recent.shift();
+    }
+    episodeWon = false;
     episode++;
     agent = randomOpen();
     step = 0;
@@ -57,7 +77,7 @@
     if (history.length > 40) history.shift();
     history.push({
       episode: episode,
-      rate: episode === 0 ? 0 : Math.round((successes * 100) / episode)
+      rate: rollingRate()
     });
   }
 
@@ -84,6 +104,7 @@
       reward = 10;
       agent = { x: nx, y: ny };
       successes++;
+      episodeWon = true;
       done = true;
     } else if (nx >= 0 && ny >= 0 && nx < w && ny < h && grid[ny][nx] === 1) {
       agent = { x: nx, y: ny };
@@ -125,6 +146,13 @@
       episode = 0;
       successes = 0;
       history = [];
+      recent = [];
+      episodeWon = false;
+      step = 0;
+      /* D-36：每一次 init 都必须把训练状态完整复位到初始值。
+       * 旧实现只重置 Q/episode/successes/history，漏了 epsilon——第二次按 L 进来时
+       * Q 表是空的、ε 却停在 0.05，策略直接退化成"撞墙鼠"（第一次正常，第二次就坏）。 */
+      epsilon = EPS_INIT;
       running = true;
       reset();
     },

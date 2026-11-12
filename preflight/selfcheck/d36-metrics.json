@@ -1,0 +1,1091 @@
+{
+  "at": "2026-11-12T09:50:03.291Z",
+  "page": "preflight/d36_harness.html",
+  "commit": "",
+  "result": {
+    "at": "2026-11-12T09:49:58.333Z",
+    "page": "preflight/d36_harness.html",
+    "protocol": {
+      "seeds": [
+        101,
+        202,
+        303,
+        404,
+        505,
+        606,
+        707
+      ],
+      "capEpisodes": 3000,
+      "evalEvery": 25,
+      "evalStarts": 50,
+      "maxSteps": 60,
+      "epsilon": {
+        "initial": 0.4,
+        "decayPerEpisode": 0.006,
+        "floor": 0.05
+      },
+      "alpha": 0.8,
+      "gamma": 0.9,
+      "greedy": "ε=0、Q 冻结、50 个固定起点（seed*17+3 采样）、argmax 并列取最小下标、60 步上限",
+      "converge": "所有可达起点 greedy 全成功 且 平均步数 / 平均最短路 ≤ 1.05 的第一个 episode（不可达起点不计入；202 图有 4 个不可达起点，ceiling=92%）",
+      "shortest": "BFS 四邻最短路（只走可通行格）",
+      "note": "指标路径：离线跑满；demo 路径（L 键）每帧 8 步，两者口径不同，不许互相冒充"
+    },
+    "demoPath": {
+      "stepsPerFrame": 8,
+      "maxStepsPerEpisode": 60,
+      "note": "每帧 tick(8) + drawLearner；帧成本见 verify_d36 D 组实测 P50/P95"
+    },
+    "deep": {
+      "seed": 101,
+      "gridHash": "b8a46448",
+      "target": {
+        "x": 9,
+        "y": 1
+      },
+      "episodesTrained": 200000,
+      "trainingRate": 61,
+      "epsilonEnd": 0.05,
+      "unreachableStarts": 0,
+      "converge": null,
+      "final": {
+        "rate": 72,
+        "wins": 36,
+        "starts": 50,
+        "reachable": 50,
+        "rateReachable": 72,
+        "avgSteps": 15.8,
+        "avgShortestAll": 22.5,
+        "avgShortestWins": 15.7,
+        "ratioOnWins": 1.01,
+        "ratioAll": 0.7
+      },
+      "samples": [
+        {
+          "episode": 25,
+          "target": 25,
+          "rate": 2,
+          "avgSteps": 1,
+          "ratioOnWins": 1
+        },
+        {
+          "episode": 50,
+          "target": 50,
+          "rate": 28,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.02
+        },
+        {
+          "episode": 100,
+          "target": 100,
+          "rate": 28,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.02
+        },
+        {
+          "episode": 200,
+          "target": 200,
+          "rate": 28,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.02
+        },
+        {
+          "episode": 400,
+          "target": 400,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 801,
+          "target": 800,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 1200,
+          "target": 1200,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 1500,
+          "target": 1478,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 1600,
+          "target": 1600,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 2001,
+          "target": 2000,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 2500,
+          "target": 2500,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        },
+        {
+          "episode": 3000,
+          "target": 3000,
+          "rate": 36,
+          "avgSteps": 11.6,
+          "ratioOnWins": 1.01
+        }
+      ]
+    },
+    "deepAll": [
+      {
+        "seed": 101,
+        "converge": null,
+        "final": {
+          "rate": 72,
+          "wins": 36,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 72,
+          "avgSteps": 15.8,
+          "avgShortestAll": 22.5,
+          "avgShortestWins": 15.7,
+          "ratioOnWins": 1.01,
+          "ratioAll": 0.7
+        },
+        "trainingRate": 58
+      },
+      {
+        "seed": 202,
+        "converge": null,
+        "final": {
+          "rate": 60,
+          "wins": 30,
+          "starts": 50,
+          "reachable": 46,
+          "rateReachable": 65,
+          "avgSteps": 11.3,
+          "avgShortestAll": 18.6,
+          "avgShortestWins": 11.2,
+          "ratioOnWins": 1.01,
+          "ratioAll": 0.61
+        },
+        "trainingRate": 45
+      },
+      {
+        "seed": 303,
+        "converge": null,
+        "final": {
+          "rate": 34,
+          "wins": 17,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 34,
+          "avgSteps": 11,
+          "avgShortestAll": 27,
+          "avgShortestWins": 11,
+          "ratioOnWins": 1,
+          "ratioAll": 0.41
+        },
+        "trainingRate": 17
+      },
+      {
+        "seed": 404,
+        "converge": null,
+        "final": {
+          "rate": 56,
+          "wins": 28,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 56,
+          "avgSteps": 10.1,
+          "avgShortestAll": 16.3,
+          "avgShortestWins": 10,
+          "ratioOnWins": 1,
+          "ratioAll": 0.62
+        },
+        "trainingRate": 39
+      },
+      {
+        "seed": 505,
+        "converge": null,
+        "final": {
+          "rate": 60,
+          "wins": 30,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 60,
+          "avgSteps": 13.6,
+          "avgShortestAll": 19.5,
+          "avgShortestWins": 13.6,
+          "ratioOnWins": 1,
+          "ratioAll": 0.7
+        },
+        "trainingRate": 60
+      },
+      {
+        "seed": 606,
+        "converge": null,
+        "final": {
+          "rate": 92,
+          "wins": 46,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 92,
+          "avgSteps": 21.3,
+          "avgShortestAll": 20.9,
+          "avgShortestWins": 21.2,
+          "ratioOnWins": 1.01,
+          "ratioAll": 1.02
+        },
+        "trainingRate": 80
+      },
+      {
+        "seed": 707,
+        "converge": null,
+        "final": {
+          "rate": 72,
+          "wins": 36,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 72,
+          "avgSteps": 13.2,
+          "avgShortestAll": 15,
+          "avgShortestWins": 13.2,
+          "ratioOnWins": 1,
+          "ratioAll": 0.88
+        },
+        "trainingRate": 55
+      }
+    ],
+    "maps": [
+      {
+        "seed": 101,
+        "gridHash": "b8a46448",
+        "target": {
+          "x": 9,
+          "y": 1
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 35,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 36,
+          "wins": 18,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 36,
+          "avgSteps": 11.6,
+          "avgShortestAll": 22.5,
+          "avgShortestWins": 11.4,
+          "ratioOnWins": 1.01,
+          "ratioAll": 0.52
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 2,
+            "avgSteps": 1,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 28,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.02
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 28,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.02
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 28,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.02
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 801,
+            "target": 800,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 2001,
+            "target": 2000,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 36,
+            "avgSteps": 11.6,
+            "ratioOnWins": 1.01
+          }
+        ]
+      },
+      {
+        "seed": 202,
+        "gridHash": "ff3ee8d8",
+        "target": {
+          "x": 11,
+          "y": 5
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 35,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 4,
+        "converge": null,
+        "final": {
+          "rate": 42,
+          "wins": 21,
+          "starts": 50,
+          "reachable": 46,
+          "rateReachable": 46,
+          "avgSteps": 10.5,
+          "avgShortestAll": 18.6,
+          "avgShortestWins": 10.5,
+          "ratioOnWins": 1,
+          "ratioAll": 0.57
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 0,
+            "avgSteps": null,
+            "ratioOnWins": null
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 4,
+            "avgSteps": 3,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 12,
+            "avgSteps": 4.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 26,
+            "avgSteps": 8.9,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 38,
+            "avgSteps": 10.6,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 800,
+            "target": 800,
+            "rate": 40,
+            "avgSteps": 10.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2000,
+            "target": 2000,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 42,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          }
+        ]
+      },
+      {
+        "seed": 303,
+        "gridHash": "d565b274",
+        "target": {
+          "x": 11,
+          "y": 13
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 11,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 10,
+          "wins": 5,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 10,
+          "avgSteps": 4,
+          "avgShortestAll": 27,
+          "avgShortestWins": 3.6,
+          "ratioOnWins": 1.11,
+          "ratioAll": 0.15
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 6,
+            "avgSteps": 2.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 6,
+            "avgSteps": 2.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 6,
+            "avgSteps": 2.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 800,
+            "target": 800,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 2000,
+            "target": 2000,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 10,
+            "avgSteps": 4,
+            "ratioOnWins": 1.11
+          }
+        ]
+      },
+      {
+        "seed": 404,
+        "gridHash": "e96871f0",
+        "target": {
+          "x": 11,
+          "y": 7
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 28,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 28,
+          "wins": 14,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 28,
+          "avgSteps": 8.1,
+          "avgShortestAll": 16.3,
+          "avgShortestWins": 7.9,
+          "ratioOnWins": 1.03,
+          "ratioAll": 0.5
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 2
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 20,
+            "avgSteps": 7,
+            "ratioOnWins": 1.04
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 20,
+            "avgSteps": 7,
+            "ratioOnWins": 1.04
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 22,
+            "avgSteps": 7.1,
+            "ratioOnWins": 1.04
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 28,
+            "avgSteps": 8.3,
+            "ratioOnWins": 1.05
+          },
+          {
+            "episode": 800,
+            "target": 800,
+            "rate": 28,
+            "avgSteps": 8.3,
+            "ratioOnWins": 1.05
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          },
+          {
+            "episode": 2000,
+            "target": 2000,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 28,
+            "avgSteps": 8.1,
+            "ratioOnWins": 1.03
+          }
+        ]
+      },
+      {
+        "seed": 505,
+        "gridHash": "460ff998",
+        "target": {
+          "x": 5,
+          "y": 11
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 28,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 20,
+          "wins": 10,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 20,
+          "avgSteps": 6.4,
+          "avgShortestAll": 19.5,
+          "avgShortestWins": 6.4,
+          "ratioOnWins": 1,
+          "ratioAll": 0.33
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 4,
+            "avgSteps": 1.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 4,
+            "avgSteps": 1.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 4,
+            "avgSteps": 1.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 14,
+            "avgSteps": 4.9,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 801,
+            "target": 800,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2000,
+            "target": 2000,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 20,
+            "avgSteps": 6.4,
+            "ratioOnWins": 1
+          }
+        ]
+      },
+      {
+        "seed": 606,
+        "gridHash": "6d15856c",
+        "target": {
+          "x": 17,
+          "y": 1
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 9,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 10,
+          "wins": 5,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 10,
+          "avgSteps": 7,
+          "avgShortestAll": 20.9,
+          "avgShortestWins": 7,
+          "ratioOnWins": 1,
+          "ratioAll": 0.34
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 801,
+            "target": 800,
+            "rate": 2,
+            "avgSteps": 2,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2001,
+            "target": 2000,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 10,
+            "avgSteps": 7,
+            "ratioOnWins": 1
+          }
+        ]
+      },
+      {
+        "seed": 707,
+        "gridHash": "4486d74c",
+        "target": {
+          "x": 11,
+          "y": 8
+        },
+        "episodesTrained": 3000,
+        "trainingRate": 37,
+        "epsilonEnd": 0.05,
+        "unreachableStarts": 0,
+        "converge": null,
+        "final": {
+          "rate": 38,
+          "wins": 19,
+          "starts": 50,
+          "reachable": 50,
+          "rateReachable": 38,
+          "avgSteps": 10.5,
+          "avgShortestAll": 15,
+          "avgShortestWins": 10.5,
+          "ratioOnWins": 1,
+          "ratioAll": 0.7
+        },
+        "samples": [
+          {
+            "episode": 25,
+            "target": 25,
+            "rate": 14,
+            "avgSteps": 6.6,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 50,
+            "target": 50,
+            "rate": 14,
+            "avgSteps": 6.6,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 100,
+            "target": 100,
+            "rate": 14,
+            "avgSteps": 6.6,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 200,
+            "target": 200,
+            "rate": 24,
+            "avgSteps": 10,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 400,
+            "target": 400,
+            "rate": 30,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 800,
+            "target": 800,
+            "rate": 30,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1200,
+            "target": 1200,
+            "rate": 30,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1500,
+            "target": 1478,
+            "rate": 32,
+            "avgSteps": 10.3,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 1600,
+            "target": 1600,
+            "rate": 32,
+            "avgSteps": 10.3,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2000,
+            "target": 2000,
+            "rate": 36,
+            "avgSteps": 10.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 2500,
+            "target": 2500,
+            "rate": 36,
+            "avgSteps": 10.7,
+            "ratioOnWins": 1
+          },
+          {
+            "episode": 3000,
+            "target": 3000,
+            "rate": 38,
+            "avgSteps": 10.5,
+            "ratioOnWins": 1
+          }
+        ]
+      }
+    ],
+    "summary": {
+      "convergeEpisodes": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "convergedMaps": 0,
+      "medianConvergeEpisodes": null,
+      "minConvergeEpisodes": null,
+      "maxConvergeEpisodes": null,
+      "finalGreedyRate": {
+        "values": [
+          36,
+          42,
+          10,
+          28,
+          20,
+          10,
+          38
+        ],
+        "median": 28,
+        "min": 10,
+        "max": 42
+      },
+      "finalRatioOnWins": [
+        1.01,
+        1,
+        1.11,
+        1.03,
+        1,
+        1,
+        1
+      ],
+      "note": "若某图未收敛则 converge=null，如实保留，不补 0、不放弃"
+    },
+    "ok": true
+  }
+}

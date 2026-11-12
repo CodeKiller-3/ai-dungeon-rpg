@@ -109,10 +109,12 @@
     return allow;
   }
 
-  /* 每张图使用全新 learner 模块实例（= 同一份源码、同一组超参，但 ε 从 0.4 起、Q 表为空），
-   * 避免"7 张图顺序训练时 ε 单调衰减到 0.05"带来的顺序效应，保证逐图条件一致。 */
+  /* D-36：这里以前用 `(0,eval)(LEARNER_SRC)` 重新执行 IIFE，拿一个"全新模块实例"来保证
+   * 7 张图逐图条件一致（ε=0.4、Q 表为空）。绕过之所以存在，是因为 learner.js 的 init()
+   * 当时**没有**复位 epsilon：同一实例顺序训练会让第 2~7 张图从 ε=0.05 起跑。
+   * 现在 init() 已把 epsilon / Q / episode / successes / history / recent 全部复位，
+   * 绕过被移除，直接复用同一个模块实例——测的就是玩家按 L 走的真实路径。 */
   function freshLearner() {
-    (0, eval)(LEARNER_SRC + '\n//# sourceURL=learner-fresh.js');
     return Game.Systems.Learner;
   }
 
@@ -180,6 +182,24 @@
     }
     if (qErr) throw new Error('Q 组异常：' + qErr);
 
+    /* D-36：同实例"二进宫"证明——7 张图跑完后再回到第 1 张，结果必须与第一次逐项相等。
+     * 旧 init 漏复位 epsilon 时，这里会从 ε=0.05 起跑，episode/rate 都会变。
+     * 这条断言是"移除 eval 绕过"的守门人：没有它，绕过可能被悄悄加回来。 */
+    var reinit = null;
+    try {
+      var g0 = genMap(SEEDS[0]);
+      var l0 = freshLearner();
+      var r0 = withSeed(SEEDS[0] * 7 + 11, function () {
+        l0.init(g0);
+        for (var t0 = 0; t0 < TRAIN_STEPS; t0++) l0.tick(1);
+        var st0 = l0.getStats();
+        l0.stop();
+        return st0;
+      });
+      reinit = { episode: r0.episode, rate: r0.successRate,
+        same: r0.episode === qRuns[0].episode && r0.successRate === qRuns[0].rate };
+    } catch (e0) { reinit = { error: String(e0), same: false }; }
+
     /* ── 第二组：随机策略（同种子重生成同一张图，逐图 episode 数与 Q 组相同） ── */
     var probe = { init: 0, tick: 0, getStats: 0, stop: 0 };
     var savedLearner = Game.Systems.Learner;
@@ -227,6 +247,13 @@
     sub.c51_qRuns = qRuns;
     sub.c51_randomRuns = rRuns;
     ok = ok && sub.c51_harnessValid;
+
+    /* ── C5-6 singletonReinit（D-36 新增）：同实例重复 init 结果逐项相等 ── */
+    sub.c56_singletonReinit = !!(reinit && reinit.same);
+    sub.c56_detail = { firstRun: { episode: qRuns[0].episode, rate: qRuns[0].rate },
+      reinitRun: reinit,
+      how: '同一个 Game.Systems.Learner 实例连续 init 8 次（7 图 + 回到第 1 图），第 8 次与第 1 次 episode/rate 相同' };
+    ok = ok && sub.c56_singletonReinit;
 
     /* ── C5-2 sameConditions ───────────────────────────── */
     var srcHasCap = LEARNER_SRC.indexOf('maxSteps = 60') >= 0;

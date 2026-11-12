@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>D-36 训练轮数证据</title></head>
+<body>
+<div id="state">RUNNING</div>
+<!-- D-36 证据采集页（不进 run-all；由 preflight/d36_run.js 用 CDP 驱动，落盘 selfcheck/d36-metrics.json）。
+     目的：把"演示路径"和"指标路径"的口径分开量出来，并回答"训到收敛要多少轮"。
+     口径与 D-13 / verify_c05 完全一致：7 张固定种子地图，α=0.8、γ=0.9、ε 0.4→0.05、60 步上限、
+     TD 更新 Q[s,a]。区别只在于这里按 episode 逐步训练并周期性地做 greedy 评估。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="lib/rl-baselines.js"></script>
+<script src="lib/rl-td-check.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = Game.Systems.Map;
+  var B = window.RlBaselines, T = window.RlTdCheck;
+  var SEEDS = [101, 202, 303, 404, 505, 606, 707];
+  var QP = {};
+  (location.search || '').replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) QP[p[0]] = p[1];
+  });
+  var ONLY = QP.only ? String(QP.only).split(',').map(Number) : null;
+  if (ONLY) SEEDS = SEEDS.filter(function (s) { return ONLY.indexOf(s) >= 0; });
+  var MAX_STEPS = 60;
+  var EVAL_STARTS = 50;
+  var CAP_EPISODES = QP.cap ? Number(QP.cap) : 3000;
+  var EVAL_EVERY = 25;
+  var SAMPLE_AT = [25, 50, 100, 200, 400, 800, 1200, 1478, 1600, 2000, 2500, 3000];
+  var DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function withSeed(seed, fn) {
+    var orig = Math.random;
+    Math.random = B.mulberry32(seed);
+    try { return fn(); } finally { Math.random = orig; }
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function hashGrid(g) {
+    var rows = [];
+    for (var y = 0; y < g.length; y++) rows.push(g[y].join(''));
+    return fnv1a(rows.join('|'));
+  }
+  /* BFS 最短路（四邻、只走 grid===1），返回步数；不可达返回 -1 */
+  function bfs(g, sx, sy, tx, ty) {
+    var h = g.length, w = g[0].length;
+    var dist = [], q = [[sx, sy]];
+    for (var y = 0; y < h; y++) { dist[y] = []; for (var x = 0; x < w; x++) dist[y][x] = -1; }
+    dist[sy][sx] = 0;
+    for (var qi = 0; qi < q.length; qi++) {
+      var cx = q[qi][0], cy = q[qi][1];
+      if (cx === tx && cy === ty) return dist[cy][cx];
+      for (var a = 0; a < 4; a++) {
+        var nx = cx + DX[a], ny = cy + DY[a];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (g[ny][nx] !== 1 || dist[ny][nx] >= 0) continue;
+        dist[ny][nx] = dist[cy][cx] + 1;
+        q.push([nx, ny]);
+      }
+    }
+    return -1;
+  }
+  function openCells(g) {
+    var out = [], h = g.length, w = g[0].length;
+    for (var y = 1; y < h - 1; y++) for (var x = 1; x < w - 1; x++) if (g[y][x] === 1) out.push({ x: x, y: y });
+    return out;
+  }
+  function pickStarts(cells, n, seed) {
+    var rnd = B.mulberry32(seed), out = [], used = {};
+    var guard = 0;
+    while (out.length < n && guard < n * 50) {
+      var c = cells[Math.floor(rnd() * cells.length)];
+      guard++;
+      var k = c.x + ',' + c.y;
+      if (used[k]) continue;
+      used[k] = 1;
+      out.push(c);
+    }
+    return out;
+  }
+  function argmax(q) {
+    var bi = 0;
+    for (var i = 1; i < q.length; i++) if (q[i] > q[bi]) bi = i;
+    return bi;
+  }
+  /* ε=0、Q 冻结的 greedy 评估：成功率 + 平均步数 + 平均最短路 + 比值
+   * startsShort 由调用方预先算好（每图只算一次 BFS），避免每个评估点重复算 50 次 */
+  function evalGreedy(g, target, Q, starts, startsShort, reach) {
+    var wins = 0, stepsWin = 0, shortWin = 0, shortAll = 0, reachable = 0;
+    for (var i = 0; i < starts.length; i++) {
+      shortAll += startsShort[i];
+      if (reach[i]) reachable++;
+      var a = { x: starts[i].x, y: starts[i].y }, win = false, s = 0;
+      for (s = 1; s <= MAX_STEPS; s++) {
+        var act = argmax(Q[a.y][a.x]);
+        var nx = a.x + DX[act], ny = a.y + DY[act];
+        if (nx >= 0 && ny >= 0 && ny < g.length && nx < g[0].length && (g[ny][nx] === 1 ||
+          (nx === target.x && ny === target.y))) a = { x: nx, y: ny };
+        if (a.x === target.x && a.y === target.y) { win = true; break; }
+      }
+      if (win) { wins++; stepsWin += s; shortWin += startsShort[i]; }
+    }
+    var avgSteps = wins ? stepsWin / wins : null;
+    return {
+      rate: Math.round(wins * 100 / starts.length), wins: wins, starts: starts.length,
+      reachable: reachable, rateReachable: reachable ? Math.round(wins * 100 / reachable) : 0,
+      avgSteps: avgSteps === null ? null : Math.round(avgSteps * 10) / 10,
+      avgShortestAll: Math.round(shortAll / starts.length * 10) / 10,
+      /* 「成功时是否走最优路」：只对成功的起点求均值——与第三方"greedy 成功时 12.1 vs 12.0"同口径 */
+      avgShortestWins: wins ? Math.round(shortWin / wins * 10) / 10 : null,
+      ratioOnWins: avgSteps ? Math.round(avgSteps / (shortWin / wins) * 100) / 100 : null,
+      ratioAll: avgSteps ? Math.round(avgSteps / (shortAll / starts.length) * 100) / 100 : null
+    };
+  }
+
+  var SRC = readDoc('../js/systems/learner.js');
+  var INSTR = T.instrument(SRC);
+  function freshLearner() { return T.loadLearner(INSTR, 'd36'); }
+  /* 先让 map.js 完成一次 generate()，它才会把 cfg 指向 Game.Data.MAPS（setFloor 依赖 cfg）。
+     generate 会 emit floorChanged → Quest.progress，读 Game.Data.Player.quests，这里补最小状态桩。 */
+  Game.Data.Player = Game.Data.Player || { quests: {}, level: 1, gold: 0 };
+  try { withSeed(1, function () { M.generate(); }); }
+  catch (e0) { window.__GEN_ERR__ = String(e0 && e0.stack || e0); }
+
+  var out = {
+    at: new Date().toISOString(),
+    page: 'preflight/d36_harness.html',
+    protocol: {
+      seeds: SEEDS, capEpisodes: CAP_EPISODES, evalEvery: EVAL_EVERY,
+      evalStarts: EVAL_STARTS, maxSteps: MAX_STEPS,
+      epsilon: { initial: 0.4, decayPerEpisode: 0.006, floor: 0.05 },
+      alpha: 0.8, gamma: 0.9,
+      greedy: 'ε=0、Q 冻结、50 个固定起点（seed*17+3 采样）、argmax 并列取最小下标、60 步上限',
+      converge: '所有可达起点 greedy 全成功 且 平均步数 / 平均最短路 ≤ 1.05 的第一个 episode（不可达起点不计入；202 图有 4 个不可达起点，ceiling=92%）',
+      shortest: 'BFS 四邻最短路（只走可通行格）',
+      note: '指标路径：离线跑满；demo 路径（L 键）每帧 8 步，两者口径不同，不许互相冒充'
+    },
+    demoPath: {
+      stepsPerFrame: 8, maxStepsPerEpisode: MAX_STEPS,
+      note: '每帧 tick(8) + drawLearner；帧成本见 verify_d36 D 组实测 P50/P95'
+    }
+  };
+  var rows = [];
+
+  window.__D36_T0__ = Date.now();
+  /* 单图完整训练：按 episode 推进 + 周期性 greedy 评估（成功时的步数 / 最短路） */
+  function trainOne(seed, cap) {
+    var g = withSeed(seed, function () { return M.setFloor(1); });
+    var lr = freshLearner();
+    /* D-36：整段训练（init + 训练 + 评估）必须在同一个种子作用域内，
+     * 否则证据 JSON 里的成功率不可复算——第一版把训练循环留在了 withSeed 外面，
+     * E 组复算当即揭穿（同一 seed 两次跑出 35% / 39%）。这里把 withSeed 包住整段。 */
+    var samples = [], convergeAt = null, finalEval = null, unreachableOut = 0;
+    var st = withSeed(seed * 7 + 11, function () {
+      var lrStats = lr.L.init(g) || lr.L.getStats();
+      var target = lrStats.target;
+      var starts = pickStarts(openCells(g), EVAL_STARTS, seed * 17 + 3);
+      var unreachable = 0;
+      var reach = [];
+      var startsShort = starts.map(function (s) {
+        /* 起点恰好是目标时最短路按 1 计（否则 0 会把"成功时/最短路"的比值压到 1 以下）；
+         * 不可达起点按 60 步计，评估里天然判失败。
+         * unreachable>0 时"50 个起点全成功"在本协议下不可达，必须在证据里显式记出来，
+         * 收敛判定改用「所有可达起点全成功」。 */
+        var d = bfs(g, s.x, s.y, target.x, target.y);
+        if (d < 0) { unreachable++; reach.push(false); }
+        else reach.push(true);
+        return d < 0 ? MAX_STEPS : Math.max(1, d);
+      });
+      var guard = 0, lastEp = 0, nextEval = EVAL_EVERY, sampleIdx = 0;
+      while (lastEp < cap && guard < 500000) {
+        lr.L.tick(16);
+        guard++;
+        var ep = lr.L.getStats().episode;
+        if (ep <= lastEp) continue;
+        lastEp = ep;
+        var atCap = ep >= cap;
+        if ((ep >= nextEval && convergeAt === null) || atCap) {
+          while (nextEval <= ep) nextEval += EVAL_EVERY;
+          var ev = evalGreedy(g, target, lr.hook.getQ(), starts, startsShort, reach);
+          while (sampleIdx < SAMPLE_AT.length && ep >= SAMPLE_AT[sampleIdx]) {
+            samples.push({ episode: ep, target: SAMPLE_AT[sampleIdx], rate: ev.rate,
+              avgSteps: ev.avgSteps, ratioOnWins: ev.ratioOnWins });
+            sampleIdx++;
+          }
+          if (convergeAt === null && ev.wins === ev.reachable && ev.reachable > 0 &&
+            ev.ratioOnWins !== null && ev.ratioOnWins <= 1.05) {
+            convergeAt = { episode: ep, rate: ev.rate, reachable: ev.reachable, wins: ev.wins,
+              avgSteps: ev.avgSteps, avgShortestWins: ev.avgShortestWins, ratioOnWins: ev.ratioOnWins };
+          }
+          if (atCap) { finalEval = ev; break; }
+        }
+      }
+      var s2 = lr.L.getStats();
+      lr.L.stop();
+      unreachableOut = unreachable;
+      return s2;
+    });
+    var target = st.target;
+    return {
+      seed: seed, gridHash: hashGrid(g), target: target,
+      episodesTrained: st.episode, trainingRate: st.successRate, epsilonEnd: st.epsilon,
+      unreachableStarts: unreachableOut,
+      converge: convergeAt,
+      final: finalEval || { rate: null, ratioOnWins: null },
+      samples: samples
+    };
+  }
+
+  try {
+    for (var i = 0; i < SEEDS.length; i++) {
+      document.getElementById('state').textContent = 'map ' + (i + 1) + '/' + SEEDS.length + ' seed=' + SEEDS[i];
+      window.__D36_PROGRESS__ = 'map ' + (i + 1) + ' seed=' + SEEDS[i];
+      rows.push(trainOne(SEEDS[i], CAP_EPISODES));
+    }
+    /* 深度探针：单图 20 万 episode，用来回答"再训下去会不会收敛"，如实记不收敛 */
+    document.getElementById('state').textContent = 'deep probe 101 @200000';
+    out.deep = trainOne(101, 200000);
+    /* 全图深探（5 万 episode/图）：回答"训到收敛要多少轮"——
+     * 第三方给的 1478 轮如果成立，这 7 张图都应该在 5 万轮内 100% 收敛；
+     * 实测谁收敛、谁不收敛都如实落盘，不补 0、不删图。 */
+    out.deepAll = SEEDS.map(function (s) {
+      document.getElementById('state').textContent = 'deepAll seed=' + s + ' @50000';
+      var r = trainOne(s, 50000);
+      return { seed: s, converge: r.converge, final: r.final, trainingRate: r.trainingRate };
+    });
+    out.maps = rows;
+    var conv = rows.map(function (r) { return r.converge ? r.converge.episode : null; });
+    var convValid = conv.filter(function (v) { return v !== null; });
+    out.summary = {
+      convergeEpisodes: conv,
+      convergedMaps: convValid.length,
+      medianConvergeEpisodes: convValid.length ? convValid.slice().sort(function (a, b) { return a - b; })[Math.floor(convValid.length / 2)] : null,
+      minConvergeEpisodes: convValid.length ? Math.min.apply(null, convValid) : null,
+      maxConvergeEpisodes: convValid.length ? Math.max.apply(null, convValid) : null,
+      finalGreedyRate: B.summarize(rows.map(function (r) { return r.final.rate; })),
+      finalRatioOnWins: rows.map(function (r) { return r.final.ratioOnWins; }),
+      note: '若某图未收敛则 converge=null，如实保留，不补 0、不放弃'
+    };
+    out.ok = rows.length === SEEDS.length;
+    window.__D36_RESULT__ = out;
+    document.getElementById('state').textContent = (out.ok ? 'PASS ' : 'FAIL ') + 'D36 metrics ready';
+    document.title = (out.ok ? 'PASS ' : 'FAIL ') + 'd36 ms=' + (Date.now() - window.__D36_T0__) +
+      ' maps=' + rows.length + ' conv=' + out.summary.convergeEpisodes.join('/') +
+      ' final=' + rows.map(function (r) { return r.final.rate + '%/' + r.final.ratioOnWins; }).join(' ');
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && e.stack) || e) + (window.__GEN_ERR__ ? ' | gen=' + window.__GEN_ERR__ : '');
+    window.__D36_RESULT__ = out;
+    document.getElementById('state').textContent = 'FAIL ' + out.err;
+    document.title = 'FAIL d36 ' + String(out.err).replace(/\s+/g, ' ').slice(0, 300);
+  }
+  window.__D36_DONE__ = true;
+})();
+</script>
+</body>
+</html>

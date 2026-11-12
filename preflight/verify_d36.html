@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>D-36 Q-learning 复位与指标口径</title></head>
+<body>
+<div id="result">RUNNING</div>
+<canvas id="game" width="1280" height="720"></canvas>
+<!-- D-36 验证页：A 复位 / B 二进宫 / C 走势图口径 / D 演示帧耗时 / E 指标可复算。
+     直接复用 js/systems/learner.js 的生产实现（通过 rl-td-check 注入只读观测口拿 Q），
+     不改 α/γ/ε 曲线/60 步上限/奖励函数，也不碰任何渲染文件。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="lib/rl-baselines.js"></script>
+<script src="lib/rl-td-check.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false };
+  var cv = document.getElementById('game');
+  var R = Game.Core.Render, B = window.RlBaselines, T = window.RlTdCheck;
+  var M = Game.Systems.Map;
+  var SEEDS = [101, 202, 303, 404, 505, 606, 707];
+  var MAX_STEPS = 60;
+  var started = Date.now();
+
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel);
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function withSeed(seed, fn) {
+    var orig = Math.random;
+    Math.random = B.mulberry32(seed);
+    try { return fn(); } finally { Math.random = orig; }
+  }
+  function fnv1a(str) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { x ^= str.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function hashGrid(g) {
+    var rows = [];
+    for (var y = 0; y < g.length; y++) rows.push(g[y].join(''));
+    return fnv1a(rows.join('|'));
+  }
+  function zerosQ(w, h) {
+    var Q = [];
+    for (var y = 0; y < h; y++) { Q[y] = []; for (var x = 0; x < w; x++) Q[y][x] = [0, 0, 0, 0]; }
+    return Q;
+  }
+
+  var SRC = readDoc('../js/systems/learner.js');
+  var INSTR = T.instrument(SRC);
+  /* 负例用：把 init 里的 epsilon 复位行删掉 = 复刻 D-36 之前的旧实现 */
+  var INSTR_OLD = INSTR.replace('      epsilon = EPS_INIT;\n', '');
+  var oldPatched = INSTR_OLD !== INSTR;
+
+  function fresh(kind) { return T.loadLearner(kind === 'old' ? INSTR_OLD : INSTR, 'd36' + (kind || '')); }
+
+  function makeGrid(n) {
+    var g = [];
+    for (var y = 0; y < n; y++) { g[y] = []; for (var x = 0; x < n; x++) g[y][x] = 1; }
+    return g;
+  }
+  function stateOf(lr) {
+    var s = lr.L.getStats();
+    return {
+      epsilon: s.epsilon, episode: s.episode, successes: s.successes,
+      step: lr.hook.getState().step, q: JSON.stringify(lr.hook.getQ()),
+      historyLen: s.history.length
+    };
+  }
+  function same(a, b) {
+    return a.epsilon === b.epsilon && a.episode === b.episode && a.successes === b.successes &&
+      a.step === b.step && a.q === b.q && a.historyLen === b.historyLen;
+  }
+
+  function run() {
+    out.loaded = !!(window.Game && R && M && Game.Systems.Learner && T && B);
+    if (!out.loaded) { finish(); return; }
+    Game.Data.Player = Game.Data.Player || { quests: {}, level: 1, gold: 0 };
+    withSeed(1, function () { M.generate(); });   /* 初始化 map.js 的 cfg */
+    R.init(cv); R.resize(1);
+    var sub = {}, ok = true;
+    var grid = makeGrid(12);
+
+    /* ================= A 组：init() 复位 ================= */
+    var lrA = fresh();
+    var a1 = [], a2 = [];
+    for (var i = 0; i < 3; i++) {
+      withSeed(11, function () { lrA.L.init(grid); });
+      a1.push(stateOf(lrA));
+    }
+    var aConsecutive = same(a1[0], a1[1]) && same(a1[0], a1[2]);
+    /* 训练 120 轮把 ε 衰减到地板，再 init：必须回到第一次的初始状态 */
+    withSeed(11, function () {
+      lrA.L.init(grid);
+      for (var t = 0; t < 120 && lrA.L.getStats().episode < 120; t++) lrA.L.tick(8);
+    });
+    var decayed = stateOf(lrA);
+    withSeed(11, function () { lrA.L.init(grid); });
+    var back = stateOf(lrA);
+    var aAfterTrain = same(a1[0], back) && decayed.epsilon < a1[0].epsilon;
+    /* 负例：旧 init（漏复位 epsilon）在同一序列下必须不相等 */
+    var lrOld = fresh('old');
+    withSeed(11, function () {
+      lrOld.L.init(grid);
+      for (var t2 = 0; t2 < 120 && lrOld.L.getStats().episode < 120; t2++) lrOld.L.tick(8);
+      lrOld.L.init(grid);
+    });
+    var oldState = stateOf(lrOld);
+    var negA = oldPatched && !same(a1[0], oldState);
+    sub.A_initReset = {
+      consecutive: aConsecutive, afterTrain: aAfterTrain,
+      epsilonFirst: a1[0].epsilon, epsilonDecayed: decayed.epsilon, epsilonBack: back.epsilon,
+      epsilonOldInit: oldState.epsilon, oldPatched: oldPatched,
+      negativeOldInitFails: negA
+    };
+    sub.A_pass = aConsecutive && aAfterTrain && negA;
+    ok = ok && sub.A_pass;
+
+    /* ================= B 组：二进宫（第一次演示 → 关掉 → 第二次） ================= */
+    function demoFirst10(lr, seed) {
+      var trace = [];
+      var eps0 = null;
+      withSeed(seed, function () {
+        lr.L.init(grid);
+        eps0 = lr.L.getStats().epsilon;
+        for (var s = 0; s < 10; s++) {
+          lr.L.tick(1);
+          var st = lr.L.getStats();
+          trace.push(st.agent.x + ',' + st.agent.y);
+        }
+      });
+      return { trace: trace, epsilon: eps0 };
+    }
+    var lrB = fresh();
+    var first = demoFirst10(lrB, 2024);
+    /* 第一次演示继续跑 30 帧（每帧 8 步）后"关掉" */
+    withSeed(2024 + 1, function () {
+      for (var f = 0; f < 30; f++) lrB.L.tick(8);
+      lrB.L.stop();
+    });
+    var second = demoFirst10(lrB, 2024);
+    var bSameTrace = first.trace.join('|') === second.trace.join('|');
+    var bSameEps = first.epsilon === second.epsilon;
+    /* 负例：把 ε 钉死 0.05（旧缺陷的现场）→ 必须判 FAIL */
+    var lrB2 = fresh();
+    var first2 = demoFirst10(lrB2, 2025);
+    withSeed(2026, function () {
+      for (var f2 = 0; f2 < 30; f2++) lrB2.L.tick(8);
+      lrB2.L.stop();
+      lrB2.L.init(grid);
+      lrB2.hook.setState({ epsilon: 0.05 });   /* 复刻"Q 空了但 ε 停在 0.05" */
+    });
+    var pinned = null;
+    withSeed(2025, function () {
+      pinned = lrB2.L.getStats().epsilon;
+    });
+    var negB = pinned !== first2.epsilon;
+    sub.B_secondDemo = {
+      firstTrace: first.trace, secondTrace: second.trace,
+      firstEpsilon: first.epsilon, secondEpsilon: second.epsilon,
+      sameTrace: bSameTrace, sameEpsilon: bSameEps,
+      pinnedEpsilon: pinned, negativePinnedFails: negB
+    };
+    sub.B_pass = bSameTrace && bSameEps && negB;
+    ok = ok && sub.B_pass;
+
+    /* ================= C 组：走势图口径（近 20 轮滚动 vs 累计） ================= */
+    var lrC = fresh();
+    withSeed(31, function () { lrC.L.init(grid); });
+    var outcomes = [1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1];
+    var rates = [];
+    for (var oi = 0; oi < outcomes.length; oi++) {
+      if (outcomes[oi]) {
+        lrC.hook.setState({ agent: { x: 2, y: 3 }, target: { x: 2, y: 2 }, Q: zerosQ(12, 12), step: 0, epsilon: 0 });
+        lrC.hook.stepOnce();   /* Q 全 0 → argmax=0(上) → 一步到目标 = 成功 */
+      } else {
+        lrC.hook.setState({ agent: { x: 5, y: 5 }, target: { x: 2, y: 2 }, Q: zerosQ(12, 12), step: 61, epsilon: 0 });
+        lrC.hook.stepOnce();   /* step 62 > 60 → 判负并 reset */
+      }
+      var hh = lrC.L.getStats().history;
+      rates.push(hh[hh.length - 1].rate);
+    }
+    function rollingExpected(seq) {
+      var res = [], win = [];
+      for (var i = 0; i < seq.length; i++) {
+        win.push(seq[i]);
+        if (win.length > 20) win.shift();
+        var s = 0;
+        for (var j = 0; j < win.length; j++) s += win[j];
+        res.push(Math.round(s * 100 / win.length));
+      }
+      return res;
+    }
+    function cumulativeExpected(seq) {
+      var res = [], wins = 0;
+      for (var i = 0; i < seq.length; i++) { wins += seq[i]; res.push(Math.round(wins * 100 / (i + 1))); }
+      return res;
+    }
+    var expRoll = rollingExpected(outcomes), expCum = cumulativeExpected(outcomes);
+    var cRolling = rates.join(',') === expRoll.join(',');
+    var cCumulativeWouldFail = rates.join(',') !== expCum.join(',');
+    /* 画出来的 20 根柱必须与 history.slice(-20).rate 一一对应 */
+    var stats = lrC.L.getStats();
+    var recBars = [], recText = [];
+    var origRect = R._ctx.fillRect, origText = R._ctx.fillText;
+    R._ctx.fillRect = function (x, y, w, h) {
+      if (R._ctx.fillStyle === '#52c41a') recBars.push({ x: x, y: y, w: w, h: h });
+      return origRect.apply(R._ctx, arguments);
+    };
+    R._ctx.fillText = function (t) { recText.push(String(t)); return origText.apply(R._ctx, arguments); };
+    R.drawLearner(stats, grid);
+    R._ctx.fillRect = origRect;
+    R._ctx.fillText = origText;
+    var bars = stats.history.slice(-20);
+    var barsOk = recBars.length === bars.length && recBars.every(function (b, i) {
+      return b.h === Math.max(2, Math.round(bars[i].rate * 0.5));
+    });
+    var label = recText.filter(function (t) { return t.indexOf('走势') >= 0; })[0] || '';
+    var labelOk = /近\s*20\s*轮/.test(label);
+    sub.C_chart = {
+      label: label, rollingRates: rates, expectedRolling: expRoll, expectedCumulative: expCum,
+      bars: recBars.length, historyLen: stats.history.length,
+      rollingMatches: cRolling, cumulativeWouldDiffer: cCumulativeWouldFail,
+      barsMatch: barsOk, labelDeclaresRolling: labelOk
+    };
+    sub.C_pass = cRolling && cCumulativeWouldFail && barsOk && labelOk;
+    ok = ok && sub.C_pass;
+
+    /* ================= D 组：演示路径帧耗时 ================= */
+    withSeed(77, function () {
+      lrC.L.init(grid);
+      for (var f3 = 0; f3 < 60; f3++) lrC.L.tick(8);
+    });
+    var frames = [], tPrev = 0;
+    for (var fi = 0; fi < 240; fi++) {
+      var t0 = performance.now();
+      lrC.L.tick(8);
+      R.drawLearner(lrC.L.getStats(), grid);
+      var t1 = performance.now();
+      if (fi >= 20) frames.push(t1 - t0);   /* 前 20 帧热身 */
+    }
+    frames.sort(function (a, b) { return a - b; });
+    function pct(arr, p) { return arr[Math.min(arr.length - 1, Math.floor(arr.length * p))]; }
+    var p50 = Math.round(pct(frames, 0.5) * 100) / 100;
+    var p95 = Math.round(pct(frames, 0.95) * 100) / 100;
+    var pMax = Math.round(frames[frames.length - 1] * 100) / 100;
+    var budget = 16.7;
+    /* 演示路径「一次会话能训多少轮」：60fps × 600 帧 = 10 秒，每帧 tick(8) → 4800 步。
+     * 口径与 L 键一致（真实地图 seed 909，单实例顺序训练）。 */
+    var dg = withSeed(909, function () { return M.setFloor(1); });
+    var lrD = fresh();
+    var dStats = withSeed(909 * 7 + 11, function () {
+      lrD.L.init(dg);
+      for (var f4 = 0; f4 < 600; f4++) lrD.L.tick(8);
+      return lrD.L.getStats();
+    });
+    lrD.L.stop();
+    sub.D_frame = {
+      frames: frames.length, stepsPerFrame: 8, budgetMs: budget,
+      p50: p50, p95: p95, max: pMax, pass: p95 <= budget,
+      demoSession: {
+        mapSeed: 909, frames: 600, seconds: 10, steps: 600 * 8,
+        episodes: dStats.episode, successRate: dStats.successRate,
+        avgStepsPerEpisode: Math.round((600 * 8 / Math.max(1, dStats.episode)) * 10) / 10
+      },
+      how: 'tick(8) + drawLearner 连续 220 帧（前 20 帧热身），performance.now 采样'
+    };
+    sub.D_pass = p95 <= budget;
+    ok = ok && sub.D_pass;
+
+    /* ================= E 组：证据 JSON 逐值复算 ================= */
+    var ev = readJson('selfcheck/d36-metrics.json');
+    var eRows = [], eOk = true;
+    if (!ev || !ev.result || !ev.result.maps) {
+      eOk = false;
+      eRows.push({ error: 'd36-metrics.json 缺失或结构不符' });
+    } else {
+      for (var mi = 0; mi < ev.result.maps.length; mi++) {
+        var em = ev.result.maps[mi];
+        var g2 = withSeed(em.seed, function () { return M.setFloor(1); });
+        var lrE = fresh();
+        var stE = withSeed(em.seed * 7 + 11, function () {
+          lrE.L.init(g2);
+          var guard = 0;
+          while (lrE.L.getStats().episode < 3000 && guard < 200000) { lrE.L.tick(16); guard++; }
+          return lrE.L.getStats();
+        });
+        lrE.L.stop();
+        var hashOk = hashGrid(g2) === em.gridHash;
+        var rateOk = stE.successRate === em.trainingRate;
+        var epsOk = stE.epsilon === em.epsilonEnd;
+        eRows.push({ seed: em.seed, hash: hashGrid(g2), hashOk: hashOk,
+          rate: stE.successRate, evidenceRate: em.trainingRate, rateOk: rateOk,
+          eps: stE.epsilon, evidenceEps: em.epsilonEnd, epsOk: epsOk });
+        if (!(hashOk && rateOk && epsOk)) eOk = false;
+      }
+    }
+    sub.E_metrics = { rows: eRows, ok: eOk };
+    sub.E_pass = eOk;
+    ok = ok && sub.E_pass;
+
+    out.sub = sub;
+    out.ok = ok;
+    out.ms = Date.now() - started;
+    finish();
+  }
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    var pre = document.getElementById('result');
+    pre.textContent = text;
+  }
+
+  try { run(); } catch (e) {
+    out.ok = false;
+    out.err = String(e && e.stack || e);
+    finish();
+  }
+})();
+</script>
+</body>
+</html>
