@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-54：读取 docs/ 与 selfcheck/regression-result.json（上一轮），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-54 演示脚本与交付说明</title>
+<style>
+  html, body { margin: 0; padding: 0; }
+  canvas { position: fixed; left: -9999px; top: 0; }
+  pre { white-space: pre-wrap; word-break: break-all; font: 12px/1.5 Consolas, monospace; margin: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game" width="320" height="240"></canvas>
+<pre id="result">RUNNING</pre>
+<script>
+(function () {
+  'use strict';
+
+  /* ── 读文件（file:// 下由 run-all 的 --allow-file-access-from-files 放行） ── */
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+
+  var out = { ok: false, sub: {}, errs: [] };
+  var demo = readDoc('../docs/演示脚本.md');
+  var check = readDoc('../docs/功能点检表.md');
+  var balance = readDoc('../docs/平衡定档.md');
+  var readme = readDoc('../README.md');
+  var baseline = readJson('selfcheck/page-baseline.json');
+  var reg = readJson('selfcheck/regression-result.json');
+
+  var srcAll = readDoc('../js/core/main.js') + '\n' +
+               readDoc('../js/systems/modal.js') + '\n' +
+               readDoc('../js/core/input.js');
+
+  /* ── A. 演示脚本里每个「按 X 键」都在源码里真实存在 ───────────────
+   * 键名 → 源码必须字面出现的证据片段（不靠"我记得有这个键"）。 */
+  var KEYMAP = {
+    '方向': ['ArrowUp'], '方向键': ['ArrowUp'],
+    '↑': ['ArrowUp'], '↓': ['ArrowDown'], '←': ['ArrowLeft'], '→': ['ArrowRight'],
+    'Enter': ["k['Enter']"], 'Esc': ['Escape'], 'Tab': ["'Tab'"],
+    'T': ['KeyT'], 'B': ['KeyB'], 'E': ['KeyE'], 'M': ['KeyM'],
+    'Q': ['KeyQ'], 'K': ['KeyK'], 'H': ['KeyH'], 'L': ['KeyL'], 'F': ['KeyF'], 'R': ['KeyR'],
+    '1': ['Digit1'], '2': ['Digit2'], '3': ['Digit3'], '4': ['Digit4'],
+    '5': ['Digit5'], '6': ['Digit6'], '7': ['Digit7']
+  };
+
+  function extractKeys(text) {
+    var re = /按\s*([^\s，。；、（）()【】]+?)\s*键/g, m, list = [];
+    while ((m = re.exec(text))) list.push(m[1].replace(/[*`]/g, ''));
+    return list;
+  }
+  /* 返回 {ok, bad:[{token,why}], tokens:[...]}；纯函数，E 组负例复用 */
+  function validateKeys(text, src) {
+    var tokens = extractKeys(text), bad = [], seen = {};
+    for (var i = 0; i < tokens.length; i++) {
+      var tk = tokens[i];
+      if (seen[tk]) continue;
+      seen[tk] = 1;
+      var parts = tk.split('/'), found = false;
+      for (var p = 0; p < parts.length; p++) {
+        var needs = KEYMAP[parts[p]];
+        if (!needs) { bad.push({ token: parts[p], why: '键名不在键表' }); continue; }
+        for (var n = 0; n < needs.length; n++) {
+          if (src.indexOf(needs[n]) < 0) bad.push({ token: parts[p], why: '源码缺少 ' + needs[n] });
+        }
+        found = true;
+      }
+      if (!found) bad.push({ token: tk, why: '无可识别的键段' });
+    }
+    return { ok: bad.length === 0, bad: bad, tokens: Object.keys(seen) };
+  }
+  var keyRes = validateKeys(demo, srcAll);
+  out.sub.A_keys_exist = {
+    ok: keyRes.ok && keyRes.tokens.length >= 8,
+    d: {
+      rule: '抽出脚本里全部「按 X 键」，逐个对照源码键位；键名不在表或源码缺证据即 FAIL',
+      tokens: keyRes.tokens,
+      bad: keyRes.bad
+    }
+  };
+
+  /* ── B. 脚本引用的验证页真实存在且当前 PASS ─────────────────── */
+  function validatePages(text, baseline, reg) {
+    var re = /verify_[a-z0-9_]+/g, m, refs = [];
+    while ((m = re.exec(text))) if (refs.indexOf(m[0]) < 0) refs.push(m[0]);
+    var pages = (baseline && baseline.pages) ? baseline.pages : [];
+    var rows = (reg && reg.rows) ? reg.rows : [];
+    var byName = {};
+    for (var i = 0; i < rows.length; i++) byName[rows[i].page] = rows[i].verdict;
+    var bad = [];
+    for (var j = 0; j < refs.length; j++) {
+      if (pages.indexOf(refs[j]) < 0) bad.push({ page: refs[j], why: '不在 page-baseline' });
+      else if (byName[refs[j]] !== 'PASS') bad.push({ page: refs[j], why: '上一轮裁决=' + (byName[refs[j]] || '缺失') });
+    }
+    return { ok: refs.length >= 5 && bad.length === 0, refs: refs, bad: bad };
+  }
+  var pageRes = validatePages(demo, baseline, reg);
+  out.sub.B_pages_exist_pass = {
+    ok: pageRes.ok,
+    d: {
+      rule: '脚本里出现的每个 verify_* 必须在 page-baseline 中且上一轮 PASS',
+      count: pageRes.refs.length, refs: pageRes.refs, bad: pageRes.bad
+    }
+  };
+
+  /* ── C. 点检表对 README 功能清单覆盖率 100% ─────────────────── */
+  function readmeBullets(md) {
+    var a = md.indexOf('## 功能列表');
+    if (a < 0) return [];
+    var b = md.indexOf('## 操作说明', a);
+    var sec = md.slice(a, b < 0 ? md.length : b);
+    var lines = sec.split(/\r?\n/), outList = [];
+    for (var i = 0; i < lines.length; i++) {
+      var s = lines[i].replace(/^\uFEFF/, '').trim();
+      if (/^-\s+/.test(s)) outList.push(s.replace(/^-\s+/, '').trim());
+    }
+    return outList;
+  }
+  function checklistRows(md) {
+    var lines = md.split(/\r?\n/), rows = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (!/^\|\s*R\d+\s*\|/.test(lines[i])) continue;
+      var c = lines[i].split('|');
+      if (c.length < 8) continue;
+      rows.push({ id: c[1].trim(), kw: c[2].trim(), code: c[3].trim(), verify: c[4].trim(), demo: c[5].trim(), offline: c[6].trim() });
+    }
+    return rows;
+  }
+  function pad2(n) { return n < 10 ? '0' + n : String(n); }
+  /* 返回 {ok, gaps, bad}；E 组负例复用 */
+  function validateChecklist(bullets, rows) {
+    var bad = [], gaps = [];
+    if (rows.length !== bullets.length) bad.push({ why: '行数 ' + rows.length + ' ≠ README 条目数 ' + bullets.length });
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var wantId = 'R' + pad2(i + 1);
+      if (r.id !== wantId) bad.push({ why: '第 ' + (i + 1) + ' 行编号 ' + r.id + ' ≠ ' + wantId });
+      if (i < bullets.length && bullets[i].indexOf(r.kw) < 0) {
+        bad.push({ why: wantId + ' 关键词「' + r.kw + '」不在对应 README 条目里' });
+      }
+      var cols = [r.code, r.verify, r.demo, r.offline];
+      for (var c = 0; c < cols.length; c++) {
+        if (!cols[c] || cols[c] === '—' || cols[c] === '-') bad.push({ why: wantId + ' 第 ' + (c + 1) + ' 栏为空' });
+      }
+      if (/缺口/.test(r.demo) || /缺口/.test(r.offline)) gaps.push(r.id);
+    }
+    return { ok: bad.length === 0 && bullets.length > 0, bad: bad, gaps: gaps, bullets: bullets.length, rows: rows.length };
+  }
+  var bullets = readmeBullets(readme);
+  var cRows = checklistRows(check);
+  var cRes = validateChecklist(bullets, cRows);
+  out.sub.C_checklist_coverage = {
+    ok: cRes.ok,
+    d: {
+      rule: 'README 功能列表逐条 → 点检表一行；行数相等、编号连续、关键词命中、四栏非空',
+      readmeBullets: cRes.bullets, checklistRows: cRes.rows, gaps: cRes.gaps, bad: cRes.bad
+    }
+  };
+
+  /* ── D. 文档数值与《平衡定档》逐项相等（≥10 项） ───────────── */
+  function numberTable(md) {
+    var a = md.indexOf('## 五、数字出处');
+    if (a < 0) return { body: md, rows: [] };
+    var b = md.indexOf('\n## ', a + 1);
+    var sec = md.slice(a, b < 0 ? md.length : b);
+    var lines = sec.split(/\r?\n/), rows = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (!/^\|/.test(lines[i])) continue;
+      var c = lines[i].split('|');
+      if (c.length < 4) continue;
+      var tok = c[1].replace(/[*`]/g, '').trim();
+      if (!tok || tok === '数字' || /^-+$/.test(tok.replace(/ /g, ''))) continue;
+      rows.push({ token: tok, where: c[2].trim() });
+    }
+    return { body: md.slice(0, a), rows: rows, section: sec };
+  }
+  var nt = numberTable(demo);
+  var dbad = [];
+  for (var di = 0; di < nt.rows.length; di++) {
+    var tk = nt.rows[di].token;
+    if (balance.indexOf(tk) < 0) dbad.push({ token: tk, why: '《平衡定档》中找不到该数字' });
+    else if (nt.body.indexOf(tk) < 0) dbad.push({ token: tk, why: '脚本正文没有引用该数字' });
+  }
+  out.sub.D_numbers_match_balance = {
+    ok: nt.rows.length >= 10 && dbad.length === 0,
+    d: {
+      rule: '数字出处表逐项：必须能在《平衡定档》原文找到，且脚本正文确实引用；少于 10 项 FAIL',
+      count: nt.rows.length, bad: dbad
+    }
+  };
+
+  /* ── E. 负例：假键 / 假页 / 未实现功能，三者都必须 FAIL ─────── */
+  var negKey = validateKeys('按 Z 键 打开隐藏菜单', srcAll);
+  var negPage = validatePages('详见 verify_d999', baseline, reg);
+  var negRows = cRows.concat([{ id: 'R' + pad2(cRows.length + 1), kw: '御剑飞行', code: 'js/systems/fly.js', verify: 'verify_m1', demo: 'S01', offline: '能' }]);
+  var negCheck = validateChecklist(bullets, negRows);
+  out.sub.E_negatives_fail = {
+    ok: !negKey.ok && !negPage.ok && !negCheck.ok,
+    d: {
+      rule: '往脚本塞不存在按键、不存在验证页、未实现功能，校验必须判 FAIL',
+      fakeKey: { ok: negKey.ok, bad: negKey.bad },
+      fakePage: { ok: negPage.ok, bad: negPage.bad },
+      fakeFeature: { ok: negCheck.ok, bad: negCheck.bad }
+    }
+  };
+
+  var keys = ['A_keys_exist', 'B_pages_exist_pass', 'C_checklist_coverage', 'D_numbers_match_balance', 'E_negatives_fail'];
+  var ok = true;
+  for (var k = 0; k < keys.length; k++) ok = ok && !!out.sub[keys[k]].ok;
+  out.ok = ok;
+
+  var text = (ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  var pre = document.getElementById('result');
+  pre.textContent = text;
+  pre.id = 'result';
+})();
+</script>
+</body>
+</html>

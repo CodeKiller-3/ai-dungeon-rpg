@@ -15,7 +15,7 @@
      期望页数的唯一来源是 selfcheck/page-baseline.json（人工维护的静态清单）。
      本页故意**不读** regression-result.json，因此不声明元页面标记（preflight-meta）：
      它不消费上一轮产物，首轮即可 PASS，不需要「跑两轮才收敛」。
-     注：基线 94 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94）。 -->
+     注：基线 95 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94，D-54 起 94→95）。 -->
 <script src="lib/meta.js"></script>
 <script>
 (function () {
@@ -66,7 +66,7 @@
     var led = readJson('selfcheck/current-run.json');
     var myRun = PM.runIdFromSearch(location.search);
     out.loaded = script.length > 0 && !!st && !!baseline && !!led;
-    out.note = '基线 94 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94）';
+    out.note = '基线 95 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94，D-54 起 94→95）';
 
     var pages = (baseline && baseline.pages) || [];
     var cases = (st && st.cases) || [];
