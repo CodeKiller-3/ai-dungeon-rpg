@@ -42,6 +42,113 @@
   /* UI 状态（背包/商店/任务） */
   var ui = { list: [], sel: 0, shopMode: 'buy' };
 
+  /* ---------- D-48：首屏设置（只放既有开关） ----------
+   * 三项全部对应已存在的运行时能力，不新造玩法配置：
+   *   fx    → Game.Fx 的 off/low/high（D-16，战斗内 F 同源）
+   *   muted → Game.Systems.Audio 静音开关（M9-4，K 键同源）
+   *   zoom  → Render 自适应缩放的显式档位（2026-11 自适应缩放）
+   * 持久化到一个独立键，不碰存档键 ai_dungeon_rpg_save_v1。 */
+  var SETTINGS_KEY = 'aiDungeon_settings_v1';
+  var FX_LEVELS = ['off', 'low', 'high'];
+  var ZOOM_LEVELS = ['auto', '1', '1.25', '1.5'];
+  var FX_LABEL = { off: '关', low: '低', high: '高' };
+  var ZOOM_LABEL = { auto: '自动（自适应）', '1': '100%', '1.25': '125%', '1.5': '150%' };
+  var settings = { fx: 'low', muted: false, zoom: 'auto' };
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && FX_LEVELS.indexOf(d.fx) >= 0) settings.fx = d.fx;
+      if (d) settings.muted = !!d.muted;
+      if (d && ZOOM_LEVELS.indexOf(d.zoom) >= 0) settings.zoom = d.zoom;
+    } catch (e) { /* 存储损坏/禁用 → 保留默认 */ }
+  }
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* 降级 */ }
+  }
+  function applySettings() {
+    if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel(settings.fx);
+    var A = Game.Systems && Game.Systems.Audio;
+    if (A && settings.muted && typeof A.setMuted === 'function') A.setMuted(true);
+    var R = Game.Core && Game.Core.Render;
+    if (R && typeof R.setScaleMode === 'function') R.setScaleMode(settings.zoom);
+  }
+
+  /* D-48：首屏是否显示。默认关闭（所有既有验证页/机器人页的 init() 行为不变）；
+   * 只有 index.html 显式置 __AI_DUNGEON_MENU__，或用 ?skipmenu=1 / 全局跳过开关时才改变。 */
+  function menuSkippedByEnv() {
+    if (window.__AI_DUNGEON_SKIP_MENU__ === true) return true;
+    try {
+      if (/[?&]skipmenu=1(?:&|$)/.test(String(location.search || ''))) return true;
+    } catch (e) { /* 非浏览器环境 */ }
+    return false;
+  }
+  function shouldShowMenu(opts) {
+    if (opts && opts.skipMenu === true) return false;
+    if (menuSkippedByEnv()) return false;
+    return !!(opts && opts.menu);
+  }
+
+  /* D-48：菜单运行期状态（页面/选中项/说明滚动），不落盘 */
+  var menu = { page: 'root', sel: 0, settingsSel: 0, helpScroll: 0 };
+
+  /* D-48：玩法说明正文——只写代码里确实存在的机制。
+   * 每条都带 src（源码文件）与 need（必须字面出现的实现片段），验证页逐条对照；
+   * 任何一条写了未实现功能，need 就对不上 → 验证失败。 */
+  var HELP = [
+    {
+      id: 'move', title: '移动与交互',
+      lines: ['方向键 / WASD 移动；踩到怪物即进入战斗。',
+        'B 背包 · E 商店 · M 任务 · T 对话（需相邻）· Q 设置 · H 重看引导'],
+      src: ['js/core/main.js'],
+      need: ['KeyB', 'KeyE', 'KeyM', 'KeyT', 'KeyQ', 'KeyH']
+    },
+    {
+      id: 'fireball', title: '火球',
+      lines: ['战斗按 4 释放火球，消耗 12 MP、冷却 3 回合。'],
+      src: ['js/core/main.js', 'js/data/skills.js'],
+      need: ['Digit4', 'mpCost: 12', 'cd: 3']
+    },
+    {
+      id: 'flee', title: '逃跑',
+      lines: ['战斗按 3 逃跑；成功后退一格、怪物留在原地，失败会被反击。'],
+      src: ['js/core/main.js', 'js/systems/battle.js'],
+      need: ['Digit3', "cmd === 'run'", 'retreatAfterFlee']
+    },
+    {
+      id: 'potion', title: '战斗内用药',
+      lines: ['战斗中按 7 用药（优先回血）；探索中在背包按 Enter 使用。'],
+      src: ['js/core/main.js', 'js/systems/battle.js'],
+      need: ['Digit7', "cmd === 'item'", 'pickBattlePotion']
+    },
+    {
+      id: 'equip', title: '装备与强化',
+      lines: ['武器 / 护甲在背包按 Enter 装备；强化卷轴每级 +10%（向上取整），上限 +5。'],
+      src: ['js/systems/inventory.js'],
+      need: ['equip: function', 'Math.ceil(b * n * 0.1)', 'lv >= 5']
+    },
+    {
+      id: 'bag', title: '背包与已装备标记',
+      lines: ['背包行尾标出「已装备」，页头汇总当前武器 / 护甲。'],
+      src: ['js/systems/modal.js'],
+      need: ['已装备：', '已装备 1｜背包 ']
+    },
+    {
+      id: 'shop', title: '商店买价高于卖价',
+      lines: ['商店买价严格高于卖价（卖价约为买价一半）；已装备物品不能卖。'],
+      src: ['js/systems/shop.js'],
+      need: ['p.gold < item.price', 'p.gold += item.sell', '已装备，请先卸下']
+    },
+    {
+      id: 'save', title: '存档',
+      lines: ['自动存档：换层、开箱、战斗结束时；存档键 ai_dungeon_rpg_save_v1。'],
+      src: ['js/systems/save.js', 'js/core/main.js'],
+      need: ["var KEY = 'ai_dungeon_rpg_save_v1'", 'Game.Systems.Save.save()']
+    }
+  ];
+
   /* M9-5：本局开始时间戳（死亡结算"用时"；重新开始时重置） */
   var runStart = performance.now();
 
@@ -265,9 +372,12 @@
     _frames: 0,
     _lastT: 0,
     _guideVisible: false,  /* M9-5：首次引导覆盖层是否显示 */
+    _guidePending: false,  /* D-48：首屏菜单期间挂起，进场景后再显示 */
+    HELP: HELP,            /* D-48：玩法说明正文（验证页逐条对照源码） */
 
-    init: function () {
+    init: function (opts) {
       var canvas = document.getElementById('game');
+      var showMenu = shouldShowMenu(opts);
       Game.Core.Render.init(canvas);
       Game.Core.Input.bind();
       Game.Core.EventBus.on('battle:end', onBattleEnd);
@@ -278,10 +388,15 @@
       Game.Systems.NPC.bind();
       Game.Systems.Audio.init();
       Game.Systems.Audio.bind();
+      /* D-48：读取并立即应用首屏设置（默认值与原行为完全一致） */
+      loadSettings();
+      applySettings();
       if (Game.Core.Sprites) Game.Core.Sprites.load();
       this._lastT = performance.now();
       runStart = performance.now(); /* M9-5：计时起点 */
-      this.switchScene('explore');  /* M9-4：启动探索 BGM */
+      /* D-48：showMenu 时进入 menu 场景（不启动第二条循环，仍由 start() 唯一驱动）；
+       * 其余情况保持原行为，直接进 explore。 */
+      this.switchScene(showMenu ? 'menu' : 'explore');
       Game.Systems.Map.generate();
       Game.Systems.Quest.init();
       if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.init === 'function') {
@@ -294,14 +409,20 @@
       booting = false; /* 启动/读档完成，恢复 floorChanged 自动写档 */
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
       syncHud();    /* S3-2：初始顶部 HUD 数据 */
-      Game.Core.EventBus.emit('ui:notice', {
-        msg: loaded ? '已读取存档（楼层 ' + loaded.floor + '）' : '新冒险开始'
-      });
+      /* D-48：首屏期间不弹提示/引导，等玩家真正进场景后再给 */
+      var bootNotice = loaded ? ('已读取存档（楼层 ' + loaded.floor + '）') : '新冒险开始';
+      if (!showMenu) {
+        Game.Core.EventBus.emit('ui:notice', { msg: bootNotice });
+      }
       /* M9-5：首次引导 + resize 监听（静默降级）；D-14：改为明确确认键关闭 */
-      this._guideVisible = needsGuide();
-      if (this._guideVisible) {
-        window.addEventListener('keydown', guideConfirm);
-        window.addEventListener('click', guideConfirm);
+      if (showMenu) {
+        this._guidePending = needsGuide();
+      } else {
+        this._guideVisible = needsGuide();
+        if (this._guideVisible) {
+          window.addEventListener('keydown', guideConfirm);
+          window.addEventListener('click', guideConfirm);
+        }
       }
       /* 自适应缩放：窗口 resize / 浏览器缩放 / 横竖屏切换 / 移动端视口变化都重新计算
        * （resize 覆盖桌面缩放与横竖屏；orientationchange 兜底老浏览器；visualViewport 覆盖移动端地址栏收起） */
@@ -319,6 +440,15 @@
 
     start: function () {
       var self = this;
+      /* D-48：唯一 rAF 链守卫——菜单/场景切换都只是 loop 内部的分支，
+       * 不允许任何路径再开第二条链；同一 rAF 实现下重复调用 start() 直接忽略。
+       * 例外：验证页会先把 requestAnimationFrame 换成可控假实现再调 start()，
+       * 此时宿主函数已变，允许重新绑定一条链（生产环境该函数恒定，不触发）。 */
+      var raf = window.requestAnimationFrame;
+      if (this._rafStarted && raf === this._rafFn) return false;
+      this._rafFn = raf;
+      this._rafStarted = true;
+      this._rafChains = (this._rafChains || 0) + 1;
       requestAnimationFrame(function loop(ts) {
         /* D-11：单帧异常不得打断 rAF 链。
            旧实现把 requestAnimationFrame(loop) 放在 self.loop(ts) 之后，任意一帧
@@ -341,6 +471,7 @@
         }
         requestAnimationFrame(loop);
       });
+      return true;
     },
 
     /* M9-5：本局用时（ms），供死亡结算战绩 */
@@ -420,6 +551,178 @@
       refreshFov(); /* S3-1：重新开始后刷新视野 */
       if (Game.Modal) Game.Modal.close();
       this.switchScene('explore');
+    },
+
+    /* ---------- D-48：首屏菜单 ---------- */
+    /* 纯函数：由 index.html 的 __AI_DUNGEON_MENU__ + skip 参数共同决定（验证页可直接断言） */
+    shouldShowMenu: shouldShowMenu,
+
+    /* 当前设置快照（只读副本；验证页断言三项且无第四项） */
+    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom }; },
+
+    /* 设置项列表：只含已存在的三项 */
+    _settingsSpec: function () {
+      return [
+        { id: 'fx', label: '打击感', value: FX_LABEL[settings.fx] || '低' },
+        { id: 'muted', label: '音效', value: settings.muted ? '关' : '开' },
+        { id: 'zoom', label: '画面缩放', value: ZOOM_LABEL[settings.zoom] || '自动（自适应）' }
+      ];
+    },
+
+    /* 单项设置：即时生效 + 立即持久化；非法值返回 false 且不改状态 */
+    setSetting: function (id, value) {
+      if (id === 'fx') {
+        if (FX_LEVELS.indexOf(value) < 0) return false;
+        settings.fx = value;
+        if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel(value);
+      } else if (id === 'muted') {
+        settings.muted = !!value;
+        var A = Game.Systems && Game.Systems.Audio;
+        if (A && typeof A.setMuted === 'function') A.setMuted(settings.muted);
+      } else if (id === 'zoom') {
+        if (ZOOM_LEVELS.indexOf(value) < 0) return false;
+        settings.zoom = value;
+        var R = Game.Core && Game.Core.Render;
+        if (R && typeof R.setScaleMode === 'function') R.setScaleMode(value);
+      } else {
+        return false;
+      }
+      saveSettings();
+      return true;
+    },
+
+    /* 键盘左右/Enter 的循环切换（方向 +1 / -1） */
+    cycleSetting: function (id, dir) {
+      var d = (dir < 0) ? -1 : 1;
+      if (id === 'fx') {
+        var i = FX_LEVELS.indexOf(settings.fx);
+        return this.setSetting('fx', FX_LEVELS[(i + d + FX_LEVELS.length) % FX_LEVELS.length]);
+      }
+      if (id === 'muted') return this.setSetting('muted', !settings.muted);
+      if (id === 'zoom') {
+        var z = ZOOM_LEVELS.indexOf(settings.zoom);
+        return this.setSetting('zoom', ZOOM_LEVELS[(z + d + ZOOM_LEVELS.length) % ZOOM_LEVELS.length]);
+      }
+      return false;
+    },
+
+    /* 菜单渲染数据（选项可用状态来自 Save.has()，无档时"继续游戏"置灰并带一行说明） */
+    _menuSpec: function () {
+      var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
+      return {
+        page: menu.page,
+        sel: menu.sel,
+        settingsSel: menu.settingsSel,
+        helpScroll: menu.helpScroll,
+        items: [
+          { id: 'new', label: '开始新游戏', enabled: true },
+          { id: 'continue', label: '继续游戏', enabled: hasSave, note: hasSave ? '' : '暂无存档' },
+          { id: 'help', label: '玩法说明', enabled: true },
+          { id: 'settings', label: '设置', enabled: true },
+          { id: 'about', label: '关于', enabled: true }
+        ],
+        settings: this._settingsSpec(),
+        help: HELP
+      };
+    },
+
+    getMenuState: function () {
+      return { page: menu.page, sel: menu.sel, settingsSel: menu.settingsSel, helpScroll: menu.helpScroll };
+    },
+
+    /* 进入场景：new = 清档重开；continue = 读档进场景。返回是否真的进入。 */
+    enterGame: function (mode) {
+      var S = Game.Systems && Game.Systems.Save;
+      if (mode === 'continue') {
+        if (!S || typeof S.has !== 'function' || !S.has()) {
+          Game.Core.EventBus.emit('ui:notice', { msg: '暂无存档：请先「开始新游戏」' });
+          return false;
+        }
+        try {
+          booting = true;               /* 读档期间不写档（与 init 同一守卫） */
+          var loaded = S.load();
+          booting = false;
+          if (!loaded) {
+            Game.Core.EventBus.emit('ui:notice', { msg: '存档无法读取：请先「开始新游戏」' });
+            return false;
+          }
+          if (typeof loaded.floor === 'number') player.floor = loaded.floor;
+        } catch (e) {
+          booting = false;
+          Game.Core.EventBus.emit('ui:notice', { msg: '存档读取失败：请先「开始新游戏」' });
+          return false;
+        }
+        encounter = null;
+        refreshFov();
+        syncHud();
+        if (Game.Modal) Game.Modal.close();
+        this.switchScene('explore');
+        this._finishMenuEnter('已读取存档（楼层 ' + player.floor + '）');
+        return true;
+      }
+      /* 新游戏：reuse restart()，它已包含清档、重生地图、重置任务/图鉴/商店相位 */
+      encounter = null;
+      this.restart();
+      this._finishMenuEnter('新冒险开始');
+      return true;
+    },
+
+    /* 离开首屏后的共同收尾：清残留按键、按需弹首次引导、给一条提示 */
+    _finishMenuEnter: function (msg) {
+      menu.page = 'root';
+      menu.sel = 0;
+      menu.settingsSel = 0;
+      menu.helpScroll = 0;
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      if (this._guidePending) {
+        this._guidePending = false;
+        this._guideVisible = false; /* openGuide 内部按需置 true */
+        openGuide();
+      }
+      Game.Core.EventBus.emit('ui:notice', { msg: msg });
+    },
+
+    /* 菜单键盘：↑↓ 选择 / Enter 确认 / Esc 从子页返回（鼠标点击为可选增强，不依赖） */
+    _updateMenu: function () {
+      var k = Game.Core.Input.getState();
+      var up = k['ArrowUp'] || k['KeyW'];
+      var down = k['ArrowDown'] || k['KeyS'];
+      var enter = k['Enter'] || k['NumpadEnter'];
+      var esc = k['Escape'];
+
+      if (menu.page === 'root') {
+        if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.sel = Math.max(0, menu.sel - 1); return; }
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.sel = Math.min(4, menu.sel + 1); return; }
+        if (enter) {
+          delete k['Enter']; delete k['NumpadEnter'];
+          var id = ['new', 'continue', 'help', 'settings', 'about'][menu.sel];
+          if (id === 'new') { this.enterGame('new'); return; }
+          if (id === 'continue') { this.enterGame('continue'); return; }
+          if (id === 'help') { menu.page = 'help'; menu.helpScroll = 0; return; }
+          if (id === 'settings') { menu.page = 'settings'; menu.settingsSel = 0; return; }
+          if (id === 'about') { menu.page = 'about'; return; }
+        }
+        return;
+      }
+
+      if (esc) { delete k['Escape']; menu.page = 'root'; return; }
+
+      if (menu.page === 'help') {
+        if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.helpScroll = Math.max(0, menu.helpScroll - 1); return; }
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.helpScroll += 1; return; }
+        return;
+      }
+
+      if (menu.page === 'settings') {
+        if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.settingsSel = Math.max(0, menu.settingsSel - 1); return; }
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(2, menu.settingsSel + 1); return; }
+        var ids = ['fx', 'muted', 'zoom'];
+        if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; this.cycleSetting(ids[menu.settingsSel], -1); return; }
+        if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
+        if (enter) { delete k['Enter']; delete k['NumpadEnter']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
+        return;
+      }
+      /* about：Esc 已在上面的统一分支处理 */
     },
 
     /* M9-5：首次引导（验证页断言用）
@@ -723,6 +1026,10 @@
       } else if (scene === 'victory') {
         this._updateVictory();
         Game.Core.Render.drawVictory(player);
+      } else if (scene === 'menu') {
+        /* D-48：首屏菜单是 loop 内的一个场景——不新开 rAF 链 */
+        this._updateMenu();
+        Game.Core.Render.drawMainMenu(this._menuSpec());
       }
       /* D-14：底部提示条画在所有场景之上（含弹窗），但在引导覆盖层之下 */
       if (Game.Notice && typeof Game.Notice.draw === 'function') {
@@ -735,9 +1042,11 @@
     }
   };
 
-  /* script 位于 body 末尾，DOM 已就绪，直接启动（测试页可设 __AI_DUNGEON_NO_AUTOSTART__ 跳过） */
+  /* script 位于 body 末尾，DOM 已就绪，直接启动（测试页可设 __AI_DUNGEON_NO_AUTOSTART__ 跳过）
+   * D-48：只有 index.html 显式声明 __AI_DUNGEON_MENU__ 才走首屏菜单；
+   * 既有验证页/机器人页未声明，init 仍直接进 explore（行为不变）。 */
   if (!window.__AI_DUNGEON_NO_AUTOSTART__) {
-    Game.Core.Main.init();
+    Game.Core.Main.init({ menu: !!window.__AI_DUNGEON_MENU__ });
     Game.Core.Main.start();
   }
 })();

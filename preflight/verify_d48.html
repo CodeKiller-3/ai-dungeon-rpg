@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-48：读取 selfcheck/d48-after.json（本卡跑局）与 d47-after.json（改前基线），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-48 首屏与玩法说明</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:14px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; vertical-align:top; }
+  th { color:#9fd; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-48 · 首屏菜单 / 继续游戏 / 键盘导航 / 说明↔源码 / 设置 / 单 rAF / 旧档 / 回归（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<h2>说明页逐条 ↔ 源码</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D48ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D48ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D48ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    try { return JSON.parse(readText(rel)); } catch (e) { return null; }
+  }
+  var M = Game.Core.Main, R = Game.Core.Render, S = Game.Systems.Save, P = Game.Data.Player;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+
+  function kd(code) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true }));
+  }
+  function ku(code) {
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true }));
+  }
+  /* 一次按键 = keydown → 手动驱动一帧菜单逻辑 → keyup（不依赖 rAF，确定性强） */
+  function press(code) {
+    kd(code);
+    try { M._updateMenu(1e9); } catch (e) { window.__D48ERR.push('press ' + code + ': ' + ((e && e.message) || e)); }
+    ku(code);
+  }
+  function setSel(n) {
+    var st = M.getMenuState();
+    var guard = 0;
+    while (st.sel < n && guard++ < 10) { press('ArrowDown'); st = M.getMenuState(); }
+    while (st.sel > n && guard++ < 10) { press('ArrowUp'); st = M.getMenuState(); }
+    return st.sel;
+  }
+  function stored() {
+    try { return JSON.parse(localStorage.getItem(SET_KEY) || 'null'); } catch (e) { return null; }
+  }
+
+  try {
+    /* 干净起点：无存档、无设置、跳过首次引导；然后按 index.html 的冷启动路径 init({menu:true}) */
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { /* 存储禁用时后续断言会如实失败 */ }
+
+    M.init({ menu: true });
+    var drawErr = null;
+    try { M.loop(performance.now()); } catch (e) { drawErr = String((e && e.message) || e); }
+
+    /* ── A：冷启动首屏 = 主菜单；skip 可直进场景；去掉 skip 必须回菜单 ── */
+    var idxTxt = readText('../index.html');
+    var itemsA = M._menuSpec().items;
+    var menuOk = M._scene === 'menu' && M.getMenuState().page === 'root' && itemsA.length === 5 &&
+      itemsA[0].label === '开始新游戏' && itemsA[1].label === '继续游戏' &&
+      itemsA[2].label === '玩法说明' && itemsA[3].label === '设置' && itemsA[4].label === '关于' && drawErr === null;
+    var skipPure = M.shouldShowMenu({ menu: true, skipMenu: true }) === false &&
+      M.shouldShowMenu({ menu: true }) === true &&
+      M.shouldShowMenu({}) === false;
+    /* 负例：去掉 skipMenu 后仍返回"不显示菜单"，说明菜单可以被无条件绕过 → FAIL */
+    var negBypass = M.shouldShowMenu({ menu: true, skipMenu: false }) === true;
+    rec('A_cold_start_menu', menuOk && idxTxt.indexOf('__AI_DUNGEON_MENU__') >= 0 && skipPure && negBypass, {
+      rule: 'index.html 显式声明首屏；冷启动 init({menu:true}) 落在 menu 场景；skipMenu 参数可跳过；去掉 skip 必须回到菜单',
+      scene: M._scene, page: M.getMenuState().page, items: itemsA,
+      indexDeclaresMenu: idxTxt.indexOf('__AI_DUNGEON_MENU__') >= 0, skipPure: skipPure, negBypass: negBypass, drawErr: drawErr
+    });
+
+    /* ── B：继续游戏——无档置灰 + 一行说明；有档进场景；不抛错 ── */
+    var noSave = S.has() === false;
+    var contA = M._menuSpec().items[1];
+    var r1 = M.enterGame('continue');
+    var bNo = noSave && contA.enabled === false && contA.note === '暂无存档' &&
+      r1 === false && M._scene === 'menu';
+    /* 旧档形状（无 saveVersion / 无 map / 无 upg / 无 npcQuests） */
+    var legacy = {
+      floor: 1,
+      player: {
+        hp: 55, maxHp: 100, atk: 13, def: 5, gold: 123, exp: 0, level: 1,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null }, quests: {}
+      }
+    };
+    try { localStorage.setItem(KEY, JSON.stringify(legacy)); } catch (e) { }
+    var hasNow = S.has() === true;
+    var contB = M._menuSpec().items[1];
+    var r2 = M.enterGame('continue');
+    var bYes = hasNow && contB.enabled === true && contB.note === '' &&
+      r2 === true && M._scene === 'explore' && P.gold === 123 && P.hp === 55 &&
+      P.inventory.potion_small === 2;
+    rec('B_continue', bNo && bYes && window.__D48ERR.length === 0, {
+      rule: '无档：置灰 + note「暂无存档」+ enterGame 返回 false 且留在菜单；有档：进入 explore 并恢复金币/血量/背包',
+      noSave: { noSave: noSave, r1: r1, enabled: contA.enabled, note: contA.note, scene: 'menu' },
+      withSave: { hasNow: hasNow, r2: r2, scene: M._scene, gold: P.gold, hp: P.hp, potions: P.inventory.potion_small }
+    });
+
+    /* ── C：键盘全导航（↑↓ 选中 / Enter 执行 / Esc 从子页返回） ── */
+    M.switchScene('menu');
+    setSel(0);
+    press('ArrowDown');
+    var c1 = M.getMenuState().sel;
+    press('ArrowDown');
+    var c2 = M.getMenuState().sel;
+    press('ArrowUp');
+    var c3 = M.getMenuState().sel;
+    var cUpDown = (c1 === 1 && c2 === 2 && c3 === 1);
+    /* Enter 执行：继续游戏（此时有档）→ 进场景 */
+    press('Enter');
+    var cEnter = (M._scene === 'explore');
+    /* Esc 从子页返回：说明 / 设置 / 关于 */
+    M.switchScene('menu'); setSel(2); press('Enter');
+    var cHelpOpen = M.getMenuState().page === 'help';
+    press('Escape');
+    var cHelpBack = M.getMenuState().page === 'root';
+    setSel(3); press('Enter');
+    var cSetOpen = M.getMenuState().page === 'settings';
+    press('ArrowDown');
+    var cSetMove = M.getMenuState().settingsSel === 1;
+    press('Escape');
+    var cSetBack = M.getMenuState().page === 'root';
+    setSel(4); press('Enter');
+    var cAboutOpen = M.getMenuState().page === 'about';
+    press('Escape');
+    var cAboutBack = M.getMenuState().page === 'root';
+    rec('C_keyboard_nav', cUpDown && cEnter && cHelpOpen && cHelpBack && cSetOpen && cSetMove && cSetBack && cAboutOpen && cAboutBack, {
+      rule: '↑↓ 移动选中项；Enter 执行；Esc 从说明/设置/关于返回主菜单',
+      upDown: { afterDown1: c1, afterDown2: c2, afterUp: c3, ok: cUpDown },
+      enterExec: cEnter, help: [cHelpOpen, cHelpBack], settings: [cSetOpen, cSetMove, cSetBack], about: [cAboutOpen, cAboutBack]
+    });
+
+    /* ── D：说明页与源码一致（8 条逐条对照；负例：未实现功能必须被拒） ── */
+    var HELP = M.HELP || [];
+    var files = {};
+    for (var hi = 0; hi < HELP.length; hi++) {
+      for (var si = 0; si < HELP[hi].src.length; si++) {
+        var f = HELP[hi].src[si];
+        if (!files[f]) files[f] = readText('../' + f);
+      }
+    }
+    function entryMissing(e) {
+      var txt = '';
+      for (var i = 0; i < (e.src || []).length; i++) txt += (files[e.src[i]] || '') + '\n';
+      var miss = [];
+      for (var j = 0; j < (e.need || []).length; j++) {
+        if (txt.indexOf(e.need[j]) < 0) miss.push(e.need[j]);
+      }
+      return miss;
+    }
+    var dBad = [];
+    for (var di = 0; di < HELP.length; di++) {
+      var missD = entryMissing(HELP[di]);
+      if (missD.length) dBad.push({ id: HELP[di].id, missing: missD });
+    }
+    var expectIds = 'move,fireball,flee,potion,equip,bag,shop,save';
+    var idsNow = HELP.map(function (e) { return e.id; }).join(',');
+    /* 负例：把一条改成未实现的功能（按 8 键治疗），同一判据必须拒绝 */
+    var fake = { id: 'fake', src: HELP[0].src.slice(), need: ['Digit8', '治疗术'] };
+    var fakeRejected = entryMissing(fake).length > 0;
+    rec('D_help_matches_code', HELP.length === 8 && idsNow === expectIds && dBad.length === 0 && fakeRejected &&
+      M._menuSpec().help.length === 8, {
+      rule: '玩法说明 8 条全部只写已实现机制：每条 need 片段必须在 src 源码中字面存在；未实现功能（负例）必须对不上',
+      ids: idsNow, bad: dBad, fakeMissing: entryMissing(fake), fakeRejected: fakeRejected
+    });
+
+    /* ── E：设置只含既有三项，改动即时生效并可持久化 ── */
+    var spec = M._settingsSpec();
+    var specIds = spec.map(function (s) { return s.id; }).join(',');
+    var fxBad = M.setSetting('fx', 'ultra') === false && M.getSettings().fx === 'low';
+    var fxOk = M.setSetting('fx', 'high') === true && Game.Fx.getLevel() === 'high' && stored().fx === 'high';
+    var mutOk = M.setSetting('muted', true) === true && Game.Systems.Audio.isMuted() === true && stored().muted === true;
+    var zoomOk = M.setSetting('zoom', '1.5') === true && R.scale === 1.5 && stored().zoom === '1.5';
+    var zoomBack = M.setSetting('zoom', 'auto') === true && R.getScaleMode() === 'auto' && stored().zoom === 'auto';
+    /* 留一组非默认值给"重载后仍生效"用 */
+    M.setSetting('zoom', '1.25');
+    rec('E_settings', spec.length === 3 && specIds === 'fx,muted,zoom' && fxBad && fxOk && mutOk && zoomOk && zoomBack, {
+      rule: '设置页仅打击感 / 音效 / 画面缩放三项；非法值拒绝；三项均即时生效且写入 localStorage',
+      items: spec, fxBad: fxBad, fxOk: fxOk, mutedOk: mutOk, zoomOk: zoomOk, zoomBack: zoomBack, stored: stored()
+    });
+
+    /* ── 持久化 + skip 真正落点：重载 init（菜单开启 + skip） ── */
+    M.setSetting('fx', 'high'); M.setSetting('muted', true); M.setSetting('zoom', '1.25');
+    M.init({ menu: true, skipMenu: true });
+    var reloaded = M.getSettings();
+    var skipBootOk = M._scene === 'explore' && reloaded.fx === 'high' && reloaded.muted === true && reloaded.zoom === '1.25';
+    rec('E2_reload_and_skip', skipBootOk, {
+      rule: '带 skipMenu 启动直接进入 explore；上一轮设置（high / 静音 / 125%）在 init 时被读回',
+      scene: M._scene, settings: reloaded
+    });
+    /* 恢复默认，避免影响后续断言 */
+    M.setSetting('fx', 'low'); M.setSetting('muted', false); M.setSetting('zoom', 'auto');
+
+    /* ── G：旧档读入正常、存档键未变（v1 形状：无 saveVersion / map / upg / npcQuests） ── */
+    try { localStorage.removeItem(KEY); } catch (e) { }
+    var legacy2 = {
+      floor: 1,
+      player: {
+        hp: 61, maxHp: 100, atk: 11, def: 5, gold: 77, exp: 0, level: 1,
+        inventory: { potion_small: 1 }, equipment: { weapon: 'knife', armor: null }, quests: {}
+      }
+    };
+    var gErr = null, gLoaded = null;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(legacy2));
+      gLoaded = S.load();
+    } catch (e) { gErr = String((e && e.message) || e); }
+    var gOk = S.KEY === 'ai_dungeon_rpg_save_v1' && gErr === null && !!gLoaded &&
+      P.mp === 50 && P.gold === 77 && typeof P.upg === 'object' && typeof P.npcQuests === 'object' &&
+      localStorage.getItem('ai_dungeon_rpg_save_v1') !== null;
+    rec('G_old_save', gOk, {
+      rule: '存档键仍为 ai_dungeon_rpg_save_v1；D-46 及之前的 v1 档（缺 mp/upg/npcQuests/map）读入不抛错并补默认',
+      key: S.KEY, err: gErr, loaded: !!gLoaded, mp: P.mp, gold: P.gold, upg: P.upg, npcQuests: P.npcQuests
+    });
+
+    /* ── H：同种子 1001–1050、maxActions 2500 四策略不退化（对照 D-47） ── */
+    var AFTER = readJson('selfcheck/d48-after.json');
+    var PRE = readJson('selfcheck/d47-after.json');
+    if (!AFTER || !PRE) throw new Error('缺少跑局产物: ' + JSON.stringify({ after: !!AFTER, pre: !!PRE }));
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050 &&
+      (AFTER.env && AFTER.env.maxActions) === 2500 && AFTER.env.bootScene === 'explore';
+    var b1Now = AFTER.agg.b1.outcomes.win, b1Pre = PRE.agg.b1.outcomes.win;
+    var f5Now = AFTER.agg.b1.f5.reached, f5Pre = PRE.agg.b1.f5.reached;
+    var preBy = {};
+    ((PRE.runs && PRE.runs.b1) || []).forEach(function (r) { preBy[r.seed] = r.outcome; });
+    var mismatch = [];
+    ((AFTER.runs && AFTER.runs.b1) || []).forEach(function (r) {
+      if (preBy[r.seed] !== undefined && preBy[r.seed] !== r.outcome) mismatch.push({ seed: r.seed, pre: preBy[r.seed], now: r.outcome });
+    });
+    var g2Now = AFTER.agg.g2.f5.reached, g2Pre = PRE.agg.g2.f5.reached;
+    var s1Now = AFTER.agg.s1.f5.reached, s1Pre = PRE.agg.s1.f5.reached;
+    var m1Now = AFTER.agg.m1.floorReach['4'], m1Pre = PRE.agg.m1.floorReach['4'];
+    rec('H_no_regression', seedOk && b1Now >= 7 && b1Now >= b1Pre && f5Now >= f5Pre &&
+      mismatch.length === 0 && g2Now >= g2Pre && s1Now >= s1Pre && m1Now >= m1Pre, {
+      rule: 'B1 / G2 / S1 / M1 同种子 1001–1050、maxActions 2500；B1 ≥7/50 且逐局结果与 D-47 完全一致；G2/S1/M1 不退化',
+      seeds: { n: seeds.length, first: seeds[0], last: seeds[49] }, bootScene: AFTER.env.bootScene,
+      b1: { now: b1Now, pre: b1Pre, f5Now: f5Now, f5Pre: f5Pre, mismatch: mismatch.slice(0, 6) },
+      g2: { now: g2Now, pre: g2Pre }, s1: { now: s1Now, pre: s1Pre }, m1: { now: m1Now, pre: m1Pre }
+    });
+
+    /* ── F：进入/退出菜单后只有一条 rAF 链；无 JS 错误 ── */
+    var s1 = M.start();
+    var chains1 = M._rafChains;
+    var s2 = M.start();
+    var chains2 = M._rafChains;
+    M.switchScene('menu');
+    M.enterGame('new');
+    M.switchScene('menu');
+    M.enterGame('continue');
+    M.switchScene('menu');
+    var chains3 = M._rafChains;
+    var frameErr = null;
+    try { M.loop(performance.now()); } catch (e) { frameErr = String((e && e.message) || e); }
+    rec('F_single_raf', s1 === true && s2 === false && chains1 === 1 && chains2 === 1 && chains3 === 1 &&
+      frameErr === null && M._scene === 'menu' && window.__D48ERR.length === 0, {
+      rule: 'start() 只允许一条 rAF 链；重复调用被忽略；菜单↔场景多次往返后计数仍为 1；整帧执行无异常、无页面级 JS 错误',
+      start: [s1, s2], chains: [chains1, chains2, chains3], frameErr: frameErr, scene: M._scene,
+      errors: window.__D48ERR.slice(0, 6)
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+
+    /* 逐条对照小表 */
+    var h = ['<table><tr><th>#</th><th>id</th><th>说明</th><th>源码</th><th>结果</th></tr>'];
+    for (var ri = 0; ri < HELP.length; ri++) {
+      var e = HELP[ri], miss2 = entryMissing(e);
+      h.push('<tr><td>' + (ri + 1) + '</td><td>' + e.id + '</td><td>' + e.title + '<br>' +
+        e.lines.join('<br>') + '</td><td>' + e.src.join('<br>') + '<br>' +
+        (e.need || []).join(' · ') + '</td><td>' + (miss2.length ? '✗ ' + miss2.join(',') : '✓') + '</td></tr>');
+    }
+    h.push('</table>');
+    document.getElementById('detail').innerHTML = h.join('');
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + ((e && e.stack) || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D48_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

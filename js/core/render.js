@@ -312,6 +312,15 @@
     cssW: 0,       /* 逻辑视口尺寸（绘制/命中坐标空间 = cssPx / scale） */
     cssH: 0,
     _animNow: null,  /* P1-3：可注入时钟函数（验证页冻结动画帧）；null=用 performance.now */
+    /* D-48：画面缩放设置。'auto' = 原有自适应结果（默认，行为不变）；
+     * '1' / '1.25' / '1.5' = 玩家在首屏设置页里显式选择的固定缩放。 */
+    _scaleMode: 'auto',
+    setScaleMode: function (m) {
+      this._scaleMode = (m === '1' || m === '1.25' || m === '1.5') ? m : 'auto';
+      if (this._canvas) this.resize();
+      return this._scaleMode;
+    },
+    getScaleMode: function () { return this._scaleMode; },
 
     init: function (canvas) {
       this._canvas = canvas;
@@ -357,6 +366,11 @@
     /* 等比缩放系数：以 960×540 为设计基准，取横纵可容纳比例中较小值（避免任一方向超出），
      * 限制在 [1,2] 并按 0.25 步进取整；竖屏小窗口保持 1，不做反向缩小，保证字号可读。 */
     _computeScale: function (pxW, pxH) {
+      /* D-48：显式缩放设置优先（'auto' 时走原公式，所有既有页面结果不变） */
+      if (this._scaleMode && this._scaleMode !== 'auto') {
+        var fixed = parseFloat(this._scaleMode);
+        if (isFinite(fixed) && fixed > 0) return Math.min(Math.max(fixed, 0.5), 2);
+      }
       var rawScale = Math.min(pxW / BASE_W, pxH / BASE_H);
       var s = Math.round(rawScale / SCALE_STEP) * SCALE_STEP;
       if (s < MIN_SCALE) s = MIN_SCALE;
@@ -1580,6 +1594,185 @@
       var lay = this._guideLayout();
       var last = lay.length ? lay[lay.length - 1].y : this._guideMetrics().startY;
       return { x: Math.round((W - w) / 2), y: Math.round(last + this._guideMetrics().lineH + 18), w: w, h: h };
+    },
+
+    /* D-48：启动首屏（主菜单 / 玩法说明 / 设置 / 关于）。
+     * 只画 UI，不启动任何循环——主循环仍由 Main.start() 唯一持有。
+     * spec 由 Main._menuSpec() 生成（选项文案、可用状态、设置项、说明正文同源）。 */
+    drawMainMenu: function (spec) {
+      var ctx = this._ctx;
+      if (!ctx) return;
+      this._applyDpr();
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var st = spec || {};
+
+      /* 背景：深色 + 细网格，沿用既有像素风的纯色块，不引外部图片 */
+      ctx.fillStyle = '#0b0c14';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(80,90,130,0.16)';
+      ctx.lineWidth = 1;
+      for (var gx = 0; gx < W; gx += 32) {
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
+      }
+      for (var gy = 0; gy < H; gy += 32) {
+        ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
+      }
+      /* 顶部/底部装饰线 */
+      ctx.fillStyle = '#ffcf6e';
+      ctx.fillRect(W / 2 - 120, 22, 240, 2);
+      ctx.fillStyle = '#3a3a55';
+      ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
+
+      if (st.page === 'help') this._drawMenuHelp(st, W, H);
+      else if (st.page === 'settings') this._drawMenuSettings(st, W, H);
+      else if (st.page === 'about') this._drawMenuAbout(W, H);
+      else this._drawMenuRoot(st, W, H);
+    },
+
+    _drawMenuRoot: function (st, W, H) {
+      var ctx = this._ctx;
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 30px monospace';
+      ctx.fillText('AI 勇者闯地牢', cx, Math.max(88, H * 0.17));
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '14px monospace';
+      ctx.fillText('往地牢更深处走 · 第 5 层击败地牢巨龙', cx, Math.max(114, H * 0.17) + 28);
+
+      var items = st.items || [];
+      var pw = Math.min(430, W - 60);
+      var itemH = 44;
+      var listH = items.length * itemH;
+      var py = Math.max(170, H * 0.34 - listH / 2);
+
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i], y = py + i * itemH;
+        var on = (i === st.sel);
+        if (on) {
+          ctx.fillStyle = 'rgba(255,207,110,0.14)';
+          ctx.fillRect(cx - pw / 2, y, pw, itemH - 6);
+          ctx.strokeStyle = '#ffcf6e';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, itemH - 8);
+        }
+        ctx.textAlign = 'left';
+        ctx.fillStyle = it.enabled === false ? '#5a5f70' : (on ? '#ffcf6e' : '#cfcfcf');
+        ctx.font = (on ? 'bold ' : '') + '17px monospace';
+        ctx.fillText((on ? '▶ ' : '  ') + it.label, cx - pw / 2 + 24, y + 26);
+        if (it.note) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#7f8fa8';
+          ctx.font = '12px monospace';
+          ctx.fillText(it.note, cx + pw / 2 - 20, y + 26);
+        }
+      }
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('↑↓ 选择 · Enter 确认 · 鼠标可点（非必需）', cx, H - 42);
+    },
+
+    _drawMenuHelp: function (st, W, H) {
+      var ctx = this._ctx;
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 22px monospace';
+      ctx.fillText('玩法说明 · 只列已实现的机制', cx, 52);
+
+      var rows = [], help = st.help || [];
+      for (var i = 0; i < help.length; i++) {
+        rows.push({ head: true, text: (i + 1) + '. ' + help[i].title });
+        for (var j = 0; j < (help[i].lines || []).length; j++) rows.push({ head: false, text: help[i].lines[j] });
+      }
+      var lineH = H < 600 ? 17 : 19;
+      var top = 76, bottom = 44;
+      var maxRows = Math.max(4, Math.floor((H - top - bottom) / lineH));
+      var scroll = Math.max(0, Math.min(st.helpScroll || 0, Math.max(0, rows.length - maxRows)));
+
+      var panelW = Math.min(820, W - 40);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx - panelW / 2, top - 10, panelW, maxRows * lineH + 16);
+      ctx.clip();
+      ctx.textAlign = 'left';
+      for (var r = 0; r < maxRows && (r + scroll) < rows.length; r++) {
+        var row = rows[r + scroll];
+        var y = top + r * lineH;
+        if (row.head) {
+          ctx.fillStyle = '#ffb86b';
+          ctx.font = 'bold 13px monospace';
+        } else {
+          ctx.fillStyle = '#cfcfcf';
+          ctx.font = '12px monospace';
+        }
+        ctx.fillText(row.text, cx - panelW / 2 + 16, y);
+      }
+      ctx.restore();
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('↑↓ 滚动 · Esc 返回主菜单', cx, H - 16);
+    },
+
+    _drawMenuSettings: function (st, W, H) {
+      var ctx = this._ctx;
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 22px monospace';
+      ctx.fillText('设置', cx, 56);
+
+      var rows = st.settings || [];
+      var pw = Math.min(460, W - 60), rowH = 46;
+      var py = Math.max(120, H * 0.32 - rows.length * rowH / 2);
+      for (var i = 0; i < rows.length; i++) {
+        var y = py + i * rowH, on = (i === st.settingsSel);
+        if (on) {
+          ctx.fillStyle = 'rgba(255,207,110,0.14)';
+          ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
+          ctx.strokeStyle = '#ffcf6e';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, rowH - 10);
+        }
+        ctx.textAlign = 'left';
+        ctx.fillStyle = on ? '#ffcf6e' : '#cfcfcf';
+        ctx.font = (on ? 'bold ' : '') + '16px monospace';
+        ctx.fillText(rows[i].label, cx - pw / 2 + 24, y + 26);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = on ? '#ffcf6e' : '#9bbbf4';
+        ctx.font = '15px monospace';
+        ctx.fillText(rows[i].value, cx + pw / 2 - 24, y + 26);
+      }
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('↑↓ 选择 · ←→ / Enter 切换 · Esc 返回主菜单', cx, H - 16);
+    },
+
+    _drawMenuAbout: function (W, H) {
+      var ctx = this._ctx;
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 22px monospace';
+      ctx.fillText('关于', cx, 60);
+      var lines = [
+        'AI 勇者闯地牢 · 像素地牢 Roguelike',
+        '零构建、零外部依赖：双击 index.html 即可游玩',
+        '目标：穿过 5 层地牢，在第 5 层击败地牢巨龙',
+        '操作：方向键 / WASD 移动；B 背包 · E 商店 · M 任务',
+        '战斗：1 攻击 · 2 防御 · 3 逃跑 · 4 火球 · 7 用药',
+        '存档自动写入浏览器本地（ai_dungeon_rpg_save_v1）'
+      ];
+      ctx.fillStyle = '#cfcfcf';
+      ctx.font = '14px monospace';
+      var y = Math.max(140, H * 0.32);
+      for (var i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx, y + i * 26);
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('Esc 返回主菜单', cx, H - 16);
     }
   };
 })();

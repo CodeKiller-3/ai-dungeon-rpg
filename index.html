@@ -15,6 +15,9 @@
   <div id="npc-log"></div>
   <input id="npc-input" maxlength="100" placeholder="输入想说的话，回车发送…">
 </div>
+<!-- D-48：声明冷启动显示首屏主菜单；带 ?skipmenu=1 时 main.js 会跳过菜单直接进场景。
+     其它测试页/机器人页不声明该变量，行为与之前完全一致。 -->
+<script>window.__AI_DUNGEON_MENU__ = true;</script>
 <!-- 加载顺序严格按 PLAN.md §4.6：core → data → vendor → systems → main（最后） -->
 <script src="js/core/eventBus.js"></script>
 <script src="js/core/sprites.js"></script>

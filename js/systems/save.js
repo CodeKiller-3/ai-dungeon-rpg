@@ -13,6 +13,13 @@
   var SAVE_VERSION = 2;
 
   Game.Systems.Save = {
+    /* D-48：存档键对外只读暴露 + 存在性查询（首屏"继续游戏"置灰判定用）。
+     * 键名与写入路径完全不变，旧档仍按原 key 读取。 */
+    KEY: KEY,
+    has: function () {
+      try { return localStorage.getItem(KEY) !== null; } catch (e) { return false; }
+    },
+
     save: function () {
       var p = Game.Data.Player;
       var M = Game.Systems.Map;
