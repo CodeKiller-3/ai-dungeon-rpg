@@ -38,10 +38,11 @@
 - 战斗表现：时间轴分段、伤害飘字、受击抖动、顿帧与震屏。<!-- 锚点: js/systems/fx.js#Game.Fx -->
 - 音效与 BGM：Web Audio 程序化合成，三场景自动切换，K 静音 / Q 音量面板。<!-- 锚点: js/systems/audio.js#Game.Systems.Audio -->
 - 视野与光影：rot.js 精确投影迷雾、火把光晕、视野软边、暗角。<!-- 锚点: js/systems/fov.js#Game.fov -->
+- 地图贴图逻辑（D-35）：贴图尺寸改为「原生高 × `TILE/16`、脚底锚定格底」（玩家 21→42px、史莱姆 18px < 独眼酋长 37.5px），装饰按脚下行浮点位置参与 y 前后关系（走进物件那一行时物件盖脚、静止同格时人在前），埋伏整格红膜改为脚下警戒环，落地物件与角色统一补中性地面投影。战场 112.5px 口径未动。<!-- 锚点: js/core/main.js#drawMap -->
 
 ### 工具
 
-- 回归批跑：75 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：76 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->

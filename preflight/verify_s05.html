@@ -225,7 +225,10 @@
         fillStyle: '', strokeStyle: '', lineWidth: 1,
         fillRect: function () {}, strokeRect: function () {}, beginPath: function () {},
         arc: function () {}, fill: function () {}, moveTo: function () {},
-        lineTo: function () {}, closePath: function () {}
+        lineTo: function () {}, closePath: function () {},
+        /* D-35：_drawDecor 起给落地装饰补地面投影（ellipse + save/restore），
+         * 桩 ctx 需要具备这些标准 2D 方法，否则测到的是桩缺方法而不是绘制代码出错 */
+        ellipse: function () {}, save: function () {}, restore: function () {}
       };
       if (R && typeof R._drawDecor === 'function') { R._drawDecor(stub, 'room_chest', 0, 0); t9 = true; }
     } catch (e9) { t9 = false; }

@@ -334,10 +334,10 @@
       (movedAway.length ? '；缺失=' + movedAway.join(',') : '') +
       '；被搬进 docs/process/=' + (htmlInProcess.length ? htmlInProcess.join(',') : '0'));
 
-    /* A9：基线页数是人工维护的硬数字——每新增一张验证页必须同步改这里（D-34：74→75）。
-     * 这是基线变更，不是放宽断言：改的是"应该有 75 页"这个事实，判定形状不变。 */
-    var a9 = !!BASE && BASE.count === 75 && Array.isArray(BASE.pages) &&
-      BASE.pages.length === 75 && BASE.pages.indexOf('verify_d32') >= 0;
+    /* A9：基线页数是人工维护的硬数字——每新增一张验证页必须同步改这里
+     * （D-34：74→75；D-35：75→76，新增 verify_d35）。这是基线变更，不是放宽断言。 */
+    var a9 = !!BASE && BASE.count === 76 && Array.isArray(BASE.pages) &&
+      BASE.pages.length === 76 && BASE.pages.indexOf('verify_d32') >= 0;
     rec('A9_pageBaselineAligned', a9,
       'count=' + (BASE ? BASE.count : 'n/a') + '；pages.length=' +
       (BASE && BASE.pages ? BASE.pages.length : 'n/a') +
@@ -346,12 +346,12 @@
     /* A10 */
     var README = read('../README.md'), LOG = read('../CHANGELOG.md');
     var a10 = README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
-      README.indexOf('验证页 75 个') >= 0 &&
+      README.indexOf('验证页 76 个') >= 0 &&
       LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0;
     rec('A10_docsUpdated', a10,
       'README 含 docs/process=' + (README.indexOf('docs/process/') >= 0) +
       ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
-      ' / 验证页 75 个=' + (README.indexOf('验证页 75 个') >= 0) +
+      ' / 验证页 76 个=' + (README.indexOf('验证页 76 个') >= 0) +
       '；CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) +
       ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
 
@@ -436,18 +436,18 @@
       'PLAN/README/CHANGELOG/规划 仍在根目录=' + (CORE.length - coreMiss.length) + '/4' +
       (coreMiss.length ? '；缺=' + coreMiss.join(',') : ''));
 
-    var a9 = !!base && base.count === 75 && Array.isArray(base.pages) &&
-      base.pages.length === 75 && base.pages.indexOf('verify_d32') >= 0;
+    var a9 = !!base && base.count === 76 && Array.isArray(base.pages) &&
+      base.pages.length === 76 && base.pages.indexOf('verify_d32') >= 0;
     rec('L3_pageBaselineAligned', a9,
       'count=' + (base ? base.count : 'n/a') + '；含 verify_d32=' +
       (base && base.pages ? base.pages.indexOf('verify_d32') >= 0 : 'n/a'));
 
     var README = read('../README.md'), LOG = read('../CHANGELOG.md'), PLAN2 = read('../规划-对标补齐.md');
     rec('L4_readmeUpdated', README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
-      README.indexOf('验证页 75 个') >= 0,
+      README.indexOf('验证页 76 个') >= 0,
       'README 关键锚点 docs/process=' + (README.indexOf('docs/process/') >= 0) +
       ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
-      ' / 75 个=' + (README.indexOf('验证页 75 个') >= 0));
+      ' / 76 个=' + (README.indexOf('验证页 76 个') >= 0));
 
     rec('L5_changelogUpdated', LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0,
       'CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) + ' B2=' + (LOG.indexOf('阶段 B2') >= 0));

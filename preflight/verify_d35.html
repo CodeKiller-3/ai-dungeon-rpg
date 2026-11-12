@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d35</title>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-35 验证页：地图贴图逻辑（尺寸口径 / 装饰前后关系 / 埋伏红膜 / 地面投影）。
+     加载顺序与主游戏同序（core → data），main.js 不加载（不需要主循环）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, api: false, ok: false };
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+  var TILE = 24;
+  var rec = [];            /* drawImage 记录：{ n, src, x, y, w, h } */
+  var origDrawImage = ctx.drawImage;
+
+  ctx.drawImage = function (img) {
+    try {
+      if (img && img.src) {
+        var a = arguments;
+        rec.push({
+          n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          src: String(img.src),
+          x: Number(a[1]), y: Number(a[2]),
+          w: Number(a[3]), h: Number(a[4])
+        });
+      }
+    } catch (e) { /* 记录失败不影响绘制 */ }
+    return origDrawImage.apply(ctx, arguments);
+  };
+
+  /* ---------- 场景桩 ---------- */
+  var grid = [], decorAt = {}, enemies = [], playerObj = { x: 5, y: 5, floor: 1 };
+  (function () {
+    for (var y = 0; y < 12; y++) { grid[y] = []; for (var x = 0; x < 12; x++) grid[y][x] = 1; }
+  })();
+
+  function stubMap() {
+    Game.Systems = Game.Systems || {};
+    Game.Systems.Map = {
+      getDetail: function () { return null; },
+      getDecor: function (x, y) { return decorAt[x + ',' + y] || null; },
+      getEnemies: function () { return enemies; },
+      getGrid: function () { return grid; },
+      getTrap: function () { return null; }
+    };
+    Game.Systems.AI = { getPatrols: function () { return []; } };
+    Game.fov = undefined;
+    Game.Lighting = undefined;
+    Game.Particles = undefined;
+    Game.Feedback = undefined;
+    Game.hud = undefined;
+  }
+
+  /* 画一帧：opts.decor / opts.enemy / opts.player */
+  function scene(opts) {
+    opts = opts || {};
+    decorAt = {};
+    if (opts.decor) decorAt[opts.decor.x + ',' + opts.decor.y] = opts.decor.id;
+    enemies = opts.enemy ? [{ x: opts.enemy.x, y: opts.enemy.y, monsterId: opts.enemy.id }] : [];
+    rec = [];
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    Game.Core.Render.drawMap(grid, playerObj);
+    if (opts.player) Game.Core.Render.drawPlayer(playerObj);
+    return rec.slice();
+  }
+
+  function firstByPrefix(list, p) {
+    for (var i = 0; i < list.length; i++) if (list[i].n.indexOf(p) === 0) return { r: list[i], i: i };
+    return null;
+  }
+  function lastByPrefix(list, p) {
+    var found = null;
+    for (var i = 0; i < list.length; i++) if (list[i].n.indexOf(p) === 0) found = { r: list[i], i: i };
+    return found;
+  }
+
+  /* 视口 → 设备像素系数（本页强制 dpr=1；仍按实例值计算，不写死 1） */
+  var S = 1;
+  function dv(v) { return Math.round(v * S); }
+  function snap() {
+    var d = ctx.getImageData(0, 0, cv.width, cv.height);
+    return { w: d.width, h: d.height, d: d.data };
+  }
+  function at(s, x, y) {
+    var i = (y * s.w + x) * 4;
+    return [s.d[i], s.d[i + 1], s.d[i + 2], s.d[i + 3]];
+  }
+  function dist(a, b) {
+    return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]);
+  }
+  function diffCount(a, b, x0, y0, w, h) {
+    var n = 0;
+    for (var y = y0; y < y0 + h; y++) {
+      for (var x = x0; x < x0 + w; x++) {
+        if (dist(at(a, x, y), at(b, x, y)) > 0) n++;
+      }
+    }
+    return n;
+  }
+
+  /* 素材 alpha 内容框（独立于渲染层，直接读 PNG 像素） */
+  var bboxCache = {};
+  function assetBox(src) {
+    if (bboxCache[src]) return bboxCache[src];
+    var img = new Image();
+    img.src = src;
+    var w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return null;
+    var oc = document.createElement('canvas');
+    oc.width = w; oc.height = h;
+    var octx = oc.getContext('2d');
+    octx.clearRect(0, 0, w, h);
+    octx.drawImage(img, 0, 0);
+    var d = octx.getImageData(0, 0, w, h).data;
+    var minX = w, minY = h, maxX = -1, maxY = -1;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (d[(y * w + x) * 4 + 3] > 8) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    var box = { nw: w, nh: h, cw: maxX - minX + 1, ch: maxY - minY + 1, top: minY, bottom: maxY,
+      padTop: minY, padBottom: h - 1 - maxY };
+    bboxCache[src] = box;
+    return box;
+  }
+
+  /* 地面投影判据：取样点是否被压暗 */
+  function shadowScore(base, withEnt, pts) {
+    var hit = 0;
+    for (var i = 0; i < pts.length; i++) {
+      var a = at(base, pts[i][0], pts[i][1]);
+      var b = at(withEnt, pts[i][0], pts[i][1]);
+      if (dist(a, b) >= 8 && (b[0] + b[1] + b[2]) < (a[0] + a[1] + a[2])) hit++;
+    }
+    return hit;
+  }
+
+  /* 尺寸口径判据（负例复用）：h 是否等于原生高 × TILE/16 */
+  function sizeOk(natH, drawnH) {
+    return Math.abs(drawnH - Math.round(natH * TILE / 16)) < 0.01;
+  }
+
+  function run() {
+    var R = Game.Core.Render, Sp = Game.Core.Sprites;
+    out.loaded = !!(window.Game && R && Sp);
+    out.api = !!(typeof R.drawMap === 'function' && typeof R.drawPlayer === 'function' &&
+      typeof R._drawDecor === 'function' && typeof R.TILE === 'number');
+    if (!out.loaded || !out.api) { finish(); return; }
+
+    R.init(cv);
+    R.resize(1);                 /* 固定 dpr=1、scale=1：逻辑像素 = 设备像素，便于逐像素读数 */
+    R._staticBypass = true;      /* 直绘路径：与重建缓存同一段逐格代码，drawImage 顺序可观测 */
+    R._animNow = function () { return 0; };
+    stubMap();
+    S = R.dpr * R.scale;
+
+    var sub = {};
+    var ok = true;
+
+    /* ================= A 组：尺寸口径 ================= */
+    var samples = [
+      { key: 'player', opts: { player: true }, pfx: 'knight_m_', label: '玩家骑士' },
+      { key: 'slime', opts: { enemy: { x: 5, y: 5, id: 'slime' } }, pfx: 'tiny_slug_anim_f', label: '史莱姆' },
+      { key: 'chief', opts: { enemy: { x: 5, y: 5, id: 'ogre' } }, pfx: 'ogre_idle_anim_f', label: '独眼酋长' },
+      { key: 'dragon', opts: { enemy: { x: 5, y: 5, id: 'dragon' } }, pfx: 'big_demon_idle_anim_f', label: 'Boss 龙' },
+      { key: 'barrel', opts: { decor: { x: 5, y: 5, id: 'barrel' } }, pfx: 'barrel', label: '装饰桶' },
+      { key: 'chest', opts: { decor: { x: 5, y: 5, id: 'chest' } }, pfx: 'chest', label: '宝箱' }
+    ];
+    var sizeRows = [], sizeAll = true;
+    for (var si = 0; si < samples.length; si++) {
+      var sp = samples[si];
+      var list = scene(sp.opts);
+      var hit = lastByPrefix(list, sp.pfx);
+      if (!hit) { sizeAll = false; sizeRows.push({ id: sp.key, found: false }); continue; }
+      var ab = assetBox(hit.r.src);
+      var expect = Math.round(ab.nh * TILE / 16);
+      var contentExpect = ab.ch * TILE / 16;                 /* 内容高 × TILE/16 */
+      var contentDrawn = hit.r.h * ab.ch / ab.nh;            /* 等比缩放后实际可见内容高 */
+      var good = !!ab && sizeOk(ab.nh, hit.r.h) && Math.abs(contentDrawn - contentExpect) <= 0.51 &&
+        Math.abs(hit.r.w / hit.r.h - ab.nw / ab.nh) <= 0.03;
+      if (!good) sizeAll = false;
+      sizeRows.push({
+        id: sp.key, label: sp.label, nat: ab.nw + 'x' + ab.nh, content: ab.cw + 'x' + ab.ch,
+        drawn: hit.r.w + 'x' + hit.r.h, expectH: expect,
+        contentExpect: Math.round(contentExpect * 10) / 10,
+        contentDrawn: Math.round(contentDrawn * 10) / 10, ok: good
+      });
+    }
+    sub.A_sizes = sizeRows;
+    sub.A_all = sizeAll;
+    /* 史莱姆不得高于独眼酋长（内容高与绘制框双比） */
+    var sl = sizeRows.filter(function (r) { return r.id === 'slime'; })[0];
+    var ch = sizeRows.filter(function (r) { return r.id === 'chief'; })[0];
+    sub.A_slimeNotTaller = !!(sl && ch && sl.contentDrawn < ch.contentDrawn && sl.drawn.split('x')[1] < ch.drawn.split('x')[1]);
+
+    /* 真像素复核：玩家与装饰桶的"内容顶边"（投影只在脚底，不影响顶边读数） */
+    var camNow = R._cam();
+    function tileXY(tx, ty) { return { x: Math.round(tx * TILE - camNow.x), y: Math.round(ty * TILE - camNow.y) }; }
+    function firstDiffRow(baseSnap, withSnap, x0, x1, y0, y1) {
+      for (var y = y0; y <= y1; y++) {
+        for (var x = x0; x <= x1; x++) {
+          if (dist(at(baseSnap, x, y), at(withSnap, x, y)) > 0) return y;
+        }
+      }
+      return -1;
+    }
+    var baseSnap = (scene({}), snap());
+    var pSnap = (scene({ player: true }), snap());
+    var pBox = sizeRows.filter(function (r) { return r.id === 'player'; })[0];
+    var pTile = tileXY(5, 5);
+    var pAsset = pBox ? assetBox(lastByPrefix(scene({ player: true }), 'knight_m_').r.src) : null;
+    var pBottom = Math.round((5 * TILE - camNow.y + TILE - 1) * S);
+    var pTopExpect = pBottom - Math.round((pBox.contentDrawn + (pAsset ? pAsset.padBottom : 0) * TILE / 16) * S);
+    var pTopMeasured = firstDiffRow(baseSnap, pSnap,
+      dv(pTile.x), dv(pTile.x + TILE - 1), Math.max(0, pTopExpect - dv(TILE * 2)), pBottom);
+    var bSnap = (scene({ decor: { x: 5, y: 5, id: 'barrel' } }), snap());
+    var bBox = sizeRows.filter(function (r) { return r.id === 'barrel'; })[0];
+    var bAsset = assetBox(lastByPrefix(scene({ decor: { x: 5, y: 5, id: 'barrel' } }), 'barrel').r.src);
+    var bBottom = Math.round((5 * TILE - camNow.y + TILE) * S);
+    var bTopExpect = bBottom - Math.round((bBox.contentDrawn + bAsset.padBottom * TILE / 16) * S);
+    var bTopMeasured = firstDiffRow(baseSnap, bSnap,
+      dv(pTile.x), dv(pTile.x + TILE - 1), Math.max(0, bTopExpect - dv(TILE * 2)), bBottom);
+    sub.A_pixelPlayer = { topMeasured: pTopMeasured, topExpect: pTopExpect };
+    sub.A_pixelBarrel = { topMeasured: bTopMeasured, topExpect: bTopExpect };
+    sub.A_pixelOk = Math.abs(pTopMeasured - pTopExpect) <= 2 && Math.abs(bTopMeasured - bTopExpect) <= 2;
+    sub.A_pass = sub.A_all && sub.A_slimeNotTaller && sub.A_pixelOk;
+    ok = ok && sub.A_pass;
+
+    /* ================= B 组：装饰与角色的前后关系 ================= */
+    var tp = tileXY(5, 5);
+    /* B1 静止站在物件格上：物件维持"在角色之下"（玩家不被木桶埋掉） */
+    var sameList = scene({ player: true, decor: { x: 5, y: 5, id: 'chest' } });
+    var chestStatic = firstByPrefix(sameList, 'chest');
+    var chestFront = lastByPrefix(sameList, 'chest');
+    var playerDraw = lastByPrefix(sameList, 'knight_m_');
+    var b1 = !!(chestStatic && playerDraw && chestStatic.i < playerDraw.i &&
+      (!chestFront || chestFront.i === chestStatic.i));
+    /* B2 走进物件所在行（ry=5.5）：物件必须补画在角色之后，盖住脚 */
+    Game.Motion = { getRenderPos: function () { return { x: 5, y: 5.5, t: 0.5 }; } };
+    var movingList = scene({ player: true, decor: { x: 5, y: 6, id: 'chest' } });
+    Game.Motion = undefined;
+    var movePlayer = lastByPrefix(movingList, 'knight_m_');
+    var moveChestFront = lastByPrefix(movingList, 'chest');
+    var b2 = !!(movePlayer && moveChestFront && moveChestFront.i > movePlayer.i);
+    /* B3 北侧（行号更小）：装饰在角色之上应被角色的躯干遮住 → 静态层顺序即可 */
+    var northList = scene({ player: true, decor: { x: 5, y: 4, id: 'chest' } });
+    var northChest = lastByPrefix(northList, 'chest');
+    var northPlayer = lastByPrefix(northList, 'knight_m_');
+    var b3 = !!(northChest && northPlayer && northChest.i < northPlayer.i);
+    /* 像素复核：走进宝箱那 0.5 格时，脚部像素显示宝箱色而不是骑士色 */
+    Game.Motion = { getRenderPos: function () { return { x: 5, y: 5.5, t: 0.5 }; } };
+    var mvOnly = (scene({ player: true }), snap());
+    var mvWith = (scene({ player: true, decor: { x: 5, y: 6, id: 'chest' } }), snap());
+    var mvChestOnly = (scene({ decor: { x: 5, y: 6, id: 'chest' } }), snap());
+    Game.Motion = undefined;
+    var probe = [dv(tp.x + 12), dv(tp.y + TILE + 6)];
+    var cWith = at(mvWith, probe[0], probe[1]);
+    var cChest = at(mvChestOnly, probe[0], probe[1]);
+    var cPlayer = at(mvOnly, probe[0], probe[1]);
+    var dChest = dist(cWith, cChest), dPlayer = dist(cWith, cPlayer);
+    /* 宝箱像素可能半透明，允许与"只有宝箱"有少量混合误差；但必须远离玩家原色 */
+    var b4 = dPlayer > 30 && dChest * 3 < dPlayer;
+    sub.B_order = {
+      chestStaticIdx: chestStatic ? chestStatic.i : -1,
+      chestFrontIdx: chestFront ? chestFront.i : -1,
+      playerIdx: playerDraw ? playerDraw.i : -1,
+      moveChestIdx: moveChestFront ? moveChestFront.i : -1,
+      movePlayerIdx: movePlayer ? movePlayer.i : -1,
+      northChestIdx: northChest ? northChest.i : -1,
+      northPlayerIdx: northPlayer ? northPlayer.i : -1
+    };
+    sub.B_sameTileBehind = b1;
+    sub.B_enterRowInFront = b2;
+    sub.B_northBehind = b3;
+    sub.B_pixels = { point: probe, with: cWith, chestOnly: cChest, playerOnly: cPlayer, ok: b4 };
+    /* 像素复核：静止站在木桶格上时，躯干像素必须显示玩家而不是木桶（人不能被木桶埋掉） */
+    var stPlayer = (scene({ player: true }), snap());
+    var stWith = (scene({ player: true, decor: { x: 5, y: 5, id: 'barrel' } }), snap());
+    var stBarrel = (scene({ decor: { x: 5, y: 5, id: 'barrel' } }), snap());
+    var p2 = [dv(tp.x + 12), dv(tp.y + TILE - 10)];
+    var sWith = at(stWith, p2[0], p2[1]);
+    var b5 = dist(sWith, at(stPlayer, p2[0], p2[1])) === 0 && dist(sWith, at(stBarrel, p2[0], p2[1])) > 0;
+    sub.B_standOnDecor = { point: p2, with: sWith, playerOnly: at(stPlayer, p2[0], p2[1]),
+      barrelOnly: at(stBarrel, p2[0], p2[1]), ok: b5 };
+    /* 反证：旧实现里装饰全部在角色之前，B2 的"物件在角色之后"不可能成立 */
+    sub.B_notAlwaysBottom = b2;
+    sub.B_pass = b1 && b2 && b3 && b4 && b5;
+    ok = ok && sub.B_pass;
+
+    /* ================= C 组：埋伏标记不再污染整格 ================= */
+    var ct = { x: 6, y: 5 };
+    var cBox = tileXY(ct.x, ct.y);
+    var tileW = dv(TILE), tileH = dv(TILE);
+    var tx0 = dv(cBox.x), ty0 = dv(cBox.y);
+    var total = tileW * tileH;
+    var floorOnly = (scene({}), snap());
+    var monPlain = (scene({ enemy: { x: ct.x, y: ct.y, id: 'slime' } }), snap());
+    var noMon = (scene({ decor: { x: ct.x, y: ct.y, id: 'chest' } }), snap());
+    var withMon = (scene({
+      decor: { x: ct.x, y: ct.y, id: 'chest' },
+      enemy: { x: ct.x, y: ct.y, id: 'slime' }
+    }), snap());
+    /* 怪物自身占用的像素（含投影/描边）：用"空地 + 怪"对比"空地"求出 */
+    var footMask = {};
+    var foot = 0;
+    for (var cy = 0; cy < tileH; cy++) {
+      for (var cx = 0; cx < tileW; cx++) {
+        var isFoot = dist(at(floorOnly, tx0 + cx, ty0 + cy), at(monPlain, tx0 + cx, ty0 + cy)) > 0;
+        footMask[cx + ',' + cy] = isFoot;
+        if (isFoot) foot++;
+      }
+    }
+    /* 旧实现回放：整格 24×24 红膜 + 22px 贴图（同一格，含宝箱） */
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    scene({ decor: { x: ct.x, y: ct.y, id: 'chest' } });
+    ctx.fillStyle = 'rgba(234,102,104,0.22)';
+    ctx.fillRect(tx0, ty0, tileW, tileH);
+    var chestImg = Game.Core.Sprites.get('chest');
+    if (chestImg) { ctx.drawImage(chestImg, tx0 + 1, ty0 + 1, dv(TILE - 2), dv(TILE - 2)); }
+    var legacy = snap();
+    /* 判据：怪物轮廓之外的像素零污染；旧红膜回放必须被同一判据拒绝。
+     * 阈值 24：装饰贴图边缘的半透明混合只有个位数差异，红膜会带来 40+/通道 的偏移。 */
+    var CONTAM_T = 24;
+    var contam2 = 0, legacyContam2 = 0;
+    for (var cy2 = 0; cy2 < tileH; cy2++) {
+      for (var cx2 = 0; cx2 < tileW; cx2++) {
+        if (footMask[cx2 + ',' + cy2]) continue;
+        if (dist(at(noMon, tx0 + cx2, ty0 + cy2), at(withMon, tx0 + cx2, ty0 + cy2)) > CONTAM_T) contam2++;
+        if (dist(at(noMon, tx0 + cx2, ty0 + cy2), at(legacy, tx0 + cx2, ty0 + cy2)) > CONTAM_T) legacyContam2++;
+      }
+    }
+    sub.C_film = {
+      tile: total, footprint: foot, contaminated: contam2,
+      legacyContaminated: legacyContam2,
+      legacyRatio: Math.round(legacyContam2 / total * 1000) / 10
+    };
+    sub.C_pass = contam2 === 0 && legacyContam2 > 100;
+    ok = ok && sub.C_pass;
+
+    /* ================= D 组：地面投影 ================= */
+    /* 实体投影画在静态层之后，脚底下方 1~2 行只可能是投影（贴图内容到脚底为止） */
+    function ptsUnder(bottomY, cx) {
+      var p = [];
+      for (var dy = 1; dy <= 2; dy++) {
+        for (var dx = -6; dx <= 6; dx += 3) p.push([dv(cx + dx), dv(bottomY + dy)]);
+      }
+      return p;
+    }
+    /* 装饰投影烘焙在静态层里，必须留在本格内 → 取样在本格底部 1~2 行（内容底之上） */
+    function ptsInside(bottomY, cx) {
+      var p = [];
+      for (var dy = -2; dy <= -1; dy++) {
+        for (var dx = -6; dx <= 6; dx += 3) p.push([dv(cx + dx), dv(bottomY + dy)]);
+      }
+      return p;
+    }
+    var emptySnap = (scene({}), snap());
+    var pSnap2 = (scene({ player: true }), snap());
+    var pp = tileXY(5, 5);
+    var sPlayer = shadowScore(emptySnap, pSnap2, ptsUnder(5 * TILE - camNow.y + TILE - 1, pp.x + 12));
+    var eSnap = (scene({ enemy: { x: 5, y: 5, id: 'slime' } }), snap());
+    var sEnemy = shadowScore(emptySnap, eSnap, ptsUnder(5 * TILE - camNow.y + TILE, pp.x + 12));
+    var dSnap = (scene({ decor: { x: 5, y: 5, id: 'barrel' } }), snap());
+    var sDecor = shadowScore(emptySnap, dSnap, ptsInside(5 * TILE - camNow.y + TILE, pp.x + 12));
+    sub.D_shadow = { player: sPlayer, enemy: sEnemy, decor: sDecor, need: 6, points: 10 };
+    /* 负例：同一贴图不给投影 → 判据必须拒绝 */
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    scene({});
+    var bar = Game.Core.Sprites.get('barrel');
+    var bNat = bar ? { w: bar.naturalWidth, h: bar.naturalHeight } : { w: 16, h: 16 };
+    var bh = Math.round(bNat.h * TILE / 16), bw = Math.round(bNat.w * bh / bNat.h);
+    if (bar) {
+      ctx.drawImage(bar, dv(pp.x + 12 - bw / 2), dv(5 * TILE - camNow.y + TILE - bh), dv(bw), dv(bh));
+    }
+    var noShadowSnap = snap();
+    var sNoShadow = shadowScore(emptySnap, noShadowSnap, ptsInside(5 * TILE - camNow.y + TILE, pp.x + 12));
+    sub.D_noShadowScore = sNoShadow;
+    sub.D_pass = sPlayer >= 6 && sEnemy >= 6 && sDecor >= 6 && sNoShadow < 6;
+    ok = ok && sub.D_pass;
+
+    /* ================= 负例总表 ================= */
+    sub.neg_sizeOld = !sizeOk(28, 21);                    /* 改回"一格塞满"（21px）必须被判负 */
+    sub.neg_sizeOld22 = !sizeOk(16, 22);                  /* 常规帧压进 22px 同样判负 */
+    sub.neg_filmOld = !(legacyContam2 === 0);   /* 旧红膜回放必须被 C 组判据拒绝 */
+    sub.neg_noShadow = !(sNoShadow >= 6);
+    sub.neg_pass = sub.neg_sizeOld && sub.neg_sizeOld22 && sub.neg_filmOld && sub.neg_noShadow;
+
+    out.sub = sub;
+    out.ok = ok && sub.neg_pass;
+    finish();
+  }
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    var pre = document.createElement('pre');
+    pre.id = 'result';
+    pre.textContent = text;
+    document.body.appendChild(pre);
+  }
+
+  /* 素材加载完成后跑（最多 8s，超时也跑，失败项会明确为 false） */
+  var Sp = Game.Core.Sprites;
+  Sp.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (Sp.isReady() || (Date.now() - t0) > 8000) { run(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

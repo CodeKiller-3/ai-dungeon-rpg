@@ -173,6 +173,11 @@
     var fxT = 0;
     Fx._setClock(function () { return fxT; });
     Fx._reset();
+    /* D-35 夹具固定（不是放宽断言）：D1~D3 测的是"低/高三档预设本身"，
+     * 不应被宿主系统的 prefers-reduced-motion 污染。headless Edge 在本机
+     * 报告 reduce=true 时三档会被整体降为 off，D2/D3 会假失败。
+     * D4 仍显式 _setPrefersReduced(true) 验证降档行为，判定强度不变。 */
+    Fx._setPrefersReduced(false);
 
     Fx.setLevel('off');
     var offHit = Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });

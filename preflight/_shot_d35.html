@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-35 shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-35 改前/改后对照截图页：?v=old 载入 HEAD 版 render.js（_render_old.js），?v=new 载入工作区版。
+     同一份场景、同一台相机、同一套素材，只换 render.js，用来做 8 倍放大对照。 -->
+<script>
+var V = (location.search.match(/v=(old|new)/) || [])[1] || 'new';
+</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script>
+document.write('<script src="' + (V === 'old' ? '_render_old.js' : '../js/core/render.js') + '"><\/script>');
+</script>
+<script>
+(function () {
+  'use strict';
+  var cv = document.getElementById('game');
+  var TILE = 24;
+  var R = Game.Core.Render, S = Game.Core.Sprites;
+
+  /* 固定场景：12×12 全地板；玩家在 (5,5)，同格放木桶；北侧 (5,4) 放宝箱；
+     (6,5) 埋伏一只史莱姆；(7,6) 独眼酋长。所有素材都是既有 60 色内的原图。 */
+  var decor = { '5,5': 'barrel', '5,4': 'chest', '7,5': 'crate' };
+  var grid = [];
+  for (var y = 0; y < 12; y++) { grid[y] = []; for (var x = 0; x < 12; x++) grid[y][x] = 1; }
+
+  Game.Systems = Game.Systems || {};
+  Game.Systems.Map = {
+    getDetail: function () { return null; },
+    getDecor: function (x, y) { return decor[x + ',' + y] || null; },
+    getEnemies: function () {
+      return [{ x: 6, y: 5, monsterId: 'slime' }, { x: 7, y: 6, monsterId: 'ogre' }];
+    },
+    getGrid: function () { return grid; },
+    getTrap: function () { return null; }
+  };
+  Game.Systems.AI = { getPatrols: function () { return []; } };
+  Game.fov = undefined; Game.Lighting = undefined; Game.Particles = undefined;
+  Game.Feedback = undefined; Game.hud = undefined;
+
+  function draw() {
+    cv.width = 1280; cv.height = 800;
+    cv.style.width = '1280px'; cv.style.height = '800px';
+    R.init(cv);
+    R.resize(1);
+    /* headless 的 window.innerWidth/innerHeight 不稳定：显式钉死逻辑视口 1280×800、dpr/scale=1 */
+    R.dpr = 1; R.scale = 1; R.cssW = 1280; R.cssH = 800;
+    cv.width = 1280; cv.height = 800;
+    R._animNow = function () { return 0; };
+    R.drawMap(grid, { x: 5, y: 5, floor: 1 });
+    R.drawPlayer({ x: 5, y: 5, floor: 1 });
+  }
+
+  function zoom() {
+    var cam = R._cam();
+    /* 裁切区域：玩家所在 5×5 格（含北侧宝箱、东侧史莱姆、独眼酋长），再放大 6 倍 */
+    var sx = Math.round(3 * TILE - cam.x), sy = Math.round(3 * TILE - cam.y);
+    var sw = TILE * 5, sh = TILE * 5;
+    var z = 8;
+    var out = document.createElement('canvas');
+    out.width = sw * z; out.height = sh * z;
+    var o = out.getContext('2d');
+    o.imageSmoothingEnabled = false;
+    o.fillStyle = '#0b0d14'; o.fillRect(0, 0, out.width, out.height);
+    o.drawImage(cv, sx, sy, sw, sh, 0, 0, sw * z, sh * z);
+    /* 格线：帮助看清"是否跨格" */
+    o.strokeStyle = 'rgba(120,180,255,0.28)';
+    o.lineWidth = 1;
+    for (var i = 0; i <= sw; i += TILE) {
+      o.beginPath(); o.moveTo(i * z + 0.5, 0); o.lineTo(i * z + 0.5, sh * z); o.stroke();
+    }
+    for (var j = 0; j <= sh; j += TILE) {
+      o.beginPath(); o.moveTo(0, j * z + 0.5); o.lineTo(sw * z, j * z + 0.5); o.stroke();
+    }
+    return out;
+  }
+
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (!S.isReady() && Date.now() - t0 < 8000) { setTimeout(poll, 60); return; }
+    draw();
+    var zc = zoom();
+    var img = new Image();
+    img.src = zc.toDataURL('image/png');
+    img.style.cssText = 'position:fixed;left:0;top:0;width:' + zc.width + 'px;height:' + zc.height + 'px';
+    document.body.appendChild(img);
+    var cv2 = new Image();
+    cv2.src = cv.toDataURL('image/png');
+    cv2.style.cssText = 'position:fixed;left:' + (zc.width + 8) + 'px;top:0;width:1280px;height:800px';
+    document.body.appendChild(cv2);
+    document.title = 'SHOT d35 v=' + V + ' zoom=' + zc.width + 'x' + zc.height +
+      ' cam=' + R._cam().x + ',' + R._cam().y + ' ready=' + S.isReady();
+  })();
+})();
+</script>
+</body>
+</html>

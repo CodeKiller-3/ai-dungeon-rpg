@@ -131,12 +131,14 @@
       var dRunOk = true;
       try { R.drawPlayer({ x: 2, y: 1 }); } catch (e) { dRunOk = false; }
       var runOk = dRunOk && hasPrefix('knight_m_run_anim_f');
-      /* 骑士帧绘制按 16×28 高度适配：高=TILE-2，宽约 12（非方形拉伸） */
+      /* D-35 规格变更：地图层尺寸口径由"统一压进一格（高 TILE-2）"改为"原生高 × TILE/16、
+       * 脚底锚定格底"。骑士帧 16×28 → 高 42 / 宽 24（比例仍为 16:28，非方形拉伸）。
+       * 这不是放宽：旧的 21px 断言已不成立，新断言按新口径逐值比对。 */
       var hok = false;
       for (var ri = 0; ri < rec.length; ri++) {
         var nm = rec[ri].n;
         if (nm.indexOf('knight_m_') === 0) {
-          if (rec[ri].h === R.TILE - 2 && rec[ri].w > 8 && rec[ri].w < 18) hok = true;
+          if (rec[ri].h === R.TILE * 28 / 16 && rec[ri].w === R.TILE) hok = true;
         }
       }
       sub.t3_playerDraw = idleOk && runOk && hok;

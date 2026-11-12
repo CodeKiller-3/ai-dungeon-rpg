@@ -73,6 +73,40 @@
     return w;
   }
 
+  /* D-35：地图层尺寸口径——素材原生像素高 × (TILE/16)，脚底锚定格底。
+   * 旧实现把玩家/怪物/装饰一律压进一格（玩家 21px、大图 21px、常规帧 22px），
+   * 比例完全失真：史莱姆实测 17.9px，反而比独眼酋长 15.2px 还高。
+   * 现在按素材自身比例缩放（16px 素材 → 1.5 格 = 36px/16 = 1.5×），
+   * 战场层（drawBattle）仍用 drawSpriteByHeight 的绝对高度口径，112.5px 基线不受影响。 */
+  function unitBox(img, cx, bottom) {
+    var nw = img && (img.naturalWidth || 0);
+    var nh = img && (img.naturalHeight || 0);
+    if (nw <= 0 || nh <= 0) return null;
+    var h = Math.max(2, Math.round(nh * TILE / 16));
+    var w = Math.max(2, Math.round(nw * h / nh));
+    return { x: Math.round(cx - w / 2), y: Math.round(bottom - h), w: w, h: h };
+  }
+
+  function drawSpriteByUnit(ctx, img, cx, bottom) {
+    var b = unitBox(img, cx, bottom);
+    if (!b) return null;
+    ctx.drawImage(img, b.x, b.y, b.w, b.h);
+    return b;
+  }
+
+  /* D-35：地面投影——站在地面上的角色/怪物/装饰统一补一层柔和椭圆影，解决"贴图浮着"。
+   * 颜色与主题无关（固定中性黑），不参与主题 tint；只做一次椭圆填充，零新素材。
+   * inside=true 用于烘焙进静态层的装饰：投影必须留在本格内，否则越过格底会被下一行地板覆盖。 */
+  function groundShadow(ctx, cx, bottom, w, inside) {
+    var rx = Math.max(3, Math.round((w || TILE) * 0.42));
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(cx, bottom - (inside ? 1.5 : 0.5), rx, inside ? 2 : 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   /* D-16：战斗血条（敌方/我方同款）——带数值标签，文字 11px（不低于 HUD 最小字号） */
   function battleBar(ctx, cx, y, ratio, color, bgColor, label) {
     var W = (Game.Core && Game.Core.Render && Game.Core.Render.cssW) || 960;
@@ -446,8 +480,10 @@
     },
 
     /* M9-1：装饰物绘制——素材就绪用贴图，否则程序化矩形+轮廓兜底
-     * id: chest(宝箱黄框) / barrel(木桶棕框) / torch(火把橙焰) / vine(藤蔓绿条) */
-    _drawDecor: function (ctx, id, px, py) {
+     * id: chest(宝箱黄框) / barrel(木桶棕框) / torch(火把橙焰) / vine(藤蔓绿条)
+     * D-35：① 贴图改走地图尺寸口径（原生高 × TILE/16，脚底锚定格底），不再压进一格；
+     *       ② 落地类装饰补地面投影；③ noShadow=true 供"装饰前层"重绘时跳过投影，避免压角色一脚。 */
+    _drawDecor: function (ctx, id, px, py, noShadow) {
       /* S-05：密室宝箱——先铺一层金色光晕（有贴图时也保留，远看就能认出"这里有厚赏"） */
       if (id === 'room_chest') {
         ctx.fillStyle = 'rgba(255,207,110,0.20)';
@@ -455,10 +491,15 @@
         ctx.arc(px + TILE / 2, py + TILE / 2, TILE / 2 + 3, 0, Math.PI * 2);
         ctx.fill();
       }
+      /* D-35：只有"立在地上"的物件补投影；火把/藤蔓是贴在墙面上的竖向物件，给了投影反而更假 */
+      if (!noShadow && (id === 'chest' || id === 'room_chest' || id === 'barrel' ||
+        id === 'crate' || id === 'skull')) {
+        groundShadow(ctx, px + TILE / 2, py + TILE, TILE - 6, true);
+      }
       var sp = this._hasSprites() ? Game.Core.Sprites.get(id) : null;
       /* P1-1：chest/crate/skull/wall_goo 有同名贴图则直接绘制；
        * barrel/torch/vine 无同名文件（get 返回 null）→ 继续走下方程序化兜底 */
-      if (sp) { ctx.drawImage(sp, px + 1, py + 1, TILE - 2, TILE - 2); return; }
+      if (sp) { drawSpriteByUnit(ctx, sp, px + TILE / 2, py + TILE); return; }
       if (id === 'room_chest') {
         ctx.fillStyle = '#5a3a18';
         ctx.fillRect(px + 2, py + 6, TILE - 4, TILE - 8);
@@ -545,6 +586,29 @@
       ctx.fillRect(px + 4, py + TILE - 7, TILE - 9, 2);
     },
 
+    /* D-35：装饰与角色的前后关系（不引入全局 y 排序，静态层保持原样）。
+     * 规则按"脚下行的浮点位置"判定：只有当装饰格行号严格大于角色当前行（ty 可为小数，
+     * 玩家/巡逻怪移动插值时为 5.5 这种值）才补画在角色之上——也就是"走进物件那一行时，
+     * 物件的边缘先盖住脚"。角色静止站在物件格上时（ty 为整数）物件仍在身后，
+     * 不会出现"人被木桶埋掉"。只重画角色周围 ±cols 列、2 行，不整屏重绘；
+     * 不改 map.js 的装饰放置规则。 */
+    _drawFrontDecor: function (ctx, grid, tx, ty) {
+      if (!grid || !Game.Systems || !Game.Systems.Map ||
+        typeof Game.Systems.Map.getDecor !== 'function') return;
+      var fovOn = !!(Game.fov && Game.fov.isVisible);
+      var row0 = Math.floor(ty) + 1;
+      for (var yy = row0; yy <= row0 + 1; yy++) {
+        for (var xx = tx - 1; xx <= tx + 1; xx++) {
+          if (yy < 0 || yy >= grid.length || !grid[yy] || xx < 0 || xx >= grid[yy].length) continue;
+          if (fovOn && !Game.fov.isVisible(xx, yy)) continue;
+          var dec = Game.Systems.Map.getDecor(xx, yy);
+          if (!dec) continue;
+          /* noShadow=true：投影已在静态层画过，重绘只补"遮挡"这一层 */
+          this._drawDecor(ctx, dec, xx * TILE - cam.x, yy * TILE - cam.y, true);
+        }
+      }
+    },
+
     drawMap: function (grid, player) {
       var ctx = this._ctx;
       var cv = this._canvas;
@@ -582,13 +646,27 @@
             if (!eimg) eimg = Game.Core.Sprites.get('monster_chort');
           }
           if (eimg) {
-            ctx.fillStyle = 'rgba(234,102,104,0.22)';
-            ctx.fillRect(epx - 2, epy - 2, TILE, TILE);
-            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规 16×16 帧铺满格 */
-            if ((eimg.naturalWidth || 0) > 26) {
-              drawSpriteByHeight(ctx, eimg, epx - 1 + TILE / 2, epy - 1 + TILE - 1, TILE - 3);
-            } else {
-              ctx.drawImage(eimg, epx - 1, epy - 1, TILE - 2, TILE - 2);
+            /* D-35：尺寸口径统一走 unitBox（原生高 × TILE/16、脚底锚定格底）。
+             * 埋伏标记从"整格 24×24 半透明红膜"改为"贴图自身矩形描边"：旧红膜把同格装饰
+             * 一起染红（实测加怪后该格 784/784 设备像素全部变化），现在只描怪物自己的框。 */
+            var ecx = es[i].x * TILE - cam.x + TILE / 2;
+            var ebt = es[i].y * TILE - cam.y + TILE;
+            var ebox = unitBox(eimg, ecx, ebt);
+            if (ebox) {
+              groundShadow(ctx, ecx, ebt, ebox.w);
+              /* D-35：埋伏标记从"整格 24×24 半透明红膜"改为"脚下红色警戒环"。
+               * 旧红膜把同格装饰一起染红（实测加怪后该格 784/784 设备像素全部变化），
+               * 现在红色只落在怪物脚下的椭圆环上，装饰与地面保持原色。 */
+              ctx.save();
+              ctx.strokeStyle = 'rgba(234,102,104,0.7)';
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.ellipse(ecx, ebt - 2, Math.max(6, ebox.w * 0.42), 2, 0, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+              ctx.drawImage(eimg, ebox.x, ebox.y, ebox.w, ebox.h);
+              /* D-35：装饰前后关系——走进物件所在行时，物件边缘盖住脚 */
+              this._drawFrontDecor(ctx, grid, es[i].x, es[i].y);
             }
           } else {
             ctx.fillStyle = '#ea6668';
@@ -617,15 +695,24 @@
             if (!pimg) pimg = Game.Core.Sprites.get(chasing ? 'monster_chort_run' : 'monster_chort');
           }
           if (pimg) {
-            if (chasing) {
-              ctx.fillStyle = 'rgba(234,102,104,0.25)';
-              ctx.fillRect(ppx - 2, ppy - 2, TILE, TILE);
-            }
-            /* P1-3：大图（big_demon 32×36）按高度适配 TILE 格，常规帧铺满 */
-            if ((pimg.naturalWidth || 0) > 26) {
-              drawSpriteByHeight(ctx, pimg, ppx - 1 + TILE / 2, ppy - 1 + TILE - 1, TILE - 3);
-            } else {
-              ctx.drawImage(pimg, ppx - 1, ppy - 1, TILE - 2, TILE - 2);
+            /* D-35：尺寸口径同埋伏怪；追击标记同样由"整格红膜"改为贴图描边，
+             * 避免把怪物脚下的装饰整块染红。 */
+            var pcx = prx * TILE - cam.x + TILE / 2;
+            var pbt = pry * TILE - cam.y + TILE;
+            var pbox = unitBox(pimg, pcx, pbt);
+            if (pbox) {
+              groundShadow(ctx, pcx, pbt, pbox.w);
+              if (chasing) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(234,102,104,0.7)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.ellipse(pcx, pbt - 2, Math.max(6, pbox.w * 0.42), 2, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+              }
+              ctx.drawImage(pimg, pbox.x, pbox.y, pbox.w, pbox.h);
+              this._drawFrontDecor(ctx, grid, Math.round(prx), pry);
             }
             if (chasing) {
               ctx.fillStyle = '#fff';
@@ -820,8 +907,15 @@
           animIndex(moving ? 'knight_m_run' : 'knight_m_idle', 4));
       }
       if (kimg) {
-        /* 高=TILE-2≈21px，宽=round(16×21/28)=12px，水平居中、底部贴格底 */
-        drawSpriteByHeight(ctx, kimg, px + TILE / 2, py + TILE - 1, TILE - 2);
+        /* D-35：尺寸口径改为原生高 × TILE/16、脚底锚定格底（16×28 骑士 → 42px，原 21px），
+         * 与战场 90px 基准的比例回到同一量级；并补地面投影、处理同格装饰的前后关系。 */
+        var pcx = px + TILE / 2;
+        var pbt = py + TILE - 1;
+        groundShadow(ctx, pcx, pbt, TILE);
+        drawSpriteByUnit(ctx, kimg, pcx, pbt);
+        if (Game.Systems && Game.Systems.Map && typeof Game.Systems.Map.getGrid === 'function') {
+          this._drawFrontDecor(ctx, Game.Systems.Map.getGrid(), Math.round(rx), ry);
+        }
         return;
       }
       /* M7.5：素材就绪时使用 kni-dungeon 骑士精灵，否则回退像素小人色块 */
