@@ -284,6 +284,9 @@
       this.switchScene('explore');  /* M9-4：启动探索 BGM */
       Game.Systems.Map.generate();
       Game.Systems.Quest.init();
+      if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.init === 'function') {
+        Game.Systems.NpcQuest.init();
+      }
       resetPlayer();
       /* 读档：有存档则恢复进度；D-27 起手武器只发给"真正的新档"，旧档读入不补发 */
       var loaded = Game.Systems.Save.load();
@@ -391,6 +394,10 @@
       player.upg = {}; /* S-03：新局强化清零 */
       player.status = {}; /* S-04：新局状态清空 */
       if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
+      /* D-47：新局 NPC 任务状态清零（与 Player.quests 同一处重置） */
+      if (Game.Systems && Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.reset === 'function') {
+        Game.Systems.NpcQuest.reset();
+      }
       if (Game.Systems && Game.Systems.Save) Game.Systems.Save.clear();
       /* 修复 P2：新局图鉴从空开始，与已清空的存档保持一致 */
       if (Game.Systems && Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
@@ -452,7 +459,16 @@
        * 商店改用 E 打开；S 保留给移动，其余按键语义不变。 */
       if (k['KeyE']) { delete k['KeyE']; Game.Modal.open('shop'); return; }
       if (k['KeyM']) { delete k['KeyM']; Game.Modal.open('quests'); return; }
-      if (k['KeyT']) { delete k['KeyT']; Game.Systems.NPC.open(); this._scene = 'npc'; return; }
+      /* D-47：T 只对"实体 NPC"生效——必须站在相邻格（含斜向）。
+       * 距离 >1 时不弹任何模态，只在底部提示条给一行"附近没有人"（非阻塞）。 */
+      if (k['KeyT']) {
+        delete k['KeyT'];
+        var nq = Game.Systems.NpcQuest;
+        var near = (nq && typeof nq.nearby === 'function') ? nq.nearby(player.x, player.y) : null;
+        if (near) { Game.Modal.open('npcquest', near); return; }
+        Game.Core.EventBus.emit('ui:notice', { msg: '附近没有人' });
+        return;
+      }
       if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
       /* M9-4：Q 打开设置弹窗；K 一键静音（不 return，允许同时移动） */
       if (k['KeyQ']) { delete k['KeyQ']; Game.Modal.open('settings'); return; }
@@ -486,6 +502,10 @@
           var fromX = player.x, fromY = player.y;
           player.x = nx;
           player.y = ny;
+          /* D-47：NPC 任务进度——每一步都检查"是否走到下行梯旁"（不含楼梯格自身） */
+          if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.checkPosition === 'function') {
+            Game.Systems.NpcQuest.checkPosition(nx, ny);
+          }
           /* M9-3：登记移动插值（逻辑坐标已更新，渲染层取视觉位置） */
           if (Game.Motion && typeof Game.Motion.setStep === 'function') {
             Game.Motion.setStep('player', fromX, fromY, nx, ny, 140);

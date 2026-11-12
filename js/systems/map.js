@@ -18,6 +18,7 @@
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
+  var npcs = [];    /* D-47：本层实体 NPC [{id, x, y}]，位置确定性生成且可通行 */
   /* 修复 P1：楼层快照缓存——回访时恢复同一份地图/敌人/装饰/巡逻，
    * 避免上下楼反复重新生成而刷怪、刷宝箱。只在重新开始（setFloor）时清空。 */
   var floorCache = {};
@@ -517,6 +518,72 @@
     furnishRooms(); /* S-05：密室内固定 1 个密室宝箱 + 2 个火把 */
     placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
     placeRewards(w, h); /* D-46：每层固定奖励点（金币/药），放在陷阱之后，互不侵占 */
+    placeNpc(w, h);     /* D-47：实体 NPC（不消耗随机数，放在最后，不挤占任何既有落点） */
+  }
+
+  /* ── D-47：实体 NPC ────────────────────────────────────────────
+   * 位置规则：优先"出生点→下行梯"主路的 72% 附近（离楼梯 3~6 步，接取后走到楼梯旁
+   * 再回头两步即可交付），沿路径向两侧逐格扫描；主路找不到再按行序扫描整个出生点
+   * 连通块。全程不调用 Math.random，因此地图指纹 / 怪物 / 宝箱 / 奖励点与 D-46 逐格一致。
+   * 约束：地板格、出生点连通块内、不压出生点/楼梯、离出生点 ≥4、离下行梯 ≥2、
+   *       不在密室内、不占敌人/巡逻/装饰（含宝箱与奖励点）/陷阱格。 */
+  function placeNpc(w, h) {
+    npcs = [];
+    var list = (Game.Data.NPCS && Game.Data.NPCS.list) || [];
+    var def = null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].floor === floorIndex + 1) { def = list[i]; break; }
+    }
+    if (!def) return;
+    var seen = spawnComponent();
+    var down = findTile(2, w, h);
+    var cands = [], used = Object.create(null);
+    if (down) {
+      var path = rewardPath(down, w, h, false) || rewardPath(down, w, h, true) || [];
+      var fracs = [0.72, 0.65, 0.6, 0.78, 0.55, 0.8, 0.5, 0.85, 0.45, 0.9];
+      for (var f = 0; f < fracs.length; f++) {
+        var idx = Math.max(1, Math.min(path.length - 1, Math.round((path.length - 1) * fracs[f])));
+        for (var d2 = 0; d2 < path.length; d2++) {
+          var j = (d2 % 2 === 0) ? idx + d2 / 2 : idx - (d2 + 1) / 2;
+          if (j < 0 || j >= path.length) continue;
+          var key = path[j].x + ',' + path[j].y;
+          if (used[key]) continue;
+          used[key] = 1;
+          cands.push(path[j]);
+        }
+      }
+    }
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        var k = x + ',' + y;
+        if (used[k]) continue;
+        if (grid[y][x] === 1 && seen[y][x]) { used[k] = 1; cands.push({ x: x, y: y }); }
+      }
+    }
+    for (var c = 0; c < cands.length; c++) {
+      if (!npcCellOk(cands[c], seen)) continue;
+      npcs.push({ id: def.id, x: cands[c].x, y: cands[c].y });
+      return;
+    }
+  }
+
+  function npcCellOk(c, seen) {
+    if (!grid[c.y] || grid[c.y][c.x] !== 1) return false;
+    if (!seen[c.y][c.x]) return false;                                  /* 出生点连通块内（真实移动语义） */
+    if (c.x === spawn.x && c.y === spawn.y) return false;               /* 不压出生点 */
+    if (dist(c.x, c.y, spawn.x, spawn.y) < 4) return false;
+    var down = findTile(2, grid[0].length, grid.length);
+    if (down && dist(c.x, c.y, down.x, down.y) < 2) return false;       /* 不压下行梯 */
+    if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) return false;
+    if (enemyAtCell(c.x, c.y)) return false;                            /* 不占怪物格 */
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? Game.Systems.AI.getPatrols() : [];
+    for (var i = 0; i < ps.length; i++) {                               /* 不占巡逻怪格 */
+      if (ps[i].x === c.x && ps[i].y === c.y) return false;
+    }
+    if (decor[c.y] && decor[c.y][c.x]) return false;                    /* 不压宝箱 / 奖励点 */
+    if (traps[c.y] && traps[c.y][c.x]) return false;                    /* 不压陷阱 */
+    return true;
   }
 
   /* ── D-46：每层固定奖励点 ──────────────────────────────────────
@@ -737,7 +804,7 @@
         rms.push({ x: r.x, y: r.y, w: r.w, h: r.h, cx: r.cx, cy: r.cy, doorX: r.doorX, doorY: r.doorY });
       }
     }
-    return {
+    var out = {
       grid: cloneGrid(e && e.grid),
       enemies: ens,
       details: cloneRows(e && e.details),
@@ -747,6 +814,19 @@
       spawn: (e && e.spawn) ? { x: e.spawn.x, y: e.spawn.y } : { x: 1, y: 1 },
       patrols: ps
     };
+    /* D-47：旧档（D-46 及之前）没有 npcs 字段——保持"属性不存在"，
+     * 让 importState 之后的 generate 走"补生成"而不是误当成"本层没有 NPC" */
+    if (e && Array.isArray(e.npcs)) {
+      var ns = [];
+      for (i = 0; i < e.npcs.length; i++) {
+        var n = e.npcs[i];
+        if (n && typeof n.id === 'string' && typeof n.x === 'number' && typeof n.y === 'number') {
+          ns.push({ id: n.id, x: n.x, y: n.y });
+        }
+      }
+      out.npcs = ns;
+    }
+    return out;
   }
 
   Game.Systems.Map = {
@@ -768,6 +848,14 @@
         spawn = { x: cached.spawn.x, y: cached.spawn.y };
         if (Game.Systems.AI && typeof Game.Systems.AI.setPatrols === 'function') {
           Game.Systems.AI.setPatrols(cached.patrols);
+        }
+        /* D-47：旧档快照没有 npcs 字段 → 用同一套确定性规则补生成并写回缓存；
+         * 新档直接恢复（位置随存档固化，刷新不会换人站位） */
+        if (Array.isArray(cached.npcs)) {
+          npcs = cached.npcs.slice();
+        } else {
+          placeNpc(grid[0].length, grid.length);
+          cached.npcs = npcs.slice();
         }
         Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
         if (!quietQuest) notifyFloorQuest();
@@ -793,7 +881,8 @@
         rooms: rooms,
         spawn: { x: spawn.x, y: spawn.y },
         patrols: (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
-          ? Game.Systems.AI.getPatrols() : []
+          ? Game.Systems.AI.getPatrols() : [],
+        npcs: npcs.slice() /* D-47：NPC 站位随楼层快照保存 */
       };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       if (!quietQuest) notifyFloorQuest();
@@ -901,6 +990,16 @@
       return false;
     },
     getEnemies: function () { return enemies; },
+
+    /* D-47：本层实体 NPC（只读）。位置在 placeNpc 里确定性生成，
+     * 渲染、交互判定与验证页共用这一份数据。 */
+    getNpcs: function () { return npcs; },
+    npcAt: function (x, y) {
+      for (var i = 0; i < npcs.length; i++) {
+        if (npcs[i].x === x && npcs[i].y === y) return npcs[i];
+      }
+      return null;
+    },
 
     /* M9-1：取该格 tile 细节类型（纯视觉），越界返回 null */
     getDetail: function (x, y) {

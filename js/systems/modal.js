@@ -49,6 +49,7 @@
   /* M9-5：死亡结算状态 */
   var gameStats = null;       /* gameover 战绩 {floor,kills,gold,elapsedMs}（open 传入或现场拉取） */
   var gameRestartRect = null; /* 重新开始按钮矩形 {x,y,w,h} */
+  var npcId = null;           /* D-47：当前对话的 NPC id（npcquest 面板专用） */
 
   function canvas() {
     return (Game.Core && Game.Core.Render && Game.Core.Render._canvas) || document.getElementById('game');
@@ -152,7 +153,7 @@
     /* D-28：供验证页断言"背包上下文传强化等级 / 商店图鉴走基础值"的只读入口 */
     _itemDesc: function (item, plus) { return itemDesc(item, plus); },
     open: function (k, stats) {
-      if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover') return;
+      if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover' && k !== 'npcquest') return;
       /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
        * 原来直接 _bind() 会把上一份监听器引用覆盖掉，导致它永远删不掉：
        * 之后每次 Enter 都会被重复确认 N 次（实测长跑后一次 Enter 触发 8 次确认）。 */
@@ -169,6 +170,7 @@
       volDragging = false;
       gameStats = (k === 'gameover') ? (stats || null) : null;
       gameRestartRect = null;
+      npcId = (k === 'npcquest' && stats && stats.id) ? stats.id : null;
       this._refresh();
       this._bind();
     },
@@ -182,6 +184,7 @@
       muteRect = null;
       gameStats = null;
       gameRestartRect = null;
+      if (kind === 'npcquest') npcId = null;
       this._unbind();
       /* 关闭时清掉 Input 残留按键，避免移动键粘滞导致关闭瞬间移动 */
       if (Game.Core && Game.Core.Input && typeof Game.Core.Input.clear === 'function') {
@@ -203,6 +206,11 @@
           if (page === 1) data = collectEntries(Game.Data.MONSTERS);
           else if (page === 2) data = collectEntries(Game.Data.ITEMS);
           else data = Game.Systems.Quest.getActive();
+        }
+        /* D-47：NPC 任务面板——行文本来自 NpcQuest.panel（四态 + 操作提示） */
+        else if (kind === 'npcquest') {
+          data = (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.panel === 'function')
+            ? Game.Systems.NpcQuest.panel(npcId) : [];
         }
         /* gameover 无列表，战绩在 _drawGameover 现场拉取 */
       } catch (e) { data = []; }
@@ -485,6 +493,24 @@
 
     _confirm: function () {
       if (data.length === 0) return;
+      /* D-47：NPC 任务面板——Enter 按状态执行 接取 / 交付；其余状态只给提示。
+       * 交付由 NpcQuest.deliver 内部拦截"已交付"，这里不再重复判断。 */
+      if (kind === 'npcquest') {
+        var NQ = Game.Systems.NpcQuest;
+        var nres = null;
+        try {
+          var nst = NQ.state(npcId);
+          if (nst === 'unaccepted') nres = NQ.accept(npcId);
+          else if (nst === 'ready') nres = NQ.deliver(npcId);
+          else { this.close(); return; }
+          this._refresh();
+        } catch (e) { /* 降级：面板异常不影响主游戏 */ }
+        if (nres && nres.ok === true && Game.Systems.Save && typeof Game.Systems.Save.save === 'function') {
+          Game.Systems.Save.save();
+        }
+        this._report(nres);
+        return;
+      }
       var entry = data[sel];
       var res = null;
       try {
@@ -748,6 +774,10 @@
       else if (kind === 'shop') title = '商店 · ' + (shopMode === 'buy' ? '购买' : '出售');
       else if (kind === 'settings') title = '设置';
       else if (kind === 'gameover') title = '冒险结束';
+      else if (kind === 'npcquest') {
+        var nd = (Game.Systems.NpcQuest && Game.Systems.NpcQuest.def) ? Game.Systems.NpcQuest.def(npcId) : null;
+        title = (nd ? nd.name : '???') + ' · 任务';
+      }
       if (kind === 'quests') {
         /* M8-4：三页签标题（任务/怪物/物品，当前页高亮加粗） */
         var tabs = ['任务', '怪物', '物品'];
@@ -879,6 +909,7 @@
       if (kind === 'inventory') hint = '↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭';
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
+      else if (kind === 'npcquest') hint = 'Enter 接取/交付 · Esc/点遮罩关闭'; /* D-47 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
       /* P2-3b/C-03：列表滚动时底部显示当前位置 (sel+1)/total */
       var scrolling = data.length > visibleRowCount(sz);
@@ -1111,6 +1142,9 @@
           return entry.def.name + '   ' + itemDesc(entry.def) + '   ' + entry.def.price + ' 金币   获得x' + ic;
         }
         return entry.def.name + '   ???';
+      } else if (kind === 'npcquest') {
+        /* D-47：面板行文本由 NpcQuest.panel 统一生成（状态 / 进度 / 奖励 / 操作） */
+        return entry.text || '';
       }
       return '';
     }

@@ -185,9 +185,17 @@
     M._guideVisible = false;
     exploreHit = null;
     var om = Game.Modal.open, on = Game.Systems.NPC.open,
-        ol = Game.Systems.Learner.init, oa = Game.Systems.Audio.setMuted;
+        ol = Game.Systems.Learner.init, oa = Game.Systems.Audio.setMuted,
+        /* D-47：T 改为"只和相邻实体 NPC 交互"（nearby → Modal.open('npcquest')）。
+         * 本页不起地图/NPC 数据，因此按测试意图给一次"相邻 NPC"桩，恢复时还原。 */
+        onq = (Game.Systems.NpcQuest && Game.Systems.NpcQuest.nearby) || null;
     Game.Modal.open = function (kind) { exploreHit = kind; };
     Game.Systems.NPC.open = function () { exploreHit = 'npc'; };
+    if (Game.Systems.NpcQuest) {
+      Game.Systems.NpcQuest.nearby = function () {
+        return (want === 'npc') ? { id: 'warden_f1', x: 0, y: 0, distance: 1 } : null;
+      };
+    }
     Game.Systems.Learner.init = function () { exploreHit = 'learner'; };
     Game.Systems.Audio.setMuted = function () { exploreHit = 'mute'; };
     if (want === 'move') {
@@ -213,6 +221,7 @@
       kd(code); M._updateExplore(1e9); ku(code);
     }
     Game.Modal.open = om; Game.Systems.NPC.open = on;
+    if (Game.Systems.NpcQuest) Game.Systems.NpcQuest.nearby = onq;
     Game.Systems.Learner.init = ol; Game.Systems.Audio.setMuted = oa;
     return exploreHit;
   }
@@ -255,7 +264,8 @@
     var eBad = [], eDetail = [];
     var eExpect = {
       inventory: 'inventory', shop: 'shop', quests: 'quests',
-      npc: 'npc', learner: 'learner', settings: 'settings', mute: 'mute'
+      /* D-47：T 键打开的是 NPC 任务面板（npcquest），旧的守门人聊天面板不再由 T 打开 */
+      npc: 'npcquest', learner: 'learner', settings: 'settings', mute: 'mute'
     };
     for (var ei = 0; ei < R.KEYMAP.explore.length; ei++) {
       var er = R.KEYMAP.explore[ei];

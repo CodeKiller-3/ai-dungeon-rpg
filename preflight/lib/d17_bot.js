@@ -835,6 +835,98 @@
     rec.d46.log.push({ at: rec.actions, src: src, kind: kind, gold: gold, floor: floor });
   }
 
+  /* ── D-47：NPC 实体交互（默认关闭；不传 opts.npc 时一行都不会执行） ─────
+   * 只做真人会做的事：走到 NPC 相邻格 → 按 T 打开任务面板 → Enter 接取/交付。
+   * 寻路复用 d39Bfs（怪当墙，楼梯当作不可穿行），NPC 本身是可通行格。
+   * 任务进度由游戏内部"走到下行梯旁"推进，bot 不需要伪造任何状态。 */
+  function npcNew() {
+    return {
+      accepted: false, delivered: false, talks: 0, fails: 0,
+      acceptedAt: null, deliveredAt: null, detourSteps: 0,
+      gold: 0, state: 'unaccepted', stateAtEnd: null,
+      pos: null, spawn: null, distSpawn: null
+    };
+  }
+  function npcTarget() {
+    var P = Game.Data.Player, NQ = Game.Systems.NpcQuest;
+    if (!NQ || typeof NQ.defOnFloor !== 'function') return null;
+    var Map = Game.Systems.Map;
+    if (!Map || typeof Map.getNpcs !== 'function') return null;
+    var ns = Map.getNpcs();
+    for (var i = 0; i < ns.length; i++) {
+      var def = NQ.def(ns[i].id);
+      if (def && def.floor === P.floor) return { npc: ns[i], def: def };
+    }
+    return null;
+  }
+  function npcAdjacent(P, npc) {
+    return Math.max(Math.abs(P.x - npc.x), Math.abs(P.y - npc.y)) <= 1;
+  }
+  function npcAct(rec) {
+    var P = Game.Data.Player, NQ = Game.Systems.NpcQuest, Map = Game.Systems.Map;
+    var t = npcTarget();
+    if (!t) return false;
+    if (!rec.npc.pos) {
+      var sp = Map.getSpawn();
+      rec.npc.pos = { x: t.npc.x, y: t.npc.y, floor: P.floor };
+      rec.npc.spawn = { x: sp.x, y: sp.y };
+      rec.npc.distSpawn = Math.abs(t.npc.x - sp.x) + Math.abs(t.npc.y - sp.y);
+    }
+    var st = NQ.state(t.npc.id);
+    rec.npc.state = st;
+    if (st === 'done') return false;
+    if (npcAdjacent(P, t.npc)) {
+      if (st !== 'unaccepted' && st !== 'ready') return false;
+      rec.actions++;
+      press('KeyT', MOVE_MS);
+      if (Game.Modal.current() !== 'npcquest') {
+        rec.npc.fails++;
+        if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
+        return true;
+      }
+      var gold0 = P.gold;
+      rec.actions++;
+      press('Enter', MOVE_MS);
+      rec.npc.talks++;
+      var after = NQ.state(t.npc.id);
+      if (st === 'unaccepted' && after !== 'unaccepted') {
+        rec.npc.accepted = true; rec.npc.acceptedAt = rec.actions;
+      }
+      if (st === 'ready' && after === 'done') {
+        rec.npc.delivered = true; rec.npc.deliveredAt = rec.actions;
+        rec.npc.gold += (P.gold - gold0);
+      }
+      rec.npc.state = after;
+      if (Game.Modal.isOpen()) { rec.actions++; press('Escape', MOVE_MS); }
+      return true;
+    }
+    if (st === 'unaccepted' || st === 'ready') {
+      var grid = Map.getGrid(), start = { x: P.x, y: P.y };
+      var goal = function (x, y) {
+        return Math.max(Math.abs(x - t.npc.x), Math.abs(y - t.npc.y)) === 1;
+      };
+      /* 会换层的楼梯不能当走廊；怪当墙，找不到再无视怪 */
+      var walk = function (x, y, tt) {
+        if (tt === 0 || tt === 2) return false;
+        return !Map.enemyAt(x, y);
+      };
+      var r = d39Bfs(grid, start, goal, walk);
+      if (!r.ok) {
+        r = d39Bfs(grid, start, goal, function (x, y, tt) { return tt !== 0 && tt !== 2; });
+      }
+      if (r.ok && r.first) {
+        rec.actions++;
+        var bx = P.x, by = P.y;
+        press(d39Dir(P, r.first), MOVE_MS);
+        if (P.x === bx && P.y === by) rec.blockedSteps++;
+        rec.npc.detourSteps++;
+        return true;
+      }
+      rec.npc.fails++;
+    }
+    return false;
+  }
+
   /* D-45：商店决策遥测（只读；不传 opts.d45 时 rec.d45 为 null，行为不变）。
    * 每次进店记录：当时金币/药量/武器档位、货架逐项（类型/价格/是否升级/是否买得起/是否已拥有）、
    * 成交明细、成交后金币，以及"为什么没买武器"的分类（noStock/goldShort/priority）。 */
@@ -1561,6 +1653,12 @@
     var P = Game.Data.Player, Map = Game.Systems.Map;
     bumpFloor(rec);
     rec.floorActions++;
+    /* D-47：NPC 任务面板残留（正常流程不会走到；兜底按 Enter + Esc 收场） */
+    if (rec.npc && Game.Modal.isOpen() && Game.Modal.current() === 'npcquest') {
+      press('Enter', MOVE_MS); rec.actions++;
+      if (Game.Modal.isOpen()) { press('Escape', MOVE_MS); rec.actions++; }
+      return;
+    }
     /* 面板残留保护：正常流程不会走到；若真卡住，按 Esc 收场并计数（不当作玩家动作） */
     if (Game.Modal.isOpen()) { rec.modalStuck++; press('Escape', MOVE_MS); return; }
     /* ① 低血用药：B1 在 F1–F4 把阈值压到 30%（药留给最终 Boss），F5 仍是 45%；
@@ -1586,6 +1684,9 @@
       var si = scrollIndex();
       if (si >= 0) { useIndex(si); rec.m1.scrollsUsed++; rec.actions++; return; }
     }
+    /* ②c D-47：NPC 任务（只做真人会做的事：走到旁边 → T → Enter）。
+     * 接取/交付的顺路绕行也计入 actions，通关率变化可归因。 */
+    if (rec.npc && npcAct(rec)) return;
     /* ③ D-18：每到新一层先看一眼商店（真人到新层也会先看货），本层只进一次 */
     if (!rec.noShop && rec.shopVisitedFloor !== P.floor &&
         (!rec.b1 || P.floor >= ((Game.Data.MAPS && Game.Data.MAPS.floors) || 5))) {
@@ -1841,6 +1942,8 @@
     if (opts.d45 && opts.d45Probe) rec.d45Probe = opts.d45Probe;
     /* D-46：金币收支分类账（只读） */
     if (opts.d46) rec.d46 = d46New();
+    /* D-47：NPC 交互（默认关闭；不传时行为与 D-46 完全一致） */
+    if (opts.npc) rec.npc = npcNew();
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -1921,6 +2024,18 @@
       rec.d46.finalGold = P.gold;
       rec.d46.balance = rec.d46.initial + (inc.chest + inc.drop + inc.reward + inc.quest) -
         rec.d46.spentNet - rec.d46.finalGold;
+    }
+    /* D-47：NPC 任务收尾（状态从存档对象反推，避免只靠交互路径记账） */
+    if (rec.npc) {
+      var nq2 = Game.Systems.NpcQuest;
+      var nd2 = (nq2 && typeof nq2.defOnFloor === 'function') ? nq2.defOnFloor(1) : null;
+      var ns2 = (nq2 && nd2) ? nq2.get(nd2.id) : null;
+      if (ns2) {
+        rec.npc.accepted = ns2.accepted;
+        rec.npc.delivered = ns2.delivered;
+        rec.npc.stateAtEnd = ns2.state;
+        rec.npc.restAccepted = !!(Game.Data.Player.npcQuests && Game.Data.Player.npcQuests[nd2.id]);
+      }
     }
     /* D-44：B1 收尾（留药检查、通关事件序列） */
     if (rec.b1) b1Finalize(rec);

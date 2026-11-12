@@ -1,7 +1,7 @@
 ﻿{
   "note": "D-22 页数基线：preflight/ 根目录下应存在的 verify_*.html 清单（人工维护）。run-all.ps1 只读本文件作为期望值来源；增删验证页时必须同步改这里，否则批跑会报 FAIL（缺页）或 BASELINE_STALE（新增未登记）。",
   "updatedAt": "2026-11-13",
-  "count": 87,
+  "count": 88,
   "pages": [
     "verify_c02",
     "verify_c03",
@@ -51,6 +51,7 @@
     "verify_d44",
     "verify_d45",
     "verify_d46",
+    "verify_d47",
     "verify_m1",
     "verify_m2",
     "verify_m3",

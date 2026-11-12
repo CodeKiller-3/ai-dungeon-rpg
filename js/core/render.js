@@ -750,6 +750,55 @@
           }
         }
       }
+      /* D-47：实体 NPC（程序化像素小人 + 任务标记）。动态层绘制，FOV 裁剪，
+       * 不引入新素材；NPC 格本身仍是可通行地板，绘制不改变任何碰撞/寻路。 */
+      var nps = (Game.Systems.Map && typeof Game.Systems.Map.getNpcs === 'function')
+        ? Game.Systems.Map.getNpcs() : [];
+      for (var ni = 0; ni < nps.length; ni++) {
+        var no = nps[ni];
+        if (fovOn && !Game.fov.isVisible(no.x, no.y)) continue;
+        var ncx = no.x * TILE - cam.x + TILE / 2;
+        var nbt = no.y * TILE - cam.y + TILE;
+        if (ncx < -30 || nbt < -30 || ncx > W + 30 || nbt > H + 30) continue;
+        groundShadow(ctx, ncx, nbt, TILE - 8);
+        /* 斗篷 + 腰带 + 头 + 提灯：4 个色块足够一眼认出"这里站着一个人" */
+        ctx.fillStyle = '#46567f';
+        ctx.fillRect(ncx - 5, nbt - 16, 10, 15);
+        ctx.fillStyle = '#2a3350';
+        ctx.fillRect(ncx - 5, nbt - 5, 10, 3);
+        ctx.fillStyle = '#e6c69c';
+        ctx.beginPath();
+        ctx.arc(ncx, nbt - 19, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffcf6e';
+        ctx.fillRect(ncx + 6, nbt - 12, 3, 4);
+        /* 任务标记：未接取 / 可交付 = 金色 "!"；进行中不画（避免满屏感叹号） */
+        var nst = (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.state === 'function')
+          ? Game.Systems.NpcQuest.state(no.id) : '';
+        if (nst === 'unaccepted' || nst === 'ready') {
+          ctx.fillStyle = '#ffcf6e';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText('!', ncx - 2, nbt - 26);
+        }
+        /* 相邻 2 格内显示名字，提示"这里可以按 T" */
+        var pd = (player && typeof player.x === 'number')
+          ? Math.max(Math.abs(player.x - no.x), Math.abs(player.y - no.y)) : 99;
+        if (pd <= 2) {
+          var ndef = (Game.Systems.NpcQuest && Game.Systems.NpcQuest.def)
+            ? Game.Systems.NpcQuest.def(no.id) : null;
+          var nlabel = ndef ? ndef.name : 'NPC';
+          ctx.font = '10px monospace';
+          var nw = Math.round(ctx.measureText(nlabel).width);
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(ncx - nw / 2 - 3, nbt - 40, nw + 6, 13);
+          ctx.fillStyle = '#ffe6b0';
+          ctx.fillText(nlabel, ncx - nw / 2, nbt - 30);
+          if (pd <= 1) {
+            ctx.fillStyle = '#9bbbf4';
+            ctx.fillText('T', ncx - 2, nbt - 46);
+          }
+        }
+      }
       /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
       try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
       /* M9-3：粒子特效层（探索场景命中/死亡粒子），叠在光影之上、HUD 之下 */

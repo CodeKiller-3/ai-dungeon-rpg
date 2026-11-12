@@ -25,6 +25,7 @@
 - 起手匕首：新档与重开都发一把 `knife`（+1 攻击），旧档不补发。<!-- 锚点: js/core/main.js#START_WEAPON -->
 - 本地存档 `ai_dungeon_rpg_save_v1`：自动存档、读档按等级重算属性。<!-- 锚点: js/systems/save.js#ai_dungeon_rpg_save_v1 -->
 - 大模型 NPC 对话：配置 Key 走 DeepSeek，无 Key / 断网降级为离线规则问答。<!-- 锚点: js/systems/npc.js#Game.Systems.NPC -->
+- 首个实体 NPC 与任务闭环（D-47）：`js/data/npcs.js` 定义"守夜人·洛恩"（F1），`map.js` 沿"出生点→下行梯"主路 72% 处确定性取点（不消耗 `Math.random`，地图/敌人/宝箱/奖励点逐格不变；不压楼梯/出生点/怪物/巡逻/宝箱/陷阱，且必在出生点连通块内）。**按 T 只与相邻格（含斜向）的实体 NPC 交互**，距离 >1 只给一行"附近没有人"的非阻塞提示、不弹模态；任务"探路"四态（unaccepted / active / ready / done）互斥可查，走到下行梯旁达成、回头复命交付，**固定 60 金币、一次交付不重复**；`reward.exclusiveItem` 仅作"任务专属装备"数据留口（本卡恒为 null、不发放）。旧档无 `npcQuests` / `map.floors[*].npcs` 时补默认并原地补生成 NPC。同种子 1001–1050 / maxActions 2500：B1 **7/50 与 D-46 逐局完全一致**（G2 19、S1 25、M1 到 F4 29 不变）；NPC 支路 50 局接取 50、交付 50、交互失败 0，通关 7/50（换的是哪 7 局，见任务卡）。`verify_d47` A–H 守门，`page-baseline` 87→88。<!-- 锚点: js/systems/map.js#placeNpc -->
 - Q-learning 寻宝鼠演示：ε-贪心 + 距离势引导，实时显示成功率。<!-- 锚点: js/systems/learner.js#Game.Systems.Learner -->
 - 怪物 AI：巡逻→追击状态机 + A\* 逐格追击。<!-- 锚点: js/systems/ai.js#Game.Systems.AI -->
 
@@ -43,7 +44,7 @@
 
 ### 工具
 
-- 回归批跑：87 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：88 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 早期金币通道（D-46）：只加补给、不动物品与怪物——新增"每层固定奖励点"（`gold_pile` / `potion_stash`），沿"出生点→下行梯"的 BFS 主路 35% / 70% 处确定性放置（不消耗 `Math.random`，D-45 的地图/敌人/宝箱逐格不变），每层 ≤2 处、距出生点 ≥5 步、距下行梯 ≥3 步。额度 F1 30×2 / F2 45×2 / F3 80×2 / F4 80×2 / F5 特大血瓶×2 = **+470 金币（D-40 期望 2860 的 16.4%，护栏 60%）**。依据 D-45 的"96.6% 是钱不够"：F1 首店缺口中位 **45**（改前仅 1/50 买得起）、F2 **79**（2/41），改后 −15 / −22（42/50、44/45 买得起）。同种子 1001–1050：**B1 通关 1→7/50、巨龙击杀 1→7、到 F5 25→25、M1 到 F4 27→29、25 个 F5 局装备购买 9→72 次**；G2 到 F5 11→19、S1 12→25。金币账 50 局逐局 `初始+获得−支出=期末` 误差 0（宝箱/掉落/奖励点/任务四分类，卖出记负支出）；负例把奖励点清空即复现 1/50。`verify_d46` A–F 守门，`page-baseline` 86→87。<!-- 锚点: js/data/maps.js#Game.Data.REWARD -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->

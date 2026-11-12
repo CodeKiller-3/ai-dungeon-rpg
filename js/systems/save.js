@@ -27,7 +27,9 @@
           gold: p.gold, exp: p.exp, level: p.level,
           inventory: p.inventory, equipment: p.equipment, quests: p.quests,
           /* S-03：强化等级表（按物品 id）；旧档无此字段时读档补 {} */
-          upg: p.upg || {}
+          upg: p.upg || {},
+          /* D-47：NPC 任务四态（旧档无此字段，读档补 {}，不报错） */
+          npcQuests: p.npcQuests || {}
         },
         /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
         bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
@@ -68,6 +70,8 @@
         if (s.quests) p.quests = s.quests;
         /* S-03：旧档无 upg 字段 → 补空表，不破坏已读档的既有数值 */
         p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};
+        /* D-47：旧档（D-46 及之前）无 npcQuests → 补 {}；缺失不影响任何既有字段 */
+        p.npcQuests = (s.npcQuests && typeof s.npcQuests === 'object') ? s.npcQuests : {};
         /* S-04：状态效果不入档（读档时清空），避免"读档即中毒"与存档瞬间掉血 */
         p.status = {};
         /* M8-6：不信任旧档 atk/def/maxHp 持久值——按当前等级成长规则重算（含装备加成），
@@ -82,6 +86,10 @@
           if (p.hp > p.maxHp) p.hp = p.maxHp;
         }
         Game.Systems.Quest.init();
+        /* D-47：NPC 任务状态补齐（旧档无字段 → 全部未接取，可正常接取/交付） */
+        if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.init === 'function') {
+          Game.Systems.NpcQuest.init();
+        }
         /* M8-4：图鉴恢复——旧档无 bestiary 字段时 mergeFrom(undefined) 静默保持默认空表；
          * 有则逐项合并取较大计数（防旧档回退覆盖新进度） */
         if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.mergeFrom === 'function') {

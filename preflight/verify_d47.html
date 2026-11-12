@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-47：读取 selfcheck/d47-after.json（本卡跑局）与 d46-after.json（改前基线），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-47 首个实体 NPC 与任务闭环</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:14px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:right; }
+  th { color:#9fd; } td.l, th.l { text-align:left; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-47 · 实体 NPC / 距离判定 / 任务四态 / 60 金币 / 隔离 / 旧档兼容 / 回归（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<h2>逐局 · NPC 位置与任务状态（B1+NPC 支路）</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D47ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D47ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D47ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function fnv1a(s) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var AFTER = readJson('selfcheck/d47-after.json');
+  var PRE = readJson('selfcheck/d46-after.json');
+  var M = Game.Core.Main, NQ = Game.Systems.NpcQuest, Map = Game.Systems.Map, P = Game.Data.Player;
+
+  function clearState() {
+    try { Game.Modal.close(); } catch (e) { }
+    try { Game.Core.Input.clear(); } catch (e) { }
+    M._guideVisible = false;
+    M._scene = 'explore';
+  }
+  function kd(code) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true }));
+  }
+  function ku(code) {
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true }));
+  }
+  function pressExplore(code) {
+    clearState();
+    kd(code);
+    try { M._updateExplore(1e9); } catch (e) { /* 由断言捕获 */ }
+    ku(code);
+  }
+  function gridOf() { return Map.getGrid(); }
+  function cloneGrid(g) { var o = []; for (var y = 0; y < g.length; y++) o.push(g[y].slice()); return o; }
+  function deepRows(g) {
+    var o = [];
+    if (!g) return o;
+    for (var y = 0; y < g.length; y++) {
+      o.push(Array.isArray(g[y]) ? g[y].map(function (v) { return v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v; }) : []);
+    }
+    return o;
+  }
+
+  /* 用固定种子重新生成第 1 层，抓一份只读快照（NPC 开/关都由 withNpcs 控制） */
+  function genFloor1(seed, withNpcs) {
+    var rnd = Math.random, saved = Game.Data.NPCS;
+    Math.random = mulberry32(seed);
+    if (!withNpcs) Game.Data.NPCS = { list: [] };
+    Map.setFloor(1);
+    var snap = {
+      seed: seed,
+      grid: cloneGrid(Map.getGrid()),
+      spawn: Map.getSpawn(),
+      npcs: (Map.getNpcs() || []).map(function (n) { return { id: n.id, x: n.x, y: n.y }; }),
+      enemies: (Map.getEnemies() || []).map(function (e) { return { x: e.x, y: e.y, id: e.monsterId }; }),
+      decor: deepRows((function () {
+        var g = Map.getGrid(), o = [];
+        for (var y = 0; y < g.length; y++) {
+          o[y] = [];
+          for (var x = 0; x < g[y].length; x++) o[y][x] = Map.getDecor(x, y);
+        }
+        return o;
+      })()),
+      traps: (function () {
+        var g = Map.getGrid(), o = [];
+        for (var y = 0; y < g.length; y++) {
+          o[y] = [];
+          for (var x = 0; x < g[y].length; x++) { var t = Map.getTrap(x, y); o[y][x] = t ? t.id : null; }
+        }
+        return o;
+      })(),
+      patrols: (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols().map(function (p) { return { x: p.x, y: p.y, id: p.monsterId }; }) : []
+    };
+    Game.Data.NPCS = saved;
+    Math.random = rnd;
+    return snap;
+  }
+  function seenSet(snap, blockTiles) {
+    var r = Map.checkTargetsReachable(snap.grid, snap.spawn, blockTiles, [{ kind: 'x', x: -9, y: -9 }]);
+    return r.seen;
+  }
+  function tileAtSnap(snap, x, y) {
+    if (y < 0 || y >= snap.grid.length || x < 0 || x >= snap.grid[0].length) return 0;
+    return snap.grid[y][x];
+  }
+  function enemyAtSnap(snap, x, y) {
+    for (var i = 0; i < snap.enemies.length; i++) if (snap.enemies[i].x === x && snap.enemies[i].y === y) return snap.enemies[i];
+    return null;
+  }
+  /* 与生成期同一套判据的可复算版本（正例零违规 / 负例必须报违规） */
+  function validateNpc(t, snap) {
+    var v = [];
+    if (tileAtSnap(snap, t.x, t.y) === 0) v.push('in-wall');
+    if (tileAtSnap(snap, t.x, t.y) === 2 || tileAtSnap(snap, t.x, t.y) === 3) v.push('on-stairs');
+    if (t.x === snap.spawn.x && t.y === snap.spawn.y) v.push('on-spawn');
+    if (snap.decor[t.y] && snap.decor[t.y][t.x]) v.push('on-decor:' + snap.decor[t.y][t.x]);
+    if (enemyAtSnap(snap, t.x, t.y)) v.push('on-enemy');
+    if (snap.traps && snap.traps[t.y] && snap.traps[t.y][t.x]) v.push('on-trap');
+    for (var i = 0; i < snap.patrols.length; i++) {
+      if (snap.patrols[i].x === t.x && snap.patrols[i].y === t.y) { v.push('on-patrol'); break; }
+    }
+    var seen = seenSet(snap, [2]);
+    if (!seen[t.y] || !seen[t.y][t.x]) v.push('unreachable');
+    return v;
+  }
+
+  /* B/C 用：把玩家放到指定格并清掉面板；返回该格 */
+  function putPlayer(x, y) { P.x = x; P.y = y; clearState(); }
+  function openNeighborOf(npc) {
+    var dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (var i = 0; i < dirs.length; i++) {
+      var x = npc.x + dirs[i][0], y = npc.y + dirs[i][1];
+      if (Map.isWalkable(x, y) && Map.tileAt(x, y) === 1) return { x: x, y: y };
+    }
+    return null;
+  }
+  function farCellFrom(npc) {
+    /* 出生点距 NPC ≥4 由 A 组保证；找不到时退到任意距离 >1 的地板格 */
+    if (Math.max(Math.abs(P.x - npc.x), Math.abs(P.y - npc.y)) > 1) return { x: P.x, y: P.y };
+    var sp = Map.getSpawn();
+    if (Math.max(Math.abs(sp.x - npc.x), Math.abs(sp.y - npc.y)) > 1) return sp;
+    var g = Map.getGrid();
+    for (var y = 1; y < g.length - 1; y++) {
+      for (var x = 1; x < g[0].length - 1; x++) {
+        if (g[y][x] === 1 && Math.max(Math.abs(x - npc.x), Math.abs(y - npc.y)) > 1) return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+
+  try {
+    if (!AFTER || !PRE) throw new Error('缺少测量产物: ' + JSON.stringify({ after: !!AFTER, pre: !!PRE }));
+    try { localStorage.removeItem('ai_dungeon_rpg_save_v1'); } catch (e) { }
+    M.init();
+    M.closeGuide();
+
+    /* ── H 组：入口冒烟（index.html 引用 + 真实 init/loop 无 JS 错误） ── */
+    var idxTxt = '';
+    try { idxTxt = (function () { var x = new XMLHttpRequest(); x.open('GET', '../index.html', false); x.send(null); return x.responseText || ''; })(); } catch (e) { idxTxt = ''; }
+    var refs = [], mref;
+    var re = /<script[^>]+src="([^"]+)"/g;
+    while ((mref = re.exec(idxTxt)) !== null) refs.push(mref[1]);
+    var rele = /<link[^>]+href="([^"]+)"/g;
+    while ((mref = rele.exec(idxTxt)) !== null) refs.push(mref[1]);
+    var missing = [];
+    for (var ri = 0; ri < refs.length; ri++) {
+      if (/^https?:/i.test(refs[ri])) continue;
+      try {
+        var xr = new XMLHttpRequest();
+        xr.open('GET', '../' + refs[ri], false);
+        xr.send(null);
+        if (!xr.responseText || !xr.responseText.length) missing.push(refs[ri]);
+      } catch (e) { missing.push(refs[ri]); }
+    }
+    var smokeFrameErr = null, frameRan = false;
+    try {
+      var bts = M._lastFrame;
+      M.loop(performance.now());
+      frameRan = (M._lastFrame !== bts);
+    } catch (e) { smokeFrameErr = String((e && e.message) || e); }
+    rec('H_index_smoke', missing.length === 0 && idxTxt.indexOf('js/data/npcs.js') >= 0 &&
+      window.__D47ERR.length === 0 && smokeFrameErr === null && frameRan && M._scene === 'explore' &&
+      Map.getNpcs().length === 1, {
+      rule: 'index.html 引用的本地文件全部可读、包含 js/data/npcs.js；真实 init + 一帧 loop 无 JS 错误，场景 explore 且 F1 恰有 1 个 NPC',
+      refs: refs.length, missing: missing.slice(0, 6), npcs: Map.getNpcs(),
+      errors: window.__D47ERR.slice(0, 6), frame: { ran: frameRan, err: smokeFrameErr }, scene: M._scene
+    });
+
+    /* ── A 组：F1 有且仅有 1 个 NPC；位置可达、不压楼梯/出生点/Boss/宝箱 ── */
+    var seedsA = []; for (var sa = 1001; sa <= 1050; sa++) seedsA.push(sa);
+    var aBad = [], aSample = [], aRelax = [];
+    for (var ai = 0; ai < seedsA.length; ai++) {
+      var snapA = genFloor1(seedsA[ai], true);
+      if (snapA.npcs.length !== 1) { aBad.push({ seed: seedsA[ai], count: snapA.npcs.length }); continue; }
+      var npcA = snapA.npcs[0];
+      var vio = validateNpc(npcA, snapA);
+      if (vio.length) aBad.push({ seed: seedsA[ai], npc: npcA, violations: vio });
+      if (aSample.length < 5) aSample.push({ seed: seedsA[ai], npc: npcA, spawn: snapA.spawn, violations: vio });
+    }
+    /* F2–F5 不应有 NPC（本卡只做 F1） */
+    for (var af = 2; af <= 5; af++) {
+      Map.setFloor(af);
+      if (Map.getNpcs().length !== 0) aRelax.push({ floor: af, count: Map.getNpcs().length });
+    }
+    /* 负例：把 NPC 放到不可达格，同一判据必须报违规 */
+    var snapNeg = genFloor1(1001, true);
+    var seenNeg = seenSet(snapNeg, [2]);
+    var badCell = null, wallCell = null;
+    for (var y9 = 1; y9 < snapNeg.grid.length - 1; y9++) {
+      for (var x9 = 1; x9 < snapNeg.grid[0].length - 1; x9++) {
+        if (snapNeg.grid[y9][x9] === 1 && !seenNeg[y9][x9]) { badCell = { x: x9, y: y9 }; break; }
+        if (!wallCell && snapNeg.grid[y9][x9] === 0) wallCell = { x: x9, y: y9 };
+      }
+      if (badCell) break;
+    }
+    if (!badCell) badCell = wallCell || { x: 0, y: 0 };
+    var negVio = validateNpc({ id: 'neg', x: badCell.x, y: badCell.y }, snapNeg);
+    rec('A_one_reachable_npc', aBad.length === 0 && aRelax.length === 0 && aSample.length === 5, {
+      rule: 'F1 每局有且仅有 1 个 NPC，且位置可达、不压楼梯/出生点/Boss/宝箱/敌人/巡逻/陷阱；F2–F5 无 NPC',
+      seeds: seedsA.length, bad: aBad.slice(0, 6), otherFloors: aRelax, sample: aSample
+    });
+    rec('A_negative_unreachable_fails', negVio.length > 0, {
+      rule: '负例：把 NPC 放到不可达格（或墙格），同一判据必须报违规（不可达/墙内）',
+      cell: badCell, violations: negVio,
+      note: badCell && snapNeg.grid[badCell.y][badCell.x] === 1 ? '选的是真实地板格、只是不在出生点连通块里' : '该图没有孤立地板格，退化为墙格'
+    });
+
+    /* ── B 组：距离判定（>1 不可交互、无模态；相邻才开面板） ── */
+    var snapB = genFloor1(1001, true);
+    var npcB = snapB.npcs[0];
+    NQ.reset();
+    var far = farCellFrom(npcB);
+    var noticed = null;
+    var onNotice = function (e) { if (e && e.msg) noticed = e.msg; };
+    Game.Core.EventBus.on('ui:notice', onNotice);
+    putPlayer(far.x, far.y);
+    pressExplore('KeyT');
+    var farModal = Game.Modal.isOpen() ? Game.Modal.current() : null;
+    var farScene = M._scene;
+    var near = openNeighborOf(npcB);
+    if (!near) throw new Error('A 组已保证 NPC 至少有一个可走邻居，这里不应为空');
+    putPlayer(near.x, near.y);
+    pressExplore('KeyT');
+    var nearModal = Game.Modal.isOpen() ? Game.Modal.current() : null;
+    var nearRows = nearModal ? (Game.Systems.NpcQuest.panel(npcB.id) || []).length : 0;
+    try { Game.Modal.close(); } catch (e) { }
+    rec('B_distance_gate', farModal === null && farScene === 'explore' && noticed === '附近没有人' &&
+      nearModal === 'npcquest' && nearRows >= 4, {
+      rule: '距离 >1 按 T：不打开任何模态、场景仍是 explore、只给一行「附近没有人」提示；相邻（含斜向）才打开任务面板',
+      far: { distance: Math.max(Math.abs(far.x - npcB.x), Math.abs(far.y - npcB.y)), modal: farModal, notice: noticed, scene: farScene },
+      near: { distance: Math.max(Math.abs(near.x - npcB.x), Math.abs(near.y - npcB.y)), modal: nearModal, rows: nearRows }
+    });
+    /* 负例：把判据改成"全局可交互"后，远距离按 T 必须打开模态 → 原断言必须 FAIL */
+    var origNearby = NQ.nearby;
+    NQ.nearby = function () { return { id: npcB.id, x: npcB.x, y: npcB.y, distance: 0 }; };
+    putPlayer(far.x, far.y);
+    pressExplore('KeyT');
+    var negFarModal = Game.Modal.isOpen() ? Game.Modal.current() : null;
+    try { Game.Modal.close(); } catch (e) { }
+    NQ.nearby = origNearby;
+    rec('B_negative_global_interact_fails', negFarModal === 'npcquest', {
+      rule: '负例：把 nearby 改成恒真（全局可交互）后，远距离按 T 会打开面板 —— 说明 B 组断言对"全局可交互"是敏感的（会判 FAIL）',
+      negFarModal: negFarModal
+    });
+
+    /* ── C 组：四态互斥 + 重复交付不重复加钱 ── */
+    NQ.reset();
+    Map.setFloor(1);
+    var npcC = Map.getNpcs()[0];
+    var defC = NQ.def(npcC.id);
+    var states = [];
+    function snapState() {
+      var st = NQ.get(npcC.id);
+      var flags = { unaccepted: st.state === 'unaccepted', active: st.state === 'active', ready: st.state === 'ready', done: st.state === 'done' };
+      var n = 0; for (var k in flags) if (flags[k]) n++;
+      return { state: st.state, flags: flags, exactlyOne: n === 1 };
+    }
+    states.push(snapState());
+    var acc = NQ.accept(npcC.id);
+    states.push(snapState());
+    /* 走到下行梯旁（与 main.js 每步调用的是同一个函数） */
+    var gC = gridOf(), stair = null, stairAdj = null;
+    for (var yc = 0; yc < gC.length && !stair; yc++) {
+      for (var xc = 0; xc < gC[0].length; xc++) if (gC[yc][xc] === 2) { stair = { x: xc, y: yc }; break; }
+    }
+    var dd = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (var di = 0; di < dd.length && !stairAdj; di++) {
+      var ax = stair.x + dd[di][0], ay = stair.y + dd[di][1];
+      if (Map.isWalkable(ax, ay) && Map.tileAt(ax, ay) !== 2 && Map.tileAt(ax, ay) !== 3) stairAdj = { x: ax, y: ay };
+    }
+    if (!stair || !stairAdj) throw new Error('C 组前提失败：第 1 层没有下行梯或没有可站立的相邻格');
+    P.x = stairAdj.x; P.y = stairAdj.y;
+    NQ.checkPosition(stairAdj.x, stairAdj.y);
+    states.push(snapState());
+    var gold0 = P.gold;
+    var del1 = NQ.deliver(npcC.id);
+    states.push(snapState());
+    var gold1 = P.gold;
+    var del2 = NQ.deliver(npcC.id);
+    states.push(snapState());
+    var gold2 = P.gold;
+    var stateBad = states.some(function (s) { return !s.exactlyOne; });
+    var stateSeq = states.map(function (s) { return s.state; }).join('>');
+    rec('C_four_states_exclusive', !stateBad && stateSeq === 'unaccepted>active>ready>done>done', {
+      rule: '未接→已接→可交→已交 四态互斥可查，顺序必须是 unaccepted>active>ready>done；接受/交付走真实 API（面板 Enter 调用的同一函数）',
+      sequence: stateSeq, states: states, accept: acc, deliver: del1
+    });
+    rec('C_repeat_deliver_no_extra_gold', del1.ok === true && gold1 - gold0 === 60 && del2.ok === false && gold2 === gold1, {
+      rule: '一次交付固定 +60；已交付后再交付必须被拒绝、金币不变',
+      goldBefore: gold0, afterFirst: gold1, afterSecond: gold2, second: del2
+    });
+    /* 负例：去掉"已交"拦截（模拟无守卫实现）→ 同样断言必须判 FAIL */
+    NQ.reset(); NQ.accept(npcC.id); NQ.checkPosition(stairAdj.x, stairAdj.y);
+    var gun0 = P.gold;
+    NQ.deliver(npcC.id);
+    /* 无守卫支付：不做 done 检查，直接再发一次 */
+    P.gold += defC.quest.reward.gold;
+    var gun1 = P.gold;
+    rec('C_negative_no_done_guard_fails', (gun1 - gun0) !== 60, {
+      rule: '负例：去掉"已交付"拦截后，重复交付会让金币 +120 —— 说明 C 组断言能抓住这个缺陷',
+      guardedDelta: 60, unguardedDelta: gun1 - gun0
+    });
+
+    /* ── E 组：隔离（可通行 / 不触发战斗 / 不占怪物格 / 不影响宝箱与奖励点） ── */
+    var isoBad = [], rewardBad = [], isoSample = [];
+    for (var ei = 0; ei < 10; ei++) {
+      var s1 = genFloor1(seedsA[ei], true);
+      var s2 = genFloor1(seedsA[ei], false);
+      var f1 = fnv1a(s1.grid.map(function (r) { return r.join(''); }).join('|') + '#' +
+        JSON.stringify(s1.decor) + '#' + JSON.stringify(s1.enemies) + '#' + JSON.stringify(s1.traps));
+      var f2 = fnv1a(s2.grid.map(function (r) { return r.join(''); }).join('|') + '#' +
+        JSON.stringify(s2.decor) + '#' + JSON.stringify(s2.enemies) + '#' + JSON.stringify(s2.traps));
+      var rewardCells = 0, rewardCellsOff = 0;
+      for (var ry = 0; ry < s1.decor.length; ry++) {
+        for (var rx = 0; rx < s1.decor[ry].length; rx++) {
+          var dc = s1.decor[ry][rx];
+          if (dc === 'gold_pile' || dc === 'potion_stash') rewardCells++;
+          if (s1.npcs[0] && s1.npcs[0].x === rx && s1.npcs[0].y === ry) {
+            if (dc) isoBad.push({ seed: s1.seed, on: dc });
+          }
+          var dco = (s2.decor[ry] || [])[rx];
+          if (dco === 'gold_pile' || dco === 'potion_stash') rewardCellsOff++;
+        }
+      }
+      if (f1 !== f2) isoBad.push({ seed: s1.seed, fpOn: f1, fpOff: f2 });
+      if (rewardCells !== rewardCellsOff) rewardBad.push({ seed: s1.seed, on: rewardCells, off: rewardCellsOff });
+      if (ei < 3) isoSample.push({ seed: s1.seed, npc: s1.npcs[0], fingerprintSame: f1 === f2, rewardCells: rewardCells, rewardCellsOff: rewardCellsOff });
+    }
+    /* 真实走到 NPC 格：可通行且不进战斗 */
+    Map.setFloor(1);
+    var npcE = Map.getNpcs()[0];
+    var stepFrom = openNeighborOf(npcE);
+    if (!stepFrom) throw new Error('E 组前提失败：NPC 没有可站立的邻居');
+    putPlayer(stepFrom.x, stepFrom.y);
+    var aiTick = Game.Systems.AI.tick;
+    Game.Systems.AI.tick = function () { };
+    var dxE = npcE.x - P.x, dyE = npcE.y - P.y;
+    var codeE = dxE === 1 ? 'ArrowRight' : (dxE === -1 ? 'ArrowLeft' : (dyE === 1 ? 'ArrowDown' : 'ArrowUp'));
+    pressExplore(codeE);
+    Game.Systems.AI.tick = aiTick;
+    var stepped = (P.x === npcE.x && P.y === npcE.y);
+    var battle = (M._scene === 'battle');
+    var trapAt = Map.getTrap(npcE.x, npcE.y);
+    rec('E_isolation', isoBad.length === 0 && rewardBad.length === 0 && stepped && !battle &&
+      Map.enemyAt(npcE.x, npcE.y) === null && !trapAt && Map.isWalkable(npcE.x, npcE.y), {
+      rule: 'NPC 格可通行（真实按键走上去）、不触发战斗、不占怪物格；NPC 开关不改变地图/宝箱/敌人/陷阱指纹，F1 奖励点数量与关 NPC 时逐格一致',
+      fingerprintBad: isoBad.slice(0, 6), rewardBad: rewardBad.slice(0, 6), sample: isoSample,
+      stepped: stepped, battle: battle, enemyAt: !!Map.enemyAt(npcE.x, npcE.y), trap: trapAt
+    });
+
+    /* ── F 组：旧档兼容（D-46 存档结构：无 npcQuests / 无 map.floors[*].npcs） ── */
+    Map.setFloor(1);
+    P.hp = 77; P.maxHp = 100; P.gold = 123; P.level = 3; P.exp = 0;
+    P.inventory = {}; P.equipment = { weapon: 'knife', armor: null }; P.upg = {}; P.quests = {};
+    NQ.reset();
+    Game.Systems.Save.save();
+    var raw = '';
+    try { raw = localStorage.getItem('ai_dungeon_rpg_save_v1') || ''; } catch (e) { raw = ''; }
+    var oldObj = raw ? JSON.parse(raw) : null;
+    var oldOk = !!oldObj;
+    if (oldObj) {
+      delete oldObj.player.npcQuests;
+      if (oldObj.map && oldObj.map.floors) {
+        for (var fk in oldObj.map.floors) if (Object.prototype.hasOwnProperty.call(oldObj.map.floors, fk)) delete oldObj.map.floors[fk].npcs;
+      }
+      try { localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify(oldObj)); } catch (e) { oldOk = false; }
+    }
+    var loadErr = null, loaded = null;
+    try { loaded = Game.Systems.Save.load(); } catch (e) { loadErr = String((e && e.message) || e); }
+    var fGold0 = P.gold;
+    var fState0 = NQ.state(NQ.defOnFloor(1) ? NQ.defOnFloor(1).id : '');
+    var fNpc = Map.getNpcs();
+    var fVio = fNpc.length === 1 ? validateNpc(fNpc[0], {
+      grid: cloneGrid(Map.getGrid()), spawn: Map.getSpawn(), enemies: Map.getEnemies(),
+      decor: (function () { var g = Map.getGrid(), o = []; for (var y = 0; y < g.length; y++) { o[y] = []; for (var x = 0; x < g[0].length; x++) o[y][x] = Map.getDecor(x, y); } return o; })(),
+      traps: [], patrols: []
+    }) : ['no-npc'];
+    var fDeliver = { ok: false };
+    if (fNpc.length === 1) {
+      var fdef = NQ.def(fNpc[0].id);
+      NQ.accept(fdef.id);
+      var gF = Map.getGrid(), fstair = null;
+      for (var fy = 0; fy < gF.length && !fstair; fy++) for (var fx = 0; fx < gF[0].length; fx++) if (gF[fy][fx] === 2) { fstair = { x: fx, y: fy }; break; }
+      var fadj = null;
+      for (var fi2 = 0; fi2 < dd.length && !fadj; fi2++) {
+        var qx = fstair.x + dd[fi2][0], qy = fstair.y + dd[fi2][1];
+        if (Map.isWalkable(qx, qy) && Map.tileAt(qx, qy) !== 2 && Map.tileAt(qx, qy) !== 3) fadj = { x: qx, y: qy };
+      }
+      if (!fadj) throw new Error('F 组前提失败：读档后第 1 层没有可站立的下行梯相邻格');
+      P.x = fadj.x; P.y = fadj.y;
+      NQ.checkPosition(fadj.x, fadj.y);
+      fDeliver = NQ.deliver(fdef.id);
+    }
+    rec('F_old_save_compat', oldOk && loadErr === null && loaded !== null && fGold0 === 123 &&
+      fState0 === 'unaccepted' && fNpc.length === 1 && fVio.length === 0 &&
+      fDeliver.ok === true && P.gold === 183, {
+      rule: 'D-46 结构旧档（删掉 player.npcQuests 与 map.floors[*].npcs）读入不抛错、既有字段保留、缺字段补默认；补齐 NPC 后可正常接取/交付（+60）',
+      oldSaveBuilt: oldOk, loadErr: loadErr, loadedFloor: loaded ? loaded.floor : null,
+      goldPreserved: fGold0, stateAfterLoad: fState0, npcAfterLoad: fNpc, placementViolations: fVio,
+      deliver: fDeliver, goldAfterDeliver: P.gold
+    });
+
+    /* ── D 组：奖励恒为 60，单局任务金币总额 ≤150；装备字段是"留口"不发放 ── */
+    var NPCs = Game.Data.NPCS.list || [];
+    var rwBad = [], exBad = [];
+    for (var ni = 0; ni < NPCs.length; ni++) {
+      var rw = NPCs[ni].quest.reward;
+      if (!rw || rw.gold !== 60) rwBad.push({ id: NPCs[ni].id, gold: rw ? rw.gold : null });
+      if (!Object.prototype.hasOwnProperty.call(rw, 'exclusiveItem')) exBad.push(NPCs[ni].id);
+    }
+    var qg = (AFTER.d47 && AFTER.d47.questGold) || [];
+    var qgBad = [];
+    var maxQuest = 0;
+    for (var qi = 0; qi < qg.length; qi++) {
+      if (!qg[qi].delivered) continue;
+      if (qg[qi].npcGold !== 60) qgBad.push({ seed: qg[qi].seed, npcGold: qg[qi].npcGold });
+      if (qg[qi].npcGold > maxQuest) maxQuest = qg[qi].npcGold;
+    }
+    var npcAggD = AFTER.npcAgg || {};
+    rec('D_reward_60_once', NPCs.length === 1 && rwBad.length === 0 && exBad.length === 0 &&
+      qgBad.length === 0 && npcAggD.goldTotal === 60 * (npcAggD.delivered || 0) && maxQuest <= 150, {
+      rule: '唯一 NPC 任务的 reward.gold 恒为 60；每局交付只 +60（50 局 50 次交付 = 3000）；reward 里有 exclusiveItem 留口字段（本卡恒为 null，不发放）',
+      npcCount: NPCs.length, rewardBad: rwBad, missingExclusiveField: exBad,
+      delivered: npcAggD.delivered, goldTotal: npcAggD.goldTotal, maxPerRun: maxQuest, badRuns: qgBad.slice(0, 6),
+      exclusiveItem: NPCs.length ? NPCs[0].quest.reward.exclusiveItem : null
+    });
+
+    /* ── G 组：同种子 1001–1050、maxActions 2500，四策略不退化 + NPC 使用率 ── */
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050 &&
+      (AFTER.env && AFTER.env.maxActions) === 2500;
+    var b1Wins = (AFTER.agg.b1 && AFTER.agg.b1.outcomes) ? AFTER.agg.b1.outcomes.win : -1;
+    var b1F5 = (AFTER.agg.b1 && AFTER.agg.b1.f5) ? AFTER.agg.b1.f5.reached : -1;
+    var preWins = (PRE.agg.b1 && PRE.agg.b1.outcomes) ? PRE.agg.b1.outcomes.win : null;
+    var preF5 = (PRE.agg.b1 && PRE.agg.b1.f5) ? PRE.agg.b1.f5.reached : null;
+    /* 逐局结果对照（默认 B1 不该被 NPC 改变） */
+    var preBy = {};
+    ((PRE.runs && PRE.runs.b1) || []).forEach(function (r) { preBy[r.seed] = r.outcome; });
+    var mismatch = [];
+    ((AFTER.runs && AFTER.runs.b1) || []).forEach(function (r) {
+      if (preBy[r.seed] !== undefined && preBy[r.seed] !== r.outcome) mismatch.push({ seed: r.seed, pre: preBy[r.seed], now: r.outcome });
+    });
+    var g2Now = (AFTER.agg.g2 && AFTER.agg.g2.f5) ? AFTER.agg.g2.f5.reached : -1;
+    var g2Pre = (PRE.agg.g2 && PRE.agg.g2.f5) ? PRE.agg.g2.f5.reached : 0;
+    var s1Now = (AFTER.agg.s1 && AFTER.agg.s1.f5) ? AFTER.agg.s1.f5.reached : -1;
+    var s1Pre = (PRE.agg.s1 && PRE.agg.s1.f5) ? PRE.agg.s1.f5.reached : 0;
+    var m1Now = (AFTER.agg.m1 && AFTER.agg.m1.floorReach) ? AFTER.agg.m1.floorReach['4'] : -1;
+    var m1Pre = (PRE.agg.m1 && PRE.agg.m1.floorReach) ? PRE.agg.m1.floorReach['4'] : 0;
+    rec('G_no_regression', seedOk && b1Wins >= 7 && b1Wins === preWins && b1F5 >= 25 &&
+      mismatch.length === 0 && g2Now >= g2Pre && s1Now >= s1Pre && m1Now >= m1Pre, {
+      rule: 'B1 / G2 / S1 / M1 同种子 1001–1050、maxActions 2500 复跑；B1 通关 ≥7/50 且逐局结果与 D-46 完全一致（NPC 不改变默认策略）；G2/S1/M1 不退化',
+      seeds: { n: seeds.length, first: seeds[0], last: seeds[49] },
+      b1: { now: b1Wins, pre: preWins, f5Now: b1F5, f5Pre: preF5, outcomeMismatch: mismatch.slice(0, 6) },
+      g2: { now: g2Now, pre: g2Pre }, s1: { now: s1Now, pre: s1Pre }, m1: { now: m1Now, pre: m1Pre }
+    });
+    rec('G_npc_actually_used', ((AFTER.runs && AFTER.runs.b1n) || []).length === 50 &&
+      npcAggD.accepted >= 30 && npcAggD.delivered >= 20 && (npcAggD.states.done || 0) >= 20 && (npcAggD.fails || 0) === 0, {
+      rule: '目标值：50 局里接取 ≥30、交付 ≥20（证明 NPC 真被用到，不是摆设）；交互失败次数必须为 0',
+      accepted: npcAggD.accepted, delivered: npcAggD.delivered, states: npcAggD.states,
+      fails: npcAggD.fails, talks: npcAggD.talks, goldTotal: npcAggD.goldTotal,
+      acceptedSeeds: (npcAggD.acceptedSeeds || []).slice(0, 60)
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+    out.summary = {
+      a: { seeds: seedsA.length, bad: aBad.length, negativeViolations: negVio },
+      b: { far: farModal, near: nearModal, notice: noticed },
+      c: { sequence: stateSeq, delta1: gold1 - gold0, delta2: gold2 - gold1 },
+      d: { reward: 60, delivered: npcAggD.delivered, goldTotal: npcAggD.goldTotal },
+      e: { stepped: stepped, battle: battle, fingerprintBad: isoBad.length },
+      f: { loadErr: loadErr, goldAfter: P.gold, deliverOk: fDeliver.ok },
+      g: { b1Wins: b1Wins, b1F5: b1F5, b1nWins: (AFTER.agg.b1n && AFTER.agg.b1n.outcomes) ? AFTER.agg.b1n.outcomes.win : null,
+        accepted: npcAggD.accepted, delivered: npcAggD.delivered, g2: g2Now, s1: s1Now, m1: m1Now }
+    };
+
+    /* 逐局小表 */
+    var rows = (AFTER.runs && AFTER.runs.b1n) || [];
+    var h = ['<table><tr><th>seed</th><th class="l">NPC 位置</th><th>距出生点</th><th>接取@动作</th><th>交付@动作</th><th>绕行步</th><th class="l">结局 / 层</th></tr>'];
+    for (var rr2 = 0; rr2 < rows.length; rr2++) {
+      var z = rows[rr2], n2 = z.npc || {};
+      h.push('<tr><td>' + z.seed + '</td><td class="l">' +
+        (n2.pos ? '(' + n2.pos.x + ',' + n2.pos.y + ')' : '-') + '</td><td>' + (n2.distSpawn != null ? n2.distSpawn : '-') +
+        '</td><td>' + (n2.acceptedAt != null ? n2.acceptedAt : '-') + '</td><td>' +
+        (n2.deliveredAt != null ? n2.deliveredAt : '-') + '</td><td>' + (n2.detourSteps != null ? n2.detourSteps : '-') +
+        '</td><td class="l">' + z.outcome + ' / F' + z.floor + '</td></tr>');
+    }
+    h.push('</table>');
+    document.getElementById('detail').innerHTML = h.join('');
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + ((e && e.stack) || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D47_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>
