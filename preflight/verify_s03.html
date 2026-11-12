@@ -172,11 +172,16 @@
     sub.t8_atk = { before: beforeAtk, after: P.atk };
     ok = ok && sub.t8_saveLoad;
 
-    /* t9：旧档（无 upg 字段）→ 读档补 {}，数值按装备重算不丢 */
+    /* t9：旧档（无 upg 字段）→ 读档补 {}，数值按装备重算不丢
+     * D-41：fixture 补 exp:0 与 quests:{}（真实旧档两者都有；缺省会沿用内存里的
+     * 经验/任务进度，新曲线阈值更低时可能被误判升级——测试夹具问题，不是存档格式变更） */
+    /* D-41：先把地图放回 F1，避免 Quest.init() 用当前楼层（前序用例可能已在 F3）
+     * 补发 reach_floor3 的 40 经验——那会让 L1 夹具被低阈值抬到 L2 */
+    M.setFloor(1);
     try {
       localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify({
         floor: 1,
-        player: { hp: 100, gold: 50, level: 1, inventory: { sword_steel: 1 },
+        player: { hp: 100, gold: 50, exp: 0, level: 1, inventory: { sword_steel: 1 },
           equipment: { weapon: 'sword_steel', armor: null }, quests: {} }
       }));
       var oldLoaded = Save.load();

@@ -159,8 +159,13 @@
       { name: 'noTelemetry(status)', rec: { death: null, diedInBattle: false, lastTrapAt: -1, actions: 9 }, want: '状态/其它' }
     ];
     var caseBad = cases.filter(function (c) { return Bot.deathCauseOf(c.rec) !== c.want; });
-    /* 活体：D-37 G3 的 seed 1025 是探索期中毒致死，修后必须归为状态效果 */
+    /* 活体：D-37 G3 的 seed 1025 是探索期中毒致死，修后必须归为状态效果
+     * D-41：该局的死亡方式依赖 D-40 时的经验曲线（全程 60）；本组只验分类逻辑，
+     * 因此临时把曲线钉回 60，跑完恢复。曲线本身由 verify_d41 负责。 */
+    var curveNow38 = Game.Systems.Battle.expEarlyBase;
+    Game.Systems.Battle.expEarlyBase = 60;
     var liveC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    Game.Systems.Battle.expEarlyBase = curveNow38;
     rec('C_status_death_classified', got === expect && oldGot !== expect &&
       caseBad.length === 0 && liveC.deathCause === '状态效果' &&
       liveC.death && liveC.death.source === 'other', {

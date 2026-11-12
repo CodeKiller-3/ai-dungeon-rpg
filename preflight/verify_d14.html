@@ -474,7 +474,8 @@
 
     /* ── F 升级文字 + 低血量警示 ───────────────────────── */
     N._clear();
-    P.level = 1; P.exp = 60; P.hp = 1;
+    /* D-41：L1→L2 需 15 经验（旧曲线 60），这里只验单次升级文案，故用 15 */
+    P.level = 1; P.exp = 15; P.hp = 1;
     Inv.recalcEquip();
     var ups = B.checkLevelUp();
     var msgLv = lastNotice();

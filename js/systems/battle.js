@@ -4,7 +4,7 @@
  * 伤害公式：max(攻击方 atk - 防御方 def, 1)；防御指令本回合减伤 50%
  * 技能伤害：max(round(atk × 技能倍率) - 敌方 def, 1)（倍率版既有公式）
  * 护盾：battle state.shieldValue 本次战斗内抵挡等量伤害，扣完归零
- * M8-6：exp 达标自动升级（expToNext(level)=60×level，每级 atk/def+1、maxHp+10，升级回满 HP/MP）
+ * M8-6：exp 达标自动升级（D-41 起 L1–L4 为 15×level、L5+ 为 60×level，每级 atk/def+1、maxHp+10，升级回满 HP/MP）
  * 来源：参考 freeCodeCamp RPG 教程重构（自写实现）
  * 事件：battle:start / battle:end */
 (function () {
@@ -56,10 +56,24 @@
     return Math.max(1, Math.round(a * a / (a + d)));
   }
 
-  /* M8-6：升级成长——经验阈值 expToNext(level) = 60 × level（L1→L2 需 60，全部可复算） */
+  /* M8-6：升级成长——经验阈值 expToNext(level) = 基数 × level（L1→L2 需 基数，全部可复算）
+   * D-41：分两段。L1–L4 基数 15（早期等级便宜，普通推进在 F2–F3 就能到 L5）；
+   * L5 起基数仍 60（后期不加速，全图清完约 L9–L10，不把终局抬到无人区）。
+   * D-40 实测旧曲线（全程 60）下 L5 要 600 经验、M1 全清必死 F2；本卡只改阈值，
+   * 每级增量（+1/+1/+10/+0）与伤害公式都不动。
+   * 两个基数挂在导出对象上，仅为 D-41 的负例能还原旧曲线（early=60）做同种子对照，正常游戏不改它。 */
+  var EXP_EARLY_DEFAULT = 15;
+  var EXP_LATE_DEFAULT = 60;
+  function expBase(level) {
+    var B = Game.Systems.Battle;
+    var early = (B && typeof B.expEarlyBase === 'number') ? B.expEarlyBase : EXP_EARLY_DEFAULT;
+    var late = (B && typeof B.expCurveBase === 'number') ? B.expCurveBase : EXP_LATE_DEFAULT;
+    var base = (level < 5) ? early : late;
+    return base > 0 ? base : EXP_EARLY_DEFAULT;
+  }
   function expToNext(level) {
     var lv = (typeof level === 'number' && level >= 1) ? level : 1;
-    return 60 * lv;
+    return expBase(lv) * lv;
   }
 
   /* M8-6：exp 达标自动升级（可连续、溢出保留）；每级 atk+1/def+1/maxHp+10（L1 基础 10/5/100），
@@ -649,8 +663,12 @@
 
     getState: function () { return state; },
 
-    /* M8-6：升级成长接口（供 quest.js 任务奖励后调用与验证页断言） */
+    /* M8-6：升级成长接口（供 quest.js 任务奖励后调用与验证页断言）
+     * D-41：expEarlyBase（L1–L4）/ expCurveBase（L5+）是本卡改动的唯一数值入口，
+     * 默认 15 / 60；验证页可把 early 赋 60 复现旧曲线（全程 60） */
     expToNext: expToNext,
+    expEarlyBase: EXP_EARLY_DEFAULT,
+    expCurveBase: EXP_LATE_DEFAULT,
     checkLevelUp: checkLevelUp,
 
     /* M8-1：技能伤害落地（由 Game.Skills.cast 调用）——倍率版既有伤害公式

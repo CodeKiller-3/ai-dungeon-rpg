@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-41 成长节奏重排测量</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-41 · M1 / S1 / G2 三组同种子跑局（不参与 run-all，只产出 d41-*.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-41 三组跑局器（只测量，不改游戏）：
+ *   ?n=50            种子 1001..1000+n（默认 50）
+ *   ?curve=60        把 Battle.expCurveBase 赋成旧值（负例 / 对照），默认用代码里的新值
+ *   ?only=m1|s1|g2   只跑一组（默认三组都跑）
+ * 三组口径与 D-37 / D-39 / D-40 完全一致：同种子、maxActions 2500、同一起点。 */
+(function () {
+  'use strict';
+  var out = { protocol: 'D-41', mode: 'all', strategy: {}, env: {}, summary: null, runs: {}, agg: {}, ok: false };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  /* 每层结束快照：M1 用 m1.floors，S1 用 d39.floorEnd，G2 用 d37.floorEnd（字段同名） */
+  function floorEnds(r, key) {
+    if (key === 'm1') return (r.m1 && r.m1.floors) || [];
+    if (key === 's1') return (r.d39 && r.d39.floorEnd) || [];
+    return (r.d37 && r.d37.floorEnd) || [];
+  }
+  function agg(strategy, runs) {
+    var d = {
+      outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {},
+      floorReach: {}, floorKills: {}, floorLevel: {}, floorHp: {},
+      f5: { reached: 0, states: [], enterStates: [] },
+      l5ByF3: 0, killsTotal: 0, killsPerRun: 0,
+      expByFloor: {}
+    };
+    var perFloor = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, best = 0, ends = floorEnds(r, strategy);
+      for (var f = 0; f < ends.length; f++) {
+        var z = ends[f], fl = z.floor;
+        reached[fl] = 1;
+        if (fl > best) best = fl;
+        if (!perFloor[fl]) perFloor[fl] = { kills: [], level: [], hp: [], exp: [], n: 0 };
+        perFloor[fl].n++;
+        if (typeof z.kills === 'number') perFloor[fl].kills.push(z.kills);
+        if (typeof z.level === 'number') perFloor[fl].level.push(z.level);
+        if (typeof z.hp === 'number') perFloor[fl].hp.push(z.hp);
+        if (typeof z.expGain === 'number') perFloor[fl].exp.push(z.expGain);
+        if (z.floor === 5) {
+          d.f5.states.push({
+            seed: r.seed, hp: z.hp, maxHp: z.maxHp, mp: z.mp, maxMp: z.maxMp,
+            level: z.level, gold: z.gold, atk: z.atk, def: z.def, maxHp2: z.maxHp,
+            weaponId: z.weaponId || null, armorId: z.armorId || null, outcome: r.outcome
+          });
+        }
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      /* S1 的 F5 入场血量（D-39 的 floorEnter 是本卡唯一带"进层瞬间"快照的组） */
+      if (strategy === 's1' && r.d39 && r.d39.floorEnter) {
+        for (var fe = 0; fe < r.d39.floorEnter.length; fe++) {
+          var en = r.d39.floorEnter[fe];
+          if (en.floor === 5) d.f5.enterStates.push({
+            seed: r.seed, hp: en.hp, maxHp: en.maxHp, mp: en.mp, level: en.level,
+            gold: en.gold, equip: en.equip, hpPct: en.maxHp ? Math.round((en.hp / en.maxHp) * 1000) / 10 : null
+          });
+        }
+      }
+      /* L5 在 F2–F3 达成：离开 F2 或进入 F3 时等级 ≥5（死亡局的最后一层也算） */
+      var lvF3 = 0;
+      for (var q = 0; q < ends.length; q++) if (ends[q].floor <= 3 && (ends[q].level || 0) > lvF3) lvF3 = ends[q].level;
+      if (lvF3 >= 5) d.l5ByF3++;
+    }
+    for (var k2 in perFloor) {
+      d.floorKills[k2] = mean(perFloor[k2].kills);
+      d.floorLevel[k2] = mean(perFloor[k2].level);
+      d.floorHp[k2] = mean(perFloor[k2].hp);
+      d.expByFloor[k2] = mean(perFloor[k2].exp);
+    }
+    d.f5.reached = d.f5.states.length;
+    d.killsPerRun = Math.round((d.killsTotal / Math.max(1, runs.length)) * 100) / 100;
+    return d;
+  }
+  function statOf(res, strategy) {
+    var s = res.summary;
+    return {
+      runs: s.runs, win: s.win, dead: s.dead, stuck: s.stuck,
+      deathFloorDist: s.deathFloorDist, deathCauses: s.deathCauses,
+      avgActions: s.avgActions, avgSimSec: s.avgSimSec,
+      floorStats: s.floorStats, shop: s.shop, potions: s.potions, crashes: s.crashes,
+      agg: agg(strategy, res.runs)
+    };
+  }
+
+  try {
+    var M = Game.Core.Main, B = Game.Systems.Battle;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mc = /curve=(\d+)/.exec(qs), me = /early=(\d+)/.exec(qs), mo = /only=(m1|s1|g2)/.exec(qs);
+    var msb = /skipboss=1/.test(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    if (me) B.expEarlyBase = +me[1];
+    if (mc) B.expCurveBase = +mc[1];
+    out.env.expEarlyBase = B.expEarlyBase;
+    out.env.expCurveBase = B.expCurveBase;
+    out.env.m1SkipBoss = msb;
+    out.env.expTable = (function () {
+      var cum = 0, rows = [];
+      for (var lv = 1; lv <= 10; lv++) {
+        rows.push({ level: lv, toNext: B.expToNext(lv), cum: cum });
+        cum += B.expToNext(lv);
+      }
+      return rows;
+    })();
+    var seeds = [];
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    /* mode=neg：只跑负例三组（各 8 种子），供 verify_d41 C 组读取，避免验证页里跑长批 */
+    if (/mode=neg/.test(qs)) {
+      var NS = [];
+      for (var ni = 1001; ni <= 1008; ni++) NS.push(ni);
+      var oNew = Game.Bot.batch(NS, { maxActions: 2500, m1: { clear: true } });
+      B.expEarlyBase = 60;
+      var oOld = Game.Bot.batch(NS, { maxActions: 2500, m1: { clear: true } });
+      B.expEarlyBase = 15;
+      var oStall = Game.Bot.batch(NS, { maxActions: 2500, m1: { clear: false, stall: true } });
+      out.neg = { seeds: NS, new: agg('m1', oNew.runs), old: agg('m1', oOld.runs), stall: agg('m1', oStall.runs) };
+      out.env.expCurveAfter = '15/60';
+      out.ok = true;
+      document.title = 'NEG_DONE newF3=' + (out.neg.new.floorReach[3] || 0) +
+        ' oldF3=' + (out.neg.old.floorReach[3] || 0) +
+        ' stallKills=' + out.neg.stall.killsPerRun;
+      window.__D41__ = out;
+      document.getElementById('report').textContent = JSON.stringify(out);
+      return;
+    }
+    var plan = mo ? [mo[1]] : ['m1', 's1', 'g2'];
+    var optsOf = {
+      m1: { maxActions: 2500, m1: msb ? { clear: true, skipBoss: true } : { clear: true } },
+      s1: { maxActions: 2500, d39: { avoid: true } },
+      g2: { maxActions: 2500, d37: { fireball: true, flee: true } }
+    };
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(seeds, optsOf[key]);
+      out.runs[key] = res.runs;
+      out.summary = out.summary || {};
+      out.summary[key] = res.summary;
+      out.agg[key] = statOf(res, key);
+      out.strategy[key] = JSON.parse(JSON.stringify(optsOf[key]));
+      out.env['startPosSet_' + key] = (function (runs) {
+        var s = {};
+        for (var j = 0; j < runs.length; j++) s[runs[j].startPos] = 1;
+        return Object.keys(s).sort();
+      })(res.runs);
+    }
+    out.wallMs = Date.now() - t0;
+    out.env.seeds = seeds;
+    out.env.seedList = seeds;
+    out.env.maxActions = 2500;
+    out.spy = Game.Bot.spy();
+    out.ok = true;
+    var a = (out.agg.m1 && out.agg.m1.agg) || {};
+    document.title = 'BATCH_DONE n=' + n + ' curve=' + B.expCurveBase +
+      ' m1_f3=' + ((a.floorReach && a.floorReach[3]) || 0) + '/' + n +
+      ' m1_f5=' + ((a.f5 && a.f5.reached) || 0) +
+      ' s1_f5=' + ((out.agg.s1 && out.agg.s1.agg.f5.reached) || 0) + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String(e && (e.message + '\n' + (e.orig || e.stack)) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D41__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

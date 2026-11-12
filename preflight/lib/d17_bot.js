@@ -518,14 +518,22 @@
   function m1New(cfg) {
     return {
       clear: cfg.clear !== false,
+      skipBoss: cfg.skipBoss === true,
+      stall: cfg.stall === true,
       floors: [], floorStart: null, lastKind: '',
       bought: [], scrollsUsed: 0, extrapolated: null, shoppedAfterClear: 0, final: null
     };
   }
-  /* 累计经验（跨级不丢）：升级会从 exp 里扣阈值，层内增量必须用累计值相减 */
+  /* 累计经验（跨级不丢）：升级会从 exp 里扣阈值，层内增量必须用累计值相减。
+   * D-41：阈值改读 Battle.expToNext，曲线改动后账目自动跟随（旧实现写死 60×i）。 */
+  function expToNextOf(lv) {
+    var B = Game.Systems.Battle;
+    if (B && typeof B.expToNext === 'function') return B.expToNext(lv);
+    return 30 * lv;
+  }
   function expCum(P) {
     var s = 0;
-    for (var i = 1; i < (P.level || 1); i++) s += 60 * i;
+    for (var i = 1; i < (P.level || 1); i++) s += expToNextOf(i);
     return s + (P.exp || 0);
   }
   function ownedCount(id) {
@@ -560,6 +568,8 @@
   function m1Plan(rec) {
     var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid();
     if (!grid) return null;
+    /* D-41 负例：stall=true 表示"刷层策略被短路"（原地不动），用于验证击杀数断言真的依赖 M1 行为 */
+    if (rec.m1 && rec.m1.stall === true) return null;
     var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
     var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
     var walkT = function (t) {
@@ -571,8 +581,24 @@
     /* d39Bfs 以 passFn(nx, ny, tile) 三参调用，这里必须三参 */
     var walkable = function (x, y, t) { return walkT(t); };
     var start = { x: P.x, y: P.y };
-    var r = d39Bfs(grid, start, function (x, y) { return !!Map.enemyAt(x, y); }, walkable);
-    if (r.ok) { rec.m1.lastKind = 'enemy'; return d39Dir(P, r.first); }
+    /* D-41：clear=false 只用于负例（短路"打怪"目标，验证击杀数断言确实依赖 M1 策略）；
+     * 正常 M1 永远走 clear=true 的分支，行为与 D-40 一局不差。 */
+    var r = null;
+    if (!rec.m1 || rec.m1.clear !== false) {
+      /* D-41 诊断开关 skipBoss：只用于"如果把层 Boss 当门而不是刷怪对象会怎样"的对照，
+       * 默认 false（D-40 的 M1 仍会把层 Boss 当最近目标）。最终层不跳（Boss 就是通关目标）。 */
+      var skipBoss = rec.m1.skipBoss === true && P.floor < FLOORS;
+      r = d39Bfs(grid, start, function (x, y) {
+        var e = Map.enemyAt(x, y);
+        if (!e) return false;
+        if (skipBoss) {
+          var md = (Game.Data.MONSTERS || {})[e.monsterId];
+          if (md && md.boss) return false;
+        }
+        return true;
+      }, walkable);
+      if (r.ok) { rec.m1.lastKind = 'enemy'; return d39Dir(P, r.first); }
+    }
     r = d39Bfs(grid, start, function (x, y) {
       var dc = Map.getDecor(x, y);
       return dc === 'chest' || dc === 'room_chest';
@@ -651,7 +677,7 @@
     var lastFloor = arr[arr.length - 1].floor;
     var remain = Math.max(0, 5 - lastFloor);
     var lv = P.level, exp = (P.exp || 0) + avgExp * remain;
-    while (exp >= 60 * lv) { exp -= 60 * lv; lv++; }
+    while (exp >= expToNextOf(lv)) { exp -= expToNextOf(lv); lv++; }
     var w = P.equipment.weapon ? it[P.equipment.weapon] : null;
     var a = P.equipment.armor ? it[P.equipment.armor] : null;
     var wN = w ? Math.min(Math.max((P.upg && P.upg[w.id]) || 0, 0), 5) : 0;

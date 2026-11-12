@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-41：读取 selfcheck/d41-after.json、d41-legacy.json 与 D-37/D-39/D-40 产物，故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-41 成长节奏重排</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-41 · 经验曲线重排：同种子对照 / 归因唯一 / 曲线负例 / 价格收敛 / D-40 公式复算</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var B = Game.Systems.Battle, Inv = Game.Systems.Inventory;
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function mean(list, k) {
+    if (!list.length) return 0;
+    var s = 0;
+    for (var i = 0; i < list.length; i++) {
+      var v = (k === undefined) ? list[i] : (typeof k === 'function' ? k(list[i]) : list[i][k]);
+      s += v || 0;
+    }
+    return Math.round((s / list.length) * 100) / 100;
+  }
+  function endsOf(r, key) {
+    if (key === 'm1') return (r.m1 && r.m1.floors) || [];
+    if (key === 's1') return (r.d39 && r.d39.floorEnd) || [];
+    return (r.d37 && r.d37.floorEnd) || [];
+  }
+  /* 单局可比字段（与 D-37/D-39/D-40 同口径） */
+  function core(r) {
+    return [r.outcome, r.deathFloor, r.actions, r.kills, r.gold, r.level, r.hp, r.battles].join('|');
+  }
+  var CORE_KINDS = { m1: 'm1', s1: 'd39', g2: 'd37' };
+  function floorsSig(r, strategy) {
+    var e = endsOf(r, strategy), arr = [];
+    for (var i = 0; i < e.length; i++) {
+      arr.push([e[i].floor, e[i].kills, e[i].level, e[i].hp, e[i].gold, e[i].atk, e[i].def, e[i].maxHp].join(','));
+    }
+    return arr.join(';');
+  }
+  function diffRuns(a, b, strategy, skipSeeds) {
+    var bad = [], by = {};
+    for (var i = 0; i < b.length; i++) by[b[i].seed] = b[i];
+    for (var j = 0; j < a.length; j++) {
+      var r = a[j];
+      if (skipSeeds && skipSeeds[r.seed]) continue;
+      var o = by[r.seed];
+      if (!o) { bad.push(r.seed + ':missing'); continue; }
+      if (core(r) !== core(o)) bad.push(r.seed + ':core');
+      else if (floorsSig(r, strategy) !== floorsSig(o, strategy)) bad.push(r.seed + ':floors');
+    }
+    return bad;
+  }
+
+  try {
+    /* 本页只读产物 + 纯函数复算：不启动主循环（避免 headless 的虚拟时间被 rAF/定时器吃掉） */
+    var after = readJson('selfcheck/d41-after.json');
+    var legacy = readJson('selfcheck/d41-legacy.json');
+    var d40 = readJson('selfcheck/d40-m1.json');
+    var d39 = readJson('selfcheck/d39-s1.json');
+    var d37 = readJson('selfcheck/d37-g2.json');
+
+    /* ── A 组：三组同矩阵 + 字段可比 + 旧曲线逐局复现 ───────────────── */
+    var seeds = after.env.seeds;
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050;
+    var startOk = true, mA = [];
+    ['m1', 's1', 'g2'].forEach(function (k) {
+      var s = after.env['startPosSet_' + k] || [];
+      mA.push(s.join('|'));
+      if (s.join('|') !== mA[0]) startOk = false;
+    });
+    var fieldsOk = true, afterRun = after.runs.m1[0];
+    ['seed', 'outcome', 'deathFloor', 'actions', 'kills', 'gold', 'level', 'hp',
+      'battles', 'shopVisits', 'shopSpent', 'startPos', 'death'].forEach(function (f) {
+      if (!(f in afterRun)) fieldsOk = false;
+    });
+    var floorFields = ['floor', 'actions', 'battles', 'kills', 'expGain', 'atk', 'def', 'maxHp', 'maxMp', 'hp', 'mp', 'level', 'gold', 'equip', 'weaponId', 'armorId'];
+    var fl = afterRun.m1.floors[0] || {};
+    floorFields.forEach(function (f) { if (!(f in fl)) fieldsOk = false; });
+    var f5Enter = (after.agg.s1.agg.f5.enterStates || []);
+    rec('A_same_matrix', seedOk && startOk && after.env.maxActions === 2500 &&
+      legacy.env.maxActions === 2500 && d40.env.maxActions === 2500 &&
+      d39.env.maxActions === 2500 && d37.env.maxActions === 2500 && fieldsOk, {
+      seeds: seeds.length, maxActions: after.env.maxActions, startPosSetsEqual: startOk,
+      fieldsOk: fieldsOk, s1F5EnterStates: f5Enter.length
+    });
+
+    var badM1 = diffRuns(legacy.runs.m1, d40.runs, 'm1');
+    var badS1 = diffRuns(legacy.runs.s1, d39.runs, 's1');
+    /* D-38 修过最终层兜底：种子 1013 从 stuck 变 dead（F5），这是已记录的差异 */
+    var badG2 = diffRuns(legacy.runs.g2, d37.runs, 'g2', { 1013: 1 });
+    rec('A_legacy_reproduces', badM1.length === 0 && badS1.length === 0 && badG2.length === 0, {
+      m1: badM1.slice(0, 8), s1: badS1.slice(0, 8), g2: badG2.slice(0, 8),
+      g2KnownDelta1013: 'D-38 已修：live 为 dead(F5)，d37-g2 旧产物为 stuck'
+    });
+
+    var badAfter = diffRuns(after.runs.m1, legacy.runs.m1, 'm1');
+    /* 只改经验时"同局结果不同"是预期的；这里只验矩阵一致，不要求逐局相同 */
+    rec('A_after_same_matrix', after.env.seeds.join(',') === legacy.env.seeds.join(',') &&
+      after.env.startPosSet_m1.join('|') === legacy.env.startPosSet_m1.join('|') &&
+      after.env.startPosSet_s1.join('|') === legacy.env.startPosSet_s1.join('|') &&
+      after.env.startPosSet_g2.join('|') === legacy.env.startPosSet_g2.join('|'), {
+      seedsEqual: true, startPosEqual: true, changedRuns: badAfter.length
+    });
+
+    /* ── B 组：唯一改动可归因，且只改经验不足 ───────────────────────── */
+    var MONS = Game.Data.MONSTERS, MP = Game.Data.MAPS;
+    var expPerKill = [];
+    for (var f = 0; f < MP.enemyTable.length; f++) {
+      var e = 0;
+      for (var t = 0; t < MP.enemyTable[f].length; t++) {
+        var row = MP.enemyTable[f][t];
+        e += row.rate * MONS[row.id].exp;
+      }
+      expPerKill.push(Math.round(e * 100) / 100);
+    }
+    var questExp = 0;
+    for (var qi = 0; qi < Game.Data.QUESTS.length; qi++) questExp += (Game.Data.QUESTS[qi].reward.exp || 0);
+    var dragon = MONS.dragon, ogre = MONS.ogre_boss;
+    var f2row = JSON.stringify(MP.enemyTable[1]);
+    var knobOk = after.env.expEarlyBase === 15 && after.env.expCurveBase === 60 &&
+      legacy.env.expEarlyBase === 60 && legacy.env.expCurveBase === 60;
+    var dataOk = expPerKill.join(',') === '11.8,26.3,32.35,41.45,47.1' && questExp === 640 &&
+      MP.floors === 5 && dragon.hp === 260 && dragon.atk === 32 && dragon.def === 8 &&
+      ogre.hp === 280 && ogre.atk === 24 && ogre.def === 10 &&
+      f2row === '[{"id":"bat","rate":0.15},{"id":"skeleton","rate":0.3},{"id":"orc_warrior","rate":0.3},{"id":"orc_shaman","rate":0.25}]';
+    rec('B_only_exp_changed', knobOk && dataOk, {
+      afterCurve: '15/(L1-4) + 60/(L5+)', legacyCurve: '60/60',
+      expPerKill: expPerKill, questExp: questExp, f2TableUnchanged: dataOk,
+      dragon: { hp: dragon.hp, atk: dragon.atk, def: dragon.def },
+      ogre_boss: { hp: ogre.hp, atk: ogre.atk, def: ogre.def }
+    });
+
+    var aM = after.agg.m1.agg, lM = legacy.agg.m1.agg;
+    var aS = after.agg.s1.agg, lS = legacy.agg.s1.agg;
+    var aG = after.agg.g2.agg, lG = legacy.agg.g2.agg;
+    var deltas = {
+      m1_f3: [lM.floorReach[3] || 0, aM.floorReach[3] || 0],
+      m1_f4: [lM.floorReach[4] || 0, aM.floorReach[4] || 0],
+      m1_f5: [lM.f5.reached, aM.f5.reached],
+      m1_f2Kills: [lM.floorKills[2], aM.floorKills[2]],
+      m1_l5: [lM.l5ByF3, aM.l5ByF3],
+      s1_f5: [lS.f5.reached, aS.f5.reached],
+      g2_f5: [lG.f5.reached, aG.f5.reached]
+    };
+    var ogreDeaths = 0;
+    for (var ri = 0; ri < after.runs.m1.length; ri++) {
+      var dd = after.runs.m1[ri].death;
+      if (dd && dd.monsterId === 'ogre_boss') ogreDeaths++;
+    }
+    var targets = {
+      m1_f3: [aM.floorReach[3] || 0, 30], m1_f4: [aM.floorReach[4] || 0, 10],
+      m1_f5: [aM.f5.reached, 1], m1_f2Kills: [aM.floorKills[2], 4],
+      s1_f5: [aS.f5.reached, 5], l5: [aM.l5ByF3, 25]
+    };
+    var targetMet = {
+      m1_f3: targets.m1_f3[0] >= 30, m1_f4: targets.m1_f4[0] >= 10,
+      m1_f5: targets.m1_f5[0] >= 1, m1_f2Kills: targets.m1_f2Kills[0] >= 4,
+      s1_f5: targets.s1_f5[0] >= 5, l5: targets.l5[0] >= 25
+    };
+    rec('B_curve_insufficient_f2_boss', (aM.floorReach[3] || 0) < 30 && aM.f5.reached === 0 &&
+      ogreDeaths >= 40 && !targetMet.m1_f2Kills, {
+      targets: targets, targetMet: targetMet, deltas: deltas,
+      m1OgreBossDeaths: ogreDeaths,
+      m1DeathMonsters: (function () {
+        var c = {};
+        after.runs.m1.forEach(function (r) { var m = (r.death && r.death.monsterId) || 'none'; c[m] = (c[m] || 0) + 1; });
+        return c;
+      })(),
+      why: '经验曲线只把 M1 从 F2 杂兵推进到 F2 层 Boss 面前；F2 未改构成/密度，Boss 数值未动'
+    });
+
+    /* ── C 组：负例（读 d41-neg.json：同 8 种子下的 新曲线 / 旧曲线 / 刷层短路）─── */
+    var neg = readJson('selfcheck/d41-neg.json');
+    var gNew = neg && neg.neg ? neg.neg.new : null;
+    var gOld = neg && neg.neg ? neg.neg.old : null;
+    var gShort = neg && neg.neg ? neg.neg.stall : null;
+    rec('C_restore_curve_negative', !!neg && neg.ok === true &&
+      (gNew.l5ByF3 || 0) > (gOld.l5ByF3 || 0) &&
+      (gNew.floorKills[2] || 0) > (gOld.floorKills[2] || 0) &&
+      (legacy.agg.m1.agg.floorReach[3] || 0) < (after.agg.m1.agg.floorReach[3] || 0), {
+      seeds: neg && neg.neg && neg.neg.seeds,
+      newCurve: { f3: gNew && (gNew.floorReach[3] || 0), l5: gNew && gNew.l5ByF3, f2Kills: gNew && gNew.floorKills[2] },
+      oldCurve: { f3: gOld && (gOld.floorReach[3] || 0), l5: gOld && gOld.l5ByF3, f2Kills: gOld && gOld.floorKills[2] },
+      artifactF3: [legacy.agg.m1.agg.floorReach[3] || 0, after.agg.m1.agg.floorReach[3] || 0],
+      note: '还原曲线(early=60)后 L5 达成数与 F3 到达率都回落；"经验改动有效"的断言在还原时 FAIL'
+    });
+
+    var shortKills = gShort ? gShort.killsPerRun : 0;
+    var normalKills = gNew ? gNew.killsPerRun : 0;
+    rec('C_m1_short_negative', shortKills < 4 && normalKills >= 4 && shortKills < normalKills &&
+      (gShort.l5ByF3 || 0) < (gNew.l5ByF3 || 0), {
+      shortF3: gShort && (gShort.floorReach[3] || 0), shortKillsPerRun: shortKills,
+      normalKillsPerRun: normalKills,
+      note: '把 M1 的刷层策略短路（原地不动）后击杀数/等级同时掉；"F2 击杀 ≥4" 的断言确实依赖 M1 策略'
+    });
+
+    /* ── D 组：价格仍收敛、物品未被改 ───────────────────────────────── */
+    var IT = Game.Data.ITEMS, sumPrice = 0, sumSell = 0, badPrice = [], keys = Object.keys(IT).sort();
+    keys.forEach(function (k) {
+      var it = IT[k];
+      if (typeof it.price === 'number') sumPrice += it.price;
+      if (typeof it.sell === 'number') sumSell += it.sell;
+      if (typeof it.price === 'number' && typeof it.sell === 'number' && !(it.price > it.sell)) badPrice.push(k);
+    });
+    var fnvStr = keys.map(function (k) { return k + ':' + IT[k].price + ':' + IT[k].sell; }).join('|');
+    var fnv = 2166136261;
+    for (var fi = 0; fi < fnvStr.length; fi++) {
+      fnv ^= fnvStr.charCodeAt(fi);
+      fnv = Math.imul(fnv, 16777619) >>> 0;
+    }
+    rec('D_prices_converge', keys.length === 48 && sumPrice === 10165 && sumSell === 5081 &&
+      fnv === 0x331540f9 && badPrice.length === 0, {
+      items: keys.length, sumPrice: sumPrice, sumSell: sumSell,
+      fnv: fnv.toString(16), badPrice: badPrice,
+      note: 'D-41 未改 items.js；若改物品必须重算这三个数并说明'
+    });
+
+    /* D-40 的 A 组用真实 Player 单例复算（recalcEquip 无参），这里同样做并原样恢复 */
+    var P = Game.Data.Player;
+    var savedP = { level: P.level, equip: JSON.parse(JSON.stringify(P.equipment)), upg: JSON.parse(JSON.stringify(P.upg || {})) };
+    function manual(level, w, a, wp, ap) {
+      var e = function (b, n) { n = Math.max(0, Math.min(5, n || 0)); return b + Math.ceil(b * n * 0.1); };
+      return {
+        atk: 10 + (level - 1) + (w ? e(IT[w].effect.atk, wp) : 0),
+        def: 5 + (level - 1) + (a ? e(IT[a].effect.def, ap) : 0),
+        maxHp: 100 + (level - 1) * 10 + (w ? (IT[w].effect.maxHp || 0) : 0) + (a ? (IT[a].effect.maxHp || 0) : 0)
+      };
+    }
+    var combos = [
+      [1, null, null, 0, 0], [4, 'sword_magic_epic', 'plate_armor_epic', 0, 0],
+      [8, 'sword_magic_epic', 'plate_armor_epic', 5, 5], [6, 'sword_dragon_epic', 'robe_mage_epic', 3, 2],
+      [4, 'sword_anime', 'plate_armor_rare', 1, 4]
+    ];
+    var mism = [];
+    combos.forEach(function (c) {
+      P.level = c[0];
+      P.equipment.weapon = c[1]; P.equipment.armor = c[2];
+      P.upg = {};
+      if (c[1]) P.upg[c[1]] = c[3];
+      if (c[2]) P.upg[c[2]] = c[4];
+      Inv.recalcEquip();
+      var m = manual(c[0], c[1], c[2], c[3], c[4]);
+      if (P.atk !== m.atk || P.def !== m.def || P.maxHp !== m.maxHp) {
+        mism.push({ c: c, got: [P.atk, P.def, P.maxHp], want: [m.atk, m.def, m.maxHp] });
+      }
+    });
+    P.level = 1; P.equipment.weapon = null; P.equipment.armor = null; P.upg = {};
+    Inv.recalcEquip();
+    var lv1 = { atk: P.atk, def: P.def, maxHp: P.maxHp, maxMp: P.maxMp };
+    P.level = 2; Inv.recalcEquip();
+    var growth = { atk: P.atk - lv1.atk, def: P.def - lv1.def, maxHp: P.maxHp - lv1.maxHp, maxMp: P.maxMp - lv1.maxMp };
+    P.level = savedP.level; P.equipment = savedP.equip; P.upg = savedP.upg;
+    Inv.recalcEquip();
+    rec('E_d40_formula_still_valid', mism.length === 0 && growth.atk === 1 && growth.def === 1 &&
+      growth.maxHp === 10 && growth.maxMp === 0 && lv1.maxMp === 50, {
+      mismatches: mism, growth: growth, maxMpConstant: lv1.maxMp,
+      note: '升级增量未改（+1/+1/+10/+0），D-40 A 组复算继续成立；本次只改 expToNext 的基数'
+    });
+
+    function cum(base, L) { var s = 0; for (var i = 1; i < L; i++) s += B.expToNext(i); return s; }
+    var curve = {
+      L5: cum(1, 5), L8: cum(1, 8), L10: cum(1, 10),
+      oldL5: 600, oldL8: 1680, oldL10: 2700,
+      totalExpCeil: 1984 + 640, cumL11: cum(1, 11)
+    };
+    rec('E_curve_table', curve.L5 === 150 && curve.L8 === 1230 && curve.L10 === 2250 &&
+      curve.totalExpCeil >= curve.L10 && curve.totalExpCeil < curve.cumL11, {
+      curve: curve, toNext: [B.expToNext(1), B.expToNext(4), B.expToNext(5), B.expToNext(10)],
+      note: 'D-40 的"L10 不可达"是旧曲线(60/60)结论；新曲线 L10=2250，全图怪物上限 1984 + 全任务 640 = 2624，L10 成为"全清+全任务"的极限，L11 仍不可达'
+    });
+
+    out.ms = Date.now() - START;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+    document.title = 'D41_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+    document.title = 'D41_ERROR';
+  }
+  /* 裁决行必须是行首 "PASS {json}" / "FAIL {json}"——run-all.ps1 的 Get-PageVerdict 只认这一种形态；
+   * 只把 PASS 写在 <title>（D41_DONE PASS ...）会让批跑判 NONE。 */
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

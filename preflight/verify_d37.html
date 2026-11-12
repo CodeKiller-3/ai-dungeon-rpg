@@ -164,7 +164,11 @@
     var mutated = JSON.parse(JSON.stringify(G0));
     mutated.runs[0].actions += 1;
     var aNeg = cmpRuns(mutated.runs, D34.runs);
-    /* 活体：同页现跑 3 个种子，证明"当前代码"仍复现，而不是只信落盘文件 */
+    /* 活体：同页现跑 3 个种子，证明"当前代码"仍复现，而不是只信落盘文件
+     * D-41：D-34 的基线是在旧经验曲线（全程 60）下测的；本组只校验策略/测量台没变，
+     * 因此活体段把曲线临时钉回 60，跑完恢复。曲线本身的变化由 verify_d41 负责。 */
+    var curveNow = Game.Systems.Battle.expEarlyBase;
+    Game.Systems.Battle.expEarlyBase = 60;
     M.init();
     M.closeGuide();
     Bot.install();
@@ -186,6 +190,7 @@
       evidence: aEv, liveSeeds: LIVE_SEEDS, live: aLive,
       negativeMutatedRunFails: !aNeg.ok, negativeBadSeed: aNeg.bad,
       negativeStrategyChangeDetected: aStrategyNeg,
+      liveCurvePinned: 'expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）',
       liveG1Actions: liveG1.map(function (r) { return r.actions; }),
       d34Actions: LIVE_SEEDS.map(function (s) {
         return D34.runs.filter(function (x) { return x.seed === s; })[0].actions;
@@ -214,6 +219,7 @@
     /* 活体：重跑 G2 的 seed 1023（证据里最早发生逃跑的一局），逃跑日志必须逐项一致 */
     var ev1023 = G2.runs.filter(function (r) { return r.seed === 1023; })[0];
     var live1023 = live(1023, CFG.G2);
+    Game.Systems.Battle.expEarlyBase = curveNow;
     var cLiveSame = !!ev1023 && JSON.stringify(live1023.d37.fleeLog) === JSON.stringify(ev1023.d37.fleeLog);
     var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
       liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });
