@@ -64,6 +64,10 @@
   function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
 
   try {
+    /* D-46：每层固定奖励点（金币/药）会改变种子走向。本页验的是地图可达性 / 死亡归因 / 不再卡死，
+     * 不是新补给本身，故把奖励点钉回改前（REWARD.floors 置空），跑完恢复；奖励点由 verify_d46 负责。 */
+    var d46RwSnap = Game.Data.REWARD;
+    Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
     M.init();
     M.closeGuide();
     Bot.install();
@@ -216,6 +220,7 @@
       fleet: liveD.d37 ? { attempts: liveD.d37.fleeAttempts, success: liveD.d37.fleeSuccess } : null
     });
 
+    Game.Data.REWARD = d46RwSnap;
     out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
   } catch (e) {
     out.err = String((e && e.stack) || e);

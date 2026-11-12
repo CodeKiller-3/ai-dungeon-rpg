@@ -522,7 +522,8 @@
               /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空）
                * S-05：密室宝箱（room_chest）同样走 takeDecor，掉落口径在 map.js 内区分 */
               var dec = Game.Systems.Map.getDecor(nx, ny);
-              if (dec === 'chest' || dec === 'room_chest') {
+              /* D-46：gold_pile / potion_stash 与宝箱同一拾取路径（站上即拿，不阻挡移动） */
+              if (dec === 'chest' || dec === 'room_chest' || dec === 'gold_pile' || dec === 'potion_stash') {
                 Game.Systems.Map.takeDecor(nx, ny);
                 /* D-15：开箱同时改金币/背包 + 清空装饰格，两件事必须同一次落盘，
                  * 否则刷新后会出现"箱子回来了、金币没回"或"金币涨了、箱子还在"。 */

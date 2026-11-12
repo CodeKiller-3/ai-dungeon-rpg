@@ -815,6 +815,26 @@
     }
   }
 
+  /* ── D-46：金币账（只测量）──────────────────────────────────────
+   * 目的是让"初始 + 获得 − 支出 = 期末"能逐局复算，并把来源分成
+   * 宝箱（chest/room_chest）/ 掉落（battle:end.gold）/ 奖励点（gold_pile / potion_stash）/ 任务（quest:complete）。
+   * 卖出杂物算"负支出"（spentNet = 商店花费 − 卖出所得），因此四个来源之外不会再有金币流入。
+   * 不传 opts.d46 时 rec.d46 为 null，钩子全部直接返回，游戏与既有策略零变化。 */
+  function d46New() {
+    return {
+      initial: 0, finalGold: 0, spentGross: 0, soldGold: 0, spentNet: 0, balance: null,
+      buyGold: 0, buyCount: 0, sellGold: 0, sellCount: 0,
+      income: { chest: 0, drop: 0, reward: 0, quest: 0 },
+      rewardByFloor: {}, rewardPicksByFloor: {}, log: []
+    };
+  }
+  function d46Income(rec, src, gold, kind, floor) {
+    if (!rec || !rec.d46 || !gold) return;
+    rec.d46.income[src] += gold;
+    if (src === 'reward') rec.d46.rewardByFloor[floor] = (rec.d46.rewardByFloor[floor] || 0) + gold;
+    rec.d46.log.push({ at: rec.actions, src: src, kind: kind, gold: gold, floor: floor });
+  }
+
   /* D-45：商店决策遥测（只读；不传 opts.d45 时 rec.d45 为 null，行为不变）。
    * 每次进店记录：当时金币/药量/武器档位、货架逐项（类型/价格/是否升级/是否买得起/是否已拥有）、
    * 成交明细、成交后金币，以及"为什么没买武器"的分类（noStock/goldShort/priority）。 */
@@ -1819,6 +1839,8 @@
     /* D-45：补给侧决策遥测（只读）。d45Probe 仅用于反事实武器档位测量，不改游戏规则。 */
     if (opts.d45) rec.d45 = d45New();
     if (opts.d45 && opts.d45Probe) rec.d45Probe = opts.d45Probe;
+    /* D-46：金币收支分类账（只读） */
+    if (opts.d46) rec.d46 = d46New();
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -1831,6 +1853,8 @@
       Game.Systems.Battle._setHpLog(function (e) { if (cur && cur.d43) d43Log(cur, e); });
       d43Start(rec);
     }
+    /* D-46：开局金币（restart 后为 0；照实记录，不写死） */
+    if (rec.d46) rec.d46.initial = P.gold;
     rec.floorNow = P.floor;
     rec.shieldOn = false;
     rec.startPos = P.x + ',' + P.y;
@@ -1887,6 +1911,16 @@
       m1End(rec);
       m1Extrapolate(rec);
       rec.m1.final = d37Snap(P, P.floor);
+    }
+    /* D-46：金币账收尾——四个来源 + 净支出必须与期末金币对上 */
+    if (rec.d46) {
+      var inc = rec.d46.income;
+      rec.d46.soldGold = rec.b1 ? (rec.b1.soldGold || 0) : 0;
+      rec.d46.spentGross = rec.d46.buyGold;
+      rec.d46.spentNet = rec.d46.buyGold - rec.d46.sellGold;
+      rec.d46.finalGold = P.gold;
+      rec.d46.balance = rec.d46.initial + (inc.chest + inc.drop + inc.reward + inc.quest) -
+        rec.d46.spentNet - rec.d46.finalGold;
     }
     /* D-44：B1 收尾（留药检查、通关事件序列） */
     if (rec.b1) b1Finalize(rec);
@@ -2070,6 +2104,27 @@
       if (!cur || !cur.d44) return;
       d44End(cur, e);
     });
+    /* ── D-46：金币来源分类（独立监听器；rec.d46 为空时直接返回） ──
+     * 商店花销由 rec.shopSpent / b1.soldGold 汇总，不在这里记；这里只认"进账"。 */
+    EB.on('battle:end', function (e) {
+      if (!cur || !cur.d46 || !e) return;
+      if (e.result === 'win' && typeof e.gold === 'number') {
+        d46Income(cur, 'drop', e.gold, 'drop', Game.Data.Player.floor);
+      }
+    });
+    EB.on('quest:complete', function (e) {
+      if (!cur || !cur.d46 || !e || !e.reward) return;
+      var g = e.reward.gold || 0;
+      if (g) d46Income(cur, 'quest', g, (e.id || 'quest'), Game.Data.Player.floor);
+    });
+    /* 商店成交按"实际扣款/进账"记账：比按动作前后差值更可靠（差值会把没成交的按键也算进去） */
+    EB.on('shop:changed', function (e) {
+      if (!cur || !cur.d46 || !e) return;
+      var it = Game.Data.ITEMS && Game.Data.ITEMS[e.id];
+      if (!it) return;
+      if (e.action === 'buy') { cur.d46.buyGold += it.price; cur.d46.buyCount++; }
+      else if (e.action === 'sell') { cur.d46.sellGold += it.sell; cur.d46.sellCount++; }
+    });
   }
 
   Bot.install = function () {
@@ -2102,6 +2157,34 @@
       Game.Motion.setStep = function (who) {
         if (who === 'player') { spy.moves++; if (!inUpdate) spy.movesOutside++; }
         return saved.motion.apply(this, arguments);
+      };
+    }
+    /* D-46：拾取记账——只把"金币增量"和来源分桶，不改 takeDecor 的任何行为。
+     * 未启用 d46 的局（cur.d46 为空）除了多一次前后读数外零影响。 */
+    if (Game.Systems.Map && typeof Game.Systems.Map.takeDecor === 'function') {
+      var td = Game.Systems.Map.takeDecor;
+      saved.takeDecor = td;
+      Game.Systems.Map.takeDecor = function (x, y) {
+        var g0 = Game.Data.Player.gold;
+        var id = Game.Systems.Map.getDecor(x, y);
+        var r = td.apply(this, arguments);
+        if (r && cur && cur.d46) {
+          var gain = Game.Data.Player.gold - g0;
+          if (gain) {
+            var src = (id === 'gold_pile' || id === 'potion_stash') ? 'reward' : 'chest';
+            d46Income(cur, src, gain, id, Game.Data.Player.floor);
+          } else if (id === 'potion_stash') {
+            /* 药水奖励没有金币增量，单独记一笔，便于统计"奖励点拾取次数" */
+            var pf = Game.Data.Player.floor;
+            cur.d46.log.push({ at: cur.actions, src: 'reward', kind: id, gold: 0, potion: 1, floor: pf });
+            cur.d46.rewardPicksByFloor[pf] = (cur.d46.rewardPicksByFloor[pf] || 0) + 1;
+          }
+          if (gain && id === 'gold_pile') {
+            var gf = Game.Data.Player.floor;
+            cur.d46.rewardPicksByFloor[gf] = (cur.d46.rewardPicksByFloor[gf] || 0) + 1;
+          }
+        }
+        return r;
       };
     }
     /* 虚拟时钟：让 dying / 各种墙钟计时都可复现 */
@@ -2150,6 +2233,7 @@
     Game.Core.Main._updateExplore = saved.ue;
     Game.Systems.Battle.playerAction = saved.pa;
     if (saved.motion) Game.Motion.setStep = saved.motion;
+    if (saved.takeDecor) Game.Systems.Map.takeDecor = saved.takeDecor;
   };
 
   /* 测试钩子：只推进主循环、不产生任何输入。

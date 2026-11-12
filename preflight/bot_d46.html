@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-46 早期金币通道</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-46 · 金币账 / 首店缺口 / 奖励点拾取 / 负例（只产出 d46-*.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-46 跑局器（只测量）：
+ *   ?mode=main（默认）  B1 50 种子（金币账 + 商店遥测）+ G2/S1/M1 同种子对照
+ *   ?mode=neg          把奖励点还原（REWARD.floors 清空）后复跑 B1（负例：应回到 D-45 基线）
+ *   ?only=b1&n=50      只跑 B1（调参时用；不改任何判据）
+ * 种子 1001–1050、maxActions 2500，与 D-37..D-45 完全一致。 */
+(function () {
+  'use strict';
+  var out = {
+    protocol: 'D-46', mode: 'main', env: {}, summary: {}, runs: {}, agg: {},
+    b1: {}, d45: null, d46: null, neg: null, ok: false
+  };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  function median(a) {
+    if (!a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.floor(s.length / 2)];
+  }
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+
+  /* 与 D-44/D-45 同口径的到达/死层汇总 */
+  function aggBase(runs) {
+    var d = {
+      outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {},
+      floorReach: {}, floorLevel: {}, floorHp: {},
+      f5: { reached: 0, states: [] }, l5ByF3: 0,
+      killsTotal: 0, killsPerRun: 0, boss: {}
+    };
+    var perFloor = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, hitF5 = (r.floor === 5);
+      var ends = r.b1 ? (r.b1.floorExit || []) : (r.floors || []);
+      for (var f = 0; f < ends.length; f++) {
+        var z = ends[f], fl = z.floor;
+        reached[fl] = 1;
+        if (fl === 5) hitF5 = true;
+        if (!perFloor[fl]) perFloor[fl] = { level: [], hp: [], n: 0 };
+        perFloor[fl].n++;
+        perFloor[fl].level.push(z.level);
+        perFloor[fl].hp.push(z.hp);
+      }
+      if (r.b1) {
+        for (var en = 0; en < (r.b1.floorEnter || []).length; en++) {
+          var efl = r.b1.floorEnter[en].floor;
+          reached[efl] = 1;
+          if (efl === 5) hitF5 = true;
+        }
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      if (hitF5) {
+        d.f5.reached++;
+        d.f5.states.push({
+          seed: r.seed, hp: r.hp, level: r.level,
+          potions: (r.b1 && r.b1.enterF5) ? r.b1.enterF5.potions : null, outcome: r.outcome
+        });
+      }
+      var lvF3 = 0;
+      for (var q = 0; q < ends.length; q++) if (ends[q].floor <= 3 && ends[q].level > lvF3) lvF3 = ends[q].level;
+      if (lvF3 >= 5) d.l5ByF3++;
+      if (r.d42 && r.d42.boss) {
+        for (var bid in r.d42.boss) {
+          if (!Object.prototype.hasOwnProperty.call(r.d42.boss, bid)) continue;
+          var b = r.d42.boss[bid];
+          var cur = d.boss[bid] || (d.boss[bid] = { encounters: 0, maxDealtPct: 0, bestSeed: null, killed: 0 });
+          cur.encounters++;
+          if (b.dealtPct > cur.maxDealtPct) { cur.maxDealtPct = b.dealtPct; cur.bestSeed = r.seed; }
+          if (b.killed) cur.killed++;
+        }
+      }
+    }
+    for (var k2 in perFloor) {
+      d.floorLevel[k2] = mean(perFloor[k2].level);
+      d.floorHp[k2] = mean(perFloor[k2].hp);
+    }
+    d.killsPerRun = Math.round((d.killsTotal / Math.max(1, runs.length)) * 100) / 100;
+    return d;
+  }
+
+  /* B1 专属汇总（与 D-44/D-45 同字段） */
+  function aggB1(runs) {
+    var a = {
+      runs: runs.length, active: 0, forced: 0, patrol: 0, boss: 0, battles: 0, race: 0,
+      shop: { visits: 0, buys: 0, spent: 0, potionsBought: 0, equipBought: 0, soldCount: 0, soldGold: 0 },
+      reserve: { need: 4, reachF5: 0, pass: 0, min: null, max: null },
+      dragon: { attempts: 0, runs: 0, kills: 0, bestDealt: 0, bestDealtPct: 0, bestSeed: null, best: null },
+      wins: [], f5Enter: []
+    };
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], b = r.b1;
+      if (!b) continue;
+      a.battles += b.battles || 0;
+      a.active += b.active || 0;
+      a.forced += b.forced || 0;
+      a.patrol += b.patrol || 0;
+      a.race += b.race || 0;
+      a.boss += b.boss || 0;
+      a.shop.visits += b.shopVisits || 0;
+      a.shop.buys += b.shopBuys || 0;
+      a.shop.spent += b.shopSpent || 0;
+      a.shop.potionsBought += b.potionsBought || 0;
+      a.shop.equipBought += b.equipBought || 0;
+      a.shop.soldCount += b.soldCount || 0;
+      a.shop.soldGold += b.soldGold || 0;
+      if (b.dragon) {
+        a.dragon.attempts += b.dragon.battles || 0;
+        a.dragon.runs += b.dragon.reached ? 1 : 0;
+        a.dragon.kills += b.dragon.killed || 0;
+        if (b.dragon.best && b.dragon.best.dealt > a.dragon.bestDealt) {
+          a.dragon.bestDealt = b.dragon.best.dealt;
+          a.dragon.bestDealtPct = Math.round((b.dragon.best.dealt / 260) * 1000) / 10;
+          a.dragon.bestSeed = r.seed;
+          a.dragon.best = b.dragon.best;
+        }
+      }
+      if (b.enterF5) {
+        a.reserve.reachF5++;
+        if (b.enterF5.potions >= 4) a.reserve.pass++;
+        if (a.reserve.min === null || b.enterF5.potions < a.reserve.min) a.reserve.min = b.enterF5.potions;
+        if (a.reserve.max === null || b.enterF5.potions > a.reserve.max) a.reserve.max = b.enterF5.potions;
+        a.f5Enter.push({
+          seed: r.seed, potions: b.enterF5.potions, hp: b.enterF5.hp, maxHp: b.enterF5.maxHp,
+          level: b.enterF5.level, gold: b.enterF5.gold, atk: b.enterF5.atk, def: b.enterF5.def,
+          weaponId: b.enterF5.weaponId, armorId: b.enterF5.armorId, outcome: r.outcome
+        });
+      }
+      if (r.outcome === 'win') a.wins.push(r.seed);
+    }
+    return a;
+  }
+
+  /* D-45 口径的商店决策分类（E 组逐项可比） */
+  function aggD45(runs) {
+    var res = {
+      f5Runs: 0, floorsReached: 0,
+      counts: { bought: 0, noStock: 0, goldShort: 0, priority: 0, noEntry: 0 },
+      failures: 0, shares: {}, equipBuys: 0
+    };
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], b = r.b1;
+      if (!b || !b.enterF5) continue;
+      res.f5Runs++;
+      res.equipBuys += b.equipBought || 0;
+      var floors = [];
+      for (var e = 0; e < (b.floorEnter || []).length; e++) {
+        var fl = b.floorEnter[e].floor;
+        if (floors.indexOf(fl) < 0) floors.push(fl);
+      }
+      floors.sort();
+      var shops = (r.d45 && r.d45.shops) || [];
+      var missed = (r.d45 && r.d45.missed) || [];
+      for (var fi = 0; fi < floors.length; fi++) {
+        var f = floors[fi];
+        res.floorsReached++;
+        var visits = [];
+        for (var s = 0; s < shops.length; s++) if (shops[s].floor === f) visits.push(shops[s]);
+        var miss = 0;
+        for (var m = 0; m < missed.length; m++) if (missed[m].floor === f) miss++;
+        if (!visits.length) { res.counts.noEntry++; continue; }
+        for (var v = 0; v < visits.length; v++) {
+          res.counts[visits[v].reason] = (res.counts[visits[v].reason] || 0) + 1;
+        }
+      }
+    }
+    res.failures = res.counts.noStock + res.counts.goldShort + res.counts.priority + res.counts.noEntry;
+    var keys = ['noStock', 'goldShort', 'noEntry', 'priority'];
+    for (var x = 0; x < keys.length; x++) {
+      res.shares[keys[x]] = res.failures ?
+        Math.round((res.counts[keys[x]] / res.failures) * 1000) / 10 : 0;
+    }
+    return res;
+  }
+
+  /* D-46 A/B 组：金币账 + F1/F2 首店缺口（逐局可复算） */
+  function cheapestUpgrade(sh) {
+    var best = null;
+    for (var i = 0; i < sh.stock.length; i++) {
+      var it = sh.stock[i];
+      if (it.owned) continue;
+      if (!(it.weaponUp || it.armorUp)) continue;
+      if (best === null || it.price < best) best = it.price;
+    }
+    return best;
+  }
+  function aggD46(runs) {
+    var res = {
+      ledger: [], firstShop: { f1: [], f2: [] },
+      gaps: { f1: {}, f2: {} }, reward: { picks: 0, gold: 0, potion: 0, byFloor: {} },
+      balanceMaxAbs: 0, incomeTotal: { chest: 0, drop: 0, reward: 0, quest: 0 }, spentNet: 0
+    };
+    function stat(a) {
+      if (!a.length) return { n: 0, avg: null, median: null, min: null, max: null };
+      return {
+        n: a.length, avg: Math.round((a.reduce(function (s, v) { return s + v; }, 0) / a.length) * 100) / 100,
+        median: median(a), min: Math.min.apply(null, a), max: Math.max.apply(null, a)
+      };
+    }
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], L = r.d46;
+      if (!L) continue;
+      var inc = L.income;
+      res.ledger.push({
+        seed: r.seed, initial: L.initial, income: inc,
+        incomeSum: inc.chest + inc.drop + inc.reward + inc.quest,
+        spentGross: L.spentGross, soldGold: L.soldGold, spentNet: L.spentNet,
+        finalGold: L.finalGold, balance: L.balance,
+        buyCount: L.buyCount, sellCount: L.sellCount,
+        rewardByFloor: L.rewardByFloor, rewardPicksByFloor: L.rewardPicksByFloor,
+        sources: L.log.filter(function (x) { return x.gold > 0; })
+      });
+      res.incomeTotal.chest += inc.chest;
+      res.incomeTotal.drop += inc.drop;
+      res.incomeTotal.reward += inc.reward;
+      res.incomeTotal.quest += inc.quest;
+      res.spentNet += L.spentNet;
+      if (Math.abs(L.balance) > res.balanceMaxAbs) res.balanceMaxAbs = Math.abs(L.balance);
+      for (var g = 0; g < L.log.length; g++) {
+        if (L.log[g].src !== 'reward') continue;
+        res.reward.picks++;
+        res.reward.gold += L.log[g].gold || 0;
+        if (L.log[g].potion) res.reward.potion++;
+        var fk = L.log[g].floor;
+        res.reward.byFloor[fk] = (res.reward.byFloor[fk] || 0) + 1;
+      }
+      /* B 组：F1 / F2 首次进店 */
+      var shops = (r.d45 && r.d45.shops) || [];
+      for (var f = 1; f <= 2; f++) {
+        var v = null;
+        for (var s = 0; s < shops.length; s++) if (shops[s].floor === f) { v = shops[s]; break; }
+        if (!v) continue;
+        var cheap = cheapestUpgrade(v);
+        var row = {
+          seed: r.seed, floor: f, gold: v.goldIn, goldAtOpen: v.gold,
+          cheapest: cheap, gap: (cheap === null) ? null : cheap - v.goldIn,
+          weaponId: v.weaponId, weaponAtk: v.weaponAtk,
+          bought: v.bought, reason: v.reason
+        };
+        if (f === 1) res.firstShop.f1.push(row); else res.firstShop.f2.push(row);
+      }
+    }
+    res.gaps.f1 = stat(res.firstShop.f1.filter(function (x) { return x.gap !== null; }).map(function (x) { return x.gap; }));
+    res.gaps.f2 = stat(res.firstShop.f2.filter(function (x) { return x.gap !== null; }).map(function (x) { return x.gap; }));
+    return res;
+  }
+
+  function trimRun(r, strategy) {
+    var o = {
+      seed: r.seed, outcome: r.outcome, deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      hp: r.hp, level: r.level, gold: r.gold, equip: r.equip, kills: r.kills,
+      battles: r.battles, actions: r.actions, simSec: r.simSec,
+      shopVisits: r.shopVisits, shopBuys: r.shopBuys, shopSpent: r.shopSpent,
+      potions: r.potions, d42: r.d42 || null,
+      death: r.death || null, deathCause: r.deathCause || null
+    };
+    if (strategy === 'b1') {
+      o.maxHp = r.b1 ? (r.b1.enterF5 ? r.b1.enterF5.maxHp : (r.b1.final ? r.b1.final.maxHp : null)) : null;
+      o.b1 = r.b1;
+      o.d45 = r.d45 || null;
+      o.d46 = r.d46 || null;
+      o.f5Battles = ((r.d44 && r.d44.battles) || []).filter(function (b) {
+        return b.floor === 5 || b.monsterId === 'dragon';
+      });
+    }
+    return o;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    out.env.maxActions = 2500;
+    out.env.seeds = seedsOf(n);
+    out.env.reward = JSON.parse(JSON.stringify(Game.Data.REWARD));
+    out.env.decor = JSON.parse(JSON.stringify(Game.Data.DECOR));
+    out.env.chestLoot = JSON.stringify(Game.Data.CHEST_LOOT);
+    out.env.stock = JSON.stringify(Game.Data.SHOP_STOCK);
+
+    var B1OPTS = { maxActions: 2500, b1: { reserve: 4 }, d42: true, d45: true, d46: true };
+
+    /* ── neg：奖励点还原（REWARD 清空）后复跑 B1 ───────────────── */
+    if (/mode=neg/.test(qs)) {
+      Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
+      out.mode = 'neg';
+      out.env.rewardNeg = JSON.parse(JSON.stringify(Game.Data.REWARD));
+      var nr = Game.Bot.batch(seedsOf(n), { maxActions: 2500, b1: { reserve: 4 }, d42: true, d45: true, d46: true });
+      out.neg = {
+        agg: aggBase(nr.runs), b1: aggB1(nr.runs), d45: aggD45(nr.runs), d46: aggD46(nr.runs),
+        runs: nr.runs.map(function (r) { return trimRun(r, 'b1'); })
+      };
+      out.ok = true;
+      document.title = 'NEG_DONE wins=' + out.neg.agg.outcomes.win + '/' + n +
+        ' f5=' + out.neg.agg.f5.reached + ' dragonKills=' + out.neg.b1.dragon.kills +
+        ' rewardPicks=' + out.neg.d46.reward.picks;
+      window.__D46__ = out;
+      document.getElementById('report').textContent = JSON.stringify(out);
+      return;
+    }
+
+    /* ── main：B1 全量遥测 + G2/S1/M1 同种子对照 ───────────────── */
+    function optsFor(key) {
+      if (key === 'b1') return B1OPTS;
+      if (key === 'g2') return { maxActions: 2500, d37: { fireball: true, flee: true }, d42: true };
+      if (key === 's1') return { maxActions: 2500, d39: { avoid: true }, d42: true };
+      return { maxActions: 2500, m1: { clear: true }, d42: true };
+    }
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(out.env.seeds, optsFor(key));
+      out.runs[key] = res.runs.map(function (r) { return trimRun(r, key); });
+      out.summary[key] = res.summary;
+      out.agg[key] = aggBase(res.runs);
+      if (key === 'b1') out.b1 = aggB1(res.runs);
+    }
+    out.d45 = aggD45(out.runs.b1 || []);
+    out.d46 = aggD46(out.runs.b1 || []);
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'BATCH_DONE n=' + n +
+      ' b1_win=' + out.agg.b1.outcomes.win +
+      ' b1_f5=' + out.agg.b1.f5.reached +
+      ' b1_dragon=' + out.b1.dragon.kills + '/' + out.b1.dragon.attempts +
+      ' equipBuys=' + out.d45.equipBuys +
+      ' rewardPicks=' + out.d46.reward.picks +
+      ' goldShort=' + out.d45.counts.goldShort +
+      ' m1_f4=' + (out.agg.m1 ? out.agg.m1.floorReach['4'] : '-') +
+      ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D46__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

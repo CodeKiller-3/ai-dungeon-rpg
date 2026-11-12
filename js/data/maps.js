@@ -61,13 +61,37 @@
   };
 
   /* M9-1：装饰物定义——不阻挡移动；chest 可拾取（金币或道具）
-   * loot: 'gold' | 'item' | 'random' */
+   * loot: 'gold' | 'item' | 'random'
+   * D-46：gold_pile / potion_stash 是"每层固定奖励点"，额度只读 Game.Data.REWARD，
+   *       不参与宝箱随机池（不碰 CHEST_LOOT），也不出武器/护甲。 */
   Game.Data.DECOR = {
     chest:  { id: 'chest',  name: '宝箱', desc: '内含金币或道具', loot: 'random' },
     room_chest: { id: 'room_chest', name: '密室宝箱', desc: '封闭小房里的厚赏', loot: 'rich' },
+    gold_pile: { id: 'gold_pile', name: '金币堆', desc: '散落的金币（固定额度）', loot: 'gold' },
+    potion_stash: { id: 'potion_stash', name: '补给包', desc: '一罐药水（固定额度）', loot: 'potion' },
     barrel: { id: 'barrel', name: '木桶', desc: '装饰物' },
     torch:  { id: 'torch',  name: '火把', desc: '照亮周围（静态，M9-2 加光晕）' },
     vine:   { id: 'vine',   name: '藤蔓', desc: '装饰物' }
+  };
+
+  /* D-46：每层固定奖励点（只加补给：金币 / 药）。
+   * 放置规则见 map.js placeRewards：沿"出生点→下行梯"的主路确定性取点，
+   * 不消耗随机数（既有地图指纹不变），每层 ≤2 处（count 上限 2），
+   * 与楼梯 / Boss / 出生点 / 敌人 / 陷阱 / 已有装饰错开，绝不是"贴楼梯白拿"。
+   * 额度口径：F1–F4 给金币，正好补上"首次进店差的钱"；F5 给 2 瓶特大血瓶，
+   * 因为 F5 的商店在落地时就已经开过了，金币到那里买不到东西。
+   * 金币增量合计 60+90+110+100 = 360，相对 D-40 的期望总收入 2860 增幅 12.6%（护栏 ≤60%）。 */
+  Game.Data.REWARD = {
+    floors: [
+      { count: 2, kind: 'gold', amount: 30 },
+      { count: 2, kind: 'gold', amount: 45 },
+      { count: 2, kind: 'gold', amount: 80 },
+      { count: 2, kind: 'gold', amount: 80 },
+      { count: 2, kind: 'potion', id: 'potion_xl' }
+    ],
+    maxPerFloor: 2,      /* 护栏：每层奖励点 ≤2 处 */
+    minSpawnDist: 5,     /* 距出生点至少 5 步（不是一落地就白拿） */
+    minStairDist: 3      /* 与下行梯 / Boss 至少隔 3 步（不许贴楼梯白拿） */
   };
 
   /* D-43：宝箱道具池（数据化）——takeDecor 从这里抽取，验证页可整体换回改前池做负例。

@@ -208,6 +208,11 @@
       chest: ['potion_small', 'sword_bone', 'armor_leather'],
       room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade']
     };
+    /* D-46：新增"每层固定奖励点"（金币/药）也是补给侧改动，会改变种子走向。
+     * 本组只验测量台与 D-34 逐局一致，故把奖励点也钉回改前（REWARD.floors 置空），跑完恢复；
+     * 奖励点本身的行为由 verify_d46 负责。这是补给钉回的延续，不是放宽断言。 */
+    var d46RwSnap = Game.Data.REWARD;
+    Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
     M.init();
     M.closeGuide();
     Bot.install();
@@ -309,6 +314,7 @@
       fieldSets: detail, recompute: eChecks
     });
 
+    Game.Data.REWARD = d46RwSnap;
     out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
   } catch (e) {
     out.err = String((e && e.stack) || e);

@@ -206,6 +206,10 @@
     for (var b = 0; b < refRuns.length; b++) base[refRuns[b].seed] = refRuns[b];
 
     var seeds = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010];
+    /* D-46：新增"每层固定奖励点"（金币/药）会改变种子走向。B 组是与 D-19 的纯观测对账，
+     * 故把奖励点钉回改前（REWARD.floors 置空）再跑，跑完恢复；奖励点本身由 verify_d46 负责。 */
+    var d46RwSnap23 = Game.Data.REWARD;
+    Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
     var res = Bot.batch(seeds, { maxActions: 2500 });
     var mine = (res && res.runs) || [];
     var refMiss = [], outMis = [], actMis = [], flrMis = [], cauMis = [], lines = [];
@@ -228,6 +232,7 @@
      * 本条不再声称"与 D-19 逐局相同"，改为验证"同种子二次采集逐局完全一致"（纯观测、可复现），
      * 并把与 D-19 的动作数/死亡层偏差如实打印。 */
     var res2 = Bot.batch(seeds, { maxActions: 2500 });
+    Game.Data.REWARD = d46RwSnap23;
     var mine2 = (res2 && res2.runs) || [];
     var diff2 = [];
     for (var n2 = 0; n2 < mine.length && n2 < mine2.length; n2++) {

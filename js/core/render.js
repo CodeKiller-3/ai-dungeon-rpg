@@ -554,6 +554,26 @@
         ctx.fillRect(px + 4, py + 2, 3, TILE - 6);
         ctx.fillRect(px + 14, py + 6, 3, TILE - 10);
         ctx.fillRect(px + 9, py + 10, 3, TILE - 14);
+      } else if (id === 'gold_pile') {
+        /* D-46：金币堆——三枚叠放的小金币，远看是地面上的金色点 */
+        var coins = [[4, 9], [9, 7], [6, 11]];
+        for (var ci = 0; ci < coins.length; ci++) {
+          ctx.fillStyle = '#d9a021';
+          ctx.beginPath();
+          ctx.arc(px + coins[ci][0], py + coins[ci][1], 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#ffd24a';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      } else if (id === 'potion_stash') {
+        /* D-46：补给包——红瓶身 + 白瓶塞，与背包里的血瓶同一视觉语言 */
+        ctx.fillStyle = '#7a2020';
+        ctx.fillRect(px + 5, py + 6, TILE - 10, TILE - 10);
+        ctx.fillStyle = '#e04848';
+        ctx.fillRect(px + 6, py + 7, TILE - 12, TILE - 13);
+        ctx.fillStyle = '#e8e8e8';
+        ctx.fillRect(px + TILE / 2 - 2, py + 4, 4, 3);
       }
     },
 

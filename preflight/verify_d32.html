@@ -338,10 +338,11 @@
      * （D-34：74→75；D-35：75→76，新增 verify_d35；D-36：76→77，新增 verify_d36；
      *   D-37：77→78，新增 verify_d37；D-38：78→79，新增 verify_d38；
      *   D-39：79→80，新增 verify_d39；D-40：80→81，新增 verify_d40；D-41：81→82，新增 verify_d41；D-42：82→83，新增 verify_d42；
-     *   D-43：83→84，新增 verify_d43；D-44：84→85，新增 verify_d44；D-45：85→86，新增 verify_d45）。
+     *   D-43：83→84，新增 verify_d43；D-44：84→85，新增 verify_d44；D-45：85→86，新增 verify_d45；
+     *   D-46：86→87，新增 verify_d46）。
      * 这是基线变更，不是放宽断言。 */
-    var a9 = !!BASE && BASE.count === 86 && Array.isArray(BASE.pages) &&
-      BASE.pages.length === 86 && BASE.pages.indexOf('verify_d32') >= 0;
+    var a9 = !!BASE && BASE.count === 87 && Array.isArray(BASE.pages) &&
+      BASE.pages.length === 87 && BASE.pages.indexOf('verify_d32') >= 0;
     rec('A9_pageBaselineAligned', a9,
       'count=' + (BASE ? BASE.count : 'n/a') + '；pages.length=' +
       (BASE && BASE.pages ? BASE.pages.length : 'n/a') +
@@ -350,12 +351,12 @@
     /* A10 */
     var README = read('../README.md'), LOG = read('../CHANGELOG.md');
     var a10 = README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
-      README.indexOf('验证页 86 个') >= 0 &&
+      README.indexOf('验证页 87 个') >= 0 &&
       LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0;
     rec('A10_docsUpdated', a10,
       'README 含 docs/process=' + (README.indexOf('docs/process/') >= 0) +
       ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
-      ' / 验证页 86 个=' + (README.indexOf('验证页 86 个') >= 0) +
+      ' / 验证页 87 个=' + (README.indexOf('验证页 87 个') >= 0) +
       '；CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) +
       ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
 

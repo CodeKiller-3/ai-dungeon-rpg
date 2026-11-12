@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-46：读取 selfcheck/d46-after.json / d46-neg.json / d45-after.json（改前基线），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-46 早期金币通道</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:14px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:right; }
+  th { color:#9fd; }
+  td.l, th.l { text-align:left; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-46 · 早期金币通道：F1/F2 首店缺口、金币账、护栏与负例（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<h2>逐局表 · F1 / F2 首次进店：金币 / 最便宜可买装备 / 差额（改前 → 改后）</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function runsOf(J, s) { return (J && J.runs && J.runs[s]) || []; }
+  function median(a) {
+    if (!a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.floor(s.length / 2)];
+  }
+  function fnv1a(s) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+
+  /* 本卡不允许改动的两张补给表（F 组指纹；与 D-44/D-45 完全一致） */
+  var BASE_STOCK = '[[\"potion_small\",\"potion_large\",\"knife\",\"machete\",\"sword_rusty\",\"sword_iron\",\"armor_leather\"],[\"potion_large\",\"potion_mana\",\"sword_steel\",\"axe_war\",\"bow_hunter\",\"hammer\",\"spear\",\"chain_mail\",\"robe_mage\"],[\"potion_xl\",\"sword_magic\",\"staff_fire\",\"axe_double\",\"sword_anime\",\"plate_armor\",\"sword_dragon\",\"sword_dragon_rare\",\"sword_dragon_epic\"],[\"potion_xl\",\"potion_mana\",\"sword_magic_rare\",\"sword_steel_epic\",\"chain_mail_rare\",\"plate_armor_rare\",\"robe_mage_rare\",\"sword_dragon_rare\"],[\"potion_xl\",\"potion_mana\",\"sword_magic_epic\",\"sword_dragon_epic\",\"plate_armor_epic\",\"chain_mail_epic\",\"robe_mage_epic\",\"sword_dragon_rare\"]]';
+  var BASE_CHEST = '{\"chest\":[\"potion_large\",\"potion_large\",\"potion_small\",\"sword_bone\",\"armor_leather\"],\"room_chest\":[\"potion_xl\",\"potion_large\",\"sword_bone\",\"armor_leather\",\"scroll_upgrade\"]}';
+
+  var AFTER = readJson('selfcheck/d46-after.json');
+  var NEG = readJson('selfcheck/d46-neg.json');
+  var PRE = readJson('selfcheck/d45-after.json');   /* 改前基线（D-45 的 B1 50 局） */
+
+  var SRC = ['chest', 'drop', 'reward', 'quest'];
+  function cheapestUpgrade(sh) {
+    var best = null;
+    for (var i = 0; i < (sh.stock || []).length; i++) {
+      var it = sh.stock[i];
+      if (it.owned) continue;
+      if (!(it.weaponUp || it.armorUp)) continue;
+      if (best === null || it.price < best) best = it.price;
+    }
+    return best;
+  }
+  /* 从 d45 商店快照独立重算"首次进店"行（不读页面聚合，证明可复算） */
+  function firstShopRows(J) {
+    var rows = { 1: [], 2: [] };
+    var runs = runsOf(J, 'b1');
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], shops = (r.d45 && r.d45.shops) || [];
+      for (var f = 1; f <= 2; f++) {
+        var v = null;
+        for (var s = 0; s < shops.length; s++) if (shops[s].floor === f) { v = shops[s]; break; }
+        if (!v) continue;
+        var ch = cheapestUpgrade(v);
+        rows[f].push({
+          seed: r.seed, floor: f, gold: v.goldIn, cheapest: ch,
+          gap: (ch === null) ? null : ch - v.goldIn,
+          weaponId: v.weaponId, reason: v.reason, outcome: r.outcome
+        });
+      }
+    }
+    return rows;
+  }
+
+  try {
+    if (!AFTER || !NEG || !PRE) {
+      throw new Error('缺少测量产物: ' + JSON.stringify({ after: !!AFTER, neg: !!NEG, pre: !!PRE }));
+    }
+    var B1R = runsOf(AFTER, 'b1');
+    var AGG = AFTER.agg || {};
+    var B1 = AFTER.b1 || {};
+    var D46 = AFTER.d46 || {};
+    var PRE_B1 = PRE.b1 || {};
+    var PRE_AGG = PRE.agg || {};
+
+    /* ── A 组：金币账可复算（初始 + 获得 − 支出 = 期末，误差 ≤0；来源四分类） ── */
+    var ledger = D46.ledger || [];
+    var badRows = [], srcBad = [], sample = [];
+    for (var i = 0; i < ledger.length; i++) {
+      var L = ledger[i];
+      var sum = L.initial + (L.income.chest + L.income.drop + L.income.reward + L.income.quest) -
+        L.spentNet - L.finalGold;
+      if (sum !== 0 || L.balance !== 0) {
+        badRows.push({ seed: L.seed, recompute: sum, botBalance: L.balance,
+          initial: L.initial, income: L.income, spentNet: L.spentNet, finalGold: L.finalGold });
+      }
+      for (var k in L.income) {
+        if (SRC.indexOf(k) < 0) srcBad.push({ seed: L.seed, key: k });
+      }
+      if (!L.sources) srcBad.push({ seed: L.seed, key: 'no sources' });
+    }
+    /* 任取 3 局（首/中/末）把账摊开 */
+    var picks = [ledger[0], ledger[Math.floor(ledger.length / 2)], ledger[ledger.length - 1]];
+    for (var p = 0; p < picks.length; p++) {
+      var z = picks[p];
+      if (!z) continue;
+      sample.push({
+        seed: z.seed, initial: z.initial,
+        income: z.income, incomeSum: z.incomeSum,
+        spentGross: z.spentGross, soldGold: z.soldGold, spentNet: z.spentNet,
+        finalGold: z.finalGold,
+        check: z.initial + z.incomeSum - z.spentNet - z.finalGold
+      });
+    }
+    rec('A_ledger_recomputable', ledger.length === 50 && badRows.length === 0 &&
+      sample.length === 3 && sample.every(function (x) { return x.check === 0; }), {
+      rule: '任取 3 局，初始金币 + 获得 − 支出 = 期末金币，误差必须为 0；50 局全部逐局复算通过',
+      runs: ledger.length, bad: badRows.slice(0, 6), sample: sample,
+      note: '支出 = 商店买入 − 卖出杂物（净支出）；卖出不算来源，避免"倒手套利"混进收入'
+    });
+    rec('A_sources_classified', srcBad.length === 0 && (D46.reward && D46.reward.picks > 0), {
+      rule: '来源只允许 宝箱 / 掉落 / 奖励点 / 任务 四类；奖励点必须真的被捡到（picks>0）',
+      incomeTotal: D46.incomeTotal, reward: D46.reward, bad: srcBad.slice(0, 6)
+    });
+
+    /* ── B 组：F1/F2 首店缺口逐局可复算（页面独立重算 vs bot 记录） ── */
+    var rowsNow = firstShopRows(AFTER), rowsPre = firstShopRows(PRE);
+    var matchBad = [];
+    for (var f1 = 1; f1 <= 2; f1++) {
+      var key = 'f' + f1;
+      var mine = rowsNow[f1], botRows = (D46.firstShop || {})[key] || [];
+      if (mine.length !== botRows.length) matchBad.push({ floor: f1, mine: mine.length, bot: botRows.length });
+      for (var m = 0; m < mine.length; m++) {
+        var b = botRows[m];
+        if (!b || b.seed !== mine[m].seed || b.gold !== mine[m].gold ||
+            b.cheapest !== mine[m].cheapest || b.gap !== mine[m].gap) {
+          matchBad.push({ floor: f1, mine: mine[m], bot: b || null });
+        }
+      }
+    }
+    function gapStats(rows) {
+      var g = [];
+      for (var i2 = 0; i2 < rows.length; i2++) if (rows[i2].gap !== null) g.push(rows[i2].gap);
+      return { n: g.length, median: median(g), min: g.length ? Math.min.apply(null, g) : null,
+        max: g.length ? Math.max.apply(null, g) : null,
+        affordable: g.filter(function (x) { return x <= 0; }).length };
+    }
+    var gNow1 = gapStats(rowsNow[1]), gNow2 = gapStats(rowsNow[2]);
+    var gPre1 = gapStats(rowsPre[1]), gPre2 = gapStats(rowsPre[2]);
+    rec('B_first_shop_recomputable', B1R.length === 50 && matchBad.length === 0 &&
+      rowsNow[1].length === 50 && rowsNow[2].length > 0, {
+      rule: 'F1 / F2 首次进店的金币、最便宜可买装备价、差额必须能从 d45.shops 逐局独立重算，且与 bot 汇总逐字段一致',
+      f1Runs: rowsNow[1].length, f2Runs: rowsNow[2].length, mismatch: matchBad.slice(0, 6)
+    });
+    rec('B_gap_shrinks', gNow1.median < gPre1.median && gNow2.median < gPre2.median &&
+      gNow1.affordable > gPre1.affordable && gNow2.affordable > gPre2.affordable, {
+      rule: '改后 F1/F2 首店缺口中位数必须下降，且"进店就买得起"的局数必须上升',
+      f1: { before: gPre1, after: gNow1 }, f2: { before: gPre2, after: gNow2 }
+    });
+
+    /* ── C 组：负例——还原奖励点后必须复现改前基线，差值断言必须 FAIL ── */
+    var preWins = (PRE_AGG.b1 && PRE_AGG.b1.outcomes) ? PRE_AGG.b1.outcomes.win : 0;
+    var preF5 = (PRE_AGG.b1 && PRE_AGG.b1.f5) ? PRE_AGG.b1.f5.reached : 0;
+    var preDragon = PRE_B1.dragon ? PRE_B1.dragon.kills : 0;
+    var negAgg = (NEG.neg && NEG.neg.agg) || {};
+    var negWins = (negAgg.outcomes) ? negAgg.outcomes.win : -1;
+    var negF5 = (negAgg.f5) ? negAgg.f5.reached : -1;
+    var negDragon = (NEG.neg && NEG.neg.b1 && NEG.neg.b1.dragon) ? NEG.neg.b1.dragon.kills : -1;
+    var negPicks = (NEG.neg && NEG.neg.d46 && NEG.neg.d46.reward) ? NEG.neg.d46.reward.picks : -1;
+    rec('C_neg_restores_baseline', negWins === preWins && negWins === 1 &&
+      negF5 === preF5 && negF5 === 25 && negDragon === preDragon && negDragon === 1 && negPicks === 0, {
+      rule: '负例：把奖励点还原（REWARD.floors 清空，宝箱金币本卡未改）后，B1 必须复现改前基线 1/50、到 F5 25/50、龙杀 1',
+      before: { wins: preWins, f5: preF5, dragonKills: preDragon },
+      neg: { wins: negWins, f5: negF5, dragonKills: negDragon, rewardPicks: negPicks }
+    });
+    var deltaOnNeg = negWins - preWins;
+    var deltaNow = ((AGG.b1 && AGG.b1.outcomes) ? AGG.b1.outcomes.win : 0) - preWins;
+    rec('C_neg_delta_assertion_fails', !(deltaOnNeg >= 4), {
+      rule: '差值断言（改后至少 +4 通关）作用在负例数据上必须 FAIL：负例 delta 必须为 0',
+      deltaOnNeg: deltaOnNeg, deltaAfter: deltaNow, required: 4,
+      note: '负例把"奖励点"这一项抽掉，通关率立刻回到 1/50 —— 说明改后 +6 的差值确实来自本卡新增的金币通道，而不是别的改动'
+    });
+
+    /* ── D 组：三条护栏，超限必须 FAIL ── */
+    var RW = (Game.Data && Game.Data.REWARD) || { floors: [] };
+    var goldAdded = 0, pointBad = [], kindBad = [];
+    for (var ri = 0; ri < RW.floors.length; ri++) {
+      var sp = RW.floors[ri];
+      if (sp.kind === 'gold') goldAdded += (sp.amount || 0) * (sp.count || 0);
+      if (sp.kind !== 'gold' && sp.kind !== 'potion') kindBad.push({ floor: ri + 1, kind: sp.kind });
+      if ((sp.count || 0) > 2) pointBad.push({ floor: ri + 1, count: sp.count });
+    }
+    var baseIncome = 2860;
+    var ratio = goldAdded / baseIncome;
+    rec('D1_gold_increment_under_60pct', RW.floors.length === 5 && goldAdded === 470 &&
+      ratio <= 0.6 && kindBad.length === 0, {
+      rule: '护栏①：金币总收入期望增幅 ≤60%（D-40 基线 2860）；奖励点只放金币/药，绝不放武器/护甲',
+      goldAdded: goldAdded, baseIncome: baseIncome,
+      ratioPct: Math.round(ratio * 1000) / 10, limitPct: 60,
+      perFloor: RW.floors, nonGoldPotionKinds: kindBad
+    });
+    /* 每层点位数 ≤2（配置 + 实测拾取都查） */
+    var pickBad = [];
+    var amtOf = function (f) { var s = RW.floors[f - 1]; return (s && s.kind === 'gold') ? (s.amount || 0) : 0; };
+    for (var li = 0; li < ledger.length; li++) {
+      var lb = ledger[li];
+      for (var pf2 = 1; pf2 <= 5; pf2++) {
+        var got = (lb.rewardByFloor || {})[String(pf2)] || 0;
+        var cap = 2 * amtOf(pf2);
+        if (got > cap) pickBad.push({ seed: lb.seed, floor: pf2, gold: got, cap: cap });
+        var picks = (lb.rewardPicksByFloor || {})[String(pf2)] || 0;
+        if (picks > 2) pickBad.push({ seed: lb.seed, floor: pf2, picks: picks, cap: 2 });
+      }
+    }
+    rec('D2_two_points_per_floor', RW.maxPerFloor === 2 && pointBad.length === 0 &&
+      RW.minSpawnDist >= 5 && RW.minStairDist >= 3 && pickBad.length === 0, {
+      rule: '护栏②：每层奖励点 ≤2 处；距出生点 ≥5 步、距下行梯 ≥3 步（不许贴楼梯白拿）；单局单层金币奖励不得超过 2×该层额度',
+      maxPerFloor: RW.maxPerFloor, counts: RW.floors.map(function (x) { return x.count; }),
+      minSpawnDist: RW.minSpawnDist, minStairDist: RW.minStairDist,
+      overCap: pickBad.slice(0, 6), badCounts: pointBad
+    });
+    /* 价格关系 + 物品表未变 */
+    var I = Game.Data.ITEMS, ik = Object.keys(I).sort(), ilines = [], sp2 = 0, ss2 = 0, arbBad = [];
+    for (var ii = 0; ii < ik.length; ii++) {
+      var it2 = I[ik[ii]];
+      ilines.push(it2.id + ':' + it2.price + ':' + it2.sell);
+      sp2 += it2.price; ss2 += it2.sell;
+      if (!(it2.price > it2.sell)) arbBad.push(it2.id);
+    }
+    var ifnv2 = fnv1a(ilines.join('\n'));
+    var stockNow = JSON.stringify(Game.Data.SHOP_STOCK);
+    var chestNow = JSON.stringify(Game.Data.CHEST_LOOT);
+    rec('D3_price_relation_unchanged', arbBad.length === 0 && ik.length === 48 &&
+      sp2 === 10165 && ss2 === 5081 && ifnv2 === 'd814ef98' &&
+      stockNow === BASE_STOCK && chestNow === BASE_CHEST, {
+      rule: '护栏③：买价 > 卖价不变；物品 Σprice/Σsell/FNV 未改必须不变；商店货架与宝箱掉落池未改',
+      itemCount: ik.length, sumPrice: sp2, sumSell: ss2, itemFnv: ifnv2,
+      arbitrage: arbBad.slice(0, 6),
+      shopStockSame: stockNow === BASE_STOCK, chestLootSame: chestNow === BASE_CHEST
+    });
+
+    /* ── E 组：四策略同种子 1001–1050、maxActions 2500，与 D-45 逐项可比 ── */
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050;
+    var API = ['b1', 'g2', 's1', 'm1'];
+    var tableE = [], runBad = [];
+    for (var ei = 0; ei < API.length; ei++) {
+      var kk = API[ei];
+      var agA = (AFTER.agg || {})[kk] || {};
+      var agP = (PRE.agg || {})[kk] || {};
+      var n = runsOf(AFTER, kk).length;
+      if (n !== 50) runBad.push({ strategy: kk, runs: n });
+      tableE.push({
+        strategy: kk, runs: n,
+        win: { after: (agA.outcomes || {}).win, d45: (agP.outcomes || {}).win },
+        f5: { after: (agA.f5 || {}).reached, d45: (agP.f5 || {}).reached },
+        f4: { after: (agA.floorReach || {})['4'], d45: (agP.floorReach || {})['4'] },
+        dead: { after: (agA.outcomes || {}).dead, d45: (agP.outcomes || {}).dead }
+      });
+    }
+    rec('E_four_strategies_same_seeds', seedOk && runBad.length === 0 &&
+      (AFTER.env && AFTER.env.maxActions) === 2500, {
+      rule: 'B1/G2/S1/M1 必须同种子 1001–1050、maxActions 2500，各 50 局；与 D-45 同口径逐项可比',
+      seeds: { n: seeds.length, first: seeds[0], last: seeds[49] },
+      maxActions: AFTER.env && AFTER.env.maxActions, table: tableE, bad: runBad
+    });
+    var b1F5 = (AGG.b1 && AGG.b1.f5) ? AGG.b1.f5.reached : 0;
+    var m1F4 = (AGG.m1 && AGG.m1.floorReach) ? AGG.m1.floorReach['4'] : 0;
+    var g2F5 = (AGG.g2 && AGG.g2.f5) ? AGG.g2.f5.reached : 0;
+    var s1F5 = (AGG.s1 && AGG.s1.f5) ? AGG.s1.f5.reached : 0;
+    var preM1F4 = (PRE_AGG.m1 && PRE_AGG.m1.floorReach) ? PRE_AGG.m1.floorReach['4'] : 0;
+    rec('E_no_regression', b1F5 >= 25 && m1F4 >= 27 && g2F5 >= ((PRE_AGG.g2 && PRE_AGG.g2.f5) ? PRE_AGG.g2.f5.reached : 0) &&
+      s1F5 >= ((PRE_AGG.s1 && PRE_AGG.s1.f5) ? PRE_AGG.s1.f5.reached : 0), {
+      rule: '不退化：B1 到 F5 ≥25/50、M1 到 F4 ≥27/50、G2/S1 到 F5 不低于 D-45',
+      b1F5: { now: b1F5, d45: (PRE_AGG.b1 && PRE_AGG.b1.f5) ? PRE_AGG.b1.f5.reached : null },
+      m1F4: { now: m1F4, d45: preM1F4 },
+      g2F5: { now: g2F5, d45: (PRE_AGG.g2 && PRE_AGG.g2.f5) ? PRE_AGG.g2.f5.reached : null },
+      s1F5: { now: s1F5, d45: (PRE_AGG.s1 && PRE_AGG.s1.f5) ? PRE_AGG.s1.f5.reached : null }
+    });
+    var wins = (AGG.b1 && AGG.b1.outcomes) ? AGG.b1.outcomes.win : 0;
+    var dragonKills = B1.dragon ? B1.dragon.kills : 0;
+    var equipBuys = (AFTER.d45 && AFTER.d45.equipBuys) || 0;
+    rec('E_targets_met', wins >= 5 && dragonKills >= 6 && equipBuys >= 20, {
+      rule: '目标值：B1 通关 ≥5/50、巨龙击杀 ≥6/50、25 个到 F5 的局装备购买 ≥20 次',
+      b1Win: { target: 5, actual: wins },
+      dragonKills: { target: 6, actual: dragonKills, attempts: B1.dragon ? B1.dragon.attempts : null },
+      equipBuys25F5: { target: 20, actual: equipBuys },
+      b1F5: { target: 25, actual: b1F5 }, m1F4: { target: 27, actual: m1F4 }
+    });
+
+    /* ── F 组：怪物指纹 / 巨龙三项 / 物品表指纹（未改必须原值） ── */
+    var M = Game.Data.MONSTERS;
+    var mk = Object.keys(M).sort(), mlines = [];
+    for (var mi = 0; mi < mk.length; mi++) {
+      var mo = M[mk[mi]];
+      mlines.push(mo.id + ':' + mo.hp + ':' + mo.atk + ':' + mo.def);
+    }
+    var mfnv = fnv1a(mlines.join('\n'));
+    var dr = M.dragon;
+    rec('F_monster_and_dragon_unchanged', mk.length === 18 && mfnv === 'a8f05f90' &&
+      dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+      dr.enrage.hpPct === 0.5 && dr.enrage.atkMul === 1.5 && dr.enrage.defMul === 1.3 &&
+      dr.enrage.skill.chance === 0.3 && dr.enrage.skill.dmgMul === 1.4, {
+      rule: '怪物指纹（18 只，id:hp:atk:def 排序 FNV-1a）与巨龙三项 + 狂暴参数必须原值',
+      monsterCount: mk.length, monsterFnv: mfnv, expectedFnv: 'a8f05f90',
+      dragon: { hp: dr.hp, atk: dr.atk, def: dr.def }, enrage: dr.enrage
+    });
+    rec('F_items_unchanged', ik.length === 48 && sp2 === 10165 && ss2 === 5081 && ifnv2 === 'd814ef98', {
+      rule: '物品表 48 件、Σprice=10165、Σsell=5081、FNV=d814ef98（本卡未改物品）',
+      itemCount: ik.length, sumPrice: sp2, sumSell: ss2, itemFnv: ifnv2, expectedFnv: 'd814ef98'
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k3) { return out.sub[k3].ok; });
+    out.summary = {
+      a: { ledgerRuns: ledger.length, balanceMaxAbs: D46.balanceMaxAbs, incomeTotal: D46.incomeTotal },
+      b: { f1: { before: gPre1, after: gNow1 }, f2: { before: gPre2, after: gNow2 } },
+      c: { preWins: preWins, negWins: negWins, deltaOnNeg: deltaOnNeg, deltaAfter: deltaNow },
+      d: { goldAdded: goldAdded, ratioPct: Math.round(ratio * 1000) / 10 },
+      e: { b1Win: wins, dragonKills: dragonKills, b1F5: b1F5, m1F4: m1F4, g2F5: g2F5, s1F5: s1F5, equipBuys: equipBuys }
+    };
+
+    /* ── 逐局表（F1/F2 首店缺口：改前 → 改后） ── */
+    var preBy = {};
+    for (var pf = 1; pf <= 2; pf++) {
+      for (var pi = 0; pi < rowsPre[pf].length; pi++) preBy[pf + ':' + rowsPre[pf][pi].seed] = rowsPre[pf][pi];
+    }
+    var h = ['<table><tr><th>seed</th><th>层</th><th>改前金币</th><th>改前最便宜</th><th>改前差额</th>',
+      '<th>改后金币</th><th>改后最便宜</th><th>改后差额</th><th class="l">结果 / 当时武器</th></tr>'];
+    for (var tf = 1; tf <= 2; tf++) {
+      for (var ti = 0; ti < rowsNow[tf].length; ti++) {
+        var rw = rowsNow[tf][ti], rp = preBy[tf + ':' + rw.seed] || {};
+        h.push('<tr><td>' + rw.seed + '</td><td>F' + tf + '</td><td>' +
+          (rp.gold != null ? rp.gold : '-') + '</td><td>' + (rp.cheapest != null ? rp.cheapest : '-') +
+          '</td><td>' + (rp.gap != null ? rp.gap : '-') + '</td><td>' + rw.gold + '</td><td>' +
+          (rw.cheapest != null ? rw.cheapest : '-') + '</td><td>' + (rw.gap != null ? rw.gap : '-') +
+          '</td><td class="l">' + rw.outcome + ' / ' + (rw.weaponId || '-') + '</td></tr>');
+      }
+    }
+    h.push('</table>');
+    document.getElementById('detail').innerHTML = h.join('');
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D46_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

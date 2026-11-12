@@ -43,7 +43,8 @@
 
 ### 工具
 
-- 回归批跑：86 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：87 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 早期金币通道（D-46）：只加补给、不动物品与怪物——新增"每层固定奖励点"（`gold_pile` / `potion_stash`），沿"出生点→下行梯"的 BFS 主路 35% / 70% 处确定性放置（不消耗 `Math.random`，D-45 的地图/敌人/宝箱逐格不变），每层 ≤2 处、距出生点 ≥5 步、距下行梯 ≥3 步。额度 F1 30×2 / F2 45×2 / F3 80×2 / F4 80×2 / F5 特大血瓶×2 = **+470 金币（D-40 期望 2860 的 16.4%，护栏 60%）**。依据 D-45 的"96.6% 是钱不够"：F1 首店缺口中位 **45**（改前仅 1/50 买得起）、F2 **79**（2/41），改后 −15 / −22（42/50、44/45 买得起）。同种子 1001–1050：**B1 通关 1→7/50、巨龙击杀 1→7、到 F5 25→25、M1 到 F4 27→29、25 个 F5 局装备购买 9→72 次**；G2 到 F5 11→19、S1 12→25。金币账 50 局逐局 `初始+获得−支出=期末` 误差 0（宝箱/掉落/奖励点/任务四分类，卖出记负支出）；负例把奖励点清空即复现 1/50。`verify_d46` A–F 守门，`page-baseline` 86→87。<!-- 锚点: js/data/maps.js#Game.Data.REWARD -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->

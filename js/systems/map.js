@@ -516,6 +516,96 @@
     placeDecor('vine', 2 + f, w, h);
     furnishRooms(); /* S-05：密室内固定 1 个密室宝箱 + 2 个火把 */
     placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
+    placeRewards(w, h); /* D-46：每层固定奖励点（金币/药），放在陷阱之后，互不侵占 */
+  }
+
+  /* ── D-46：每层固定奖励点 ──────────────────────────────────────
+   * 只解决一件事：玩家在 F1/F2 首次进店时买得起第一件装备。
+   * 位置取"出生点→下行梯"的主路（优先不穿怪的路径），确定性取点、不消耗
+   * Math.random，因此既有地图指纹/敌人/宝箱布局与 D-45 逐格一致。
+   * 约束：每层 ≤2 处；距出生点 ≥minSpawnDist；距下行梯 ≥minStairDist；
+   *       不落在墙 / 敌人 / 陷阱 / 已有装饰 / 密室内。 */
+  function placeRewards(w, h) {
+    var rc = Game.Data.REWARD;
+    if (!rc || !rc.floors) return;
+    var spec = rc.floors[floorIndex];
+    if (!spec || !spec.count) return;
+    var n = Math.min(spec.count, (typeof rc.maxPerFloor === 'number') ? rc.maxPerFloor : 2, 2);
+    var down = findTile(2, w, h);
+    if (!down || n <= 0) return;
+    var path = rewardPath(down, w, h, false);
+    if (!path || path.length < 4) path = rewardPath(down, w, h, true);
+    if (!path || path.length < 3) return;
+    for (var i = 0; i < n; i++) {
+      var frac = (n === 1) ? 0.5 : (i === 0 ? 0.35 : 0.7);
+      var idx = Math.max(1, Math.round((path.length - 1) * frac));
+      var cell = rewardCell(path, idx, down, rc);
+      if (!cell) continue;
+      decor[cell.y][cell.x] = (spec.kind === 'potion') ? 'potion_stash' : 'gold_pile';
+    }
+  }
+  function findTile(t, w, h) {
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) if (grid[y][x] === t) return { x: x, y: y };
+    }
+    return null;
+  }
+  function enemyAtCell(x, y) {
+    for (var i = 0; i < enemies.length; i++) if (enemies[i].x === x && enemies[i].y === y) return enemies[i];
+    return null;
+  }
+  /* 出生点→目标格的 BFS 路径（含两端）。allowEnemy=false 时把敌人当墙。
+   * 与真实移动语义一致：会换层的楼梯是传送门，不能当走廊穿行。 */
+  function rewardPath(goal, w, h, allowEnemy) {
+    var sk = spawn.x + ',' + spawn.y;
+    var prev = Object.create(null), q = [sk], head = 0;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    prev[sk] = null;
+    while (head < q.length) {
+      var k = q[head++], c = k.split(','), x = +c[0], y = +c[1];
+      if (x === goal.x && y === goal.y) break;
+      for (var i = 0; i < 4; i++) {
+        var nx = x + dirs[i][0], ny = y + dirs[i][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var nk = nx + ',' + ny;
+        if (prev[nk] !== undefined) continue;
+        var t = grid[ny][nx];
+        if (t === 0) continue;
+        if (t === 3 && floorIndex > 0) continue;
+        if (t === 2 && !(nx === goal.x && ny === goal.y)) continue;
+        if (!allowEnemy && enemyAtCell(nx, ny)) continue;
+        prev[nk] = k; q.push(nk);
+      }
+    }
+    var gk = goal.x + ',' + goal.y;
+    if (prev[gk] === undefined) return null;
+    var out = [], cur = gk;
+    while (cur !== null) {
+      var cc = cur.split(',');
+      out.push({ x: +cc[0], y: +cc[1] });
+      cur = prev[cur];
+    }
+    out.reverse();
+    return out;
+  }
+  /* 在路径 idx 附近找一格合法落点（前后各退 1 格依次尝试） */
+  function rewardCell(path, idx, down, rc) {
+    var minSpawn = (typeof rc.minSpawnDist === 'number') ? rc.minSpawnDist : 5;
+    var minStair = (typeof rc.minStairDist === 'number') ? rc.minStairDist : 3;
+    for (var d = 0; d < path.length; d++) {
+      var j = (d % 2 === 0) ? (idx + d / 2) : (idx - (d + 1) / 2);
+      if (j < 1 || j >= path.length) continue;
+      var c = path[j];
+      if (grid[c.y][c.x] !== 1) continue;
+      if (decor[c.y][c.x]) continue;
+      if (traps[c.y] && traps[c.y][c.x]) continue;
+      if (enemyAtCell(c.x, c.y)) continue;
+      if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) continue;
+      if (Math.abs(c.x - spawn.x) + Math.abs(c.y - spawn.y) < minSpawn) continue;
+      if (Math.abs(c.x - down.x) + Math.abs(c.y - down.y) < minStair) continue;
+      return c;
+    }
+    return null;
   }
 
   /* S-05：密室内固定陈设——中心密室宝箱，左右上角各一支火把（若有空间） */
@@ -925,8 +1015,29 @@
       if (!decor || !decor[y]) return false;
       if (x < 0 || y < 0 || x >= decor[0].length || y >= decor.length) return false;
       var id = decor[y][x];
-      if (id !== 'chest' && id !== 'room_chest') return false;
+      if (id !== 'chest' && id !== 'room_chest' && id !== 'gold_pile' && id !== 'potion_stash') return false;
       decor[y][x] = null;
+      /* D-46：固定奖励点——额度只读 Game.Data.REWARD（按当前层），不走进宝箱随机池 */
+      var rw = (Game.Data.REWARD && Game.Data.REWARD.floors) ? Game.Data.REWARD.floors[floorIndex] : null;
+      if (id === 'gold_pile') {
+        var amt = (rw && rw.kind === 'gold' && rw.amount) ? rw.amount : 0;
+        Game.Data.Player.gold += amt;
+        Game.Core.EventBus.emit('ui:notice', { msg: '路边金币：+' + amt + ' 金币' });
+        Game.Core.EventBus.emit('decor:taken', { x: x, y: y, kind: id });
+        Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
+        return true;
+      }
+      if (id === 'potion_stash') {
+        var pid = (rw && rw.kind === 'potion' && rw.id) ? rw.id : 'potion_xl';
+        if (Game.Systems.Inventory && Game.Systems.Inventory.add) {
+          Game.Systems.Inventory.add(pid, 1);
+          var pit = Game.Data.ITEMS && Game.Data.ITEMS[pid];
+          Game.Core.EventBus.emit('ui:notice', { msg: '补给包：获得 ' + (pit ? pit.name : pid) });
+        }
+        Game.Core.EventBus.emit('decor:taken', { x: x, y: y, kind: id });
+        Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
+        return true;
+      }
       var loot = 'gold';
       var def = Game.Data.DECOR && Game.Data.DECOR[id];
       if (def && def.loot === 'random') loot = Math.random() < 0.5 ? 'gold' : 'item';
