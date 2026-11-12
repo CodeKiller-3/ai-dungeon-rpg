@@ -13,3 +13,11 @@
 - `d35-map-old.png` / `d35-map-new.png`：从上面两张里裁出的 1280×800 实机画面（1:1，未缩放）。
 - 复现：`preflight/_shot_d35.html?v=old|new`（Edge headless `--screenshot`，见 `docs/tasks/D-35-贴图逻辑修复.md`）。
 
+## D-56 交付截图（3 张，1280×800）
+
+- `d56-menu.png`：首屏菜单（直接打开 `index.html`）。
+- `d56-guide.png`：接取「探路」后的一帧，右侧边缘可见「下行梯 N 步」箭头小条（D-55）。
+- `d56-ending.png`：通关结局页（真实 `_commitVictory` 计算评级与统计）。
+
+三张都由游戏真实渲染循环绘制，未做后期合成或改字。复现页 `preflight/_shot_d56.html?view=guide|ending`，命令见 `docs/运行说明.md` 第五节。
+

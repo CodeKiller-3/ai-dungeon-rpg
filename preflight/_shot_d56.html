@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-56 shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-56 交付截图页：?view=guide|ending（menu 直接用 index.html 实拍）。
+     加载与主游戏完全相同的脚本与顺序，只跳过首屏/引导覆盖层，方便 headless 截到指定画面。
+     画面全部由游戏真实渲染循环绘制，不做任何后期合成或改字。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var view = (String(location.search).match(/view=(guide|ending)/) || [])[1] || 'guide';
+  try { localStorage.setItem('aiDungeon_guided', '1'); } catch (e) {}
+  var M = Game.Core.Main;
+  M.init({ menu: false });
+  var P = Game.Data.Player;
+  if (view === 'guide') {
+    /* 接取第 1 层「探路」任务 → HUD 右侧应出现箭头与步数 */
+    Game.Systems.NpcQuest.accept('warden_f1');
+    if (M._scene !== 'explore') M.switchScene('explore');
+  } else {
+    /* 结局页：用真实的"读档恢复统计"接口填入一局正常通关数据，
+     * 再走真实 _commitVictory 计算评级与渲染；计时也走真实 elapsed。 */
+    P.gold = 471; P.level = 5; P.exp = 0;
+    /* 截结局页时把局面也放到第 5 层，避免顶栏还写「第 1 层」与结算自相矛盾 */
+    Game.Systems.Map.setFloor(5);
+    P.floor = 5;
+    var sp5 = Game.Systems.Map.getSpawn();
+    P.x = sp5.x; P.y = sp5.y;
+    P.adaptive = P.adaptive || {};
+    P.adaptive.triggers = 1;
+    M._restoreRunStats({ known: true, floorReached: 5, kills: 6, maxLevel: 5, turns: 302, potions: 7 });
+    setTimeout(function () { M._commitVictory(); }, 5000);
+  }
+  M.start();
+})();
+</script>
+</body>
+</html>

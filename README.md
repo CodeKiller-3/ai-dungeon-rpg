@@ -100,7 +100,7 @@ ai-dungeon-rpg/
 ├── preflight/            # 96 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图（D-32 起：shots_resize/ 12 张响应式截图；D-35：d35-old/new.png 8× 对照、d35-map-*.png 1280×800 实机）
-├── docs/                 # 答辩讲稿
+├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明
 ├── docs/tasks/           # 里程碑任务卡（每卡一份，含契约与验收）
 ├── docs/process/         # 过程报告（自检 / 修复 / 诊断 / 对标自检，D-32 从根目录迁入，正文未改）
 ├── CHANGELOG.md          # 更新日志（每条带可机器校验的代码锚点）
@@ -111,7 +111,7 @@ ai-dungeon-rpg/
 └── .gitignore
 ```
 
-**文档索引**：玩法与运行看本文件 → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 过程报告（自检 / 修复 / 诊断 / 对标）看 `docs/process/` → 目录归位与 B2 取舍看 `docs/process/D-32-归档决定.md` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
+**文档索引**：玩法与运行看本文件与 [docs/运行说明.md](docs/运行说明.md) → 演示走 [docs/演示脚本.md](docs/演示脚本.md) → 功能逐条对照看 [docs/功能点检表.md](docs/功能点检表.md) → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 过程报告（自检 / 修复 / 诊断 / 对标）看 `docs/process/` → 目录归位与 B2 取舍看 `docs/process/D-32-归档决定.md` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
 
 ## 组件来源声明（站在巨人的肩膀上）
 

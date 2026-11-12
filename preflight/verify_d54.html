@@ -131,32 +131,49 @@
   function checklistRows(md) {
     var lines = md.split(/\r?\n/), rows = [];
     for (var i = 0; i < lines.length; i++) {
-      if (!/^\|\s*R\d+\s*\|/.test(lines[i])) continue;
+      if (!/^\|\s*[RX]\d+\s*\|/.test(lines[i])) continue;
       var c = lines[i].split('|');
       if (c.length < 8) continue;
-      rows.push({ id: c[1].trim(), kw: c[2].trim(), code: c[3].trim(), verify: c[4].trim(), demo: c[5].trim(), offline: c[6].trim() });
+      rows.push({ kind: c[1].trim().charAt(0), id: c[1].trim(), kw: c[2].trim(), code: c[3].trim(), verify: c[4].trim(), demo: c[5].trim(), offline: c[6].trim() });
     }
     return rows;
   }
   function pad2(n) { return n < 10 ? '0' + n : String(n); }
-  /* 返回 {ok, gaps, bad}；E 组负例复用 */
+  /* D-56：README 25 条用 R 行覆盖；D-51–D-55 新增能力用 X 行，单独要求出现 */
+  var X_FEATURES = ['暂停', '清档', '放弃本局', '结局页', '存档落点', '任务指引'];
   function validateChecklist(bullets, rows) {
-    var bad = [], gaps = [];
-    if (rows.length !== bullets.length) bad.push({ why: '行数 ' + rows.length + ' ≠ README 条目数 ' + bullets.length });
+    var bad = [], gaps = [], rr = [], xr = [];
     for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var wantId = 'R' + pad2(i + 1);
-      if (r.id !== wantId) bad.push({ why: '第 ' + (i + 1) + ' 行编号 ' + r.id + ' ≠ ' + wantId });
-      if (i < bullets.length && bullets[i].indexOf(r.kw) < 0) {
-        bad.push({ why: wantId + ' 关键词「' + r.kw + '」不在对应 README 条目里' });
+      if (rows[i].kind === 'R') rr.push(rows[i]);
+      else if (rows[i].kind === 'X') xr.push(rows[i]);
+    }
+    if (rr.length !== bullets.length) bad.push({ why: 'R 行数 ' + rr.length + ' ≠ README 条目数 ' + bullets.length });
+    for (var r = 0; r < rr.length; r++) {
+      var row = rr[r];
+      var wantId = 'R' + pad2(r + 1);
+      if (row.id !== wantId) bad.push({ why: '第 ' + (r + 1) + ' 行编号 ' + row.id + ' ≠ ' + wantId });
+      if (r < bullets.length && bullets[r].indexOf(row.kw) < 0) {
+        bad.push({ why: wantId + ' 关键词「' + row.kw + '」不在对应 README 条目里' });
       }
-      var cols = [r.code, r.verify, r.demo, r.offline];
+      var cols = [row.code, row.verify, row.demo, row.offline];
       for (var c = 0; c < cols.length; c++) {
         if (!cols[c] || cols[c] === '—' || cols[c] === '-') bad.push({ why: wantId + ' 第 ' + (c + 1) + ' 栏为空' });
       }
-      if (/缺口/.test(r.demo) || /缺口/.test(r.offline)) gaps.push(r.id);
+      if (/缺口/.test(row.demo) || /缺口/.test(row.offline)) gaps.push(row.id);
     }
-    return { ok: bad.length === 0 && bullets.length > 0, bad: bad, gaps: gaps, bullets: bullets.length, rows: rows.length };
+    var xText = '';
+    for (var x = 0; x < xr.length; x++) {
+      xText += '|' + xr[x].kw + '|' + xr[x].code + '|' + xr[x].verify + '|' + xr[x].demo + '|' + xr[x].offline;
+      var xc = [xr[x].code, xr[x].verify, xr[x].demo, xr[x].offline];
+      for (var y = 0; y < xc.length; y++) {
+        if (!xc[y] || xc[y] === '—' || xc[y] === '-') bad.push({ why: xr[x].id + ' 第 ' + (y + 1) + ' 栏为空' });
+      }
+    }
+    var missX = [];
+    for (var f = 0; f < X_FEATURES.length; f++) if (xText.indexOf(X_FEATURES[f]) < 0) missX.push(X_FEATURES[f]);
+    if (xr.length < X_FEATURES.length) bad.push({ why: 'X 行数 ' + xr.length + ' < 新增功能数 ' + X_FEATURES.length });
+    if (missX.length) bad.push({ why: '点检表缺少 D-51–D-55 新增功能：' + missX.join('、') });
+    return { ok: bad.length === 0 && bullets.length > 0, bad: bad, gaps: gaps, bullets: bullets.length, rows: rr.length, xrows: xr.length, missX: missX };
   }
   var bullets = readmeBullets(readme);
   var cRows = checklistRows(check);
@@ -165,7 +182,8 @@
     ok: cRes.ok,
     d: {
       rule: 'README 功能列表逐条 → 点检表一行；行数相等、编号连续、关键词命中、四栏非空',
-      readmeBullets: cRes.bullets, checklistRows: cRes.rows, gaps: cRes.gaps, bad: cRes.bad
+      readmeBullets: cRes.bullets, checklistRows: cRes.rows, xRows: cRes.xrows,
+      missingNewFeatures: cRes.missX, gaps: cRes.gaps, bad: cRes.bad
     }
   };
 
@@ -194,9 +212,9 @@
     else if (nt.body.indexOf(tk) < 0) dbad.push({ token: tk, why: '脚本正文没有引用该数字' });
   }
   out.sub.D_numbers_match_balance = {
-    ok: nt.rows.length >= 10 && dbad.length === 0,
+    ok: nt.rows.length >= 12 && dbad.length === 0,
     d: {
-      rule: '数字出处表逐项：必须能在《平衡定档》原文找到，且脚本正文确实引用；少于 10 项 FAIL',
+      rule: '数字出处表逐项：必须能在《平衡定档》原文找到，且脚本正文确实引用；少于 12 项 FAIL',
       count: nt.rows.length, bad: dbad
     }
   };
@@ -204,7 +222,7 @@
   /* ── E. 负例：假键 / 假页 / 未实现功能，三者都必须 FAIL ─────── */
   var negKey = validateKeys('按 Z 键 打开隐藏菜单', srcAll);
   var negPage = validatePages('详见 verify_d999', baseline, reg);
-  var negRows = cRows.concat([{ id: 'R' + pad2(cRows.length + 1), kw: '御剑飞行', code: 'js/systems/fly.js', verify: 'verify_m1', demo: 'S01', offline: '能' }]);
+  var negRows = cRows.concat([{ kind: 'R', id: 'R' + pad2(cRows.length + 1), kw: '御剑飞行', code: 'js/systems/fly.js', verify: 'verify_m1', demo: 'S01', offline: '能' }]);
   var negCheck = validateChecklist(bullets, negRows);
   out.sub.E_negatives_fail = {
     ok: !negKey.ok && !negPage.ok && !negCheck.ok,
@@ -216,7 +234,25 @@
     }
   };
 
-  var keys = ['A_keys_exist', 'B_pages_exist_pass', 'C_checklist_coverage', 'D_numbers_match_balance', 'E_negatives_fail'];
+  /* ── F. 文档表述与当前实现一致（D-56 回写） ─────────────────── */
+  function scriptConsistency(text) {
+    var banned = ['最容易翻车', '只沿主路走', '不走岔路', '靠只走主路'];
+    var required = ['屏幕右侧', '任务指引', '19.5'];
+    var hit = [], miss = [];
+    for (var i = 0; i < banned.length; i++) if (text.indexOf(banned[i]) >= 0) hit.push(banned[i]);
+    for (var j = 0; j < required.length; j++) if (text.indexOf(required[j]) < 0) miss.push(required[j]);
+    return { ok: hit.length === 0 && miss.length === 0, bannedHits: hit, missing: miss };
+  }
+  var cons = scriptConsistency(demo);
+  out.sub.F_doc_matches_impl = {
+    ok: cons.ok,
+    d: {
+      rule: '脚本不得再出现与当前实现矛盾的表述；必须写明右侧指引、任务指引开关与 19.5 步数据',
+      bannedHits: cons.bannedHits, missing: cons.missing
+    }
+  };
+
+  var keys = ['A_keys_exist', 'B_pages_exist_pass', 'C_checklist_coverage', 'D_numbers_match_balance', 'E_negatives_fail', 'F_doc_matches_impl'];
   var ok = true;
   for (var k = 0; k < keys.length; k++) ok = ok && !!out.sub[keys[k]].ok;
   out.ok = ok;
