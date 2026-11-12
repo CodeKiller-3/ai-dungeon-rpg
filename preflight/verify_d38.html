@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-38 F5 必经目标可达性与死因归类</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-38 · F5 必经目标连通性 + 状态致死归类</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, Map = Game.Systems.Map, Bot = Game.Bot;
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+
+  try {
+    M.init();
+    M.closeGuide();
+    Bot.install();
+
+    var seeds = [];
+    for (var s = 1001; s <= 1200; s++) seeds.push(s);
+
+    /* ══ A 组：200 种子 × F5，Boss 必须 100% 从出生点可达 ═══════════ */
+    var aBad = [], aMoved = [], aMissingBoss = [];
+    for (var i = 0; i < seeds.length; i++) {
+      Math.random = Bot.mulberry32(seeds[i]);
+      for (var f = 1; f <= 5; f++) Map.setFloor(f);
+      var g = Map.getGrid(), sp = Map.getSpawn();
+      var mt = Map.getMandatoryTargets();
+      var boss = mt.filter(function (t) { return t.kind === 'boss'; });
+      if (boss.length !== 1) { aMissingBoss.push(seeds[i]); continue; }
+      /* F5 只有上行梯是真传送门（下行梯空转） */
+      var chk = Map.checkTargetsReachable(g, sp, [3], boss);
+      if (!chk.ok) aBad.push(seeds[i]);
+      var mv = Map.getLastMoves();
+      if (mv.length) aMoved.push({ seed: seeds[i], moves: mv });
+    }
+    /* 负例：把上行梯摆在唯一走廊口，检测器必须判 Boss 不可达 */
+    var gBlock = [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 3, 1, 1, 0],
+      [0, 1, 0, 0, 0, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0]
+    ];
+    var gOpen = [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 3, 1, 1, 0],
+      [0, 1, 1, 1, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0]
+    ];
+    var negChk = Map.checkTargetsReachable(gBlock, { x: 1, y: 1 }, [3], [{ kind: 'boss', x: 5, y: 1 }]);
+    var posChk = Map.checkTargetsReachable(gOpen, { x: 1, y: 1 }, [3], [{ kind: 'boss', x: 5, y: 1 }]);
+    rec('A_F5_boss_reachable', aBad.length === 0 && aMissingBoss.length === 0 && !negChk.ok && posChk.ok, {
+      seeds: seeds.length, unreachableSeeds: aBad, missingBoss: aMissingBoss,
+      relocated: aMoved,
+      negativeBlockedCorridor: negChk, positiveDetour: posChk
+    });
+
+    /* ══ B 组：200 种子 × 5 层，必经目标全可达；D-18 楼梯口径 0 失败 ══ */
+    var bBadTarget = [], bBadTiles = [], bBadUp = [], bBadDown = [];
+    var floors = 0;
+    for (var i2 = 0; i2 < seeds.length; i2++) {
+      Math.random = Bot.mulberry32(seeds[i2]);
+      for (var f2 = 1; f2 <= 5; f2++) {
+        Map.setFloor(f2);
+        floors++;
+        var g2 = Map.getGrid(), sp2 = Map.getSpawn();
+        var ups = [], downs = [];
+        for (var y = 0; y < g2.length; y++) for (var x = 0; x < g2[0].length; x++) {
+          if (g2[y][x] === 3) ups.push({ kind: 'up', x: x, y: y });
+          if (g2[y][x] === 2) downs.push({ kind: 'down', x: x, y: y });
+        }
+        if (ups.length !== 1 || downs.length !== 1) { bBadTiles.push(seeds[i2] + 'F' + f2); continue; }
+        var mt2 = Map.getMandatoryTargets();
+        var block = [];
+        if (f2 > 1) block.push(3);
+        if (f2 < 5) block.push(2);
+        if (!Map.checkTargetsReachable(g2, sp2, block, mt2).ok) bBadTarget.push(seeds[i2] + 'F' + f2);
+        /* D-18 原口径：把一条梯当墙，验另一条梯可达 */
+        if (!Map.checkTargetsReachable(g2, sp2, (f2 < 5) ? [2] : [], ups).ok) bBadUp.push(seeds[i2] + 'F' + f2);
+        if (!Map.checkTargetsReachable(g2, sp2, (f2 > 1) ? [3] : [], downs).ok) bBadDown.push(seeds[i2] + 'F' + f2);
+      }
+    }
+    rec('B_all_floors_targets', bBadTarget.length === 0 && bBadTiles.length === 0 &&
+      bBadUp.length === 0 && bBadDown.length === 0, {
+      seeds: seeds.length, floors: floors,
+      badTarget: bBadTarget.slice(0, 5), badTiles: bBadTiles.slice(0, 5),
+      badUp: bBadUp.slice(0, 5), badDown: bBadDown.slice(0, 5),
+      d18_1000maps_zeroFail: bBadUp.length === 0 && bBadDown.length === 0 && bBadTiles.length === 0
+    });
+
+    /* ══ C 组：探索期状态致死不许再算"被怪打死" ═══════════════════ */
+    /* 构造：本局有 battle:end(lose)（diedInBattle=true），但死亡遥测 source=other */
+    var fake = { death: { source: 'other' }, diedInBattle: true, lastTrapAt: -1, actions: 321 };
+    var expect = '状态效果';
+    var got = Bot.deathCauseOf(fake);
+    function oldCause(r) {
+      if (r.lastTrapAt === r.actions) return '陷阱';
+      if (r.diedInBattle) return '被怪打死';
+      return '状态/其它';
+    }
+    var oldGot = oldCause(fake);
+    var cases = [
+      { name: 'battle', rec: { death: { source: 'battle' }, diedInBattle: true, lastTrapAt: -1, actions: 9 }, want: '被怪打死' },
+      { name: 'trap', rec: { death: { source: 'trap' }, diedInBattle: false, lastTrapAt: -1, actions: 9 }, want: '陷阱' },
+      { name: 'other', rec: fake, want: '状态效果' },
+      { name: 'noTelemetry(battle)', rec: { death: null, diedInBattle: true, lastTrapAt: -1, actions: 9 }, want: '被怪打死' },
+      { name: 'noTelemetry(status)', rec: { death: null, diedInBattle: false, lastTrapAt: -1, actions: 9 }, want: '状态/其它' }
+    ];
+    var caseBad = cases.filter(function (c) { return Bot.deathCauseOf(c.rec) !== c.want; });
+    /* 活体：D-37 G3 的 seed 1025 是探索期中毒致死，修后必须归为状态效果 */
+    var liveC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    rec('C_status_death_classified', got === expect && oldGot !== expect &&
+      caseBad.length === 0 && liveC.deathCause === '状态效果' &&
+      liveC.death && liveC.death.source === 'other', {
+      constructed: { expected: expect, newLogic: got, oldLogic: oldGot,
+        negativeOldLogicDiffers: oldGot !== expect },
+      cases: cases.map(function (c) { return { name: c.name, got: Bot.deathCauseOf(c.rec), want: c.want }; }),
+      liveSeed: 1025, liveCause: liveC.deathCause, liveSource: liveC.death && liveC.death.source
+    });
+
+    /* ══ D 组：D-37 G2 种子 1013 重跑，不许再"路被堵" ═══════════════ */
+    var liveD = Bot.run(1013, { maxActions: 2500, d37: { fireball: true, flee: true, grind: false } });
+    var dOk = liveD.outcome !== 'stuck' && !liveD.stuckReason &&
+      (liveD.outcome === 'dead' || liveD.outcome === 'win');
+    rec('D_seed1013_not_stuck', dOk, {
+      outcome: liveD.outcome, actions: liveD.actions, floor: liveD.floor,
+      stuckReason: liveD.stuckReason || null, deathCause: liveD.deathCause,
+      death: liveD.death || null, noDir: liveD.noDir, blockedSteps: liveD.blockedSteps,
+      fleet: liveD.d37 ? { attempts: liveD.d37.fleeAttempts, success: liveD.d37.fleeSuccess } : null
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  var pre = document.getElementById('result');
+  pre.textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

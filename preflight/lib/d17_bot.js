@@ -347,10 +347,27 @@
     var toStairsFree = function (x, y, t) { return stairPass(t); };
     var isDownStair = function (x, y, t) { return t === 2 && !downNoop; };
     var s1 = { vis: 0, unexp: 0, hit: null }, s2 = { vis: 0, unexp: 0, hit: null }, s3 = { vis: 0, unexp: 0, hit: null };
+    var s4 = { vis: 0, unexp: 0, hit: null };
     var stage = 'explore';
     var hit = bfsPass(avoidEnemy, function (x, y) { return !Game.fov.isExplored(x, y); }, s1);
     if (!hit) { stage = 'stairs'; hit = bfsPass(toStairs, isDownStair, s2); }
     if (!hit) { stage = 'stairs-any'; hit = bfsPass(toStairsFree, isDownStair, s3); }
+    /* D-38：最后一层的必经目标是 Boss（胜利条件），而该层的下行梯是空转格——
+     * 于是 isDownStair 永远不会命中，探索完就会原地空转（D-37 种子 1013 卡 1400+ 步的真因）。
+     * 这里新增第 4 阶段：只剩最后一层且前三阶段无目标时，朝本层 Boss 走；
+     * 打不打得过由战斗分支决定，至少不会"路没堵却站着不动"。非最终层不进入此阶段。 */
+    if (!hit && P.floor >= FLOORS) {
+      var bossId = null;
+      var bs = (Game.Data.MAPS && Game.Data.MAPS.bosses) || [];
+      for (var bi = 0; bi < bs.length; bi++) if (bs[bi].floor === P.floor) { bossId = bs[bi].id; break; }
+      if (bossId) {
+        stage = 'boss';
+        hit = bfsPass(function (x, y, t) { return walkable(t); }, function (x, y) {
+          var e = Map.enemyAt(x, y);
+          return !!(e && e.monsterId === bossId);
+        }, s4);
+      }
+    }
     if (!hit) {
       planDbg = { why: 'noTarget', stage: stage, start: start, w: w, h: h,
         tile: grid[P.y] ? grid[P.y][P.x] : 'OOB', s1: s1, s2: s2, s3: s3 };
@@ -606,23 +623,61 @@
       return { seen: s, down: d };
     }
     var all = bfs(true);
+    /* D-38：再跑一次"真实移动语义"的 BFS——会换层的楼梯可以走上去，但不能穿过。
+     * 只有这一版也到不了下行梯，才是真的"楼梯把路堵死"；否则旧实现会把任何
+     * 探索完没目标的卡关都误报成"上行梯封住唯一走廊"（D-37 种子 1013 就是这么被误诊的）。 */
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    var upBlocks = P.floor > 1, downBlocks = P.floor < FLOORS;
+    function bfsStrict() {
+      var s = {}, qq = [start], hd = 0, d = 0;
+      s[start] = 1;
+      while (hd < qq.length) {
+        var c = qq[hd++].split(','), x = +c[0], y = +c[1];
+        if (grid[y][x] === 2) d++;
+        if ((grid[y][x] === 3 && upBlocks) || (grid[y][x] === 2 && downBlocks)) continue;
+        for (var i = 0; i < 4; i++) {
+          var nx = x + DIRS[i][0], ny = y + DIRS[i][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h || grid[ny][nx] === 0) continue;
+          var nk = nx + ',' + ny;
+          if (s[nk]) continue;
+          s[nk] = 1; qq.push(nk);
+        }
+      }
+      return { seen: s, down: d };
+    }
+    var strict = bfsStrict();
+    var sp = Map.getSpawn();
     if (!all.down) {
       var hasDown = false;
       for (var y2 = 0; y2 < h; y2++) for (var x2 = 0; x2 < w; x2++) if (grid[y2][x2] === 2) hasDown = true;
       return { reason: hasDown ? '下行梯不可达' : '本层无下行梯', spawnInPocket: null };
     }
     /* 出生点是否与玩家同处被上行梯封住的区域：是 ⇒ 真人靠换层传送也回不来 */
-    var sp = Map.getSpawn();
-    return { reason: '上行梯封住唯一走廊', spawnInPocket: !!all.seen[sp.x + ',' + sp.y] };
+    if (!strict.down) {
+      return { reason: '上行梯封住唯一走廊', spawnInPocket: !!all.seen[sp.x + ',' + sp.y] };
+    }
+    return { reason: '本层无可用目标', spawnInPocket: !!all.seen[sp.x + ',' + sp.y] };
   }
 
+  /* D-38：死因归类（纯函数，classify 与 verify_d38 共用同一份口径）。
+   * 以死亡遥测的 source 为准，不再用"本局是否见过 battle:end(lose)"推断：
+   * 探索期中毒/流血结算致死同样会走 lose 事件（D-37 G3 的 4 局就是这样被错记的）。
+   * 只有没有遥测时才退回旧口径。 */
+  function deathCauseOf(rec) {
+    var src = rec.death && rec.death.source;
+    if (src === 'battle') return '被怪打死';
+    if (src === 'trap') return '陷阱';
+    if (src === 'other' || src === 'status') return '状态效果';
+    if (src) return '状态/其它';
+    if (rec.lastTrapAt === rec.actions) return '陷阱';
+    if (rec.diedInBattle) return '被怪打死';
+    return '状态/其它';
+  }
   function classify(rec) {
     var P = Game.Data.Player;
     rec.deathFloor = P.floor;
     rec.noPotionAtDeath = healPotions().length === 0;
-    if (rec.lastTrapAt === rec.actions) rec.deathCause = '陷阱';
-    else if (rec.diedInBattle) rec.deathCause = '被怪打死';
-    else rec.deathCause = '状态/其它';
+    rec.deathCause = deathCauseOf(rec);
   }
 
   Bot.run = function (seed, opts) {
@@ -959,6 +1014,7 @@
   Bot.mulberry32 = mulberry32;
   Bot.ACTION_SEC = ACTION_SEC;
   Bot.STEP_MS = STEP;
+  Bot.deathCauseOf = deathCauseOf; /* D-38：死因归类口径（verify_d38 C 组直接调用） */
   /* 诊断出口（只读，供 preflight 调试页/verify 观察内部状态） */
   Bot._planPath = function () { return planPath(); };
   Bot._diag = function () {

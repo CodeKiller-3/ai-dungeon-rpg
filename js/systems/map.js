@@ -21,6 +21,7 @@
   /* 修复 P1：楼层快照缓存——回访时恢复同一份地图/敌人/装饰/巡逻，
    * 避免上下楼反复重新生成而刷怪、刷宝箱。只在重新开始（setFloor）时清空。 */
   var floorCache = {};
+  var lastMoves = [];   /* D-38：最近一次生成里被搬进出生点连通块的必经目标（只读遥测） */
 
   function initGrid(w, h) {
     var g = [];
@@ -289,6 +290,100 @@
       grid[up.y][up.x] = 3;
       grid[down.y][down.x] = 2;
     }
+  }
+
+  /* D-38：出生点连通块。楼梯是传送门——踩到会真正换层的楼梯格不能当走廊穿行，
+   * 所以这里只走非墙格，并把"会换层的楼梯值"排除（空转楼梯仍是普通地板）。 */
+  function stairBlockMap() {
+    return {
+      2: floorIndex < cfg.floors - 1, /* 最深层的下行梯空转 */
+      3: floorIndex > 0               /* 第 1 层的上行梯空转 */
+    };
+  }
+  function spawnComponent() {
+    var w = grid[0].length, h = grid.length;
+    var block = stairBlockMap();
+    var seen = [], q = [[spawn.x, spawn.y]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[spawn.y][spawn.x] = true;
+    var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1];
+      qi++;
+      /* 传送楼梯可以"走上去"（它是目标/终点），但踩上去就换层，不能从它继续往外走 */
+      if (block[grid[cy][cx]]) continue;
+      for (var d = 0; d < dirs.length; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (seen[ny][nx] || grid[ny][nx] === 0) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return seen;
+  }
+
+  /* D-38：某一层的"必经目标"集合（不通关不能算合格地图）：
+   *   · 非最终层：下行梯——不下楼永远到不了 Boss；
+   *   · 最终层：MAPS.bosses 注入的 Boss——主线胜利条件是击杀 Boss；
+   *     该层的下行梯 changeFloor 空转，是普通地板，不构成目标。
+   * 由 floorIndex / cfg.floors / cfg.bosses 推导，不写死层号。 */
+  function mandatoryTargets() {
+    var list = [];
+    if (floorIndex >= cfg.floors - 1) {
+      var bossId = null;
+      if (cfg.bosses) {
+        for (var b = 0; b < cfg.bosses.length; b++) {
+          if (cfg.bosses[b].floor === floorIndex + 1) { bossId = cfg.bosses[b].id; break; }
+        }
+      }
+      if (bossId) {
+        for (var i = 0; i < enemies.length; i++) {
+          if (enemies[i].monsterId === bossId) {
+            list.push({ kind: 'boss', id: bossId, enemyIndex: i, x: enemies[i].x, y: enemies[i].y });
+          }
+        }
+      }
+      return list;
+    }
+    for (var y = 0; y < grid.length; y++) {
+      for (var x = 0; x < grid[0].length; x++) {
+        if (grid[y][x] === 2) list.push({ kind: 'stairs-down', x: x, y: y });
+      }
+    }
+    return list;
+  }
+
+  /* 只修"目标落点"，不动迷宫拓扑 / 楼梯位置 / 怪物数量：
+   * 目标不在出生点连通块里时，把它搬到块内空地（沿用 spawnEnemies 的"离出生点 >6 格"约束）。
+   * 只有旧检查漏掉的非法层会走到这里——合法地图不消耗随机数，指纹与历史基线不变。 */
+  function ensureMandatoryTargets() {
+    var seen = spawnComponent();
+    var targets = mandatoryTargets();
+    var moved = [];
+    for (var t = 0; t < targets.length; t++) {
+      var tg = targets[t];
+      if (seen[tg.y][tg.x]) continue;
+      if (tg.kind !== 'boss') continue; /* 下行梯由 placeStairs 的 fits 保证，这里只兜底 Boss */
+      var cands = [];
+      for (var y = 1; y < grid.length - 1; y++) {
+        for (var x = 1; x < grid[0].length - 1; x++) {
+          if (grid[y][x] !== 1 || !seen[y][x]) continue;
+          if (dist(x, y, spawn.x, spawn.y) <= 6) continue;
+          var occupied = false;
+          for (var e = 0; e < enemies.length; e++) {
+            if (e !== tg.enemyIndex && enemies[e].x === x && enemies[e].y === y) { occupied = true; break; }
+          }
+          if (!occupied) cands.push({ x: x, y: y });
+        }
+      }
+      if (!cands.length) continue;
+      var pick = cands[Math.floor(Math.random() * cands.length)];
+      moved.push({ kind: tg.kind, id: tg.id, from: tg.x + ',' + tg.y, to: pick.x + ',' + pick.y });
+      enemies[tg.enemyIndex].x = pick.x;
+      enemies[tg.enemyIndex].y = pick.y;
+    }
+    return moved;
   }
 
   /* 按楼层怪物概率表生成敌人（M2 战斗触发点） */
@@ -573,6 +668,7 @@
       /* 修复 P1：已有该层快照则原样恢复，不重新生成 */
       var cached = floorCache[floorIndex];
       if (cached) {
+        lastMoves = [];
         grid = cached.grid;
         enemies = cached.enemies;
         details = cached.details;
@@ -594,6 +690,7 @@
       placeSpecialRoom(size[0], size[1]); /* S-05：先挖密室（需要整片实心墙），再放楼梯 */
       placeStairs();
       spawnEnemies();
+      lastMoves = ensureMandatoryTargets(); /* D-38：必经目标必须落在出生点连通块里 */
       if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
       spawn = { x: 1, y: 1 };
       genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
@@ -611,6 +708,53 @@
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       if (!quietQuest) notifyFloorQuest();
       return grid;
+    },
+
+    /* D-38：最近一次生成里被搬动的必经目标（只读；用于统计"修复了多少张图"） */
+    getLastMoves: function () { return lastMoves.slice(); },
+
+    /* D-38：当前层的必经目标（只读，供 verify_d38 与生成期共用同一份定义） */
+    getMandatoryTargets: function () {
+      cfg = Game.Data.MAPS;
+      var list = mandatoryTargets(), out = [];
+      for (var i = 0; i < list.length; i++) {
+        out.push({ kind: list[i].kind, id: list[i].id || null, x: list[i].x, y: list[i].y });
+      }
+      return out;
+    },
+
+    /* D-38：纯函数——给定网格/出生点/会换层的 tile 列表/目标，返回目标可达性与不可达清单。
+     * 语义与生成期一致：只走非墙格；传送楼梯可作终点进入，但不能穿过。 */
+    checkTargetsReachable: function (gx, sp, blockTiles, targets) {
+      var w = gx[0].length, h = gx.length;
+      var blocked = {};
+      for (var b = 0; b < (blockTiles || []).length; b++) blocked[blockTiles[b]] = true;
+      var seen = [], q = [[sp.x, sp.y]], qi = 0;
+      for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+      if (sp.x < 0 || sp.y < 0 || sp.x >= w || sp.y >= h) {
+        return { ok: false, unreachable: (targets || []).slice(), seen: seen };
+      }
+      seen[sp.y][sp.x] = true;
+      var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      while (qi < q.length) {
+        var cx = q[qi][0], cy = q[qi][1];
+        qi++;
+        if (blocked[gx[cy][cx]]) continue;
+        for (var d = 0; d < dirs.length; d++) {
+          var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (seen[ny][nx] || gx[ny][nx] === 0) continue;
+          seen[ny][nx] = true;
+          q.push([nx, ny]);
+        }
+      }
+      var unreachable = [];
+      for (var t = 0; t < (targets || []).length; t++) {
+        var tg = targets[t];
+        var ok = tg.x >= 0 && tg.y >= 0 && tg.x < w && tg.y < h && seen[tg.y][tg.x];
+        if (!ok) unreachable.push({ kind: tg.kind, x: tg.x, y: tg.y });
+      }
+      return { ok: unreachable.length === 0, unreachable: unreachable, seen: seen };
     },
 
     isWalkable: function (x, y) {
