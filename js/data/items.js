@@ -184,4 +184,24 @@
     scroll_upgrade_3: 'icon_scroll_3',
     scroll_upgrade_4: 'icon_scroll_4'
   };
+
+  /* D-49：救援专属装备——只由 Adaptive 在"第二次死亡"时发放。
+   * 关键约束：不进商店 / 宝箱 / 怪物掉落三张表，也不改变 ITEMS 的可枚举统计
+   * （D-45 对 Σprice / Σsell / FNV 有硬断言），因此用不可枚举属性挂到 ITEMS 上，
+   * 让 Inventory/Modal 既有的 ITEMS[id] 直接访问照常工作，而 Object.keys(ITEMS) 仍是 48 件。
+   * 强度推导（D-45 档位表）：各层可买到的最好武器 atk = F1 3 / F2 8 / F3 12 / F4 12 / F5 16，
+   * 现有最强档 atk16；取 13 落在"当前可买到最好档"与"最强档"之间，且永不等于最强档。
+   * F5 可买最好已是 16，没有中间档，故 F5 的救援改为 60 金币。 */
+  Game.Data.RESCUE_ITEMS = {
+    sword_rescue: {
+      id: 'sword_rescue', name: '守夜人的旧剑', type: 'weapon',
+      effect: { atk: 13 }, price: 90, sell: 45, rescue: true
+    }
+  };
+  Object.defineProperty(Game.Data.ITEMS, 'sword_rescue', {
+    value: Game.Data.RESCUE_ITEMS.sword_rescue, enumerable: false, configurable: true, writable: false
+  });
+  Object.defineProperty(Game.Data.ITEM_ICONS, 'sword_rescue', {
+    value: 'weapon_lavish_sword', enumerable: false, configurable: true, writable: false
+  });
 })();

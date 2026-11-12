@@ -1951,6 +1951,14 @@
     Math.random = mulberry32(seed);
     if (Game.Fx && typeof Game.Fx._reset === 'function') Game.Fx._reset();
     M.restart();
+    /* D-49：自适应救援开关（默认关闭——不传 opts.adaptive 时与 D-48 行为完全一致；
+     * 只有 D-49 的验证/跑局显式传 true/false）。 */
+    if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.setEnabled === 'function') {
+      Game.Systems.Adaptive.setEnabled(opts.adaptive === true);
+    }
+    if (opts.adaptive !== undefined) {
+      rec.adaptive = Game.Systems.Adaptive ? Game.Systems.Adaptive.snapshot() : null;
+    }
     /* D-43：装血量账钩子并起第一层账（restart 之后，避免把开局满血记成回复） */
     if (rec.d43) {
       Game.Systems.Battle._setHpLog(function (e) { if (cur && cur.d43) d43Log(cur, e); });
@@ -2036,6 +2044,10 @@
         rec.npc.stateAtEnd = ns2.state;
         rec.npc.restAccepted = !!(Game.Data.Player.npcQuests && Game.Data.Player.npcQuests[nd2.id]);
       }
+    }
+    /* D-49：自适应救援收尾快照（触发点、层级、发放、金币等价） */
+    if (opts.adaptive !== undefined) {
+      rec.adaptive = Game.Systems.Adaptive ? Game.Systems.Adaptive.snapshot() : null;
     }
     /* D-44：B1 收尾（留药检查、通关事件序列） */
     if (rec.b1) b1Finalize(rec);

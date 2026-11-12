@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-49：读取 selfcheck/d49-after.json / d49-off.json 与 d48-after.json，声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-49 自适应难度与兜底救援</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:12px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; }
+  th { color:#9fd; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-49 · 触发判据 / 上限 / 关闭复现 / 未稀释 / 三表隔离 / 旧档 / 四策略 / 开关持久化（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<h2>逐局救援触发</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D49ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D49ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D49ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readText(rel)); } catch (e) { return null; } }
+  var M = Game.Core.Main, P = Game.Data.Player, S = Game.Systems.Save, AD = Game.Systems.Adaptive;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+
+  /* 上限判据：单局 ≤2 次、金币等价 ≤150，且发放总额必须与 log 可复算一致 */
+  function limitCheck(r) {
+    var ad = r && r.adaptive;
+    if (!ad) return { ok: false, why: 'no-adaptive' };
+    var sum = 0;
+    for (var i = 0; i < (ad.log || []).length; i++) sum += (ad.log[i].value || 0);
+    return {
+      ok: (ad.triggers || 0) <= 2 && (ad.spent || 0) <= 150 && sum === (ad.spent || 0) &&
+        (ad.log || []).length === (ad.triggers || 0),
+      triggers: ad.triggers, spent: ad.spent, sum: sum, log: ad.log
+    };
+  }
+
+  function kd(c) { window.dispatchEvent(new KeyboardEvent('keydown', { code: c, bubbles: true, cancelable: true })); }
+  function ku(c) { window.dispatchEvent(new KeyboardEvent('keyup', { code: c, bubbles: true, cancelable: true })); }
+  function stored() { try { return JSON.parse(localStorage.getItem(SET_KEY) || 'null'); } catch (e) { return null; } }
+
+  try {
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { }
+    M.init({ menu: true, skipMenu: true });
+
+    /* ── E：救援装备不在商店/宝箱/掉落三张表；不进 ITEMS 可枚举统计 ── */
+    var ID = AD.GEAR_ID, IT = Game.Data.ITEMS, def = IT[ID];
+    var keys = Object.keys(IT);
+    var enumOk = keys.indexOf(ID) < 0 && keys.length === 48;
+    var defOk = !!def && def.effect && def.effect.atk === 13 && def.price === 90 && def.sell === 45 && def.sell < def.price;
+    var shopIds = [];
+    var SS = Game.Data.SHOP_STOCK || [], SR = Game.Data.SHOP_ROTATION || [], SC = Game.Data.SHOP_SCROLLS || [];
+    for (var a = 0; a < SS.length; a++) shopIds = shopIds.concat(SS[a]);
+    for (var b = 0; b < SR.length; b++) shopIds = shopIds.concat(SR[b]);
+    shopIds = shopIds.concat(SC);
+    var chestIds = ((Game.Data.CHEST_LOOT && Game.Data.CHEST_LOOT.chest) || [])
+      .concat((Game.Data.CHEST_LOOT && Game.Data.CHEST_LOOT.room_chest) || []);
+    var dropIds = [];
+    var MK = Object.keys(Game.Data.MONSTERS || {});
+    for (var m = 0; m < MK.length; m++) {
+      var ds = (Game.Data.MONSTERS[MK[m]].drops) || [];
+      for (var d = 0; d < ds.length; d++) dropIds.push(ds[d].itemId);
+    }
+    var notInTables = shopIds.indexOf(ID) < 0 && chestIds.indexOf(ID) < 0 && dropIds.indexOf(ID) < 0;
+    rec('E_gear_isolated', enumOk && defOk && notInTables, {
+      rule: '救援装备只由 Adaptive 发放：不在 SHOP_STOCK/SHOP_ROTATION/CHEST_LOOT/怪物 drops，也不改变 ITEMS 的 48 件可枚举统计',
+      id: ID, enumerableKeys: keys.length, hasDirectLookup: !!def, def: def,
+      inShop: shopIds.indexOf(ID) >= 0, inChest: chestIds.indexOf(ID) >= 0, inDrops: dropIds.indexOf(ID) >= 0
+    });
+
+    /* ── F：旧档兼容（无 adaptive 字段）、存档键未变、补默认不报错 ── */
+    try { localStorage.removeItem(KEY); } catch (e) { }
+    var legacy = {
+      floor: 1,
+      player: {
+        hp: 61, maxHp: 100, atk: 11, def: 5, gold: 77, exp: 0, level: 1,
+        inventory: { potion_small: 1 }, equipment: { weapon: 'knife', armor: null }, quests: {}
+      }
+    };
+    var fErr = null, loaded = null;
+    try { localStorage.setItem(KEY, JSON.stringify(legacy)); loaded = S.load(); } catch (e) { fErr = String((e && e.message) || e); }
+    var ad0 = P.adaptive;
+    var fOk = S.KEY === 'ai_dungeon_rpg_save_v1' && fErr === null && !!loaded &&
+      !!ad0 && typeof ad0 === 'object' && typeof ad0.deaths === 'object' &&
+      ad0.triggers === 0 && ad0.spent === 0 && Array.isArray(ad0.log) &&
+      ad0.gearGranted === false && localStorage.getItem('ai_dungeon_rpg_save_v1') !== null;
+    rec('F_old_save', fOk, {
+      rule: '旧档（无 adaptive）读入不抛错、补默认；存档键仍是 ai_dungeon_rpg_save_v1',
+      key: S.KEY, err: fErr, adaptive: ad0
+    });
+
+    /* ── H：设置开关持久化；关掉后重启仍是关 ── */
+    var set1 = M.setSetting('adaptive', false) === true && AD.isEnabled() === false && stored().adaptive === false;
+    M.init({ menu: true, skipMenu: true });
+    var afterReload = M.getSettings().adaptive === false && AD.isEnabled() === false;
+    var set2 = M.setSetting('adaptive', true) === true && AD.isEnabled() === true;
+    rec('H_toggle_persist', set1 && afterReload && set2, {
+      rule: '设置页新增「自适应难度」：默认开；写入 aiDungeon_settings_v1；关闭后重新 init 仍为关',
+      afterOff: set1, afterReload: afterReload, restore: set2, stored: stored()
+    });
+
+    /* ── A/B/C/D/G：跑局证据 ── */
+    var AFTER = readJson('selfcheck/d49-after.json');
+    var OFF = readJson('selfcheck/d49-off.json');
+    var D48 = readJson('selfcheck/d48-after.json');
+    if (!AFTER || !OFF || !D48) {
+      throw new Error('缺少跑局产物: ' + JSON.stringify({ after: !!AFTER, off: !!OFF, d48: !!D48 }));
+    }
+
+    var runs = AFTER.runs.b1 || [];
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050 && AFTER.env.maxActions === 2500;
+    var perRun = [], trig = 0, gear = 0, potion = 0, gold = 0, big = 0;
+    for (var r = 0; r < runs.length; r++) {
+      var ad = runs[r].adaptive || {};
+      var lc = limitCheck(runs[r]);
+      perRun.push({
+        seed: runs[r].seed, outcome: runs[r].outcome, triggers: ad.triggers || 0, spent: ad.spent || 0,
+        logs: ad.log || [], skipped: (ad.trace || []).filter(function (t) { return !t.ok; }),
+        limitOk: lc.ok
+      });
+      trig += ad.triggers || 0;
+      if (!lc.ok) big++;
+      for (var li = 0; li < (ad.log || []).length; li++) {
+        var g = ad.log[li].grant || '';
+        if (g === 'sword_rescue') gear++;
+        else if (g.indexOf('potion') === 0) potion++;
+        else if (g.indexOf('gold') === 0) gold++;
+      }
+    }
+    rec('A_trigger_ledger', seedOk && runs.length === 50 && perRun.length === 50 && big === 0, {
+      rule: '逐局列出触发点/层/原因/发放；未触发也保留 trace（why=disabled/budget/hp-ok）',
+      triggers: trig, runsWithRescue: perRun.filter(function (x) { return x.triggers > 0; }).length,
+      sample: perRun.filter(function (x) { return x.triggers > 0; }).slice(0, 6)
+    });
+
+    /* B：上限（含负例） */
+    var fakeBad1 = { adaptive: { triggers: 3, spent: 120, log: [{ value: 40 }, { value: 40 }, { value: 40 }] } };
+    var fakeBad2 = { adaptive: { triggers: 2, spent: 200, log: [{ value: 100 }, { value: 100 }] } };
+    var negOk = limitCheck(fakeBad1).ok === false && limitCheck(fakeBad2).ok === false;
+    var maxTrig = 0, maxSpent = 0;
+    for (var q = 0; q < runs.length; q++) {
+      var adq = runs[q].adaptive || {};
+      if ((adq.triggers || 0) > maxTrig) maxTrig = adq.triggers;
+      if ((adq.spent || 0) > maxSpent) maxSpent = adq.spent;
+    }
+    rec('B_caps', big === 0 && negOk && maxTrig <= 2 && maxSpent <= 150, {
+      rule: '单局触发 ≤2、金币等价 ≤150；触发次数与 log 条数一致；负例（3 次 / 200 金）必须 FAIL',
+      maxTriggers: maxTrig, maxSpent: maxSpent, violators: big,
+      negative: { three: limitCheck(fakeBad1).ok, over150: limitCheck(fakeBad2).ok }
+    });
+
+    /* C：关闭自适应复现 D-48 逐局 outcome */
+    var offRuns = OFF.runs.b1 || [];
+    var d48By = {};
+    (D48.runs.b1 || []).forEach(function (x) { d48By[x.seed] = x.outcome; });
+    var cMis = [];
+    for (var oc = 0; oc < offRuns.length; oc++) {
+      if (d48By[offRuns[oc].seed] !== offRuns[oc].outcome) {
+        cMis.push({ seed: offRuns[oc].seed, d48: d48By[offRuns[oc].seed], off: offRuns[oc].outcome });
+      }
+    }
+    var offZero = offRuns.every(function (x) { return !x.adaptive || (x.adaptive.triggers || 0) === 0; });
+    rec('C_off_matches_d48', OFF.env.adaptive === false && offRuns.length === 50 &&
+      cMis.length === 0 && offZero && OFF.agg.b1.outcomes.win === D48.agg.b1.outcomes.win, {
+      rule: '关闭自适应后 B1 逐局 outcome 与 D-48 完全一致、零触发',
+      offWins: OFF.agg.b1.outcomes.win, d48Wins: D48.agg.b1.outcomes.win,
+      mismatches: cMis.slice(0, 6), zeroTriggers: offZero
+    });
+
+    /* D：未触发救援的局不被稀释（与 D-48 逐局一致） */
+    var zero = [], zMis = [], onWinsZero = 0, d48WinsZero = 0;
+    for (var z = 0; z < runs.length; z++) {
+      if ((runs[z].adaptive && runs[z].adaptive.triggers) || 0) continue;
+      zero.push(runs[z].seed);
+      if (runs[z].outcome === 'win') onWinsZero++;
+      if (d48By[runs[z].seed] === 'win') d48WinsZero++;
+      if (d48By[runs[z].seed] !== runs[z].outcome) {
+        zMis.push({ seed: runs[z].seed, d48: d48By[runs[z].seed], on: runs[z].outcome });
+      }
+    }
+    rec('D_no_dilution', zero.length > 0 && zMis.length === 0 && onWinsZero >= d48WinsZero, {
+      rule: '零触发局与 D-48 逐局一致：没被救援的玩家，难度一点没动',
+      zeroRuns: zero.length, onWins: onWinsZero, d48Wins: d48WinsZero, mismatches: zMis.slice(0, 6)
+    });
+
+    /* G：四策略同种子可比 + 目标值 */
+    var g2 = AFTER.agg.g2, s1 = AFTER.agg.s1, m1 = AFTER.agg.m1;
+    var g2Ok = g2 && g2.f5.reached >= D48.agg.g2.f5.reached;
+    var s1Ok = s1 && s1.f5.reached >= D48.agg.s1.f5.reached;
+    var m1Ok = m1 && m1.floorReach['4'] >= D48.agg.m1.floorReach['4'];
+    var b1On = AFTER.agg.b1.outcomes.win, b1Off = D48.agg.b1.outcomes.win;
+    var rescue = AFTER.agg.b1.rescue;
+    rec('G_four_strategies', seedOk && !!g2 && !!s1 && !!m1 && g2Ok && s1Ok && m1Ok, {
+      rule: 'B1/G2/S1/M1 同种子 1001–1050、maxActions 2500；G2/S1/M1 不退化；救援发放全部来自 Adaptive',
+      b1: { on: b1On, off: b1Off, f5: AFTER.agg.b1.f5.reached },
+      g2: { on: g2 && g2.f5.reached, d48: D48.agg.g2.f5.reached },
+      s1: { on: s1 && s1.f5.reached, d48: D48.agg.s1.f5.reached },
+      m1: { on: m1 && m1.floorReach['4'], d48: D48.agg.m1.floorReach['4'] },
+      rescue: rescue
+    });
+
+    out.targets = {
+      b1On: b1On, b1Off: b1Off, b1Goal: 15, b1Met: b1On >= 15,
+      gearGrants: gear, gearGoal: 5, gearMet: gear >= 5,
+      gearFromRescueOnly: gear === (rescue ? rescue.gear : gear),
+      zeroTriggerWins: onWinsZero, zeroTriggerBase: d48WinsZero
+    };
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+
+    var h = ['<table><tr><th>seed</th><th>结局</th><th>次数</th><th>金币等价</th><th>触发</th></tr>'];
+    for (var pr = 0; pr < perRun.length; pr++) {
+      var x = perRun[pr];
+      if (!x.triggers) continue;
+      var txt = x.logs.map(function (l) { return l.at + ' F' + l.floor + ' L' + l.level + ' → ' + l.grant + '(' + l.value + ')'; }).join('<br>');
+      h.push('<tr><td>' + x.seed + '</td><td>' + x.outcome + '</td><td>' + x.triggers + '</td><td>' + x.spent + '</td><td>' + txt + '</td></tr>');
+    }
+    h.push('</table>');
+    document.getElementById('detail').innerHTML = h.join('');
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + ((e && e.stack) || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D49_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

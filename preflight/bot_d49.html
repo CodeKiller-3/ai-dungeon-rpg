@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-49 自适应难度 · 回归跑局</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-49 · B1 / G2 / S1 / M1 同种子 1001–1050（?adapt=1 开启救援 / ?adapt=0 关闭；默认开启）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-49', mode: 'main', env: {}, summary: {}, runs: {}, agg: {}, ok: false };
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+  function aggBase(runs) {
+    var d = { outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {}, floorReach: {}, killsTotal: 0,
+      rescue: { runs: 0, triggers: 0, gear: 0, potion: 0, gold: 0, spent: 0, maxTriggers: 0, maxSpent: 0 } };
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, hitF5 = (r.floor === 5);
+      var ends = r.b1 ? (r.b1.floorExit || []) : (r.floors || []);
+      for (var f = 0; f < ends.length; f++) {
+        reached[ends[f].floor] = 1;
+        if (ends[f].floor === 5) hitF5 = true;
+      }
+      if (r.b1) {
+        for (var en = 0; en < (r.b1.floorEnter || []).length; en++) {
+          reached[r.b1.floorEnter[en].floor] = 1;
+          if (r.b1.floorEnter[en].floor === 5) hitF5 = true;
+        }
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      d.f5 = d.f5 || { reached: 0 };
+      if (hitF5) d.f5.reached++;
+      var ad = r.adaptive || null;
+      if (ad) {
+        d.rescue.triggers += ad.triggers || 0;
+        d.rescue.spent += ad.spent || 0;
+        if ((ad.triggers || 0) > 0) d.rescue.runs++;
+        if ((ad.triggers || 0) > d.rescue.maxTriggers) d.rescue.maxTriggers = ad.triggers;
+        if ((ad.spent || 0) > d.rescue.maxSpent) d.rescue.maxSpent = ad.spent;
+        for (var li = 0; li < (ad.log || []).length; li++) {
+          var g = ad.log[li].grant || '';
+          if (g === 'sword_rescue') d.rescue.gear++;
+          else if (g.indexOf('potion') === 0) d.rescue.potion++;
+          else if (g.indexOf('gold') === 0) d.rescue.gold++;
+        }
+      }
+    }
+    return d;
+  }
+  function trimRun(r) {
+    return {
+      seed: r.seed, outcome: r.outcome, deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      hp: r.hp, level: r.level, gold: r.gold, equip: r.equip, kills: r.kills,
+      battles: r.battles, actions: r.actions, simSec: r.simSec,
+      shopVisits: r.shopVisits, shopBuys: r.shopBuys, shopSpent: r.shopSpent,
+      potions: r.potions, npc: r.npc || null, d46: r.d46 || null, adaptive: r.adaptive || null,
+      enterF5: (r.b1 && r.b1.enterF5) ? { potions: r.b1.enterF5.potions, hp: r.b1.enterF5.hp, gold: r.b1.enterF5.gold } : null
+    };
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var adaptOn = !/adapt=0/.test(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    out.env = { maxActions: 2500, seeds: seedsOf(n), adaptive: adaptOn, bootScene: M._scene };
+    function optsFor(key) {
+      var base = { maxActions: 2500, adaptive: adaptOn };
+      if (key === 'b1') { base.b1 = { reserve: 4 }; base.d42 = true; base.d45 = true; base.d46 = true; }
+      else if (key === 'g2') { base.d37 = { fireball: true, flee: true }; base.d42 = true; }
+      else if (key === 's1') { base.d39 = { avoid: true }; base.d42 = true; }
+      else { base.m1 = { clear: true }; base.d42 = true; }
+      return base;
+    }
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(out.env.seeds, optsFor(key));
+      out.runs[key] = res.runs.map(trimRun);
+      out.summary[key] = res.summary;
+      out.agg[key] = aggBase(res.runs);
+    }
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'BATCH_DONE n=' + n + ' adapt=' + adaptOn +
+      ' b1_win=' + out.agg.b1.outcomes.win + ' rescue_runs=' + out.agg.b1.rescue.runs +
+      ' gear=' + out.agg.b1.rescue.gear + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D49__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

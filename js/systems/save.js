@@ -36,7 +36,9 @@
           /* S-03：强化等级表（按物品 id）；旧档无此字段时读档补 {} */
           upg: p.upg || {},
           /* D-47：NPC 任务四态（旧档无此字段，读档补 {}，不报错） */
-          npcQuests: p.npcQuests || {}
+          npcQuests: p.npcQuests || {},
+          /* D-49：自适应救援记录（死亡/触发/发放，全部在本档内，不落第二个键） */
+          adaptive: p.adaptive || null
         },
         /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
         bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
@@ -79,6 +81,10 @@
         p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};
         /* D-47：旧档（D-46 及之前）无 npcQuests → 补 {}；缺失不影响任何既有字段 */
         p.npcQuests = (s.npcQuests && typeof s.npcQuests === 'object') ? s.npcQuests : {};
+        /* D-49：旧档无 adaptive → 补默认（自适应开由设置决定，历史记录为空，不报错） */
+        p.adaptive = (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.normalize === 'function')
+          ? Game.Systems.Adaptive.normalize(s.adaptive)
+          : (s.adaptive && typeof s.adaptive === 'object' ? s.adaptive : null);
         /* S-04：状态效果不入档（读档时清空），避免"读档即中毒"与存档瞬间掉血 */
         p.status = {};
         /* M8-6：不信任旧档 atk/def/maxHp 持久值——按当前等级成长规则重算（含装备加成），

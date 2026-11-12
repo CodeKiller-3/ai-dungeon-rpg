@@ -20,7 +20,9 @@
     upg: {},
     /* S-04：状态效果 { bleed: 回合, poison: 回合 }；只作用于玩家，回合数归零即移除 */
     status: {},
-    quests: {}
+    quests: {},
+    /* D-49：自适应救援记录（旧档由 save.js 补默认；全部随本档保存，不另开键） */
+    adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
   };
   Game.Data.Player = player;
 
@@ -53,7 +55,7 @@
   var ZOOM_LEVELS = ['auto', '1', '1.25', '1.5'];
   var FX_LABEL = { off: '关', low: '低', high: '高' };
   var ZOOM_LABEL = { auto: '自动（自适应）', '1': '100%', '1.25': '125%', '1.5': '150%' };
-  var settings = { fx: 'low', muted: false, zoom: 'auto' };
+  var settings = { fx: 'low', muted: false, zoom: 'auto', adaptive: true };
 
   function loadSettings() {
     try {
@@ -63,6 +65,7 @@
       if (d && FX_LEVELS.indexOf(d.fx) >= 0) settings.fx = d.fx;
       if (d) settings.muted = !!d.muted;
       if (d && ZOOM_LEVELS.indexOf(d.zoom) >= 0) settings.zoom = d.zoom;
+      if (d) settings.adaptive = (d.adaptive === undefined) ? true : !!d.adaptive;
     } catch (e) { /* 存储损坏/禁用 → 保留默认 */ }
   }
   function saveSettings() {
@@ -74,6 +77,8 @@
     if (A && settings.muted && typeof A.setMuted === 'function') A.setMuted(true);
     var R = Game.Core && Game.Core.Render;
     if (R && typeof R.setScaleMode === 'function') R.setScaleMode(settings.zoom);
+    var D = Game.Systems && Game.Systems.Adaptive;
+    if (D && typeof D.setEnabled === 'function') D.setEnabled(settings.adaptive);
   }
 
   /* D-48：首屏是否显示。默认关闭（所有既有验证页/机器人页的 init() 行为不变）；
@@ -331,6 +336,17 @@
         return;
       }
     } else if (evt.result === 'lose') {
+      /* D-49：先让自适应系统决定是否兜底救援（复活 + 补给），能救就不走死亡结算。
+       * 触发点固定在战斗结束的死亡结算，不在战斗回合中塞东西。 */
+      var A = Game.Systems && Game.Systems.Adaptive;
+      var rescue = (A && typeof A.onDeath === 'function') ? A.onDeath(player.floor) : null;
+      if (rescue) {
+        refreshFov();
+        syncHud();
+        Game.Systems.Save.save();
+        Game.Core.Main.switchScene('explore');
+        return;
+      }
       /* M9-5：玩家死亡 → 结算弹窗（升级自原来的半血复活） */
       Game.Systems.Save.clear(); /* 死亡清档，重新开始走新档 */
       /* 修复 P2：图鉴随存档一起清空，避免"磁盘已删、内存仍留、下次保存又写回"的不一致 */
@@ -524,6 +540,10 @@
       player.quests = {};
       player.upg = {}; /* S-03：新局强化清零 */
       player.status = {}; /* S-04：新局状态清空 */
+      /* D-49：新局自适应记录清零（开关状态由设置决定，不随局重置） */
+      if (Game.Systems && Game.Systems.Adaptive && typeof Game.Systems.Adaptive.reset === 'function') {
+        Game.Systems.Adaptive.reset();
+      }
       if (Game.Systems && Game.Systems.Quest) Game.Systems.Quest.init();
       /* D-47：新局 NPC 任务状态清零（与 Player.quests 同一处重置） */
       if (Game.Systems && Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.reset === 'function') {
@@ -558,15 +578,22 @@
     shouldShowMenu: shouldShowMenu,
 
     /* 当前设置快照（只读副本；验证页断言三项且无第四项） */
-    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom }; },
+    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive }; },
 
-    /* 设置项列表：只含已存在的三项 */
+    /* 设置项列表：三项既有开关（D-48 的断言口径不变） */
     _settingsSpec: function () {
       return [
         { id: 'fx', label: '打击感', value: FX_LABEL[settings.fx] || '低' },
         { id: 'muted', label: '音效', value: settings.muted ? '关' : '开' },
         { id: 'zoom', label: '画面缩放', value: ZOOM_LABEL[settings.zoom] || '自动（自适应）' }
       ];
+    },
+
+    /* D-49：设置页渲染行 = 三项既有开关 + 自适应难度（单独行，不并入 D-48 的 _settingsSpec） */
+    _settingsRows: function () {
+      var rows = this._settingsSpec();
+      rows.push({ id: 'adaptive', label: '自适应难度', value: settings.adaptive ? '开' : '关' });
+      return rows;
     },
 
     /* 单项设置：即时生效 + 立即持久化；非法值返回 false 且不改状态 */
@@ -584,6 +611,11 @@
         settings.zoom = value;
         var R = Game.Core && Game.Core.Render;
         if (R && typeof R.setScaleMode === 'function') R.setScaleMode(value);
+      } else if (id === 'adaptive') {
+        /* D-49：默认开；关闭后 onDeath/onFloorArrived 全部直接返回 null，行为回到 D-48 */
+        settings.adaptive = !!value;
+        var D = Game.Systems && Game.Systems.Adaptive;
+        if (D && typeof D.setEnabled === 'function') D.setEnabled(settings.adaptive);
       } else {
         return false;
       }
@@ -603,6 +635,7 @@
         var z = ZOOM_LEVELS.indexOf(settings.zoom);
         return this.setSetting('zoom', ZOOM_LEVELS[(z + d + ZOOM_LEVELS.length) % ZOOM_LEVELS.length]);
       }
+      if (id === 'adaptive') return this.setSetting('adaptive', !settings.adaptive);
       return false;
     },
 
@@ -621,7 +654,7 @@
           { id: 'settings', label: '设置', enabled: true },
           { id: 'about', label: '关于', enabled: true }
         ],
-        settings: this._settingsSpec(),
+        settings: this._settingsRows(),
         help: HELP
       };
     },
@@ -715,8 +748,8 @@
 
       if (menu.page === 'settings') {
         if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.settingsSel = Math.max(0, menu.settingsSel - 1); return; }
-        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(2, menu.settingsSel + 1); return; }
-        var ids = ['fx', 'muted', 'zoom'];
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(3, menu.settingsSel + 1); return; }
+        var ids = ['fx', 'muted', 'zoom', 'adaptive'];
         if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; this.cycleSetting(ids[menu.settingsSel], -1); return; }
         if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
         if (enter) { delete k['Enter']; delete k['NumpadEnter']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
@@ -817,15 +850,24 @@
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
             /* 修复：最深层踩下行梯不再静默重生成当前层（changeFloor 边界返回 null） */
+            var prevDown = player.floor;
             if (Game.Systems.Map.changeFloor(1)) {
               player.floor = Game.Systems.Map.getFloor();
               resetPlayer();
+              /* D-49：层间落点检查"上一层出口血 <20%"——只在换层后触发，不在战斗中 */
+              if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
+                Game.Systems.Adaptive.onFloorArrived(prevDown);
+              }
             }
           } else if (t === 3) {
             /* 修复：第 1 层踩上行梯不再静默重生成当前层 */
+            var prevUp = player.floor;
             if (Game.Systems.Map.changeFloor(-1)) {
               player.floor = Game.Systems.Map.getFloor();
               resetPlayer();
+              if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
+                Game.Systems.Adaptive.onFloorArrived(prevUp);
+              }
             }
           } else {
             /* S-04：先判陷阱（踩中即结算、该格永久显现），再判遭遇——同格有怪时先吃陷阱伤害 */
