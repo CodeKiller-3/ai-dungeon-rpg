@@ -512,6 +512,166 @@
     d.floorStart = null;
   }
 
+  /* ── D-40：M1「刷满」——每层全清怪 / 拿宝箱 / 买最贵 / 用卷轴 ──────────
+   * 与 S1 相反：把"能打的全打掉"当目标，用来测量"追求最强"要付什么代价。
+   * 只测量，不改游戏；不传 opts.m1 时一行都不会执行。 */
+  function m1New(cfg) {
+    return {
+      clear: cfg.clear !== false,
+      floors: [], floorStart: null, lastKind: '',
+      bought: [], scrollsUsed: 0, extrapolated: null, shoppedAfterClear: 0, final: null
+    };
+  }
+  /* 累计经验（跨级不丢）：升级会从 exp 里扣阈值，层内增量必须用累计值相减 */
+  function expCum(P) {
+    var s = 0;
+    for (var i = 1; i < (P.level || 1); i++) s += 60 * i;
+    return s + (P.exp || 0);
+  }
+  function ownedCount(id) {
+    var p = Game.Data.Player;
+    if (p.equipment.weapon === id || p.equipment.armor === id) return 1;
+    return p.inventory[id] || 0;
+  }
+  function m1Start(rec) {
+    var P = Game.Data.Player;
+    rec.m1.floorStart = { floor: P.floor, exp: expCum(P), battles: rec.battles, kills: rec.kills, actions: rec.actions };
+  }
+  function m1End(rec) {
+    var P = Game.Data.Player, d = rec.m1, s = d.floorStart;
+    if (!s) return;
+    d.floors.push({
+      floor: s.floor,
+      actions: rec.actions - s.actions,
+      battles: rec.battles - s.battles,
+      kills: rec.kills - s.kills,
+      expGain: expCum(P) - s.exp,
+      atk: P.atk, def: P.def, maxHp: P.maxHp, maxMp: P.maxMp,
+      hp: P.hp, mp: P.mp, level: P.level, gold: P.gold,
+      equip: equipScore(),
+      weaponId: P.equipment.weapon || null, armorId: P.equipment.armor || null,
+      weaponPlus: (P.equipment.weapon && P.upg) ? (P.upg[P.equipment.weapon] || 0) : 0,
+      armorPlus: (P.equipment.armor && P.upg) ? (P.upg[P.equipment.armor] || 0) : 0,
+      potions: hpPotionCount()
+    });
+    d.floorStart = null;
+  }
+  /* 刷满寻路：最近的怪（含 Boss）→ 最近的宝箱 → 未探索格 → 下楼/最终层 Boss */
+  function m1Plan(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid();
+    if (!grid) return null;
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
+    var walkT = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    /* d39Bfs 以 passFn(nx, ny, tile) 三参调用，这里必须三参 */
+    var walkable = function (x, y, t) { return walkT(t); };
+    var start = { x: P.x, y: P.y };
+    var r = d39Bfs(grid, start, function (x, y) { return !!Map.enemyAt(x, y); }, walkable);
+    if (r.ok) { rec.m1.lastKind = 'enemy'; return d39Dir(P, r.first); }
+    r = d39Bfs(grid, start, function (x, y) {
+      var dc = Map.getDecor(x, y);
+      return dc === 'chest' || dc === 'room_chest';
+    }, walkable);
+    if (r.ok) { rec.m1.lastKind = 'chest'; return d39Dir(P, r.first); }
+    r = d39Bfs(grid, start, function (x, y) { return !Game.fov.isExplored(x, y); }, walkable);
+    if (r.ok) { rec.m1.lastKind = 'explore'; return d39Dir(P, r.first); }
+    var goal = d39Goal(P, Map);
+    if (!goal) { rec.m1.lastKind = 'none'; return null; }
+    r = d39Bfs(grid, start, goal.fn, function (x, y, t) { return walkT(t) || t === 2; });
+    rec.m1.lastKind = goal.desc;
+    return r.ok ? d39Dir(P, r.first) : null;
+  }
+  /* 刷满购物：装备优先（只买没拥有且更强的），其次卷轴（每次最多 2 张），最后药水（<3 瓶）。
+   * 同价内取更贵者——这就是"每层买最贵的"的落地口径。 */
+  function m1ShopAct(rec) {
+    var P = Game.Data.Player, it = items();
+    rec.shopVisitedFloor = P.floor;
+    press('KeyE', MOVE_MS);
+    if (Game.Modal.current() !== 'shop') { rec.shopFail++; return; }
+    rec.shopVisits++; rec.actions++;
+    var scrollBuys = 0, guard = 0;
+    while (guard++ < 8) {
+      var stock = Game.Systems.Shop.getStock();
+      var pick = -1, pickPrice = -1, kind = '';
+      for (var i = 0; i < stock.length; i++) {
+        var d = stock[i].item;
+        if (!d || d.price > P.gold) continue;
+        var worth = false;
+        if (d.type === 'weapon') {
+          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
+          worth = !ownedCount(d.id) && (d.effect.atk || 0) > ca;
+        } else if (d.type === 'armor') {
+          var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
+          worth = !ownedCount(d.id) && (d.effect.def || 0) > cd;
+        } else if (d.scroll) {
+          worth = scrollBuys < 2;
+        } else if (d.type === 'consumable' && d.effect && d.effect.hp > 0) {
+          /* "买最贵"= 先攒大件：金币不够 160 时不拿零碎药水，留着买装备/卷轴 */
+          worth = hpPotionCount() < 3 && P.gold >= 160;
+        }
+        if (!worth) continue;
+        if (d.price > pickPrice) { pickPrice = d.price; pick = i; kind = d.scroll ? 'scroll' : d.type; }
+      }
+      if (pick < 0) break;
+      shopSelect(pick);
+      var g0 = P.gold;
+      press('Enter', STEP);
+      var spent = g0 - P.gold;
+      if (spent <= 0) break;
+      rec.actions++; rec.shopBuys++; rec.shopSpent += spent;
+      if (kind === 'scroll') scrollBuys++;
+      rec.m1.bought.push({ floor: P.floor, id: stock[pick].id, price: spent, kind: kind });
+    }
+    if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
+  }
+  /* 背包里的第一张强化卷轴索引（没有返回 -1） */
+  function scrollIndex() {
+    var list = Game.Systems.Inventory.list(), it = items();
+    for (var i = 0; i < list.length; i++) {
+      if (it[list[i].id] && it[list[i].id].scroll) return i;
+    }
+    return -1;
+  }
+  /* 活不到 F5 时的外推：按本局每层平均经验线性推到第 5 层，逐字段标注 extrapolated=true。
+   * 只做算数与标注，不改玩家状态。 */
+  function m1Extrapolate(rec) {
+    var d = rec.m1, arr = d.floors;
+    if (!arr.length) { d.extrapolated = null; return; }
+    var P = Game.Data.Player, it = items();
+    /* 只按"已完整清完的楼层"取每层收益：死亡那一层是残缺的，算进去会把速率拖低 */
+    var base = arr.length > 1 ? arr.slice(0, arr.length - 1) : arr;
+    var sumExp = 0;
+    for (var i = 0; i < base.length; i++) sumExp += base[i].expGain;
+    var avgExp = sumExp / base.length;
+    var lastFloor = arr[arr.length - 1].floor;
+    var remain = Math.max(0, 5 - lastFloor);
+    var lv = P.level, exp = (P.exp || 0) + avgExp * remain;
+    while (exp >= 60 * lv) { exp -= 60 * lv; lv++; }
+    var w = P.equipment.weapon ? it[P.equipment.weapon] : null;
+    var a = P.equipment.armor ? it[P.equipment.armor] : null;
+    var wN = w ? Math.min(Math.max((P.upg && P.upg[w.id]) || 0, 0), 5) : 0;
+    var aN = a ? Math.min(Math.max((P.upg && P.upg[a.id]) || 0, 0), 5) : 0;
+    var eff = Game.Systems.Inventory.effValue;
+    d.extrapolated = {
+      extrapolated: true,
+      assumedFloor: 5, fromFloors: arr.length,
+      diedOnFloor: lastFloor,
+      avgExpPerFloor: Math.round(avgExp * 100) / 100,
+      projectedLevel: lv,
+      projectedExpInLevel: exp,
+      projectedAtk: 10 + (lv - 1) + (w ? eff(w.effect.atk || 0, wN) : 0),
+      projectedDef: 5 + (lv - 1) + (a ? eff(a.effect.def || 0, aN) : 0),
+      projectedMaxHp: 100 + (lv - 1) * 10 + (w && w.effect.maxHp ? w.effect.maxHp : 0) + (a && a.effect.maxHp ? a.effect.maxHp : 0),
+      weaponId: P.equipment.weapon || null, armorId: P.equipment.armor || null,
+      note: '外推：按本局每层平均经验线性外推到第 5 层，非实测'
+    };
+  }
+
   /* ── 寻路：BFS（只读 grid + fov 记忆；格子 0=墙、1=地板、2=下行梯、3=上行梯） ── */
   function firstStep(prev, key) {
     var P = Game.Data.Player;
@@ -749,12 +909,16 @@
     }
     /* D-39：换层即结账——上一层台账收尾、新一层重新起账（上下楼都算） */
     if (rec.d39) { d39LedgerEnd(rec); }
+    /* D-40：M1 每层收尾快照 */
+    if (rec.m1) m1End(rec);
     rec.floorNow = P.floor;
     rec.floorActions = 0;
     /* D-37：刷级额度按层计，换层清零 */
     if (rec.d37) { rec.d37.grindKillsOnFloor = 0; rec.d37.grindTarget = null; rec.d37.grindEngaged = false; }
     /* D-39：新一层重新起账 */
     if (rec.d39) d39LedgerStart(rec);
+    /* D-40：M1 新一层起账 */
+    if (rec.m1) m1Start(rec);
   }
 
   /* ── 一局 ────────────────────────────────────────────────────── */
@@ -792,6 +956,10 @@
     else if (rec.d39 && rec.d39.skill && d37DecideFireball(P, st)) {
       code = 'Digit4';
     }
+    /* D-40：M1 不逃，只按同一套火球判据决定用不用技能 */
+    else if (rec.m1 && d37DecideFireball(P, st)) {
+      code = 'Digit4';
+    }
     var pre = rec.d37 ? {
       mp: P.mp, mhp: st.monster.hp, round: st.roundNo,
       normalWould: dmgOf(P.atk, d37Stats(st).def)
@@ -824,8 +992,23 @@
     /* ② 有更好的装备就换 */
     var eq = betterEquipIndex();
     if (eq >= 0) { useIndex(eq); rec.equips++; rec.actions++; return; }
+    /* ②b D-40 M1：背包里有强化卷轴就立刻用（等价真人"拿到就用"） */
+    if (rec.m1) {
+      var si = scrollIndex();
+      if (si >= 0) { useIndex(si); rec.m1.scrollsUsed++; rec.actions++; return; }
+    }
     /* ③ D-18：每到新一层先看一眼商店（真人到新层也会先看货），本层只进一次 */
-    if (!rec.noShop && rec.shopVisitedFloor !== P.floor) { shopAct(rec); return; }
+    if (!rec.noShop && rec.shopVisitedFloor !== P.floor) {
+      if (rec.m1) m1ShopAct(rec); else shopAct(rec);
+      return;
+    }
+    /* ③b D-40 M1：把本层的怪清完之后再回商店买一次（刷满玩家的真实节奏：先赚钱再花钱） */
+    if (rec.m1 && rec.m1.shoppedAfterClear !== P.floor &&
+        Game.Systems.Map.getEnemies().length === 0 && P.gold >= 80) {
+      rec.m1.shoppedAfterClear = P.floor;
+      m1ShopAct(rec);
+      return;
+    }
     /* ④ D-37：逃跑后的 6 步喘息（计数）与主动刷级，只在 opts.d37 下生效 */
     if (rec.d37) {
       if (rec.d37.respite > 0) rec.d37.respite--;
@@ -846,7 +1029,8 @@
     if (rec.d39 && rec.d39.respite > 0) rec.d39.respite--;
     /* ⑤ 移动（D-39：潜行规划；其余情况沿用既有寻路） */
     var dir;
-    if (rec.d39) dir = rec.d39.avoid ? d39Plan(rec) : d39FallbackDir(rec);
+    if (rec.m1) dir = m1Plan(rec);
+    else if (rec.d39) dir = rec.d39.avoid ? d39Plan(rec) : d39FallbackDir(rec);
     else dir = nextDir(rec);
     if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
     var bx = P.x, by = P.y, traps0 = rec.traps, hp0m = P.hp;
@@ -955,6 +1139,8 @@
     if (opts.d37) rec.d37 = d37New(opts.d37);
     /* D-39：S1 纯潜行的开关与遥测。不传时 rec.d39 为 null，行为与 D-37/D-34 完全一致。 */
     if (opts.d39) rec.d39 = d39New(opts.d39);
+    /* D-40：M1 刷满（全清怪 / 买最贵 / 用卷轴），只测量。 */
+    if (opts.m1) rec.m1 = m1New(opts.m1);
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -967,6 +1153,8 @@
     rec.startPos = P.x + ',' + P.y;
     /* D-39：开局（玩家已满血满蓝）起第一层台账 */
     if (rec.d39) d39LedgerStart(rec);
+    /* D-40：M1 开局起账 */
+    if (rec.m1) m1Start(rec);
     while (rec.actions < rec.maxActions) {
       if (M._scene === 'victory') { rec.outcome = 'win'; break; }
       if (Game.Modal.isOpen() && Game.Modal.current() === 'gameover') { rec.outcome = 'dead'; break; }
@@ -1009,6 +1197,11 @@
       rec.d39.fleeFail = Math.max(0, rec.d39.fleeAttempts - rec.d39.fleeSuccess);
       /* 强制遭遇 = 全部战斗 − 主动踩怪（S1 的 A 组断言就是 active === 0） */
       rec.d39.forced = rec.d39.battles - rec.d39.active;
+    }
+    if (rec.m1) {
+      m1End(rec);
+      m1Extrapolate(rec);
+      rec.m1.final = d37Snap(P, P.floor);
     }
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;

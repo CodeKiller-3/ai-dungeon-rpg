@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-40：读取 preflight/selfcheck/d40-m1.json、d37-g0.json、d37-g2.json、d39-s1.json（测量产物） -->
+<meta name="preflight-meta" content="1">
+<title>D-40 成长上限审计</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-40 · 公式可复算 / 上限可证 / M1 独立 / 外推有标注 / 产物自洽</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, Map = Game.Systems.Map, Inv = Game.Systems.Inventory, D = Game.Data, Bot = Game.Bot;
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return JSON.parse(x.responseText); }
+    catch (e) { return null; }
+  }
+  /* 与 inventory.recalcEquip 同式（只用于复算，不参与游戏逻辑） */
+  function eff(base, plus) { var b = Math.max(Number(base) || 0, 0), n = Math.min(Math.max(Number(plus) || 0, 0), 5); return n > 0 ? b + Math.ceil(b * n * 0.1) : b; }
+  function expectStats(level, w, a, wN, aN) {
+    var it = D.ITEMS;
+    var wa = (w && it[w]) ? (it[w].effect.atk || 0) : 0;
+    var ad = (a && it[a]) ? (it[a].effect.def || 0) : 0;
+    var wh = (w && it[w] && it[w].effect.maxHp) ? it[w].effect.maxHp : 0;
+    var ah = (a && it[a] && it[a].effect.maxHp) ? it[a].effect.maxHp : 0;
+    return { atk: 10 + (level - 1) + eff(wa, wN), def: 5 + (level - 1) + eff(ad, aN), maxHp: 100 + (level - 1) * 10 + wh + ah };
+  }
+
+  try {
+    M.init();
+    M.closeGuide();
+    var P = D.Player;
+    var d40 = readJson('selfcheck/d40-m1.json');
+    var g0 = readJson('selfcheck/d37-g0.json');
+    var g2 = readJson('selfcheck/d37-g2.json');
+    var s1 = readJson('selfcheck/d39-s1.json');
+
+    /* ══ A 组：公式可复算（6 组装备 × 4 个等级 = 24 项） ═══════════ */
+    var combos = [
+      { w: null, a: null, wN: 0, aN: 0 },
+      { w: 'knife', a: 'armor_leather', wN: 0, aN: 0 },
+      { w: 'sword_steel', a: 'chain_mail', wN: 2, aN: 1 },
+      { w: 'sword_anime', a: 'plate_armor_rare', wN: 5, aN: 5 },
+      { w: 'sword_magic_epic', a: 'plate_armor_epic', wN: 5, aN: 5 },
+      { w: 'sword_magic_epic', a: 'robe_mage_epic', wN: 3, aN: 0 }
+    ];
+    var levels = [1, 2, 4, 8];
+    var aBad = [], aChecked = 0;
+    var saved = { level: P.level, equip: JSON.parse(JSON.stringify(P.equipment)), upg: JSON.parse(JSON.stringify(P.upg || {})) };
+    for (var ci = 0; ci < combos.length; ci++) {
+      for (var li = 0; li < levels.length; li++) {
+        var c = combos[ci], L = levels[li];
+        var exp = expectStats(L, c.w, c.a, c.wN, c.aN);
+        P.level = L;
+        P.equipment.weapon = c.w; P.equipment.armor = c.a;
+        P.upg = {};
+        if (c.w) P.upg[c.w] = c.wN;
+        if (c.a) P.upg[c.a] = c.aN;
+        Inv.recalcEquip();
+        aChecked++;
+        if (P.atk !== exp.atk || P.def !== exp.def || P.maxHp !== exp.maxHp) {
+          aBad.push({ combo: ci, level: L, got: { atk: P.atk, def: P.def, maxHp: P.maxHp }, want: exp });
+        }
+        if (ci === 0 && li === 0) { /* 无装备 L1 就是初始值，单独记 */ }
+      }
+    }
+    P.level = saved.level; P.equipment = saved.equip; P.upg = saved.upg;
+    Inv.recalcEquip();
+    rec('A_formula_reproducible', aChecked === 24 && aBad.length === 0, {
+      checked: aChecked, mismatches: aBad.slice(0, 4),
+      note: 'atk=10+(L-1)+eff(武器)，def=5+(L-1)+eff(护甲)，maxHp=100+(L-1)*10+装备maxHp'
+    });
+
+    /* ══ B 组：上限可证（每一分来源都对着代码） ═════════════════════ */
+    /* B1 初始值：L1 空装 */
+    var b1 = expectStats(1, null, null, 0, 0);
+    /* B2 升级增量：L1→L8 每级 +1/+1/+10 */
+    var b2 = { atkPerLv: expectStats(8, null, null, 0, 0).atk - expectStats(1, null, null, 0, 0).atk,
+               defPerLv: expectStats(8, null, null, 0, 0).def - expectStats(1, null, null, 0, 0).def,
+               hpPerLv: (expectStats(8, null, null, 0, 0).maxHp - expectStats(1, null, null, 0, 0).maxHp) / 7 };
+    /* B3 最强装备 */
+    var it = D.ITEMS, bestW = null, bestA = null;
+    for (var k in it) {
+      if (!it.hasOwnProperty(k)) continue;
+      if (it[k].type === 'weapon' && it[k].effect && (it[k].effect.atk || 0) > 0) {
+        if (!bestW || it[k].effect.atk > it[bestW].effect.atk) bestW = k;
+      }
+      if (it[k].type === 'armor' && it[k].effect && (it[k].effect.def || 0) > 0) {
+        if (!bestA || it[k].effect.def > it[bestA].effect.def) bestA = k;
+      }
+    }
+    /* B4 强化：+5 上限（inventory.upgrade 的 upg>=5 判定）+ 单件最大加成 */
+    var b4 = { effAtBase16Plus5: eff(16, 5), effAtBase16Plus9: eff(16, 9) };
+    /* B5 上限表：每级的最强三围（L9 是"怪物经验 + 全部任务经验"才可能擦到的天花板） */
+    var capTable = [];
+    for (var L2 = 1; L2 <= 9; L2++) {
+      var e2 = expectStats(L2, bestW, bestA, 5, 5);
+      var e3 = expectStats(L2, 'sword_anime', 'plate_armor_rare', 5, 5);
+      capTable.push({ level: L2, epicAtk: e2.atk, epicDef: e2.def, epicHp: e2.maxHp,
+        rareAtk: e3.atk, rareDef: e3.def, rareHp: e3.maxHp });
+    }
+    /* B6 (31,26,190) 同状态可达性 */
+    var sameState = capTable.filter(function (r) { return r.epicHp === 190 && r.epicAtk === 31 && r.epicDef === 26; });
+
+    /* B7 经验预算：全图 45 只怪（含 3 只 Boss）+ 12 条任务奖励 → 硬性等级上限。
+     * 经验只有两个来源：battle.js 击杀（p.exp += m.exp）与 quest.js 领奖（p.exp += q.reward.exp）；
+     * 只读：用同种子重生成地图后累加 MONSTERS[id].exp，不改任何游戏状态。 */
+    function cumExp(L) { return 30 * L * (L - 1); }
+    function levelFromExp(e) { var L = 1; while (cumExp(L + 1) <= e && L < 99) L++; return L; }
+    var questExp = 0;
+    for (var qi = 0; qi < D.QUESTS.length; qi++) questExp += (D.QUESTS[qi].reward && D.QUESTS[qi].reward.exp) || 0;
+    var bud = [], budLevels = [];
+    var seeds = (d40 && d40.env.seedList) || [];
+    for (var si = 0; si < seeds.length; si++) {
+      Math.random = Bot.mulberry32(seeds[si]);
+      var tot = 0;
+      for (var f = 1; f <= (D.MAPS.floors || 5); f++) {
+        Map.setFloor(f);
+        var es = Map.getEnemies();
+        for (var ei = 0; ei < es.length; ei++) {
+          var md = D.MONSTERS[es[ei].monsterId];
+          if (md) tot += (md.exp || 0);
+        }
+      }
+      bud.push(tot);
+      budLevels.push(levelFromExp(tot));
+    }
+    function mean(a) { if (!a.length) return 0; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return Math.round((s / a.length) * 100) / 100; }
+    var expBudget = bud.length ? {
+      seeds: bud.length, avgExp: mean(bud), minExp: Math.min.apply(null, bud), maxExp: Math.max.apply(null, bud),
+      avgMaxLevel: mean(budLevels), maxMaxLevel: Math.max.apply(null, budLevels),
+      questExp: questExp,
+      maxExpWithQuest: Math.max.apply(null, bud) + questExp,
+      maxLevelWithQuest: levelFromExp(Math.max.apply(null, bud) + questExp),
+      cumExpL8: cumExp(8), cumExpL9: cumExp(9), cumExpL10: cumExp(10)
+    } : null;
+    rec('B_ceiling_traceable', b1.atk === 10 && b1.def === 5 && b1.maxHp === 100 &&
+      b2.atkPerLv === 7 && b2.defPerLv === 7 && b2.hpPerLv === 10 &&
+      it[bestW].effect.atk === 16 && it[bestA].effect.def === 16 &&
+      b4.effAtBase16Plus5 === 24 && sameState.length === 0 &&
+      !!expBudget && expBudget.maxLevelWithQuest <= 9 &&
+      expBudget.maxExpWithQuest < expBudget.cumExpL10, {
+      baseL1: b1, levelGain: b2, bestWeapon: { id: bestW, atk: it[bestW].effect.atk },
+      bestArmor: { id: bestA, def: it[bestA].effect.def }, upgrade: b4,
+      capTable: capTable, sameStateReachable: sameState.length, expBudget: expBudget,
+      note: '(31,26,190) 只在 D-34 的 L10 模型里同时成立；L10 需 2700 经验，全图怪物+全任务上限仍 <2700，故不可达。' +
+        ' hp190 本身在 L8（epic 武器+epic 护甲各 +10）可达，但那一刻 atk/def 是 33/28（无强化）或 41/36（双 +5）'
+    });
+
+    /* ══ C 组：M1 独立（同种子/同上限/同起点）+ 改种子负例 ═════════ */
+    function sameMatrix(a, b) {
+      if (!a || !b) return false;
+      if (a.env.seedList.join(',') !== b.env.seedList.join(',')) return false;
+      if (a.env.maxActions !== b.env.maxActions) return false;
+      if (a.env.startPosSet.join(',') !== b.env.startPosSet.join(',')) return false;
+      return true;
+    }
+    var cMain = sameMatrix(d40, g0) && sameMatrix(d40, g2) && sameMatrix(d40, s1);
+    var tampered = JSON.parse(JSON.stringify(d40));
+    tampered.env.seedList[3] = 1999;
+    var cNeg = sameMatrix(tampered, g0) === false;
+    rec('C_M1_independent_matrix', !!d40 && !!g0 && !!g2 && !!s1 && cMain && cNeg, {
+      vsG0: sameMatrix(d40, g0), vsG2: sameMatrix(d40, g2), vsS1: sameMatrix(d40, s1),
+      tamperDetected: cNeg,
+      seeds: d40 ? d40.env.seedList[0] + '..' + d40.env.seedList[d40.env.seedList.length - 1] : null,
+      maxActions: d40 ? d40.env.maxActions : null
+    });
+
+    /* ══ D 组：外推有标注（负例：无标记的外推值必须被抓到） ═════════ */
+    function projectionLeaks(obj, path, acc) {
+      if (!obj || typeof obj !== 'object') return acc;
+      var keys = Object.keys(obj);
+      var flagged = obj.extrapolated === true;
+      var hasProj = false;
+      for (var i = 0; i < keys.length; i++) if (/^projected[A-Z]/.test(keys[i])) hasProj = true;
+      if (hasProj && !flagged) acc.push(path);
+      for (var j = 0; j < keys.length; j++) {
+        var v = obj[keys[j]];
+        if (v && typeof v === 'object') projectionLeaks(v, path + '.' + keys[j], acc);
+      }
+      return acc;
+    }
+    var leaks = [];
+    if (d40) {
+      projectionLeaks({ runs: d40.runs, summary: d40.summary }, 'd40', leaks);
+    }
+    var negLeak = projectionLeaks({ projectedAtk: 31, projectedMaxHp: 190 }, 'fake', []);
+    var extrapCount = 0;
+    if (d40) for (var ri = 0; ri < d40.runs.length; ri++) if (d40.runs[ri].m1 && d40.runs[ri].m1.extrapolated && d40.runs[ri].m1.extrapolated.extrapolated === true) extrapCount++;
+    rec('D_extrapolation_labelled', !!d40 && leaks.length === 0 && negLeak.length === 1 && extrapCount === d40.runs.length, {
+      extrapolatedRuns: extrapCount, totalRuns: d40 ? d40.runs.length : 0,
+      unflaggedProjections: leaks.slice(0, 4), negativeCaseCaught: negLeak.length === 1
+    });
+
+    /* ══ E 组：产物字段自洽（与 D-37 / D-39 可比） ═══════════════ */
+    var needFloor = ['hp', 'mp', 'level', 'gold', 'equip', 'atk', 'def', 'maxHp', 'maxMp', 'weaponId', 'armorId'];
+    var needFinal = ['floor', 'hp', 'maxHp', 'mp', 'maxMp', 'level', 'gold', 'equip', 'weaponId', 'armorId'];
+    var eBad = [];
+    if (d40 && d40.runs.length) {
+      var rr = d40.runs[0].m1;
+      if (!rr || !rr.floors.length) eBad.push('no floors');
+      else for (var q = 0; q < needFloor.length; q++) if (!(needFloor[q] in rr.floors[0])) eBad.push('floor.' + needFloor[q]);
+      if (!rr || !rr.final) eBad.push('no final');
+      else for (var q2 = 0; q2 < needFinal.length; q2++) if (!(needFinal[q2] in rr.final)) eBad.push('final.' + needFinal[q2]);
+      var top = d40.runs[0];
+      var needTop = ['seed', 'outcome', 'actions', 'battles', 'kills', 'gold', 'level', 'death', 'deathFloor'];
+      for (var q3 = 0; q3 < needTop.length; q3++) if (!(needTop[q3] in top)) eBad.push('run.' + needTop[q3]);
+    } else eBad.push('no runs');
+    rec('E_artifact_fields_comparable', eBad.length === 0, {
+      bad: eBad.slice(0, 6),
+      floorFields: needFloor, finalFields: needFinal,
+      note: '与 D-37 的 d37Snap / D-39 的 floorEnter 同口径'
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>
