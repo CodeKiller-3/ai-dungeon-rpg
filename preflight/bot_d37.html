@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-37 bot 四组对照测量</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-37 · 测量台校准（本页不参与 run-all 回归，只产出 d37-g*.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-37 单组跑局器：种子 1001~1050、maxActions 2500 固定；组号由 ?g=G0..G3 决定，一页一组，
+ * 四份产物分开落盘（d37-g0.json … d37-g3.json），互不覆盖。
+ * 四组的策略只差三个开关：
+ *   G0 基线（与 D-34 同一策略） / G1 +火球 / G2 +火球+逃跑 / G3 +火球+逃跑+刷级
+ * 本页只产出数据，不做"游戏难不难"的判断。 */
+(function () {
+  var out = { protocol: 'D-37', group: '', strategy: null, env: {}, summary: null, runs: [] };
+  var GROUPS = {
+    G0: { fireball: false, flee: false, grind: false },
+    G1: { fireball: true, flee: false, grind: false },
+    G2: { fireball: true, flee: true, grind: false },
+    G3: { fireball: true, flee: true, grind: true }
+  };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  function agg(runs) {
+    var d = {
+      fireball: { casts: 0, mp: 0, dmg: 0, normalWould: 0, dmgDiff: 0, castMpBad: 0,
+        runsWithCast: 0, mpDryEvents: 0, mpDryRounds: {} },
+      flee: { attempts: 0, successes: 0, failures: 0, reengaged: 0, runsWithFlee: 0,
+        retreats: [], retreatOk: 0 },
+      grind: { kills: 0, targets: 0, runsWithKill: 0 },
+      floorStates: [],
+      deathStates: { count: 0, bySource: {}, withTelemetry: 0 }
+    };
+    var fAgg = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], x = r.d37;
+      if (!x) continue;
+      d.fireball.casts += x.fireballCasts;
+      d.fireball.mp += x.fireballMp;
+      d.fireball.dmg += x.fireballDmg;
+      d.fireball.normalWould += x.fireballNormalWould;
+      d.fireball.castMpBad += x.fireballCastMpBad;
+      if (x.fireballCasts > 0) d.fireball.runsWithCast++;
+      d.fireball.mpDryEvents += x.mpDry.length;
+      for (var q = 0; q < x.mpDry.length; q++) {
+        var rd = String(x.mpDry[q].round);
+        d.fireball.mpDryRounds[rd] = (d.fireball.mpDryRounds[rd] || 0) + 1;
+      }
+      d.flee.attempts += x.fleeAttempts;
+      d.flee.successes += x.fleeSuccess;
+      d.flee.failures += x.fleeFail;
+      d.flee.reengaged += x.reengagedAfterFlee;
+      if (x.fleeSuccess > 0) d.flee.runsWithFlee++;
+      for (var f = 0; f < x.fleeLog.length; f++) {
+        var e = x.fleeLog[f];
+        d.flee.retreats.push({ seed: r.seed, floor: e.floor, monsterId: e.monsterId,
+          from: e.from, to: e.to, retreat: e.retreat });
+        if (e.retreat >= 1) d.flee.retreatOk++;
+      }
+      d.grind.kills += x.grindKills;
+      d.grind.targets += x.grindTargets;
+      if (x.grindKills > 0) d.grind.runsWithKill++;
+      for (var k = 0; k < x.floorEnd.length; k++) {
+        var s = x.floorEnd[k];
+        if (!fAgg[s.floor]) fAgg[s.floor] = { hp: [], mp: [], level: [], gold: [], equip: [] };
+        fAgg[s.floor].hp.push(s.hp);
+        fAgg[s.floor].mp.push(s.mp);
+        fAgg[s.floor].level.push(s.level);
+        fAgg[s.floor].gold.push(s.gold);
+        fAgg[s.floor].equip.push(s.equip);
+      }
+      if (r.death) {
+        d.deathStates.count++;
+        d.deathStates.withTelemetry++;
+        var src = r.death.source || '(unknown)';
+        d.deathStates.bySource[src] = (d.deathStates.bySource[src] || 0) + 1;
+      }
+    }
+    d.fireball.dmgDiff = d.fireball.dmg - d.fireball.normalWould;
+    for (var fl in fAgg) if (fAgg.hasOwnProperty(fl)) {
+      var g = fAgg[fl];
+      d.floorStates.push({
+        floor: +fl, n: g.hp.length,
+        avgHp: mean(g.hp), avgMp: mean(g.mp), avgLevel: mean(g.level),
+        avgGold: mean(g.gold), avgEquip: mean(g.equip)
+      });
+    }
+    d.floorStates.sort(function (a, b) { return a.floor - b.floor; });
+    return d;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var gm = /g=(G[0-3])/.exec(qs);
+    var group = gm ? gm[1] : 'G0';
+    out.group = group;
+    out.strategy = GROUPS[group];
+    var m = /n=(\d+)/.exec(qs);
+    var n = m ? Math.max(1, Math.min(200, +m[1])) : 50;
+    var seeds = [];
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    var t0 = Date.now();
+    var res = Game.Bot.batch(seeds, { maxActions: 2500, d37: GROUPS[group] });
+    out.wallMs = Date.now() - t0;
+    out.env = {
+      ua: navigator.userAgent,
+      stepMs: Game.Bot.STEP_MS,
+      actionSec: Game.Bot.ACTION_SEC,
+      seeds: 'seed 1001..' + (1000 + n) + ' (固定)',
+      seedList: seeds,
+      maxActions: 2500,
+      startPosSet: (function () {
+        var s = {};
+        for (var j = 0; j < res.runs.length; j++) s[res.runs[j].startPos] = 1;
+        return Object.keys(s).sort();
+      })()
+    };
+    out.summary = res.summary;
+    out.summary.d37 = agg(res.runs);
+    out.runs = res.runs;
+    out.spy = Game.Bot.spy();
+    out.ok = true;
+    document.title = 'BATCH_DONE group=' + group + ' runs=' + res.runs.length +
+      ' win=' + res.summary.win + ' dead=' + res.summary.dead + ' stuck=' + res.summary.stuck +
+      ' fb=' + out.summary.d37.fireball.casts + ' flee=' + out.summary.d37.flee.successes +
+      ' grind=' + out.summary.d37.grind.kills + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D37__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out, null, 1);
+})();
+</script>
+</body>
+</html>

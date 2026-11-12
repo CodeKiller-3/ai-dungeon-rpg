@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-37：本页读取 preflight/selfcheck/d37-g*.json 与 d34-bot-report.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-37 测量台校准：四组对照</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-37 · 测量台校准（G0 基线 / G1 +火球 / G2 +火球+逃跑 / G3 +火球+逃跑+刷级）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false, sub: {} };
+  var M = Game.Core.Main, Bot = Game.Bot;
+  var START = Date.now();
+  var CFG = {
+    G0: { fireball: false, flee: false, grind: false },
+    G1: { fireball: true, flee: false, grind: false },
+    G2: { fireball: true, flee: true, grind: false },
+    G3: { fireball: true, flee: true, grind: true }
+  };
+  var LIVE_SEEDS = [1001, 1003, 1004];
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+  }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function keysOf(o) {
+    var a = [];
+    for (var k in o) if (o.hasOwnProperty(k)) a.push(k);
+    return a.sort().join(',');
+  }
+  /* A 组口径：局数、胜负、步数、死亡层、死因 + 更严格的收尾状态 */
+  var A_FIELDS = ['seed', 'outcome', 'actions', 'deathFloor', 'deathCause', 'hp', 'level', 'gold', 'endPos', 'floors'];
+  function runSig(r) {
+    var a = [];
+    for (var i = 0; i < A_FIELDS.length; i++) a.push(r[A_FIELDS[i]]);
+    return JSON.stringify(a);
+  }
+  function cmpRuns(a, b) {
+    if (!a || !b) return { ok: false, bad: ['缺失'] };
+    if (a.length !== b.length) return { ok: false, bad: ['局数 ' + a.length + ' vs ' + b.length] };
+    var bad = [];
+    for (var i = 0; i < a.length; i++) {
+      if (runSig(a[i]) !== runSig(b[i])) bad.push(a[i].seed);
+    }
+    return { ok: bad.length === 0, bad: bad };
+  }
+  function cmpMeta(list) {
+    var bad = [];
+    var refSeeds = list[0].env.seedList.join(',');
+    var refStart = list[0].env.startPosSet.join(',');
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i];
+      if (x.env.maxActions !== 2500) bad.push(x.group + ':maxActions=' + x.env.maxActions);
+      if (x.runs.length !== 50) bad.push(x.group + ':runs=' + x.runs.length);
+      if (x.env.seedList.join(',') !== refSeeds) bad.push(x.group + ':seeds');
+      if (x.env.startPosSet.join(',') !== refStart) bad.push(x.group + ':startPos');
+    }
+    return { ok: bad.length === 0, bad: bad, seeds: refSeeds, startPos: refStart };
+  }
+  function d37FieldCheck(j) {
+    var bad = [];
+    var s = j.summary, d = s.d37;
+    if (!j.protocol || j.protocol !== 'D-37') bad.push('protocol');
+    if (j.runs.length !== s.runs) bad.push('runs.length');
+    if (s.win + s.dead + s.stuck !== s.runs) bad.push('outcomeSum');
+    if (Math.abs(s.winRate - s.win / s.runs) > 1e-9) bad.push('winRate');
+    if (Math.abs(s.deadRate - s.dead / s.runs) > 1e-9) bad.push('deadRate');
+    var dist = 0, k;
+    for (k in s.deathFloorDist) if (s.deathFloorDist.hasOwnProperty(k)) dist += s.deathFloorDist[k];
+    if (dist !== s.dead) bad.push('deathFloorSum');
+    if (d.fireball.mp !== 12 * d.fireball.casts) bad.push('fireballMpTotal');
+    if (d.fireball.castMpBad !== 0) bad.push('castMpBad');
+    if (d.flee.failures !== d.flee.attempts - d.flee.successes) bad.push('fleeFail');
+    var retreat = 0;
+    for (var i = 0; i < j.runs.length; i++) {
+      var r = j.runs[i], x = r.d37;
+      if (!x) { bad.push('run.d37@' + r.seed); continue; }
+      if (x.fireballMp !== 12 * x.fireballCasts) bad.push('runFbMp@' + r.seed);
+      if (x.fleeFail !== Math.max(0, x.fleeAttempts - x.fleeSuccess)) bad.push('runFleeFail@' + r.seed);
+      if (x.fleeLog.length !== x.fleeSuccess) bad.push('runFleeLog@' + r.seed);
+      for (var f = 0; f < x.fleeLog.length; f++) {
+        var e = x.fleeLog[f];
+        if (e.retreat >= 1 && e.from !== e.to) retreat++;
+      }
+    }
+    if (retreat !== d.flee.retreatOk) bad.push('retreatOk');
+    return { ok: bad.length === 0, bad: bad };
+  }
+
+  try {
+    var G0 = readJson('selfcheck/d37-g0.json');
+    var G1 = readJson('selfcheck/d37-g1.json');
+    var G2 = readJson('selfcheck/d37-g2.json');
+    var G3 = readJson('selfcheck/d37-g3.json');
+    var D34 = readJson('selfcheck/d34-bot-report.json');
+    out.loaded = !!(G0 && G1 && G2 && G3 && D34 && M && Bot);
+    if (!out.loaded) {
+      rec('LOAD', false, { g0: !!G0, g1: !!G1, g2: !!G2, g3: !!G3, d34: !!D34 });
+      throw new Error('产物缺失');
+    }
+
+    /* ══ A 组：测量台自检（G0 必须逐局复现 D-34） ══════════════════ */
+    var aEv = cmpRuns(G0.runs, D34.runs);
+    /* 负例 1：把 G0 的一条记录改 1 步 → 比较器必须判不等 */
+    var mutated = JSON.parse(JSON.stringify(G0));
+    mutated.runs[0].actions += 1;
+    var aNeg = cmpRuns(mutated.runs, D34.runs);
+    /* 活体：同页现跑 3 个种子，证明"当前代码"仍复现，而不是只信落盘文件 */
+    M.init();
+    M.closeGuide();
+    Bot.install();
+    function live(seed, cfg) { return Bot.run(seed, { maxActions: 2500, d37: cfg }); }
+    var liveG0 = [];
+    for (var i0 = 0; i0 < LIVE_SEEDS.length; i0++) liveG0.push(live(LIVE_SEEDS[i0], CFG.G0));
+    var liveG0Rep = liveG0.map(function (r) {
+      return D34.runs.filter(function (x) { return x.seed === r.seed; })[0];
+    });
+    var aLive = cmpRuns(liveG0, liveG0Rep);
+    /* 负例 2：只改一条策略（开火球 = G1）后同种子现跑，必须与 D-34 不同 */
+    var liveG1 = [];
+    for (var i1 = 0; i1 < LIVE_SEEDS.length; i1++) liveG1.push(live(LIVE_SEEDS[i1], CFG.G1));
+    var aStrategyNeg = liveG1.some(function (r, i) {
+      var ref = D34.runs.filter(function (x) { return x.seed === LIVE_SEEDS[i]; })[0];
+      return runSig(r) !== runSig(ref);
+    });
+    rec('A_G0_reproduces_d34', aEv.ok && aLive.ok && !aNeg.ok && aStrategyNeg, {
+      evidence: aEv, liveSeeds: LIVE_SEEDS, live: aLive,
+      negativeMutatedRunFails: !aNeg.ok, negativeBadSeed: aNeg.bad,
+      negativeStrategyChangeDetected: aStrategyNeg,
+      liveG1Actions: liveG1.map(function (r) { return r.actions; }),
+      d34Actions: LIVE_SEEDS.map(function (s) {
+        return D34.runs.filter(function (x) { return x.seed === s; })[0].actions;
+      })
+    });
+
+    /* ══ B 组：火球真的被用了（G1） ═══════════════════════════════ */
+    var b1 = G1.summary.d37.fireball;
+    var b1RunMpOk = G1.runs.every(function (r) {
+      return r.d37.fireballMp === 12 * r.d37.fireballCasts;
+    });
+    var liveG1Casts = liveG1.reduce(function (s, r) { return s + r.d37.fireballCasts; }, 0);
+    /* 负例：同种子短路火球（G0 配置）→ 次数必须为 0 */
+    var liveG0Casts = liveG0.reduce(function (s, r) { return s + r.d37.fireballCasts; }, 0);
+    var bDiffOk = b1.dmg > b1.normalWould && b1.dmgDiff > 0;
+    rec('B_fireball_used', b1.casts > 0 && b1.mp === 12 * b1.casts && b1.castMpBad === 0 &&
+      b1RunMpOk && bDiffOk && liveG1Casts > 0 && liveG0Casts === 0 && G0.summary.d37.fireball.casts === 0, {
+      evidence: b1, runsMpConsistent: b1RunMpOk,
+      liveCastsG1: liveG1Casts, liveCastsG0: liveG0Casts,
+      negativeShortCircuitZero: liveG0Casts === 0 && G0.summary.d37.fireball.casts === 0
+    });
+
+    /* ══ C 组：逃跑真的被用了（G2），且有一次成功退一格 ═══════════ */
+    var c1 = G2.summary.d37.flee;
+    var cRetreat = c1.retreats.filter(function (e) { return e.retreat >= 1 && e.from !== e.to; });
+    /* 活体：重跑 G2 的 seed 1023（证据里最早发生逃跑的一局），逃跑日志必须逐项一致 */
+    var ev1023 = G2.runs.filter(function (r) { return r.seed === 1023; })[0];
+    var live1023 = live(1023, CFG.G2);
+    var cLiveSame = !!ev1023 && JSON.stringify(live1023.d37.fleeLog) === JSON.stringify(ev1023.d37.fleeLog);
+    var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
+      liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });
+    rec('C_flee_used', c1.successes > 0 && c1.retreatOk > 0 && cRetreat.length > 0 &&
+      cLiveSame && cNeg, {
+      evidence: { attempts: c1.attempts, successes: c1.successes, failures: c1.failures,
+        reengaged: c1.reengaged, retreatOk: c1.retreatOk, runsWithFlee: c1.runsWithFlee },
+      firstRetreat: cRetreat[0] || null,
+      liveSeed: 1023, liveFleeLog: live1023.d37.fleeLog, liveMatchesEvidence: cLiveSame,
+      negativeFleeOffZero: cNeg
+    });
+
+    /* ══ D 组：四组独立（种子 / maxActions / 起点完全相同） ═══════ */
+    var dMeta = cmpMeta([G0, G1, G2, G3]);
+    var dMut = JSON.parse(JSON.stringify(G1));
+    dMut.runs[10].seed = 9999;
+    dMut.env.seedList[10] = 9999;
+    var dNeg = cmpMeta([G0, dMut, G2, G3]);
+    rec('D_groups_independent', dMeta.ok && !dNeg.ok, {
+      meta: dMeta, negativeSeedMutatedFails: !dNeg.ok, negativeBad: dNeg.bad
+    });
+
+    /* ══ E 组：产物自洽（字段集一致 / 组号 / 可复算） ═════════════ */
+    var groups = [G0, G1, G2, G3];
+    var labelOk = [G0.group, G1.group, G2.group, G3.group].join(',') === 'G0,G1,G2,G3';
+    var kTop = keysOf(G0), kRun = keysOf(G0.runs[0]), kSum = keysOf(G0.summary), kD37 = keysOf(G0.summary.d37);
+    var sameSets = true, detail = [];
+    for (var gi = 1; gi < groups.length; gi++) {
+      var x = groups[gi];
+      var ok = keysOf(x) === kTop && keysOf(x.runs[0]) === kRun &&
+        keysOf(x.summary) === kSum && keysOf(x.summary.d37) === kD37;
+      if (!ok) sameSets = false;
+      detail.push({ group: x.group, top: keysOf(x) === kTop, run: keysOf(x.runs[0]) === kRun,
+        summary: keysOf(x.summary) === kSum, d37: keysOf(x.summary.d37) === kD37 });
+    }
+    var eChecks = groups.map(function (x) {
+      var r = d37FieldCheck(x);
+      return { group: x.group, ok: r.ok, bad: r.bad };
+    });
+    var eAll = eChecks.every(function (r) { return r.ok; });
+    rec('E_artifacts_consistent', labelOk && sameSets && eAll, {
+      labels: [G0.group, G1.group, G2.group, G3.group], sameFieldSets: sameSets,
+      fieldSets: detail, recompute: eChecks
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  var pre = document.getElementById('result');
+  pre.textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>

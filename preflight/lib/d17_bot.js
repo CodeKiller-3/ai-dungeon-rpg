@@ -9,6 +9,10 @@
  *
  * 渲染：install() 把 Render.draw* 全部替换成空函数（只为提速，不影响玩法判定）。
  *
+ * D-37（测量台校准）：只新增 opts.d37 = {fireball, flee, grind} 三条可选分支与遥测，
+ * 既有策略分支（嗑药 / 套盾 / 寻路 / 商店 / 换装）一行未改；不传 opts.d37 时行为与 D-34 完全一致
+ * （由 verify_d37 A 组逐局对照 d34-bot-report.json 守门）。
+ *
  * 来源：自写 */
 (function () {
   'use strict';
@@ -100,6 +104,179 @@
     return s;
   }
 
+  /* ── D-37：人会不会这么做 ──────────────────────────────────────
+   * 这里只用"玩家肉眼也能算"的量做判断：当前 atk/def、怪的血/攻/防、MP、已损失血量。
+   * 伤害推演与 battle.js 的 D-34 公式同式（普攻 max(1,round(a²/(a+d)))，技能 max(round(a×倍率)-d,1)），
+   * 但只用于决策；实际伤害一律读战斗状态的前后差值（见 d37AfterBattleAct），不拿推演冒充实测。 */
+  function dmgOf(atk, def) {
+    var a = Math.max(Number(atk) || 0, 0), d = Math.max(Number(def) || 0, 0);
+    if (a + d <= 0) return 1;
+    return Math.max(1, Math.round(a * a / (a + d)));
+  }
+  /* 战斗状态的只读快照（狂暴时取当前生效值，与 battle.js 的 monsterAtk/monsterDef 同口径） */
+  function d37Stats(st) {
+    var m = st.monster;
+    return {
+      id: m.id, name: m.name, hp: m.hp, maxHp: m.maxHp,
+      atk: st.enraged ? st.enrageAtk : m.atk,
+      def: st.enraged ? st.enrageDef : m.def
+    };
+  }
+  /* 本回合能打出的最高单发（火球可用且更疼就用火球，否则普攻） */
+  function d37BestHit(P, def) {
+    var nd = dmgOf(P.atk, def);
+    var cd = (Game.Skills && Game.Skills.getCooldown) ? Game.Skills.getCooldown('fireball') : 0;
+    if (cd <= 0 && P.mp >= 12) {
+      var fd = Math.max(1, Math.round(P.atk * 1.8) - def);
+      if (fd > nd) return fd;
+    }
+    return nd;
+  }
+  /* 火球判据（真人版）：
+   *   · 冷却好了、MP 够 12 —— 这是硬门槛；
+   *   · 火球这一发确实比普攻疼 ≥3 点，否则不值得吃 3 回合冷却；
+   *   · 普攻这一下就能收尾时不放（伤害溢出，纯浪费蓝）；
+   *   · MP ≥ 24（还够再放一次）时放心用；
+   *   · 只剩最后一发（12 ≤ MP < 24）时只留给"两发内结束"或"血量 ≤45% 需要速杀"，
+   *     也就是留一手应急，而不是见怪就轰。 */
+  function d37DecideFireball(P, st) {
+    var m = d37Stats(st);
+    if (P.mp < 12) return false;
+    if (!Game.Skills || Game.Skills.getCooldown('fireball') > 0) return false;
+    var nd = dmgOf(P.atk, m.def);
+    var fd = Math.max(1, Math.round(P.atk * 1.8) - m.def);
+    if (fd <= nd) return false;
+    if (Math.ceil(m.hp / nd) <= 1) return false;
+    if (fd - nd < 3) return false;
+    if (P.mp >= 24) return true;
+    if (P.hp <= P.maxHp * 0.45) return true;
+    if (m.hp <= fd * 2) return true;
+    return false;
+  }
+  /* 逃跑判据（真人版）：
+   *   · 先算"还挨几下会死"（nDie）与"还要几回合能打死它"（nKill）；
+   *   · nKill ≤ 2：两下能收掉的怪不逃；
+   *   · nDie > 2：还撑得住，不逃（真人不会掉一点血就跑）；
+   *   · 只有 nKill > nDie+1（明显打不过）才逃；逃跑失败会被怪立刻反击，
+   *     所以这条判据也保证"赌输了那一下通常还挨得住"；若已经 nDie=1（本来就必死），
+   *     逃是唯一活路，允许赌；
+   *   · 同一场最多试 2 次——连续赌第三次是把命交给骰子，真人不会这么打。 */
+  function d37DecideFlee(rec, P, st) {
+    if (rec.d37.fleeTriesThisBattle >= 2) return false;
+    var m = d37Stats(st);
+    var md = dmgOf(m.atk, P.def);
+    var my = d37BestHit(P, m.def);
+    var nDie = Math.ceil(P.hp / md);
+    var nKill = Math.ceil(m.hp / my);
+    if (nKill <= 2) return false;
+    if (nDie > 2) return false;
+    return nKill > nDie + 1;
+  }
+  /* 刷级判据（真人版）：
+   *   · 血量 ≥60%（与既有寻路的"血少绕怪"同一条边界，翻转过来就是"血够就顺手清一只"）；
+   *   · 等级 ≥4 后不再刻意刷（够用即可，不做全图清怪机器）；
+   *   · 每层最多主动打 2 只，打完继续探图/下楼；
+   *   · 只挑"算下来能稳赢"的怪：nDie ≥ nKill+2 且 nKill ≤ 8，打之前就知道不会翻车。 */
+  function d37SafeFight(P, enemy) {
+    var m = (Game.Data.MONSTERS || {})[enemy.monsterId];
+    if (!m) return false;
+    var md = dmgOf(m.atk, P.def);
+    var my = d37BestHit(P, m.def);
+    var nDie = Math.ceil(P.hp / md);
+    var nKill = Math.ceil(m.hp / my);
+    return nDie >= nKill + 2 && nKill <= 8;
+  }
+  function d37Snap(P, floor) {
+    return {
+      floor: floor, hp: P.hp, maxHp: P.maxHp, mp: P.mp, maxMp: P.maxMp,
+      level: P.level, gold: P.gold, equip: equipScore(),
+      weaponId: P.equipment.weapon || null, armorId: P.equipment.armor || null
+    };
+  }
+  function d37New(cfg) {
+    return {
+      cfg: { fireball: !!cfg.fireball, flee: !!cfg.flee, grind: !!cfg.grind },
+      fireballCasts: 0, fireballMp: 0, fireballDmg: 0, fireballNormalWould: 0, fireballCastMpBad: 0,
+      shieldCasts: 0, shieldMp: 0,
+      fleeAttempts: 0, fleeSuccess: 0, fleeFail: 0, reengagedAfterFlee: 0,
+      fleeTriesThisBattle: 0, sinceFlee: -1, respite: 0,
+      fleeLog: [], mpDry: [],
+      grindKills: 0, grindKillsOnFloor: 0, grindTargets: 0, grindEngaged: false, grindTarget: null,
+      battleStartPos: null, lastBattleMonster: null, mpDryLogged: false,
+      floorEnd: [], final: null
+    };
+  }
+  /* 每回合动作后：用真实前后差值记账（不信任推演值） */
+  function d37AfterBattleAct(rec, code, pre, st) {
+    var P = Game.Data.Player, d = rec.d37;
+    if (!d || !pre) return;
+    var mpDrop = pre.mp - P.mp;
+    if (code === 'Digit4') {
+      if (mpDrop === 12) {
+        d.fireballCasts++;
+        d.fireballMp += 12;
+        var after = (st.monster && typeof st.monster.hp === 'number') ? st.monster.hp : 0;
+        var dealt = Math.min(pre.mhp, Math.max(0, pre.mhp - after)); /* 溢出伤害不计入 */
+        d.fireballDmg += dealt;
+        d.fireballNormalWould += pre.normalWould;
+      } else if (mpDrop === 0) {
+        /* 施放失败（MP/冷却在按键瞬间不满足）：不计次数，记一笔异常 */
+        d.fireballCastMpBad++;
+      } else {
+        d.fireballCastMpBad++;
+      }
+    } else if (code === 'Digit6' && mpDrop === 10) {
+      d.shieldCasts++; d.shieldMp += 10;
+    }
+    if (d.cfg.fireball && !d.mpDryLogged && P.mp < 12) {
+      d.mpDryLogged = true;
+      d.mpDry.push({ floor: P.floor, round: pre.round, mp: P.mp });
+    }
+  }
+  /* 主动刷级：BFS 找"最近且算得赢"的怪；找不到返回 null（回落到正常探图/下楼） */
+  function d37GrindDir(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid(), d = rec.d37;
+    if (!grid) return null;
+    if (P.hp < P.maxHp * 0.6) return null;
+    if (P.level >= 4) return null;
+    if (d.grindKillsOnFloor >= 2) return null;
+    if (d.respite > 0) return null;
+    var h = grid.length, w = grid[0].length;
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
+    var walk = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    var start = P.x + ',' + P.y;
+    var prev = Object.create(null), dep = Object.create(null);
+    prev[start] = null; dep[start] = 0;
+    var q = [start], head = 0, found = null;
+    while (head < q.length) {
+      var k = q[head++], c = k.split(','), x = +c[0], y = +c[1];
+      var e = Map.enemyAt(x, y);
+      if (e) {
+        if (d37SafeFight(P, e)) { found = k; break; }
+        continue; /* 打不过的怪不碰，也不当通路 */
+      }
+      if (dep[k] >= 12) continue; /* 太远的怪不值得专程跑过去 */
+      for (var i = 0; i < 4; i++) {
+        var nx = x + DIRS[i][0], ny = y + DIRS[i][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var nk = nx + ',' + ny;
+        if (prev[nk] !== undefined) continue;
+        if (!walk(grid[ny][nx])) continue;
+        prev[nk] = k; dep[nk] = dep[k] + 1; q.push(nk);
+      }
+    }
+    if (!found) return null;
+    var fc = found.split(',');
+    d.grindTarget = { x: +fc[0], y: +fc[1], floor: P.floor };
+    return firstStep(prev, found);
+  }
+
   /* ── 寻路：BFS（只读 grid + fov 记忆；格子 0=墙、1=地板、2=下行梯、3=上行梯） ── */
   function firstStep(prev, key) {
     var P = Game.Data.Player;
@@ -114,12 +291,14 @@
     return null;
   }
   /* 策略：① 未探索格优先 ② 全探索完则下楼 ③ 都不行就朝任意可走方向挪一格 */
-  function planPath() {
+  function planPath(avoidAll) {
     var Map = Game.Systems.Map, P = Game.Data.Player;
     var grid = Map.getGrid();
     if (!grid) { planDbg = { why: 'noGrid' }; return null; }
     var h = grid.length, w = grid[0].length;
-    var strong = P.hp < P.maxHp * 0.6;
+    /* D-37：逃跑成功后的 6 步里，无论血量多少都绕开所有怪（"刚逃出来先拉开距离"）；
+     * avoidAll 默认 false，G0 走的是原来那条 60% 阈值，行为不变。 */
+    var strong = P.hp < P.maxHp * 0.6 || !!avoidAll;
     var start = P.x + ',' + P.y;
 
     function bfsPass(pass, goal, st) {
@@ -187,7 +366,7 @@
     var P = Game.Data.Player;
     var key = P.x + ',' + P.y;
     if (!rec.path || rec.pathKey !== key || rec.pathFloor !== P.floor) {
-      rec.path = planPath();
+      rec.path = planPath(!!(rec.d37 && rec.d37.respite > 0));
       rec.pathKey = key;
       rec.pathFloor = P.floor;
     }
@@ -311,9 +490,15 @@
   function bumpFloor(rec) {
     var P = Game.Data.Player;
     if (P.floor === rec.floorNow) return;
-    if (P.floor > rec.floorNow) pushFloor(rec, false);
+    if (P.floor > rec.floorNow) {
+      pushFloor(rec, false);
+      /* D-37：离开某层时的 HP/MP/等级/金币/装备快照（只读，追加在 rec.d37 下） */
+      if (rec.d37) rec.d37.floorEnd.push(d37Snap(P, rec.floorNow));
+    }
     rec.floorNow = P.floor;
     rec.floorActions = 0;
+    /* D-37：刷级额度按层计，换层清零 */
+    if (rec.d37) { rec.d37.grindKillsOnFloor = 0; rec.d37.grindTarget = null; rec.d37.grindEngaged = false; }
   }
 
   /* ── 一局 ────────────────────────────────────────────────────── */
@@ -333,11 +518,25 @@
     }
     /* 低血 + 有 MP + 本场没套过盾 → 套盾（每场一次），否则平砍；不逃、不用火球（保守可解释策略） */
     else if (!rec.shieldOn && P.hp <= P.maxHp * 0.25 && P.mp >= 10) { code = 'Digit6'; rec.shieldOn = true; }
+    /* D-37：以下两条是新增分支，G0（未传 opts.d37）永远不进入；上一行原有的嗑药/套盾优先级保持不变 */
+    else if (rec.d37 && rec.d37.cfg.flee && d37DecideFlee(rec, P, st)) {
+      code = 'Digit3';
+      rec.d37.fleeAttempts++;
+      rec.d37.fleeTriesThisBattle++;
+    }
+    else if (rec.d37 && rec.d37.cfg.fireball && d37DecideFireball(P, st)) {
+      code = 'Digit4';
+    }
+    var pre = rec.d37 ? {
+      mp: P.mp, mhp: st.monster.hp, round: st.roundNo,
+      normalWould: dmgOf(P.atk, d37Stats(st).def)
+    } : null;
     rec.actions++;
     press(code, STEP);
     var n = 0;
     while (n < 30 && Game.Core.Main._scene === 'battle' && B.isInputLocked()) { frame(STEP); n++; }
     if (useItem && healPotions().length < potionsBefore) rec.battlePotions++;
+    if (rec.d37) d37AfterBattleAct(rec, code, pre, st);
   }
 
   function exploreAct(rec) {
@@ -356,7 +555,22 @@
     if (eq >= 0) { useIndex(eq); rec.equips++; rec.actions++; return; }
     /* ③ D-18：每到新一层先看一眼商店（真人到新层也会先看货），本层只进一次 */
     if (!rec.noShop && rec.shopVisitedFloor !== P.floor) { shopAct(rec); return; }
-    /* ④ 移动（未探索 → 下楼） */
+    /* ④ D-37：逃跑后的 6 步喘息（计数）与主动刷级，只在 opts.d37 下生效 */
+    if (rec.d37) {
+      if (rec.d37.respite > 0) rec.d37.respite--;
+      if (rec.d37.sinceFlee >= 0) { rec.d37.sinceFlee++; if (rec.d37.sinceFlee > 6) rec.d37.sinceFlee = -1; }
+      if (rec.d37.cfg.grind) {
+        var gdir = d37GrindDir(rec);
+        if (gdir) {
+          var gx = P.x, gy = P.y;
+          rec.actions++;
+          press(gdir, MOVE_MS);
+          if (P.x === gx && P.y === gy) rec.blockedSteps++;
+          return;
+        }
+      }
+    }
+    /* ⑤ 移动（未探索 → 下楼） */
     var dir = nextDir(rec);
     if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
     var bx = P.x, by = P.y;
@@ -417,6 +631,8 @@
     Bot.install();
     var rec = newRec(seed | 0, opts.maxActions || 2500);
     rec.noShop = !!opts.noShop;   /* D-18 负例开关：禁用商店步骤，验证"进店计数"确实来自这一步 */
+    /* D-37：四组对照的开关。不传时 rec.d37 为 null，所有新增分支与记账都不执行。 */
+    if (opts.d37) rec.d37 = d37New(opts.d37);
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -451,6 +667,12 @@
     rec.equip = equipScore();
     /* 结局层：只在"还没记过这一层"时补记（换层当帧结束则已经记过上一层） */
     if (rec.floorNow === P.floor) pushFloor(rec, true);
+    if (rec.d37) {
+      rec.d37.floorEnd.push(d37Snap(P, P.floor));
+      rec.d37.final = d37Snap(P, P.floor);
+      rec.d37.fleeFail = rec.d37.fleeAttempts - rec.d37.fleeSuccess;
+      if (rec.d37.fleeFail < 0) rec.d37.fleeFail = 0;
+    }
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;
     delete rec.shopVisitedFloor; delete rec.noShop;
@@ -509,6 +731,44 @@
       cur.traps++;
       cur.lastTrapAt = cur.actions;
       cur.lastTrapId = e && e.id;
+    });
+    /* ── D-37：独立监听器（不改上面三个既有 handler；无 d37 时立即返回） ── */
+    EB.on('battle:start', function (e) {
+      if (!cur || !cur.d37) return;
+      var P = Game.Data.Player, d = cur.d37;
+      d.battleStartPos = { x: P.x, y: P.y, floor: P.floor };
+      d.lastBattleMonster = e && e.monsterId;
+      d.fleeTriesThisBattle = 0;
+      d.mpDryLogged = false;
+      if (d.grindTarget && d.grindTarget.floor === P.floor &&
+          d.grindTarget.x === P.x && d.grindTarget.y === P.y) {
+        d.grindEngaged = true;
+        d.grindTargets++;
+      }
+      if (d.sinceFlee >= 0 && d.sinceFlee <= 6) d.reengagedAfterFlee++;
+    });
+    EB.on('battle:end', function (e) {
+      if (!cur || !cur.d37) return;
+      var P = Game.Data.Player, d = cur.d37;
+      if (e && e.result === 'run') {
+        d.fleeSuccess++;
+        var from = d.battleStartPos || { x: P.x, y: P.y, floor: P.floor };
+        d.fleeLog.push({
+          at: cur.actions, floor: P.floor, monsterId: d.lastBattleMonster || null,
+          from: from.x + ',' + from.y, to: P.x + ',' + P.y,
+          retreat: Math.abs(P.x - from.x) + Math.abs(P.y - from.y)
+        });
+        d.respite = 6;
+        d.sinceFlee = 0;
+        /* 命比经验重要：逃出来后放弃这次刷级目标，先拉开距离 */
+        d.grindEngaged = false;
+        d.grindTarget = null;
+      } else if (e && e.result === 'win' && d.grindEngaged) {
+        d.grindKills++;
+        d.grindKillsOnFloor++;
+        d.grindEngaged = false;
+        d.grindTarget = null;
+      }
     });
   }
 

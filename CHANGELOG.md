@@ -43,10 +43,11 @@
 
 ### 工具
 
-- 回归批跑：76 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：78 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->
+- 测量台校准（D-37）：`d17_bot` 只新增 `opts.d37` 三条可选分支——火球（按冷却 / MP 余量 / 伤害增益判据）、逃跑（按"还挨几下会死 vs 还要几回合能杀"判据，含失败反击代价与 6 步喘息绕怪）、刷级（血量 ≥60%、每层最多 2 只、只挑稳赢的怪），既有分支一行未改；G0 与 D-34 报告逐局一致，四组同种子 1001–1050 / maxActions 2500 分文件落盘 `d37-g0..g3.json`，`verify_d37` A–E 守门。只产数据，不产难度判决。<!-- 锚点: preflight/lib/d17_bot.js#d37DecideFireball -->
 - 线上核验产物：逐页记录 Pages 取数通道的运行时裁决行。<!-- 锚点: preflight/selfcheck/d26-online-verify.json#pages -->
 
 ### 文档
