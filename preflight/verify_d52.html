@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-52：读取 selfcheck/d52-after.json（本卡跑局）与 d51-after.json（上一卡逐局基线），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-52 结局与结算</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; }
+  th { color:#9fd; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-52 · 结局统计可复算 / 死因与 source 一致 / 评级可复算 / 存档语义 / 键盘与单 rAF / 四策略回归 / 无数据表现（A–G）</h1>
+<pre id="result">RUNNING</pre>
+<h2>摘要</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D52ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D52ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D52ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readText(rel).replace(/^\uFEFF/, '')); } catch (e) { return null; } }
+  var M = Game.Core.Main, S = Game.Systems.Save, P = Game.Data.Player;
+  var Modal = Game.Modal, B = Game.Systems.Battle, Ad = Game.Systems.Adaptive;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+
+  var T = 10000;
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+  function frame(ms) {
+    T += (typeof ms === 'number') ? ms : 16.7;
+    try { M.loop(T); } catch (e) { window.__D52ERR.push('frame: ' + ((e && e.message) || e)); }
+  }
+  function storedSave() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  function clearAll() {
+    try { localStorage.removeItem(KEY); localStorage.removeItem(SET_KEY); localStorage.setItem('aiDungeon_guided', '1'); } catch (e) { }
+  }
+
+  try {
+    clearAll();
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    frame();
+
+    /* ---------- A：结局统计逐项可复算（与 bot 被动台账逐局相等，≥6 项） ---------- */
+    var AFTER = readJson('selfcheck/d52-after.json');
+    var A_FIELDS = ['floorReached', 'kills', 'maxLevel', 'turns', 'potions', 'rescues'];
+    var aBad = [], aCmp = 0, aWins = 0, aRuns = 0, aSamples = [], aElapsedBad = 0;
+    if (!AFTER) aBad.push('缺少跑局产物 d52-after.json');
+    else {
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var rs = (AFTER.runs && AFTER.runs[k]) || [];
+        for (var i = 0; i < rs.length; i++) {
+          var r = rs[i];
+          aRuns++;
+          if (!r.run) { aBad.push(k + '/' + r.seed + ': run=null'); continue; }
+          if (r.outcome === 'win') aWins++;
+          for (var fi = 0; fi < A_FIELDS.length; fi++) {
+            var f = A_FIELDS[fi];
+            aCmp++;
+            if (r.run[f] !== r.ledger[f]) {
+              aBad.push(k + '/' + r.seed + '.' + f + ': ' + r.run[f] + '≠' + r.ledger[f]);
+            }
+          }
+          if (typeof r.run.elapsedMs !== 'number' || r.run.elapsedMs < 0) aElapsedBad++;
+          if (aSamples.length < 4) {
+            aSamples.push({ seed: r.seed, outcome: r.outcome, run: r.run, ledger: r.ledger });
+          }
+        }
+      });
+    }
+    rec('A_stats_recomputable', !!AFTER && aBad.length === 0 && aCmp >= 6 && aWins > 0 && aElapsedBad === 0, {
+      rule: '结局 7 项统计中抽 6 项（到达层数/总击杀/最高等级/总回合/喝药数/被救援次数）逐局与 bot 被动台账相等；' +
+        '总耗时为运行期实测值（≥0）；至少包含一局通关',
+      runs: aRuns, wins: aWins, compared: aCmp, mismatches: aBad.slice(0, 10), mismatchCount: aBad.length,
+      elapsedBad: aElapsedBad, samples: aSamples
+    });
+
+    /* ---------- B：死因与 death.source 一致；探索期中毒标成"被怪打死"必须 FAIL ---------- */
+    function labelOf(d) {
+      if (!d) return '未知';
+      if (d.source === 'battle') return d.monsterName ? ('被' + d.monsterName + '打死') : '被怪打死';
+      if (d.source === 'trap') return d.trapName ? ('陷阱（' + d.trapName + '）') : '陷阱';
+      if (d.source === 'other' || d.source === 'status') {
+        if (d.statusId === 'poison') return '中毒';
+        if (d.statusId === 'bleed') return '流血';
+        return '状态效果';
+      }
+      return '未知';
+    }
+    var bBad = [], bDeaths = 0, bSource = { battle: 0, trap: 0, other: 0, status: 0 }, bStatusKinds = {};
+    if (AFTER) {
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var rs = (AFTER.runs && AFTER.runs[k]) || [];
+        for (var i = 0; i < rs.length; i++) {
+          var r = rs[i];
+          if (r.outcome !== 'dead' || !r.death) continue;
+          bDeaths++;
+          if (bSource[r.death.source] !== undefined) bSource[r.death.source]++;
+          var lb = labelOf(r.death);
+          if (!M.verifyDeathCause(r.death, lb)) bBad.push(k + '/' + r.seed + ': ' + lb);
+          if (r.death.source === 'other' || r.death.source === 'status') {
+            var sk = r.death.statusId || 'none';
+            bStatusKinds[sk] = (bStatusKinds[sk] || 0) + 1;
+          }
+        }
+      });
+    }
+    /* 负例：同一份真实遥测（探索期中毒 source=other + statusId=poison）标成"被怪打死"必须 FAIL */
+    var poisonDeath = { source: 'other', statusId: 'poison', statusName: '中毒', floor: 2, potionsLeft: 1, maxHp: 100 };
+    var negBattleLabel = M.verifyDeathCause(poisonDeath, '被怪打死');
+    var posPoisonLabel = M.verifyDeathCause(poisonDeath, '中毒');
+    /* 真实事件：关自适应 → 探索期中毒致死 → 捕获 battle:end(lose) 再判死因 */
+    var liveCap = null;
+    var capFn = function (e) { if (e && e.result === 'lose') liveCap = e; };
+    Game.Core.EventBus.on('battle:end', capFn);
+    Ad.setEnabled(false);
+    B.abort();
+    M.switchScene('explore');
+    P.floor = 2; P.hp = 1; P.status = { poison: 1 };
+    var stRes = Game.Systems.Status.tick();
+    Game.Core.EventBus.off && Game.Core.EventBus.off('battle:end', capFn);
+    var liveOk = !!(liveCap && liveCap.source === 'other' && liveCap.statusId === 'poison' &&
+      M.deathCauseText(liveCap) === '中毒' && M.verifyDeathCause(liveCap, '被怪打死') === false);
+    Ad.setEnabled(true);
+    if (Modal.isOpen()) Modal.close();
+    var bOk = !!AFTER && bBad.length === 0 && bDeaths > 0 && negBattleLabel === false && posPoisonLabel === true &&
+      liveOk && stRes.length > 0;
+    rec('B_death_cause_matches_source', bOk, {
+      rule: '死因严格由 death.source 归类（battle→怪物名 / trap→陷阱 / other→状态效果并按 statusId 细分中毒·流血）；' +
+        '负例：探索期中毒遥测标成"被怪打死"必须 FAIL；真实触发一次中毒致死复核',
+      deaths: bDeaths, bySource: bSource, statusKinds: bStatusKinds, mismatches: bBad.slice(0, 8),
+      negative: { labelAsBattle: negBattleLabel, positivePoison: posPoisonLabel, live: liveCap, liveOk: liveOk }
+    });
+
+    /* ---------- C：评级公式可复算 + 边界样例；手改分数必须 FAIL ---------- */
+    var cStats = { floorReached: 5, kills: 20, maxLevel: 8, turns: 300, potions: 6, rescues: 1, elapsedMs: 600000 };
+    var cRec = M.computeRating(cStats, true);
+    var cManual = Math.max(0, 1000 + 5 * 120 + 20 * 6 + 8 * 50 + 6 * 4 - 1 * 40 - 10 * 3);
+    var boundIn = [899, 900, 1299, 1300, 1699, 1700, 2199, 2200];
+    var boundWant = ['D', 'C', 'C', 'B', 'B', 'A', 'A', 'S'];
+    var boundGot = boundIn.map(function (x) { return M.gradeOfScore(x); });
+    var boundOk = boundGot.join(',') === boundWant.join(',');
+    var tamper1 = M.verifyRating(cStats, true, { score: cRec.score + 1, grade: cRec.grade });
+    var tamper2 = M.verifyRating(cStats, true, { score: cRec.score, grade: cRec.grade === 'S' ? 'A' : 'S' });
+    var cWinSamples = [];
+    if (AFTER) {
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var rs = (AFTER.runs && AFTER.runs[k]) || [];
+        for (var i = 0; i < rs.length && cWinSamples.length < 3; i++) {
+          if (rs[i].outcome !== 'win' || !rs[i].run) continue;
+          var rr = M.computeRating(rs[i].run, true);
+          cWinSamples.push({ seed: rs[i].seed, score: rr.score, grade: rr.grade, ok: M.verifyRating(rs[i].run, true, rr) });
+        }
+      });
+    }
+    var cOk = cRec.score === cManual && cRec.grade === M.gradeOfScore(cManual) && boundOk &&
+      tamper1 === false && tamper2 === false &&
+      cWinSamples.every(function (x) { return x.ok === true; }) && cWinSamples.length > 0;
+    rec('C_rating_recomputable', cOk, {
+      rule: 'score=通关1000+层×120+击杀×6+等级×50+喝药×4−救援×40−整分钟×3（下限0）；' +
+        '阈值 S2200/A1700/B1300/C900；边界 899·900·1299·1300·1699·1700·2199·2200 逐点断言；' +
+        '手改 score 或 grade 必须被 verifyRating 判 FAIL',
+      sample: { stats: cStats, got: cRec, manual: cManual },
+      boundaries: { input: boundIn, got: boundGot, want: boundWant },
+      tamper: { scorePlusOne: tamper1, gradeSwap: tamper2 },
+      winSamples: cWinSamples
+    });
+
+    /* ---------- D：通关 / 死亡存档语义（继续游戏行为、无档置灰、清档可用） ---------- */
+    clearAll();
+    M.restart();
+    try { Game.Systems.Map.setFloor(5); P.floor = 5; } catch (e1) { }
+    P.level = 7; P.gold = 88;
+    M._restoreRunStats({ known: true, floorReached: 5, kills: 9, maxLevel: 7, turns: 41, potions: 3 });
+    var endD = M._commitVictory();
+    var sv = storedSave();
+    var d1Scene = M._scene === 'victory';
+    var d1End = !!(endD && endD.cleared === true && endD.stats && endD.stats.kills === 9);
+    var d1Save = !!(sv && sv.ending && sv.ending.cleared === true && sv.ending.stats && sv.ending.stats.kills === 9);
+    var d1Cont = M._menuSpec().items[1];
+    var d1Enter = M.enterGame('continue');
+    var d1Back = d1Enter === true && M._scene === 'victory' && !!(M.getEnding() && M.getEnding().stats.kills === 9);
+    /* 死亡：清档 → 弹窗 → 继续游戏置灰 → 损坏档仍可清 */
+    M.restart();
+    S.save();
+    var d2Had = S.has();
+    M._finalizeDeath({ source: 'other', statusId: 'poison', statusName: '中毒', floor: 2, potionsLeft: 0, maxHp: 100 });
+    var d2Modal = !!(Modal.isOpen() && Modal.current() === 'gameover');
+    var d2NoSave = !S.has();
+    var d2Cont = M._menuSpec().items[1];
+    var d2NoContinue = M.enterGame('continue') === false;
+    M._deathReturnToMenu();
+    var d2Menu = M._scene === 'menu' && !Modal.isOpen();
+    try { localStorage.setItem(KEY, '{broken json'); } catch (e2) { }
+    var d2CorruptHad = S.has();
+    var d2Cleared = M.clearSave() === true && localStorage.getItem(KEY) === null;
+    var dOk = d1Scene && d1End && d1Save && d1Cont.enabled === true && d1Back &&
+      d2Had && d2Modal && d2NoSave && d2Cont.enabled === false && d2Cont.note === '暂无存档' &&
+      d2NoContinue && d2Menu && d2CorruptHad && d2Cleared;
+    rec('D_save_semantics', dOk, {
+      rule: '通关写档并带 ending.cleared：继续游戏回到结局页（不重打、不重新结算）；' +
+        '死亡清档：继续游戏置灰且返回 false；损坏档可用「清除存档」删掉',
+      victory: {
+        scene: M._scene, ending: endD, saveEnding: sv && sv.ending,
+        continueItem: d1Cont, continueEnteredToEnding: d1Back
+      },
+      death: {
+        hadSave: d2Had, modal: d2Modal, noSave: d2NoSave, continueItem: d2Cont,
+        continueRefused: d2NoContinue, backToMenu: d2Menu,
+        corrupt: { had: d2CorruptHad, cleared: d2Cleared }
+      }
+    });
+
+    /* ---------- E：两个界面键盘全操作 + rAF 链计数 = 1 ---------- */
+    clearAll();
+    M.restart();
+    P.level = 4;
+    M._restoreRunStats({ known: true, floorReached: 5, kills: 5, maxLevel: 4, turns: 18, potions: 1 });
+    M._commitVictory();
+    kd('ArrowRight'); frame(); ku('ArrowRight');
+    var eSel = M._getEndingSel() === 1;
+    kd('Enter'); frame(); ku('Enter');
+    var eMenu = M._scene === 'menu';
+    var eContinue = M.enterGame('continue');
+    var eBackEnding = eContinue === true && M._scene === 'victory' && M._getEndingSel() === 0;
+    kd('Enter'); frame(); ku('Enter');
+    var eRestart = M._scene === 'explore' && P.hp === 100 && P.gold === 0;
+    /* 死亡弹窗：←→ 切换 + Enter 回主菜单 */
+    M._finalizeDeath({ source: 'trap', trapName: '地刺', floor: 2, potionsLeft: 1, maxHp: 100 });
+    var eDeathDefault = Modal._gameoverSel() === 0;
+    kd('ArrowRight'); ku('ArrowRight');
+    var eDeathSel = Modal._gameoverSel() === 1;
+    kd('Enter'); ku('Enter');
+    var eDeathMenu = M._scene === 'menu' && !Modal.isOpen();
+    /* 再来一局按钮：死亡弹窗默认选中 0，Enter 走 restart */
+    M._finalizeDeath({ source: 'battle', monsterName: '地牢巨龙', floor: 5, potionsLeft: 2, maxHp: 100 });
+    kd('Enter'); ku('Enter');
+    var eDeathRestart = M._scene === 'explore' && P.hp === 100;
+    /* rAF：一条链 */
+    M.switchScene('explore');
+    if (B.isActive()) B.abort();
+    var realRaf = window.requestAnimationFrame;
+    var q = [];
+    window.requestAnimationFrame = function (cb) { q.push(cb); return q.length; };
+    var start1 = M.start();
+    var chains1 = M._rafChains || 0;
+    for (var dr = 0; dr < 6; dr++) {
+      var cb = q.shift();
+      if (typeof cb === 'function') { try { cb(T += 16.7); } catch (e3) { window.__D52ERR.push('raf: ' + e3.message); } }
+      if (dr % 3 === 0) M.switchScene('menu');
+      else if (dr % 3 === 1) M.switchScene('victory');
+      else M.switchScene('explore');
+    }
+    var pending = q.length;
+    var start2 = M.start();
+    var chains2 = M._rafChains || 0;
+    window.requestAnimationFrame = realRaf;
+    var eRaf = start1 === true && start2 === false && chains1 === 1 && chains2 === 1 && pending === 1 && q.length === 1;
+    var eOk = eSel && eMenu && eBackEnding && eRestart && eDeathDefault && eDeathSel && eDeathMenu &&
+      eDeathRestart && eRaf;
+    rec('E_keyboard_full_and_single_raf', eOk, {
+      rule: '结局页 ←→ 选择 + Enter 确认（再来一局/回主菜单）均可达；死亡结算同样键盘可全操作；' +
+        'start() 只建立 1 条 rAF 链，往返菜单/结局后仍为 1',
+      victory: { selRight: eSel, enterToMenu: eMenu, continueToEnding: eBackEnding, enterRestart: eRestart },
+      death: { defaultSel: eDeathDefault, selRight: eDeathSel, enterMenu: eDeathMenu, enterRestart: eDeathRestart },
+      raf: { firstStart: start1, secondStart: start2, chains1: chains1, chains2: chains2, pending: pending, queued: q.length }
+    });
+
+    /* ---------- F：B1/G2/S1/M1 同种子 1001–1050，与 D-51 逐局一致（B1 14/50） ---------- */
+    var BASE = readJson('selfcheck/d51-after.json');
+    var fBad = [], fCount = { b1: 0, g2: 0, s1: 0, m1: 0 };
+    var fEnv = null;
+    if (!AFTER || !BASE) {
+      fBad.push('缺少跑局产物 d52-after.json 或 d51-after.json');
+    } else {
+      fEnv = AFTER.env;
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var ar = (AFTER.runs && AFTER.runs[k]) || [];
+        var br = (BASE.runs && BASE.runs[k]) || [];
+        var bm = {};
+        br.forEach(function (x) { bm[x.seed] = x; });
+        fCount[k] = ar.length;
+        if (ar.length !== 50) fBad.push(k + ': runs=' + ar.length);
+        for (var i = 0; i < ar.length; i++) {
+          var x = ar[i], y = bm[x.seed];
+          if (!y) { fBad.push(k + '/' + x.seed + ': 基线缺该种子'); continue; }
+          var fields = ['outcome', 'kills', 'gold', 'level', 'battles', 'floor'];
+          for (var fi = 0; fi < fields.length; fi++) {
+            if (x[fields[fi]] !== y[fields[fi]]) {
+              fBad.push(k + '/' + x.seed + '.' + fields[fi] + ': ' + x[fields[fi]] + '≠' + y[fields[fi]]);
+            }
+          }
+          if ((x.deathFloor || x.floor) !== (y.deathFloor || y.floor)) {
+            fBad.push(k + '/' + x.seed + '.deathFloor: ' + (x.deathFloor || x.floor) + '≠' + (y.deathFloor || y.floor));
+          }
+        }
+      });
+    }
+    var fSeedsOk = !!fEnv && fEnv.maxActions === 2500 && fEnv.seeds && fEnv.seeds.length === 50 &&
+      fEnv.seeds[0] === 1001 && fEnv.seeds[49] === 1050;
+    var fWins = AFTER && AFTER.agg && AFTER.agg.b1 ? AFTER.agg.b1.outcomes.win : -1;
+    var fAggOk = !!(AFTER && BASE && fWins === 14 && BASE.agg.b1.outcomes.win === 14 &&
+      AFTER.agg.g2.f5.reached === BASE.agg.g2.f5.reached &&
+      AFTER.agg.s1.f5.reached === BASE.agg.s1.f5.reached &&
+      AFTER.agg.m1.floorReach['4'] === BASE.agg.m1.floorReach['4']);
+    rec('F_four_strategies_match_d51', !!AFTER && !!BASE && fSeedsOk && fBad.length === 0 && fAggOk, {
+      rule: 'B1/G2/S1/M1 同种子 1001–1050、maxActions 2500：逐局 outcome / 击杀 / 金币 / 等级 / 战斗场次 / 楼层与 D-51 完全一致；B1 仍 14/50',
+      env: fEnv, runs: fCount, b1Wins: fWins,
+      agg: AFTER ? {
+        g2f5: AFTER.agg.g2.f5.reached, s1f5: AFTER.agg.s1.f5.reached, m1f4: AFTER.agg.m1.floorReach['4']
+      } : null,
+      mismatches: fBad.slice(0, 10), mismatchCount: fBad.length
+    });
+
+    /* ---------- G：无数据字段的表现（显示/不显示二选一，但必须一致且被断言） ---------- */
+    var gZero = M.endingLines({ floorReached: 3, kills: 0, maxLevel: 2, turns: 0, potions: 0, rescues: 0, elapsedMs: 0 });
+    var gKeysZero = {};
+    gZero.forEach(function (x) { gKeysZero[x.key] = x.text; });
+    var gMissing = M.endingLines({ floorReached: 3 });
+    var gKeysMissing = {};
+    gMissing.forEach(function (x) { gKeysMissing[x.key] = x.text; });
+    var gZeroOk = gKeysZero.kills === '总击杀：0 只' && gKeysZero.turns === '总回合：0' &&
+      gKeysZero.potions === '喝掉药水：0 瓶' && gKeysZero.rescues === '被救援：0 次' &&
+      gKeysZero.time === '总耗时：00:00';
+    var gMissingOk = gKeysMissing.potions === undefined && gKeysMissing.rescues === undefined &&
+      gKeysMissing.time === undefined && gKeysMissing.kills === undefined &&
+      gKeysMissing.floor === '到达层数：第 3 层';
+    var gNull = M.endingLines({ known: false, floorReached: null, kills: null, maxLevel: null, turns: null, potions: null, rescues: null, elapsedMs: null });
+    var gNullOk = gNull.length === 0;
+    rec('G_no_data_policy', gZeroOk && gMissingOk && gNullOk, {
+      rule: '真实 0 → 明确显示"0 瓶/0 次/00:00"；字段缺失（旧档 continue）→ 整行不显示；null 统计 → 一行都不编',
+      zero: gKeysZero, missing: gKeysMissing, nullLines: gNull
+    });
+
+    out.errs = window.__D52ERR;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D52ERR.length === 0;
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String((e && (e.stack || e.message)) || e);
+    out.ok = false;
+  }
+
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result').textContent = txt;
+  var rows = '';
+  Object.keys(out.sub).forEach(function (k) {
+    var v = out.sub[k];
+    rows += '<tr><td>' + k + '</td><td>' + (v.ok ? 'PASS' : 'FAIL') + '</td><td>' +
+      (v.d && v.d.rule ? v.d.rule : '') + '</td></tr>';
+  });
+  document.getElementById('detail').innerHTML = '<table><tr><th>组</th><th>结果</th><th>判据</th></tr>' + rows + '</table>';
+})();
+</script>
+</body>
+</html>

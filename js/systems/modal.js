@@ -47,8 +47,10 @@
   var volDragging = false;
   var onMouseDown = null, onMouseMove = null, onMouseUp = null;
   /* M9-5：死亡结算状态 */
-  var gameStats = null;       /* gameover 战绩 {floor,kills,gold,elapsedMs}（open 传入或现场拉取） */
+  var gameStats = null;       /* gameover 战绩（open 传入或现场拉取） */
   var gameRestartRect = null; /* 重新开始按钮矩形 {x,y,w,h} */
+  var gameMenuRect = null;    /* D-52：回主菜单按钮矩形 */
+  var gameoverSel = 0;        /* D-52：0=再来一局 / 1=回主菜单 */
   var npcId = null;           /* D-47：当前对话的 NPC id（npcquest 面板专用） */
 
   function canvas() {
@@ -170,6 +172,8 @@
       volDragging = false;
       gameStats = (k === 'gameover') ? (stats || null) : null;
       gameRestartRect = null;
+      gameMenuRect = null;
+      gameoverSel = 0;
       npcId = (k === 'npcquest' && stats && stats.id) ? stats.id : null;
       this._refresh();
       this._bind();
@@ -184,6 +188,8 @@
       muteRect = null;
       gameStats = null;
       gameRestartRect = null;
+      gameMenuRect = null;
+      gameoverSel = 0;
       if (kind === 'npcquest') npcId = null;
       this._unbind();
       /* 关闭时清掉 Input 残留按键，避免移动键粘滞导致关闭瞬间移动 */
@@ -194,6 +200,8 @@
 
     isOpen: function () { return kind !== null; },
     current: function () { return kind; },
+    /* D-52：死亡结算按钮选中态（验证页断言键盘可全操作） */
+    _gameoverSel: function () { return gameoverSel; },
 
     /* 按当前 kind 重建数据快照（调用既有系统方法，不改它们） */
     _refresh: function () {
@@ -241,11 +249,19 @@
           if (c === 'Space' || c === 'Enter' || c === 'NumpadEnter') { e.preventDefault(); self._toggleMute(); return; }
           return;
         }
-        /* M9-5：死亡结算——回车/R/空格重新开始 */
+        /* M9-5：死亡结算——回车/R/空格重新开始；D-52：←→ 切换按钮，Enter 确认 */
         if (kind === 'gameover') {
-          if (c === 'Enter' || c === 'NumpadEnter' || c === 'KeyR' || c === 'Space') {
-            e.preventDefault(); self._restart(); return;
+          if (c === 'ArrowLeft' || c === 'KeyA' || c === 'ArrowRight' || c === 'KeyD' || c === 'Tab') {
+            e.preventDefault();
+            gameoverSel = gameoverSel === 0 ? 1 : 0;
+            return;
           }
+          if (c === 'Enter' || c === 'NumpadEnter') {
+            e.preventDefault();
+            if (gameoverSel === 1) self._deathMenu(); else self._restart();
+            return;
+          }
+          if (c === 'KeyR' || c === 'Space') { e.preventDefault(); self._restart(); return; }
           return;
         }
         if (c === 'ArrowUp' || c === 'KeyW') { e.preventDefault(); sel = clamp(sel - 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
@@ -356,7 +372,7 @@
       var start = (data.length > vr) ? qScroll : 0;
       var rows = Math.min(Math.max(data.length - start, 0), vr);
       var panelH = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
-        : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
+        : (kind === 'gameover') ? Math.min(sz.h - 24, HEADER_H + 300 + FOOTER_H)
         : HEADER_H + rows * ROW_H + FOOTER_H;
       /* D-29：与 draw 共用同一套双栏度量 */
       var railOn = (kind === 'inventory') && railVisible(sz.w);
@@ -447,7 +463,8 @@
       a.setVolume(ratio);
     },
 
-    /* M9-5：死亡结算战绩（open 传入优先，否则现场取 Player/HUD 状态） */
+    /* M9-5：死亡结算战绩（open 传入优先，否则现场取 Player/HUD 状态）
+     * D-52：追加死因 / 差什么 / 救援名额 / 本局统计（全部来自 open 传入的遥测） */
     _gameoverStats: function () {
       var p = (Game.Data && Game.Data.Player) || {};
       var kills = (Game.hud && typeof Game.hud.getKills === 'function') ? Game.hud.getKills() : 0;
@@ -456,8 +473,20 @@
         floor: (typeof s.floor === 'number') ? s.floor : (typeof p.floor === 'number' ? p.floor : 0),
         kills: (typeof s.kills === 'number') ? s.kills : kills,
         gold: (typeof s.gold === 'number') ? s.gold : (typeof p.gold === 'number' ? p.gold : 0),
-        elapsedMs: (typeof s.elapsedMs === 'number') ? s.elapsedMs : 0
+        elapsedMs: (typeof s.elapsedMs === 'number') ? s.elapsedMs : 0,
+        death: s.death || null,
+        cause: (typeof s.cause === 'string') ? s.cause : null,
+        gap: s.gap || null,
+        canRescue: (s.canRescue === true),
+        run: s.run || null
       };
+    },
+
+    /* D-52：死亡结算「回主菜单」 */
+    _deathMenu: function () {
+      var M = Game.Core && Game.Core.Main;
+      if (M && typeof M._deathReturnToMenu === 'function') { M._deathReturnToMenu(); return; }
+      this.close();
     },
 
     /* M9-5：重新开始——走 Main.restart（既有 reset 逻辑），Main 不可用时兜底重置 Player */
@@ -552,10 +581,15 @@
         return;
       }
       if (kind === 'gameover') {
-        /* M9-5：点击重新开始按钮 */
+        /* D-52：两个按钮——再来一局 / 回主菜单 */
         if (gameRestartRect && x >= gameRestartRect.x && x <= gameRestartRect.x + gameRestartRect.w &&
             y >= gameRestartRect.y && y <= gameRestartRect.y + gameRestartRect.h) {
           this._restart();
+          return;
+        }
+        if (gameMenuRect && x >= gameMenuRect.x && x <= gameMenuRect.x + gameMenuRect.w &&
+            y >= gameMenuRect.y && y <= gameMenuRect.y + gameMenuRect.h) {
+          this._deathMenu();
         }
         return;
       }
@@ -669,50 +703,82 @@
       c.fillText('← → 调音量 · 空格切换静音 · Esc/点遮罩关闭', px + 14, py + h - 12);
     },
 
-    /* M9-5：死亡结算面板——战绩 + 重新开始按钮（战绩来自 Player/HUD 状态） */
+    /* M9-5：死亡结算面板 → D-52：死因 / 死在第几层 / 差什么 / 救援名额 / 双按钮 */
     _drawGameover: function (c, px, py, w, h) {
       var st = this._gameoverStats();
       var left = px + 20;
-      var y = py + HEADER_H + 8;
+      var maxW = w - 40;
+      var y = py + HEADER_H + 12;
+      var self = this;
 
-      /* 用时格式：mm:ss（elapsedMs 为 0 时显示 00:00） */
+      /* 用时格式：mm:ss */
       var secs = Math.max(0, Math.floor((st.elapsedMs || 0) / 1000));
       var mm = Math.floor(secs / 60);
       var ss = secs % 60;
       var timeStr = (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
 
-      c.fillStyle = '#cfcfcf';
-      c.font = '14px monospace';
-      var lines = [
-        '到达楼层：第 ' + st.floor + ' 层',
-        '击杀怪物：' + st.kills + ' 只',
-        '获得金币：' + st.gold,
-        '冒险用时：' + timeStr
-      ];
-      for (var i = 0; i < lines.length; i++) {
-        c.fillText(lines[i], left, y + i * 24);
+      function line(text, color, size, bold) {
+        c.font = (bold ? 'bold ' : '') + (size || 13) + 'px monospace';
+        c.fillStyle = color;
+        c.textAlign = 'left';
+        c.fillText(self._fitRow(c, text, maxW), left, y + (size || 13));
+        y += Math.round((size || 13) * 1.7);
       }
 
-      /* 重新开始按钮 */
-      var btnW = 180, btnH = 34;
-      var bx = px + (w - btnW) / 2;
-      var by = y + lines.length * 24 + 18;
-      gameRestartRect = { x: bx, y: by, w: btnW, h: btnH };
-      c.fillStyle = '#3a3a5c';
-      c.fillRect(bx, by, btnW, btnH);
-      c.strokeStyle = '#ffcf6e';
-      c.lineWidth = 1;
-      c.strokeRect(bx + 0.5, by + 0.5, btnW - 1, btnH - 1);
-      c.fillStyle = '#ffcf6e';
-      c.font = 'bold 14px monospace';
-      c.textAlign = 'center';
-      c.fillText('重新开始 (R / 回车)', px + w / 2, by + btnH / 2 + 5);
+      /* ① 死因（与 death.source 同源；具体怪物名 / 陷阱 / 中毒 / 流血） */
+      line('死因：' + (st.cause || '未知') + '（第 ' + st.floor + ' 层）', '#ff9b6b', 15, true);
+
+      /* ② 本局统计：只显示 run 里真实存在的数字；没有的项不显示 */
+      var run = st.run || {};
+      var parts1 = [];
+      if (typeof run.floorReached === 'number') parts1.push('第 ' + run.floorReached + ' 层');
+      if (typeof st.kills === 'number') parts1.push('击杀 ' + st.kills);
+      if (typeof run.maxLevel === 'number') parts1.push('Lv.' + run.maxLevel);
+      if (parts1.length) line(parts1.join(' · '), '#cfcfcf', 13, false);
+      var parts2 = [];
+      if (typeof run.turns === 'number') parts2.push('回合 ' + run.turns);
+      if (typeof run.potions === 'number') parts2.push('药水 ' + run.potions + ' 瓶');
+      if (typeof run.rescues === 'number') parts2.push('救援 ' + run.rescues + ' 次');
+      if (parts2.length) line(parts2.join(' · '), '#cfcfcf', 13, false);
+      line('用时 ' + timeStr + ' · 金币 ' + st.gold, '#9bbbf4', 13, false);
+
+      /* ③ 离下一层还差什么（血量 / 回合 / 药）——来自死亡遥测的可复算字段 */
+      if (st.gap && st.gap.text) {
+        line('离下一层：' + st.gap.text, '#9fe3a1', 13, false);
+      }
+      /* ④ 只在自适应名额真的还没用完时出现（关闭/用尽都不显示） */
+      if (st.canRescue) {
+        var used = (run.rescues || 0);
+        line('守夜人还能拉你一次（自适应救援 ' + used + '/2）', '#ffcf6e', 13, true);
+      }
+
+      /* ⑤ 双按钮：再来一局 / 回主菜单（←→ 选择，Enter 确认） */
+      var bw = Math.min(160, (w - 60) / 2), bh = 34, gap = 12;
+      var total = bw * 2 + gap;
+      var bx = px + (w - total) / 2;
+      var by = Math.min(py + h - FOOTER_H - bh - 10, y + 8);
+      var labels = ['再来一局 (Enter)', '回主菜单 (Enter)'];
+      gameRestartRect = { x: bx, y: by, w: bw, h: bh };
+      gameMenuRect = { x: bx + bw + gap, y: by, w: bw, h: bh };
+      for (var b = 0; b < 2; b++) {
+        var rx = bx + b * (bw + gap);
+        var on = (gameoverSel === b);
+        c.fillStyle = on ? 'rgba(255,207,110,0.18)' : '#3a3a5c';
+        c.fillRect(rx, by, bw, bh);
+        c.strokeStyle = on ? '#ffcf6e' : '#5a5f70';
+        c.lineWidth = on ? 2 : 1;
+        c.strokeRect(rx + 0.5, by + 0.5, bw - 1, bh - 1);
+        c.fillStyle = on ? '#ffcf6e' : '#9bbbf4';
+        c.font = 'bold 13px monospace';
+        c.textAlign = 'center';
+        c.fillText(self._fitRow(c, labels[b], bw - 12), rx + bw / 2, by + bh / 2 + 5);
+      }
       c.textAlign = 'left';
 
       /* 底部提示（窄屏缩字号，避免 320 宽溢出） */
       c.fillStyle = '#9bbbf4';
       c.font = (cssSize().w < 420 ? '11px monospace' : '12px monospace');
-      c.fillText('本局战绩 · R/回车/点击按钮重新开始', px + 14, py + h - 12);
+      c.fillText('←→ 选择 · Enter 确认 · R 再来一局', px + 14, py + h - 12);
     },
 
     draw: function () {
@@ -737,7 +803,7 @@
       var listW = listWidth(cw, railOn);
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
       var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
-        : (kind === 'gameover') ? HEADER_H + 220 + FOOTER_H
+        : (kind === 'gameover') ? Math.min(ch - 24, HEADER_H + 300 + FOOTER_H)
         /* D-27：空列表也保留 1 行高度，避免"空态提示"与底部操作提示叠在同一条线上
          * （新档背包为空是首屏常态，页头又加了装备摘要，必须让空态有独立一行） */
         : HEADER_H + Math.max(rows, 1) * ROW_H + FOOTER_H;

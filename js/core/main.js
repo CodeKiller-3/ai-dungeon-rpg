@@ -181,6 +181,146 @@
   /* M9-5：本局开始时间戳（死亡结算"用时"；重新开始时重置） */
   var runStart = performance.now();
 
+  /* ---------- D-52：本局结局统计 ----------
+   * 只累加"运行期真实发生的事件"，不做任何估算：
+   *   floorReached ← 每帧 syncHud 时取 max(当前层)
+   *   kills        ← battle:end 且 result=win 的次数（onBattleEnd）
+   *   maxLevel     ← 每帧 syncHud 时取 max(当前等级)
+   *   turns        ← 探索成功走一格 + 战斗中被接受的行动各 +1
+   *   potions      ← Inventory.use 成功喝下回血/回蓝药剂 +1（卷轴不算）
+   *   rescues      ← player.adaptive.triggers（D-49/D-50 的真实触发计数）
+   *   elapsedMs    ← getElapsedMs（D-51 已扣除暂停时长）
+   * known=false 表示从"没有 run 字段的旧档"继续：未知字段保持 null，结局页不显示。 */
+  var runStats = { known: true, floorReached: 1, kills: 0, maxLevel: 1, turns: 0, potions: 0 };
+  var endingRecord = null; /* 通关结局记录（随存档保存；死亡/新局清空） */
+  var lastDeath = null;    /* 最近一次 battle:end(lose) 的遥测副本 */
+  var endingSel = 0;       /* 结局页按钮选中：0=再来一局 / 1=回主菜单 */
+
+  function resetRunStats(known) {
+    runStats = (known === false)
+      ? { known: false, floorReached: null, kills: null, maxLevel: null, turns: null, potions: null }
+      : { known: true, floorReached: 1, kills: 0, maxLevel: 1, turns: 0, potions: 0 };
+    return runStats;
+  }
+  function bumpRunStat(key, v) {
+    if (!runStats.known) return;
+    if (typeof runStats[key] !== 'number' || !isFinite(runStats[key])) runStats[key] = v;
+    else if (v > runStats[key]) runStats[key] = v;
+  }
+  function addRunStat(key) {
+    if (!runStats.known) return;
+    runStats[key] = (typeof runStats[key] === 'number' ? runStats[key] : 0) + 1;
+  }
+
+  /* D-52：评级（纯函数，权重写死在这里；验证页按同一公式复算）。
+   *   score = 通关 1000 + 层数×120 + 击杀×6 + 最高等级×50 + 喝药×4
+   *           − 救援×40 − 整分钟数×3，最低 0
+   * 阈值：S ≥2200 / A ≥1700 / B ≥1300 / C ≥900 / D <900。
+   * 统计不完整（旧档 continue）时返回 grade='—'，不编分数。 */
+  var RATING_W = { win: 1000, floor: 120, kills: 6, level: 50, potion: 4, rescue: -40, minute: -3 };
+  var RATING_T = [{ g: 'S', min: 2200 }, { g: 'A', min: 1700 }, { g: 'B', min: 1300 }, { g: 'C', min: 900 }];
+  function gradeOfScore(score) {
+    if (typeof score !== 'number' || !isFinite(score)) return '—';
+    for (var j = 0; j < RATING_T.length; j++) {
+      if (score >= RATING_T[j].min) return RATING_T[j].g;
+    }
+    return 'D';
+  }
+  function computeRating(stats, win) {
+    var s = stats || {};
+    var nums = [s.floorReached, s.kills, s.maxLevel, s.turns, s.potions, s.rescues, s.elapsedMs];
+    for (var i = 0; i < nums.length; i++) {
+      if (typeof nums[i] !== 'number' || !isFinite(nums[i])) {
+        return { score: null, grade: '—', parts: null };
+      }
+    }
+    var parts = {
+      win: win ? RATING_W.win : 0,
+      floor: Math.max(0, Math.floor(s.floorReached)) * RATING_W.floor,
+      kills: Math.max(0, Math.floor(s.kills)) * RATING_W.kills,
+      level: Math.max(0, Math.floor(s.maxLevel)) * RATING_W.level,
+      potion: Math.max(0, Math.floor(s.potions)) * RATING_W.potion,
+      rescue: Math.max(0, Math.floor(s.rescues)) * RATING_W.rescue,
+      minute: Math.floor(Math.max(0, s.elapsedMs) / 60000) * RATING_W.minute
+    };
+    var sum = parts.win + parts.floor + parts.kills + parts.level + parts.potion + parts.rescue + parts.minute;
+    var score = Math.max(0, Math.round(sum));
+    return { score: score, grade: gradeOfScore(score), parts: parts };
+  }
+  /* 手改分数/评级必须被识破：按同一 stats 重算后逐项比对 */
+  function verifyRating(stats, win, record) {
+    var r = computeRating(stats, win);
+    return !!(record && record.score === r.score && record.grade === r.grade);
+  }
+
+  /* D-52：结局页文本行（纯函数；缺字段就不显示，绝不用 0 冒充未知）。
+   * 返回 [{key,text}]；验证页断言"有数据=显示（含 0）/ 无数据=整行不出现"。 */
+  function fmtDuration(ms) {
+    var secs = Math.max(0, Math.floor((typeof ms === 'number' ? ms : 0) / 1000));
+    var mm = Math.floor(secs / 60), ss = secs % 60;
+    return (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss;
+  }
+  /* D-52：死因归类（纯函数）。口径与 D-38 一致：先看 death.source，
+   * battle→被怪打死、trap→陷阱、other/status→状态效果；D-52 只在 other 下按 statusId
+   * 细分为中毒/流血（statusId 是 Status.tick 已发生的事实，不是推断）。 */
+  function deathCauseText(d) {
+    if (!d) return '未知';
+    if (d.source === 'battle') return d.monsterName ? ('被' + d.monsterName + '打死') : '被怪打死';
+    if (d.source === 'trap') return d.trapName ? ('陷阱（' + d.trapName + '）') : '陷阱';
+    if (d.source === 'other' || d.source === 'status') {
+      if (d.statusId === 'poison') return '中毒';
+      if (d.statusId === 'bleed') return '流血';
+      return '状态效果';
+    }
+    return '未知';
+  }
+  function verifyDeathCause(d, label) { return deathCauseText(d) === label; }
+
+  /* D-52：死亡时"离下一层还差什么"。只用死亡遥测里已经存在的真实值：
+   *   · 背包回血药为 0 → 药
+   *   · 战斗死亡且怪物还有血 → 回合（按玩家真实 atk、怪物真实 def 复算还要几回合）
+   *   · 其余（陷阱/状态/无战斗数据）→ 血量（死亡时 0 HP 的事实）
+   * 不接受"感觉"，每一条都能用 payload 数字复算。 */
+  function dmgOf(atk, def) {
+    var a = Math.max(Number(atk) || 0, 0), b = Math.max(Number(def) || 0, 0);
+    if (a + b <= 0) return 1;
+    return Math.max(1, Math.round(a * a / (a + b)));
+  }
+  function deathGap(d) {
+    if (!d) return null;
+    var potions = (typeof d.potionsLeft === 'number') ? d.potionsLeft : null;
+    var rounds = null, per = null, left = null;
+    if (d.source === 'battle' && typeof d.monsterHpLeft === 'number' && d.monsterHpLeft > 0) {
+      left = d.monsterHpLeft;
+      per = dmgOf(d.playerAtk, d.monsterDef);
+      rounds = Math.ceil(left / per);
+    }
+    if (potions === 0) {
+      return { kind: '药', rounds: rounds, text: '还差一瓶回血药（死亡时背包 0 瓶）' };
+    }
+    if (rounds !== null) {
+      return {
+        kind: '回合', rounds: rounds,
+        text: '还差 ' + rounds + ' 回合（怪物剩 ' + left + ' HP，每回合约 ' + per + ' 伤害）'
+      };
+    }
+    var maxHp = (typeof d.maxHp === 'number') ? String(d.maxHp) : '?';
+    return { kind: '血量', rounds: null, text: '还差血量：死亡时 HP 0/' + maxHp + '，没能扛住最后一击' };
+  }
+
+  function endingLines(stats) {
+    var s = stats || {};
+    var out = [];
+    if (typeof s.floorReached === 'number') out.push({ key: 'floor', text: '到达层数：第 ' + s.floorReached + ' 层' });
+    if (typeof s.kills === 'number') out.push({ key: 'kills', text: '总击杀：' + s.kills + ' 只' });
+    if (typeof s.maxLevel === 'number') out.push({ key: 'level', text: '最高等级：Lv.' + s.maxLevel });
+    if (typeof s.turns === 'number') out.push({ key: 'turns', text: '总回合：' + s.turns });
+    if (typeof s.potions === 'number') out.push({ key: 'potions', text: '喝掉药水：' + s.potions + ' 瓶' });
+    if (typeof s.rescues === 'number') out.push({ key: 'rescues', text: '被救援：' + s.rescues + ' 次' });
+    if (typeof s.elapsedMs === 'number') out.push({ key: 'time', text: '总耗时：' + fmtDuration(s.elapsedMs) });
+    return out;
+  }
+
   /* 修复 P1：移动节流。原实现每帧移动 1 格（60fps ≈ 60 格/秒），既难操控也违背 roguelike 手感。
    * 取 120ms/步（≈8.3 格/秒）：接近传统 roguelike 长按移动的节奏，且与 140ms 移动插值同量级。
    * 玩家与 AI 共用同一个"步"：每步只 tick 一次 AI（AI 内部 4 步一追击），
@@ -286,6 +426,11 @@
      M8-6：等级 + 经验进度传给 HUD（expNext 按 60×level 公式）；
      kills/killTarget 由 hud.js 自行统计（battle:end 胜场 + map:floorChanged 重置），故不在此传 */
   function syncHud() {
+    /* D-52：本局统计的最高层/最高等级——每帧取真实当前值，只进不退 */
+    if (runStats.known) {
+      bumpRunStat('floorReached', player.floor || 1);
+      bumpRunStat('maxLevel', player.level || 1);
+    }
     if (!Game.hud || !Game.hud.update) return;
     Game.hud.update({
       hp: player.hp, hpMax: player.maxHp,
@@ -349,17 +494,16 @@
       retreatAfterFlee(enc);
     }
     if (evt.result === 'win') {
+      addRunStat('kills'); /* D-52：本局总击杀（每场胜利的真实次数） */
       Game.Systems.Quest.progress('kill', evt.monsterId);
       if (Game.Systems.Quest.isDone('main_clear_dragon')) {
-        /* M8-5：通关写本地排行榜（须在切 victory 前调用；scene 已为 victory 时幂等跳过） */
-        Game.Core.Main.submitRank();
-        /* 修复 P1：通关也写档，避免玩家在结算页关闭页面后丢失本局战绩 */
-        Game.Systems.Save.save();
-        Game.Core.EventBus.emit('audio:play', { sfx: 'victory' });
-        Game.Core.Main.switchScene('victory');
+        /* D-52：通关 → 结算统计 / 评级 / 结局存档，再切独立结局画面 */
+        Game.Core.Main._commitVictory();
         return;
       }
     } else if (evt.result === 'lose') {
+      /* D-52：死亡遥测只读副本（结局/死因页只认这一份，不现场猜） */
+      lastDeath = evt;
       /* D-49：先让自适应系统决定是否兜底救援（复活 + 补给），能救就不走死亡结算。
        * 触发点固定在战斗结束的死亡结算，不在战斗回合中塞东西。 */
       var A = Game.Systems && Game.Systems.Adaptive;
@@ -371,13 +515,7 @@
         Game.Core.Main.switchScene('explore');
         return;
       }
-      /* M9-5：玩家死亡 → 结算弹窗（升级自原来的半血复活） */
-      Game.Systems.Save.clear(); /* 死亡清档，重新开始走新档 */
-      /* 修复 P2：图鉴随存档一起清空，避免"磁盘已删、内存仍留、下次保存又写回"的不一致 */
-      if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
-        Game.Systems.Bestiary.reset();
-      }
-      Game.Core.Main.openGameOver();
+      Game.Core.Main._finalizeDeath(evt);
       return;
     }
     Game.Systems.Save.save();
@@ -445,6 +583,11 @@
         Game.Systems.Battle._resetClock();
       }
       runStart = performance.now(); /* M9-5：计时起点 */
+      /* D-52：本局统计/结局记录归零（旧档续玩时由 Save.load 恢复或标记 unknown） */
+      resetRunStats(true);
+      endingRecord = null;
+      lastDeath = null;
+      endingSel = 0;
       /* D-48：showMenu 时进入 menu 场景（不启动第二条循环，仍由 start() 唯一驱动）；
        * 其余情况保持原行为，直接进 explore。 */
       this.switchScene(showMenu ? 'menu' : 'explore');
@@ -548,13 +691,136 @@
       } catch (e) { return null; }
     },
 
-    /* M9-5：死亡结算——打开 gameover 弹窗（战绩来自 Player/HUD） */
-    openGameOver: function () {
+    /* D-52：评级 / 死因 / 差距 / 结局文本——纯函数对外只读入口（验证页复算同一公式） */
+    computeRating: computeRating,
+    gradeOfScore: gradeOfScore,
+    verifyRating: verifyRating,
+    deathCauseText: deathCauseText,
+    verifyDeathCause: verifyDeathCause,
+    deathGap: deathGap,
+    endingLines: endingLines,
+    RATING_W: RATING_W,
+    RATING_T: RATING_T,
+
+    /* D-52：本局统计快照（含 elapsedMs；unknown 档保持 null，不补零） */
+    getRunStats: function (win) {
+      var rescues = (player.adaptive && typeof player.adaptive.triggers === 'number')
+        ? player.adaptive.triggers : 0;
+      if (!runStats.known) {
+        return {
+          known: false, floorReached: null, kills: null, maxLevel: null,
+          turns: null, potions: null, rescues: rescues,
+          elapsedMs: this.getElapsedMs(), win: !!win
+        };
+      }
+      return {
+        known: true,
+        floorReached: runStats.floorReached,
+        kills: runStats.kills,
+        maxLevel: runStats.maxLevel,
+        turns: runStats.turns,
+        potions: runStats.potions,
+        rescues: rescues,
+        elapsedMs: this.getElapsedMs(),
+        win: !!win
+      };
+    },
+    /* D-52：只读埋点——探索成功走一格 / 战斗被接受的行动 / 喝下一瓶药 */
+    _noteStep: function () { addRunStat('turns'); },
+    _noteBattleTurn: function () { addRunStat('turns'); },
+    _notePotion: function () { addRunStat('potions'); },
+    _restoreRunStats: function (s) {
+      if (s && s.known === true &&
+          typeof s.floorReached === 'number' && typeof s.kills === 'number' &&
+          typeof s.maxLevel === 'number' && typeof s.turns === 'number' &&
+          typeof s.potions === 'number') {
+        runStats = {
+          known: true, floorReached: s.floorReached, kills: s.kills,
+          maxLevel: s.maxLevel, turns: s.turns, potions: s.potions
+        };
+      } else {
+        resetRunStats(false); /* 旧档没有 run 字段：未知，不估算 */
+      }
+      if (runStats.known) {
+        bumpRunStat('floorReached', player.floor || 1);
+        bumpRunStat('maxLevel', player.level || 1);
+      }
+      return runStats;
+    },
+    _restoreEnding: function (e) { endingRecord = (e && e.cleared === true) ? e : null; return endingRecord; },
+    getEnding: function () { return endingRecord; },
+    _endingForSave: function () { return endingRecord; },
+    /* 结局页渲染数据（drawVictory 用；无记录时按当前运行期统计现场生成） */
+    _endingSpec: function () {
+      var e = endingRecord;
+      var stats = (e && e.stats) ? e.stats : this.getRunStats(true);
+      var score = (e && typeof e.score === 'number') ? e.score : null;
+      var grade = (e && e.grade) ? e.grade : null;
+      if (score === null || !grade) {
+        var r = computeRating(stats, true);
+        score = r.score; grade = r.grade;
+      }
+      return { stats: stats, score: score, grade: grade, lines: endingLines(stats), sel: endingSel };
+    },
+    _getEndingSel: function () { return endingSel; },
+
+    /* D-52：通关结算——统计 → 评级 → 写结局档 → 切独立结局画面（幂等：同局只结算一次） */
+    _commitVictory: function () {
+      if (this._scene === 'victory' && endingRecord) return endingRecord;
+      var stats = this.getRunStats(true);
+      var rating = computeRating(stats, true);
+      endingRecord = {
+        cleared: true, win: true, stats: stats,
+        score: rating.score, grade: rating.grade,
+        at: new Date().toISOString()
+      };
+      endingSel = 0;
+      /* M8-5：通关写本地排行榜（须在切 victory 前调用；scene 已为 victory 时幂等跳过） */
+      this.submitRank();
+      /* 结局档：写入当前局面 + ending 记录；「继续游戏」据此回到结局页而不是重打 */
+      Game.Systems.Save.save();
+      Game.Core.EventBus.emit('audio:play', { sfx: 'victory' });
+      this.switchScene('victory');
+      return endingRecord;
+    },
+
+    /* D-52：死亡收尾——清档（沿用 D-51 口径）、清图鉴，再打开死亡结算 */
+    _finalizeDeath: function (death) {
+      lastDeath = death || lastDeath;
+      endingRecord = null;
+      endingSel = 0;
+      Game.Systems.Save.clear(); /* 死亡清档，重新开始走新档 */
+      if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
+        Game.Systems.Bestiary.reset();
+      }
+      this.openGameOver();
+    },
+
+    /* D-52：自适应名额是否真的还没用完（只有这时才提示"守夜人还能拉你一次"） */
+    canRescueNow: function () {
+      var A = Game.Systems && Game.Systems.Adaptive;
+      if (!A || typeof A.isEnabled !== 'function' || !A.isEnabled()) return false;
+      var used = (player.adaptive && typeof player.adaptive.triggers === 'number') ? player.adaptive.triggers : 0;
+      var max = (typeof A.MAX_TRIGGERS === 'number') ? A.MAX_TRIGGERS : 2;
+      return used < max;
+    },
+
+    /* M9-5：死亡结算（D-52 扩展：死因 / 差什么 / 救援名额 / 本局统计）。
+     * 仍以 gameover 弹窗呈现——D-10/D-38/D-51 的表现与键盘路径（Enter 重开）保持不变。 */
+    openGameOver: function (deathOverride) {
+      var d = deathOverride || lastDeath || null;
+      var statKills = runStats.known ? runStats.kills
+        : ((Game.hud && typeof Game.hud.getKills === 'function') ? Game.hud.getKills() : null);
       var stats = {
         floor: player.floor,
         gold: player.gold,
-        kills: (Game.hud && typeof Game.hud.getKills === 'function') ? Game.hud.getKills() : 0,
-        elapsedMs: this.getElapsedMs()
+        kills: statKills,
+        elapsedMs: this.getElapsedMs(),
+        death: d,
+        cause: deathCauseText(d),
+        gap: deathGap(d),
+        canRescue: this.canRescueNow(),
+        run: this.getRunStats(false)
       };
       if (Game.Modal) {
         Game.Modal.open('gameover', stats);
@@ -563,9 +829,35 @@
       this.switchScene('explore');
     },
 
+    /* D-52：死亡结算「回主菜单」（存档已在 _finalizeDeath 清掉；只离开当前局） */
+    _deathReturnToMenu: function () {
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) Game.Modal.close();
+      menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
+      menu.confirm = null; menu.confirmSel = 1;
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      this.switchScene('menu');
+      Game.Core.EventBus.emit('ui:notice', { msg: '已回到主菜单（本局已结束，存档已清除）' });
+      return true;
+    },
+
+    /* D-52：结局页「回主菜单」——保留已通关存档，继续游戏可回到结局页 */
+    _endingReturnToMenu: function () {
+      menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
+      menu.confirm = null; menu.confirmSel = 1;
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      this.switchScene('menu');
+      Game.Core.EventBus.emit('ui:notice', { msg: '已回到主菜单（结局存档保留）' });
+      return true;
+    },
+
     /* M9-5：重新开始（既有 reset 逻辑；通关 R 键与死亡结算按钮共用） */
     restart: function () {
       runStart = performance.now();
+      /* D-52：新局统计从零开始，清掉上一局结局记录与死亡遥测 */
+      resetRunStats(true);
+      endingRecord = null;
+      lastDeath = null;
+      endingSel = 0;
       /* D-51：新局不继承暂停态与残留战斗（从菜单/结算页重开时清干净） */
       pause.active = false; pause.page = 'root'; pause.sel = 0;
       pause.settingsSel = 0; pause.confirmSel = 1; pause.wasPaused = false;
@@ -739,6 +1031,18 @@
             return false;
           }
           if (typeof loaded.floor === 'number') player.floor = loaded.floor;
+          /* D-52：已通关的档——继续游戏回到结局页（不重打 Boss、不重新结算） */
+          if (loaded.ending && loaded.ending.cleared === true) {
+            endingRecord = loaded.ending;
+            endingSel = 0;
+            encounter = null;
+            if (Game.Modal) Game.Modal.close();
+            this.switchScene('victory');
+            menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
+            if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+            Game.Core.EventBus.emit('ui:notice', { msg: '本局已通关：显示上一局结局' });
+            return true;
+          }
         } catch (e) {
           booting = false;
           Game.Core.EventBus.emit('ui:notice', { msg: '存档读取失败：请先「开始新游戏」' });
@@ -1157,6 +1461,7 @@
           player.x = nx;
           player.y = ny;
           this._stats.steps++; /* D-51：真的走了一格才 +1（暂停期间走不动） */
+          this._noteStep();    /* D-52：本局总回合 = 探索步数 + 战斗行动 */
           /* D-47：NPC 任务进度——每一步都检查"是否走到下行梯旁"（不含楼梯格自身） */
           if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.checkPosition === 'function') {
             Game.Systems.NpcQuest.checkPosition(nx, ny);
@@ -1322,12 +1627,26 @@
       Game.Systems.Learner.tick(8);
     },
 
-    /* 通关画面 */
+    /* 通关结局画面（D-52）：两个按钮，键盘全操作 */
     _updateVictory: function () {
       var k = Game.Core.Input.getState();
       if (k['KeyR']) {
         delete k['KeyR'];
-        this.restart(); /* M9-5：复用统一 reset 逻辑 */
+        this.restart(); /* M9-5：R 仍是再来一局快捷键 */
+        return;
+      }
+      if (k['ArrowLeft'] || k['KeyA'] || k['ArrowRight'] || k['KeyD'] || k['Tab'] ||
+          k['ArrowUp'] || k['KeyW'] || k['ArrowDown'] || k['KeyS']) {
+        delete k['ArrowLeft']; delete k['KeyA']; delete k['ArrowRight']; delete k['KeyD'];
+        delete k['ArrowUp']; delete k['KeyW']; delete k['ArrowDown']; delete k['KeyS'];
+        delete k['Tab'];
+        endingSel = endingSel === 0 ? 1 : 0;
+        return;
+      }
+      if (k['Enter'] || k['NumpadEnter']) {
+        delete k['Enter']; delete k['NumpadEnter'];
+        if (endingSel === 1) this._endingReturnToMenu();
+        else this.restart();
       }
     },
 
@@ -1400,7 +1719,7 @@
         Game.Core.Render.drawLearner(Game.Systems.Learner.getStats(), Game.Systems.Map.getGrid());
       } else if (scene === 'victory') {
         this._updateVictory();
-        Game.Core.Render.drawVictory(player);
+        Game.Core.Render.drawVictory(player, this._endingSpec());
       } else if (scene === 'menu') {
         /* D-48：首屏菜单是 loop 内的一个场景——不新开 rAF 链 */
         this._updateMenu();

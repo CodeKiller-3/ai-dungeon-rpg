@@ -43,6 +43,11 @@
         /* M8-4：图鉴存档顶层字段（Bestiary 未加载时补默认空表；JSON 序列化时值展开） */
         bestiary: (Game.Systems.Bestiary && Game.Systems.Bestiary.data)
           ? Game.Systems.Bestiary.data : { monsters: {}, items: {} },
+        /* D-52：本局统计与通关结局记录（键名不变，只新增顶层字段；旧档缺失→未知，不补零） */
+        run: (Game.Core && Game.Core.Main && typeof Game.Core.Main.getRunStats === 'function')
+          ? Game.Core.Main.getRunStats(false) : null,
+        ending: (Game.Core && Game.Core.Main && typeof Game.Core.Main._endingForSave === 'function')
+          ? Game.Core.Main._endingForSave() : null,
         /* D-15：地图状态（玩家到过的每层快照）。没有它刷新就会重生成整张图，
          * 于是宝箱/怪物可以反复刷。exportState 返回深拷贝，与运行期互不引用。 */
         map: (M && typeof M.exportState === 'function') ? M.exportState() : null
@@ -135,6 +140,11 @@
         p.x = sp.x;
         p.y = sp.y;
         p.floor = M.getFloor();
+        /* D-52：恢复本局统计与结局记录。旧档没有 run 字段 → unknown（结局页隐藏未知项）；
+         * 没有 ending → null（不影响任何既有字段） */
+        var MM = Game.Core && Game.Core.Main;
+        if (MM && typeof MM._restoreRunStats === 'function') MM._restoreRunStats(data.run);
+        if (MM && typeof MM._restoreEnding === 'function') MM._restoreEnding(data.ending);
         /* D-15：降级只发生一次——重建出来的地图立即固化为 v2 档，
          * 之后再刷新直接命中快照，不会每次重生成；并用提示条告知一次（D-14 通道）。 */
         if (!restored) {

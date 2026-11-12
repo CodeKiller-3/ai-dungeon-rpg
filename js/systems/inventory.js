@@ -57,6 +57,10 @@
       }
       p.inventory[id]--;
       if (p.inventory[id] === 0) delete p.inventory[id];
+      /* D-52：真实喝下的药剂计数（卷轴走上面的分支，不计入） */
+      if (Game.Core && Game.Core.Main && typeof Game.Core.Main._notePotion === 'function') {
+        Game.Core.Main._notePotion();
+      }
       notify();
       var msg = '使用 ' + item.name + '，';
       if (hpGain > 0 && mpGain > 0) msg += '回复 ' + hpGain + ' HP、' + mpGain + ' MP';

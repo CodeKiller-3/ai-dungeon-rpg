@@ -200,13 +200,14 @@
 
     /* ══ A9. 存档结构未变：键名/顶层键/player 键集合与 D-23 一致 ═ */
     /* D-47：只新增 player.npcQuests（NPC 任务四态）；D-49：只新增 player.adaptive
-     * （自适应救援记录）。键名不变、旧键不删；这是"加字段"而非改结构，故列入白名单。 */
+     * （自适应救援记录）；D-52：只新增顶层 run（本局统计）与 ending（通关结局记录）。
+     * 键名不变、旧键不删；这是"加字段"而非改结构，故列入白名单。 */
     clearSave();
     M.restart();
     Save.save();
     var raw = null;
     try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { raw = null; }
-    var TOP = ['saveVersion', 'savedAt', 'floor', 'player', 'bestiary', 'map'];
+    var TOP = ['saveVersion', 'savedAt', 'floor', 'player', 'bestiary', 'map', 'run', 'ending'];
     var PLAYER = ['hp', 'maxHp', 'mp', 'maxMp', 'atk', 'def', 'gold', 'exp', 'level',
       'inventory', 'equipment', 'quests', 'upg', 'npcQuests', 'adaptive'];
     var topKeys = raw ? Object.keys(raw).sort().join(',') : '';

@@ -1361,42 +1361,38 @@
       this._drawHud(); /* S3-2 */
     },
 
-    /* 通关画面（M4；M8-5：下方展示本地排行榜最近 10 条，行格式与既有面板一致） */
-    drawVictory: function (player) {
+    /* 通关结局画面（M4 → D-52：独立结局页）
+     * 数据全部来自 Main._endingSpec()（运行期真实统计 + 可复算评级）。
+     * spec 省略时（既有验证页直接 drawVictory(P)）现场向 Main 取同一份数据，保证两条路径一致。 */
+    drawVictory: function (player, spec) {
       var ctx = this._ctx;
-      var cv = this._canvas;
       if (!ctx) return;
-      this._applyDpr(); /* M9-5 */
-      var W = this.cssW, H = this.cssH;
-      ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, W, H);
-
-      /* M8-5：读榜单（模块缺失/存储禁用时为空数组，照常绘制通关信息） */
-      var list = [];
-      try {
-        var L = Game.Systems && Game.Systems.Leaderboard;
-        if (L && typeof L.get === 'function') list = L.get() || [];
-      } catch (e) { list = []; }
-      var rows = Math.min(list.length, 10);
-
-      /* 垂直居中布局：标题区 + 榜单区；窗口过矮时压缩行高，避免溢出 */
-      var topH = 132;
-      var gap = 24;
-      var rowH = 22;
-      var listH = rows > 0 ? (gap + rows * rowH) : 0;
-      var maxListH = Math.max(0, H - topH - 64);
-      if (listH > maxListH && rows > 0) {
-        rowH = Math.max(14, Math.floor((maxListH - gap) / rows));
-        /* 极矮窗口：即便压到最小行高仍放不下时，减少可见行数（保证不溢出底部） */
-        if (gap + rows * rowH > maxListH) {
-          rows = Math.max(0, Math.floor((maxListH - gap) / rowH));
-        }
-        listH = rows > 0 ? (gap + rows * rowH) : 0;
+      this._applyDpr();
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var st = spec;
+      if (!st || !st.lines) {
+        var M = Game.Core && Game.Core.Main;
+        st = (M && typeof M._endingSpec === 'function')
+          ? M._endingSpec()
+          : { lines: [], score: null, grade: '—', sel: 0 };
       }
-      var blockH = topH + listH + 48;
-      var y0 = Math.max((H - blockH) / 2, 12);
 
-      /* 修复 P2：按实际文本宽度居中并在超宽时缩字号，替换原先 W/2-80/-160/-180 的硬编码偏移 */
+      /* 背景：与主菜单/暂停同一套深色 + 细网格 + 金色装饰线 */
+      ctx.fillStyle = '#0b0c14';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(80,90,130,0.16)';
+      ctx.lineWidth = 1;
+      for (var gx = 0; gx < W; gx += 32) {
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
+      }
+      for (var gy = 0; gy < H; gy += 32) {
+        ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
+      }
+      ctx.fillStyle = '#ffcf6e';
+      ctx.fillRect(W / 2 - 120, 22, 240, 2);
+      ctx.fillStyle = '#3a3a55';
+      ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
+
       var pad = 16;
       function fitFont(str, size, bold) {
         ctx.font = (bold ? 'bold ' : '') + size + 'px monospace';
@@ -1416,29 +1412,61 @@
         ctx.fillText(str, Math.max((W - w) / 2, pad), y);
       }
 
-      centerText('通 关 !', y0 + 34, '#ffcf6e', 34, true);
-      centerText('勇者击败了地牢巨龙，冒险结束', y0 + 66, '#cfcfcf', 16, false);
-      centerText('最终金币: ' + player.gold + '   经验: ' + player.exp + '   等级: ' + player.level,
-        y0 + 94, '#8f8', 15, false);
+      var small = H < 520;
+      var y = Math.max(48, H * 0.10);
+      centerText('通 关 !', y, '#ffcf6e', small ? 26 : 34, true);
+      centerText('勇者击败了地牢巨龙，冒险结束', y + (small ? 24 : 30), '#cfcfcf', small ? 13 : 16, false);
+      var gradeStr = '评级 ' + (st.grade || '—');
+      if (typeof st.score === 'number') gradeStr += '  ·  ' + st.score + ' 分';
+      centerText(gradeStr, y + (small ? 48 : 58), '#9fe3a1', small ? 14 : 16, true);
 
-      /* M8-5：本地排行榜（新→旧：#1 为最新一条） */
-      if (rows > 0) {
-        centerText('本地排行榜', y0 + topH, '#ffcf6e', 15, true);
-        var rowY = y0 + topH + gap;
-        for (var i = 0; i < rows; i++) {
-          var e = list[i] || {};
-          var line = '#' + (i + 1) + '  ' + fmtRankTime(e.timeSec) +
-            '  金币' + (typeof e.gold === 'number' ? e.gold : 0) +
-            '  等级' + (typeof e.level === 'number' ? e.level : 0) +
-            '  ' + (e.date || '');
-          var w = fitFont(line, 13, false);
-          ctx.fillStyle = (i === 0) ? '#ffcf6e' : '#cfcfcf';
-          ctx.textAlign = 'left';
-          ctx.fillText(line, Math.max((W - w) / 2, pad), rowY + i * rowH);
-        }
+      /* 统计行：可用高度内均分；字号/行高随窗口收缩，窄屏逐行居中不换行溢出 */
+      var btnH = 36, hintH = 26;
+      var top = y + (small ? 62 : 84);
+      var bottom = btnH + hintH + 20;
+      var avail = Math.max(40, H - top - bottom);
+      var lines = st.lines || [];
+      var lineH = lines.length ? Math.min(26, Math.max(15, Math.floor(avail / lines.length))) : 0;
+      var startY = top + Math.max(0, Math.floor((avail - lineH * lines.length) / 2)) + Math.min(16, lineH);
+      for (var i = 0; i < lines.length; i++) {
+        centerText(lines[i].text, startY + i * lineH, '#cfcfcf', lineH < 20 ? 12 : 14, false);
       }
 
-      centerText('按 R 重新开始', y0 + blockH - 22, '#9bbbf4', 14, false);
+      /* 本地排行榜（M8-5 保留）：高窗口在按钮上方压缩展示最近 2 条，矮窗口省略不挤占统计区 */
+      var lbRows = [];
+      if (H >= 520) {
+        try {
+          var L = Game.Systems && Game.Systems.Leaderboard;
+          if (L && typeof L.get === 'function') lbRows = (L.get() || []).slice(0, 2);
+        } catch (e) { lbRows = []; }
+      }
+
+      /* 双按钮：再来一局 / 回主菜单（键盘 ←→ 选择，Enter 确认） */
+      var bw = Math.min(190, (W - 60) / 2), gap = 16;
+      var total = bw * 2 + gap;
+      var bx = (W - total) / 2, by = H - btnH - hintH;
+      for (var lr = 0; lr < lbRows.length; lr++) {
+        var le = lbRows[lr] || {};
+        centerText('最近通关 #' + (lr + 1) + '  ' + fmtRankTime(le.timeSec) +
+          ' · 金币' + (typeof le.gold === 'number' ? le.gold : 0) +
+          ' · Lv.' + (typeof le.level === 'number' ? le.level : 0),
+          by - 16 - (lbRows.length - 1 - lr) * 15, lr === 0 ? '#ffcf6e' : '#7f8fa8', 11, false);
+      }
+      var labels = ['再来一局 (Enter)', '回主菜单 (Enter)'];
+      for (var b = 0; b < 2; b++) {
+        var rx = bx + b * (bw + gap);
+        var on = ((st.sel | 0) === b);
+        ctx.fillStyle = on ? 'rgba(255,207,110,0.18)' : '#14142a';
+        ctx.fillRect(rx, by, bw, btnH);
+        ctx.strokeStyle = on ? '#ffcf6e' : '#3a3a55';
+        ctx.lineWidth = on ? 2 : 1;
+        ctx.strokeRect(rx + 0.5, by + 0.5, bw - 1, btnH - 1);
+        var lw = fitFont(labels[b], 14, on);
+        ctx.fillStyle = on ? '#ffcf6e' : '#9bbbf4';
+        ctx.textAlign = 'left';
+        ctx.fillText(labels[b], rx + Math.max(8, (bw - lw) / 2), by + btnH / 2 + 5);
+      }
+      centerText('←→ 选择 · Enter 确认 · R 再来一局', H - 10, '#7f8fa8', 12, false);
       this._drawHud(); /* S3-2 */
     },
 

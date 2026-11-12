@@ -1537,6 +1537,8 @@
     return {
       seed: seed, maxActions: maxActions, outcome: '', deathCause: '', deathFloor: 0,
       actions: 0, keys: 0, loops: 0, crashes: 0, simSec: 0, wallMs: 0,
+      /* D-52：被动计数（不参与决策）：真实走格 / 战斗行动 / 见过的最高等级 / 成功喝药 */
+      steps: 0, battleActs: 0, battleTurns: 0, maxLevelSeen: 1, potionUses: 0,
       floorNow: 1, floorActions: 0, floors: [],
       battles: 0, kills: 0, goblinKills: 0, traps: 0,
       potions: 0, battlePotions: 0, equips: 0, blockedSteps: 0, noDir: 0, modalStuck: 0,
@@ -1641,6 +1643,7 @@
     } : null;
     rec.actions++;
     press(code, STEP);
+    rec.battleActs++; /* D-52：按下次数（诊断用；回合数以 battle:turn 事件为准） */
     var n = 0;
     while (n < 30 && Game.Core.Main._scene === 'battle' && B.isInputLocked()) { frame(STEP); n++; }
     if (rec.d44) d44Round(rec, code, pre);
@@ -1951,6 +1954,23 @@
     Math.random = mulberry32(seed);
     if (Game.Fx && typeof Game.Fx._reset === 'function') Game.Fx._reset();
     M.restart();
+    /* D-52：被动台账——每个被引擎计入的回合都会发 battle:turn；只数事件，不干预行动 */
+    var _onTurnEvt = function () { rec.battleTurns++; };
+    Game.Core.EventBus.on('battle:turn', _onTurnEvt);
+    /* D-52：被动计数——包一层 Inventory.use，只统计"成功的非卷轴消耗品使用"；
+     * 不改变返回值/调用顺序，局末还原。 */
+    var _invUse = (Game.Systems.Inventory && typeof Game.Systems.Inventory.use === 'function')
+      ? Game.Systems.Inventory.use : null;
+    if (_invUse) {
+      Game.Systems.Inventory.use = function (id) {
+        var rr = _invUse.call(this, id);
+        if (rr && rr.ok === true) {
+          var it = Game.Data.ITEMS && Game.Data.ITEMS[id];
+          if (it && it.type === 'consumable' && it.scroll !== true) rec.potionUses++;
+        }
+        return rr;
+      };
+    }
     /* D-49：自适应救援开关（默认关闭——不传 opts.adaptive 时与 D-48 行为完全一致；
      * 只有 D-49 的验证/跑局显式传 true/false）。 */
     if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.setEnabled === 'function') {
@@ -1978,6 +1998,8 @@
     while (rec.actions < rec.maxActions) {
       if (M._scene === 'victory') { rec.outcome = 'win'; break; }
       if (Game.Modal.isOpen() && Game.Modal.current() === 'gameover') { rec.outcome = 'dead'; break; }
+      var sx = P.x, sy = P.y;
+      var wasExplore = (M._scene === 'explore');
       if (M._scene === 'battle') {
         var bhp = P.hp, blv = P.level;
         battleAct(rec);
@@ -1985,8 +2007,11 @@
       } else if (M._scene === 'explore') {
         var ehp = P.hp, elv = P.level;
         exploreAct(rec);
-        if (rec.d39) d39AfterAction(rec, 'explore', ehp, elv);
+        if (rec.d39) d39AfterAction(rec, 'explore', ehp, blv);
       } else { press('Escape', STEP); rec.actions++; }
+      /* D-52：被动计数——只有探索场景里的真实位移才算一步（逃跑后退格不算探索步） */
+      if (wasExplore && (P.x !== sx || P.y !== sy)) rec.steps++;
+      if (P.level > rec.maxLevelSeen) rec.maxLevelSeen = P.level;
     }
     if (!rec.outcome) rec.outcome = 'stuck';
     if (rec.outcome === 'dead') classify(rec);
@@ -1996,6 +2021,9 @@
       rec.stuckSpawnInPocket = sr.spawnInPocket;
       rec.deathFloor = P.floor;
     }
+    /* D-52：引擎侧结局统计快照（与上面被动计数逐项对照） */
+    rec.run = (Game.Core && Game.Core.Main && typeof Game.Core.Main.getRunStats === 'function')
+      ? Game.Core.Main.getRunStats(rec.outcome === 'win') : null;
     /* 收尾快照 */
     rec.floor = P.floor;
     rec.endPos = P.x + ',' + P.y;
@@ -2068,6 +2096,9 @@
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;
     delete rec.shopVisitedFloor; delete rec.noShop;
+    /* D-52：还原 Inventory.use 包装与回合事件监听 */
+    if (_invUse) Game.Systems.Inventory.use = _invUse;
+    Game.Core.EventBus.off('battle:turn', _onTurnEvt);
     rec.simSec = Math.round(rec.actions * ACTION_SEC * 100) / 100;
     rec.wallMs = Date.now() - wall0;
     rec.keys = spy.keys - spy0.keys;
@@ -2114,7 +2145,16 @@
           maxHp: pick('maxHp'),
           potionsLeft: pick('potionsLeft'),
           weaponId: pick('weaponId'),
-          armorId: pick('armorId')
+          armorId: pick('armorId'),
+          /* D-52：死因细分与差距复算所需字段（全部来自 payload，缺则 null） */
+          statusId: pick('statusId'),
+          statusName: pick('statusName'),
+          trapId: pick('trapId'),
+          trapName: pick('trapName'),
+          monsterHpLeft: pick('monsterHpLeft'),
+          monsterMaxHp: pick('monsterMaxHp'),
+          monsterDef: pick('monsterDef'),
+          playerAtk: pick('playerAtk')
         };
       }
     });

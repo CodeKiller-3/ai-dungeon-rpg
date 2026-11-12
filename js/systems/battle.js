@@ -367,6 +367,19 @@
 
   function Pfloor() { return (Game.Data.Player && Game.Data.Player.floor) || 1; }
 
+  /* D-52：被接受的一次玩家行动计入本局总回合（纯计数；击杀的那一击也算） */
+  function noteTurn() {
+    if (Game.Core && Game.Core.EventBus) {
+      Game.Core.EventBus.emit('battle:turn', {
+        turn: state ? state.turn : null,
+        roundNo: state ? state.roundNo : null
+      });
+    }
+    if (Game.Core && Game.Core.Main && typeof Game.Core.Main._noteBattleTurn === 'function') {
+      Game.Core.Main._noteBattleTurn();
+    }
+  }
+
   /* D-19：战斗内用药——候选严格限定为「消耗品 + 非卷轴 + 带 hp/mp 回复」。
    * 卷轴（S-03 强化）与装备不能在战斗中使用：前者作用于装备、属战斗外养成动作，
    * 后者不是消耗品；两者的判定都直接读 items.js 的 type/scroll 字段，不新造分类。
@@ -460,6 +473,7 @@
     tick: function () {
       var p = Game.Data.Player;
       var res = [];
+      var lethalId = null;
       if (!p || !p.status) return res;
       for (var id in p.status) {
         if (!p.status.hasOwnProperty(id)) continue;
@@ -471,6 +485,7 @@
           var hpBeforeTick = p.hp;
           p.hp = Math.max(p.hp - dmg, 0);
           logHp('damage', 'status:' + id, hpBeforeTick - p.hp);
+          if (p.hp <= 0 && lethalId === null) lethalId = id;
         }
         left -= 1;
         if (left > 0) p.status[id] = left; else delete p.status[id];
@@ -478,7 +493,12 @@
       }
       if (res.length && p.hp <= 0) {
         Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
-        Game.Core.EventBus.emit('battle:end', loseTelemetry());
+        /* D-52：只有 source=other 时才用 statusId 细分中毒/流血；战斗内致死仍保留 battle 口径 */
+        var sdef = lethalId ? (Game.Data.STATUS && Game.Data.STATUS[lethalId]) : null;
+        Game.Core.EventBus.emit('battle:end', loseTelemetry(lethalId ? {
+          statusId: lethalId,
+          statusName: (sdef && sdef.name) ? sdef.name : lethalId
+        } : null));
       }
       return res;
     }
@@ -538,6 +558,11 @@
       hpAtDeath: numOrNull(p && p.hp),
       maxHp: numOrNull(p && p.maxHp),
       potionsLeft: healPotionCount(),
+      /* D-52：死亡当场就可复算的差距数据（陷阱/状态致死时为 null，不臆造） */
+      monsterHpLeft: m ? numOrNull(m.hp) : null,
+      monsterMaxHp: m ? numOrNull(m.maxHp) : null,
+      monsterDef: m ? numOrNull(m.def) : null,
+      playerAtk: numOrNull(p && p.atk),
       weaponId: idOrNull(eq.weapon),
       armorId: idOrNull(eq.armor)
     };
@@ -623,6 +648,7 @@
         spawnHitMonster(dmg); /* S3-4：命中怪物反馈（仅展示，不改数值） */
         logPush('你对 ' + state.monster.name + ' 造成 ' + dmg + ' 伤害');
         tryEnrage(); /* M8-2：受击后判定狂暴 */
+        noteTurn(); /* D-52：击杀的那一击也计入总回合 */
         if (state.monster.hp <= 0) {
           settleWin();
           if (Game.Skills && typeof Game.Skills.tick === 'function') Game.Skills.tick();
@@ -637,6 +663,7 @@
         /* Skills.cast 负责校验 MP/冷却并触发效果；失败时不进入行动序列、不推进冷却 */
         var castOk = Game.Skills && typeof Game.Skills.cast === 'function' && Game.Skills.cast(skillId);
         if (!castOk) { state.phase = 'idle'; state.lockUntil = 0; return state; }
+        noteTurn(); /* D-52：技能成功释放才算一个回合 */
         if (state.dying || state.monster.hp <= 0) { /* 技能击杀：消散中，怪物不反击 */
           Game.Skills.tick(skillId);
           state.phase = 'idle';
@@ -647,6 +674,7 @@
         state.defending = true;
         Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
         logPush('你进入防御姿态，本回合减伤 50%');
+        noteTurn(); /* D-52 */
         scheduleMonster(t0);
       } else if (cmd === 'item') {
         /* D-19：用药 = 一个回合行动。数值全部由 Inventory.use 按 items.js 的 effect 结算，
@@ -665,11 +693,13 @@
         }
         var dHp = Math.max(0, pIt.hp - before.hp);
         var dMp = Math.max(0, pIt.mp - before.mp);
+        noteTurn(); /* D-52：真正喝下药才算一个回合 */
         pushEvent('player-item', { itemId: sel.id, hp: dHp, mp: dMp });
         logPush(useRes.msg);
         notice(useRes.msg, true);
         scheduleMonster(t0);   /* 与攻击/防御同一时序：怪物段照常反击 */
       } else if (cmd === 'run') {
+        noteTurn(); /* D-52：逃跑尝试（成功/失败）都算一个回合 */
         if (Math.random() < 0.5) {
           Game.Core.EventBus.emit('audio:play', { sfx: 'run' });
           logPush('你成功逃离了战斗');

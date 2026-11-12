@@ -1061,7 +1061,10 @@
         /* D-23：陷阱致死不是战斗致死——怪/回合显式置 null，只保留楼层与死时状态 */
         var tb = Game.Systems.Battle;
         var tp = (tb && typeof tb.loseTelemetry === 'function')
-          ? tb.loseTelemetry({ source: 'trap', monsterId: null, monsterName: null, roundNo: null })
+          ? tb.loseTelemetry({
+            source: 'trap', monsterId: null, monsterName: null, roundNo: null,
+            trapId: tr.id, trapName: def.name
+          })
           : { result: 'lose' };
         Game.Core.EventBus.emit('battle:end', tp);
       }
