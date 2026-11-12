@@ -1333,8 +1333,19 @@
       this.closePause();
     },
 
-    /* 「返回主菜单」：先把当前局面落盘，再离开战斗回到首屏（继续游戏可回到该局面） */
+    /* 「返回主菜单」：先把当前局面落盘，再离开战斗回到首屏（继续游戏可回到该局面）。
+     * D-53：战斗进行中不是存档点——不写档（否则读档会重开一场怪物满血的战斗，
+     * 或把已结算的奖励再算一次）。磁盘上保留最近一次非战斗检查点，并在提示条说明。 */
     _pauseReturnToMenu: function () {
+      var B = Game.Systems && Game.Systems.Battle;
+      var inBattle = this._scene === 'battle' && B && typeof B.isActive === 'function' && B.isActive();
+      if (inBattle) {
+        this._leaveToMenu();
+        Game.Core.EventBus.emit('ui:notice', {
+          msg: '战斗中不写档：继续游戏将回到最近的非战斗存档'
+        });
+        return true;
+      }
       if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
       this._leaveToMenu();
       Game.Core.EventBus.emit('ui:notice', { msg: '已返回主菜单（当前进度已保存）' });

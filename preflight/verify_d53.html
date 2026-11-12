@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-53：读取 selfcheck/d53-after.json（本卡跑局）与 d52-after.json（上一卡逐局基线） -->
+<meta name="preflight-meta" content="1">
+<title>D-53 存档落点</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-53 · 坐标往返 / 非法落点 BFS / 旧档回退 / 存读档零资源 / 四策略回归 / 键名与结局 / 战斗存档语义（A–G）</h1>
+<pre id="result">RUNNING</pre>
+<h2>摘要</h2><div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D53ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D53ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readText(rel).replace(/^\uFEFF/, '')); } catch (e) { return null; } }
+  var M = Game.Core.Main, S = Game.Systems.Save, P = Game.Data.Player;
+  var MAP = Game.Systems.Map, B = Game.Systems.Battle;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+  var T = 10000;
+  function frame(ms) { T += (ms || 16.7); try { M.loop(T); } catch (e) { window.__D53ERR.push('frame: ' + e.message); } }
+  function clearAll() {
+    try {
+      localStorage.removeItem(KEY); localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { }
+  }
+  function spawn() { return MAP.getSpawn(); }
+  function invJson() { try { return JSON.stringify(P.inventory || {}); } catch (e) { return '{}'; } }
+  function chestCount() {
+    var g = MAP.getGrid(), n = 0;
+    for (var y = 0; y < g.length; y++) {
+      for (var x = 0; x < g[0].length; x++) {
+        var d = MAP.getDecor(x, y);
+        if (d === 'chest' || d === 'room_chest' || d === 'gold_pile' || d === 'potion_stash') n++;
+      }
+    }
+    return n;
+  }
+  function snapshot() {
+    return {
+      gold: P.gold, exp: P.exp, inv: invJson(),
+      enemies: MAP.getEnemies().length, chests: chestCount()
+    };
+  }
+  function sameSnap(a, b) {
+    return a.gold === b.gold && a.exp === b.exp && a.inv === b.inv &&
+      a.enemies === b.enemies && a.chests === b.chests;
+  }
+
+  /* 与 map.js 同一条规则的独立 BFS（验证页自己实现，避免"用被测代码证明被测代码"） */
+  var DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+  function inG(x, y) {
+    var g = MAP.getGrid();
+    return !!(g && y >= 0 && x >= 0 && y < g.length && x < g[0].length);
+  }
+  function landable(x, y) {
+    if (!inG(x, y) || !MAP.isWalkable(x, y)) return false;
+    var t = MAP.tileAt(x, y);
+    if (t === 2 || t === 3) return false;
+    var es = MAP.getEnemies(), ns = MAP.getNpcs(), i;
+    for (i = 0; i < es.length; i++) if (es[i] && es[i].x === x && es[i].y === y) return false;
+    for (i = 0; i < ns.length; i++) if (ns[i] && ns[i].x === x && ns[i].y === y) return false;
+    if (MAP.getDecor(x, y)) return false;
+    if (MAP.getTrap(x, y)) return false;
+    return true;
+  }
+  function expectedLanding(sx, sy) {
+    if (!inG(sx, sy)) return null;
+    var seen = {}, q = [], qi = 0, i;
+    function push(x, y, d) {
+      if (!inG(x, y) || !MAP.isWalkable(x, y)) return;
+      var k = x + ',' + y;
+      if (seen[k]) return;
+      seen[k] = 1; q.push({ x: x, y: y, d: d });
+    }
+    if (MAP.isWalkable(sx, sy)) push(sx, sy, 0);
+    else {
+      var seed = null;
+      for (i = 0; i < DIRS.length; i++) {
+        var nx = sx + DIRS[i][0], ny = sy + DIRS[i][1];
+        if (inG(nx, ny) && MAP.isWalkable(nx, ny)) { seed = { x: nx, y: ny }; break; }
+      }
+      if (!seed) return null;
+      push(seed.x, seed.y, 1);
+    }
+    while (qi < q.length) {
+      var c = q[qi++];
+      if (landable(c.x, c.y)) return { x: c.x, y: c.y, d: c.d };
+      for (i = 0; i < DIRS.length; i++) push(c.x + DIRS[i][0], c.y + DIRS[i][1], c.d + 1);
+    }
+    return null;
+  }
+
+  try {
+    clearAll();
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    frame();
+
+    /* ---------- A：坐标往返一致（20 组） ---------- */
+    var tiles = [], g0 = MAP.getGrid();
+    for (var ay = 0; ay < g0.length; ay++) {
+      for (var ax = 0; ax < g0[0].length; ax++) {
+        if (MAP.canLand(ax, ay)) tiles.push({ x: ax, y: ay });
+      }
+    }
+    var sp0 = spawn();
+    tiles = tiles.filter(function (t) { return !(t.x === sp0.x && t.y === sp0.y); });
+    var aBad = [], aOk = 0, aSamples = [];
+    for (var ai = 0; ai < 20; ai++) {
+      var t = tiles[(ai * 37 + 11) % tiles.length];
+      P.x = t.x; P.y = t.y; P.floor = MAP.getFloor();
+      S.save();
+      P.x = sp0.x; P.y = sp0.y;
+      var al = S.load();
+      var good = !!al && P.x === t.x && P.y === t.y && P.floor === MAP.getFloor() &&
+        S.lastLanding && S.lastLanding.reason === 'saved';
+      if (good) aOk++; else aBad.push({ want: t, got: { x: P.x, y: P.y }, landing: S.lastLanding });
+      if (ai < 4) aSamples.push({ want: t, got: { x: P.x, y: P.y }, landing: S.lastLanding });
+    }
+    rec('A_coord_roundtrip', aOk === 20 && aBad.length === 0 && tiles.length > 0, {
+      rule: '存 → 读 20 次，玩家 x/y/层逐项等于存档时坐标；落点 reason=saved',
+      landableTiles: tiles.length, passed: aOk, failures: aBad.slice(0, 5), samples: aSamples
+    });
+
+    /* ---------- B：非法落点回退到同连通块最近可通行格（负例：出生点/不可通行必须 FAIL） ---------- */
+    var es = MAP.getEnemies();
+    var enemyTile = null, i, sg = spawn();
+    for (i = 0; i < es.length; i++) {
+      if (es[i] && MAP.isWalkable(es[i].x, es[i].y) &&
+          Math.abs(es[i].x - sg.x) + Math.abs(es[i].y - sg.y) > 3) { enemyTile = es[i]; break; }
+    }
+    var tempEnemy = null;
+    if (!enemyTile) {
+      for (i = 0; i < tiles.length; i++) {
+        if (Math.abs(tiles[i].x - sg.x) + Math.abs(tiles[i].y - sg.y) > 6) {
+          tempEnemy = { x: tiles[i].x, y: tiles[i].y, monsterId: 'slime' };
+          es.push(tempEnemy); enemyTile = tempEnemy; break;
+        }
+      }
+    }
+    var bOcc = null, bOccExp = null, bOccOk = false;
+    if (enemyTile) {
+      bOccExp = expectedLanding(enemyTile.x, enemyTile.y);
+      bOcc = MAP.resolveLanding(enemyTile.x, enemyTile.y);
+      bOccOk = !!bOccExp && !!bOcc && bOcc.reason === 'bfs' &&
+        bOcc.x === bOccExp.x && bOcc.y === bOccExp.y && landable(bOcc.x, bOcc.y);
+    }
+    if (tempEnemy) {
+      var ei = es.indexOf(tempEnemy);
+      if (ei >= 0) es.splice(ei, 1);
+    }
+    /* 墙格：找一个远离出生点的墙，期望按同一条"上/左/下/右首个可走邻格"规则 */
+    var wall = null, wallExp = null, wallHit = null, wallOk = false;
+    for (var wy = 1; wy < g0.length - 1 && !wall; wy++) {
+      for (var wx = 1; wx < g0[0].length - 1; wx++) {
+        if (g0[wy][wx] !== 0) continue;
+        if (Math.abs(wx - sg.x) + Math.abs(wy - sg.y) < 6) continue;
+        var hasN = false;
+        for (i = 0; i < DIRS.length; i++) {
+          if (inG(wx + DIRS[i][0], wy + DIRS[i][1]) && MAP.isWalkable(wx + DIRS[i][0], wy + DIRS[i][1])) { hasN = true; break; }
+        }
+        if (!hasN) continue;
+        wall = { x: wx, y: wy }; break;
+      }
+    }
+    if (wall) {
+      wallExp = expectedLanding(wall.x, wall.y);
+      wallHit = MAP.resolveLanding(wall.x, wall.y);
+      wallOk = !!wallExp && !!wallHit && wallHit.reason === 'bfs' &&
+        wallHit.x === wallExp.x && wallHit.y === wallExp.y && landable(wallHit.x, wallHit.y);
+    }
+    var negSpawn = !!bOcc && bOcc.x === sg.x && bOcc.y === sg.y;
+    var negBlocked = !!bOcc && !MAP.canLand(bOcc.x, bOcc.y);
+    rec('B_illegal_landing_bfs', bOccOk && wallOk && !negSpawn && !negBlocked, {
+      rule: '被怪物占用的地板 / 墙格 → 同连通块 BFS 最近可站立格；BFS 由验证页独立实现并逐格比对；' +
+        '负例：回退到出生点或不可通行格必须 FAIL',
+      occupiedTile: enemyTile, occupiedExpected: bOccExp, occupiedHit: bOcc, occupiedOk: bOccOk,
+      wall: wall, wallExpected: wallExp, wallHit: wallHit, wallOk: wallOk,
+      negative: { fellBackToSpawn: negSpawn, fellBackToBlocked: negBlocked }
+    });
+
+    /* ---------- C：旧档缺坐标 → 出生点；不抛错、不丢金币/背包 ---------- */
+    M.restart();
+    P.gold = 123; P.exp = 45; P.inventory = { potion_small: 2 };
+    S.save();
+    var rawC = JSON.parse(localStorage.getItem(KEY));
+    delete rawC.pos;
+    rawC.player.gold = 777;
+    rawC.player.inventory = { potion_small: 3, potion_mp: 1 };
+    localStorage.setItem(KEY, JSON.stringify(rawC));
+    var cLoad = null, cErr = null;
+    try { cLoad = S.load(); } catch (e) { cErr = String(e && e.message); }
+    var spC = spawn();
+    var cOk = !!cLoad && !cErr && P.x === spC.x && P.y === spC.y &&
+      P.gold === 777 && P.inventory.potion_small === 3 && P.inventory.potion_mp === 1 &&
+      S.lastLanding && S.lastLanding.reason === 'spawn';
+    rec('C_old_save_without_pos', cOk, {
+      rule: '旧档删除 pos 后读档：不抛错，落点回出生点；金币 / 背包原样恢复',
+      spawn: spC, got: { x: P.x, y: P.y }, landing: S.lastLanding,
+      gold: P.gold, inventory: P.inventory, error: cErr
+    });
+
+    /* ---------- D：反复存读档 20 次，资源与实体计数全部不变 ---------- */
+    M.restart();
+    P.gold = 55; P.exp = 12; P.inventory = { potion_small: 2 };
+    S.save(); S.load();
+    var dBefore = snapshot(), dBad = [];
+    for (var di = 0; di < 20; di++) {
+      S.save();
+      S.load();
+      var nowS = snapshot();
+      if (!sameSnap(dBefore, nowS)) dBad.push({ cycle: di, before: dBefore, after: nowS });
+    }
+    var dAfter = snapshot();
+    rec('D_no_resource_farming', dBad.length === 0 && sameSnap(dBefore, dAfter), {
+      rule: '连续 20 次「存档→读档」：金币 / 经验 / 背包 / 怪物数 / 宝箱与奖励点数全部不变',
+      before: dBefore, after: dAfter, violations: dBad.slice(0, 3)
+    });
+
+    /* ---------- F：存档键与设置键未变；D-52 ending 字段仍可读 ---------- */
+    var fKey = S.KEY === KEY;
+    try { localStorage.setItem(SET_KEY, '{"fx":"low"}'); } catch (e) { }
+    M._restoreEnding({
+      cleared: true, win: true, score: 2000, grade: 'A',
+      stats: { floorReached: 5, kills: 9, maxLevel: 7, turns: 40, potions: 2, rescues: 0, elapsedMs: 1000 }
+    });
+    S.save();
+    var fRaw = JSON.parse(localStorage.getItem(KEY));
+    var fEndingSaved = !!(fRaw.ending && fRaw.ending.cleared === true && fRaw.ending.grade === 'A');
+    S.load();
+    var fEndingLoaded = !!(M.getEnding() && M.getEnding().cleared === true && M.getEnding().stats.kills === 9);
+    var fSetKey = localStorage.getItem(SET_KEY) !== null;
+    rec('F_keys_and_d52_ending', fKey && fEndingSaved && fEndingLoaded && fSetKey, {
+      rule: '存档键仍是 ai_dungeon_rpg_save_v1，设置键仍是 aiDungeon_settings_v1；D-52 的 ending 字段可写可读',
+      saveKey: S.KEY, settingsKeyPresent: fSetKey,
+      endingSaved: fRaw.ending, endingLoaded: M.getEnding()
+    });
+
+    /* ---------- G：战斗内存档 / 读档的行为（≥2 种情形） ---------- */
+    /* 情形 1：战斗中 暂停→返回主菜单 不写档（字节级不变），继续游戏回到最近的非战斗存档 */
+    M.restart();
+    P.x = spawn().x; P.y = spawn().y;
+    S.save();
+    var gRawBefore = localStorage.getItem(KEY);
+    var mid = Object.keys(Game.Data.MONSTERS)[0] || 'slime';
+    B.start(mid);
+    M.switchScene('battle');
+    var gPause = M.openPause(T);
+    M._pauseReturnToMenu();
+    var gRawAfter = localStorage.getItem(KEY);
+    var g1SameBytes = gRawBefore === gRawAfter;
+    var g1Menu = M._scene === 'menu';
+    var g1NoBattle = !B.isActive();
+    var g1Enter = M.enterGame('continue');
+    var g1 = g1SameBytes && g1Menu && g1NoBattle && g1Enter === true &&
+      M._scene === 'explore' && !B.isActive();
+    /* 情形 2：被篡改成"怪物格落点"的存档 → BFS 到可站格，不自动开战、不重复结算 */
+    M.restart();
+    P.gold = 10; P.exp = 5;
+    S.save();
+    var gData = JSON.parse(localStorage.getItem(KEY));
+    var gFi = gData.map.floorIndex;
+    var gEnemies = (gData.map.floors[gFi] && gData.map.floors[gFi].enemies) || [];
+    var gE = gEnemies[0] || null;
+    var g2 = false, g2Info = null;
+    if (gE) {
+      gData.pos = { floor: gData.floor, x: gE.x, y: gE.y };
+      localStorage.setItem(KEY, JSON.stringify(gData));
+      var gGold = P.gold, gExp = P.exp, gCount = gEnemies.length;
+      S.load();
+      var landedFree = !(P.x === gE.x && P.y === gE.y) && MAP.canLand(P.x, P.y);
+      var noBattle = !B.isActive();
+      var noReward = P.gold === gGold && P.exp === gExp;
+      var sameCount = MAP.getEnemies().length === gCount;
+      g2 = landedFree && noBattle && noReward && sameCount &&
+        S.lastLanding && S.lastLanding.reason === 'bfs';
+      g2Info = {
+        enemyTile: { x: gE.x, y: gE.y }, landed: { x: P.x, y: P.y },
+        landing: S.lastLanding, battle: B.isActive(), gold: P.gold, exp: P.exp,
+        enemies: MAP.getEnemies().length
+      };
+    }
+    rec('G_battle_save_semantics', g1 && g2, {
+      rule: '战斗中不是存档点：暂停→返回主菜单不写档（字节不变），继续游戏从最近非战斗档进入探索、不恢复半截战斗；' +
+        '篡改落点到怪物格时 BFS 到可站格，不自动开战、不加金币/经验、怪物数不变',
+      battleMenu: {
+        pauseOpened: gPause, bytesUnchanged: g1SameBytes, menu: g1Menu,
+        battleAborted: g1NoBattle, continueToExplore: g1Enter === true && M._scene === 'explore'
+      },
+      tamperedPos: g2Info
+    });
+
+    /* ---------- E：B1/G2/S1/M1 同种子 1001–1050，与 D-52 逐局一致（B1 14/50） ---------- */
+    var AFTER = readJson('selfcheck/d53-after.json');
+    var BASE = readJson('selfcheck/d52-after.json');
+    var eBad = [], eCount = { b1: 0, g2: 0, s1: 0, m1: 0 };
+    if (!AFTER || !BASE) eBad.push('缺少 selfcheck/d53-after.json 或 d52-after.json');
+    else {
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var ar = (AFTER.runs && AFTER.runs[k]) || [];
+        var br = (BASE.runs && BASE.runs[k]) || [];
+        var bm = {};
+        br.forEach(function (x) { bm[x.seed] = x; });
+        eCount[k] = ar.length;
+        if (ar.length !== 50) eBad.push(k + ': runs=' + ar.length);
+        for (var j = 0; j < ar.length; j++) {
+          var x = ar[j], y = bm[x.seed];
+          if (!y) { eBad.push(k + '/' + x.seed + ': 基线缺该种子'); continue; }
+          var fs = ['outcome', 'kills', 'gold', 'level', 'battles', 'floor'];
+          for (var fi2 = 0; fi2 < fs.length; fi2++) {
+            if (x[fs[fi2]] !== y[fs[fi2]]) eBad.push(k + '/' + x.seed + '.' + fs[fi2] + ': ' + x[fs[fi2]] + '≠' + y[fs[fi2]]);
+          }
+          if ((x.deathFloor || x.floor) !== (y.deathFloor || y.floor)) {
+            eBad.push(k + '/' + x.seed + '.deathFloor');
+          }
+        }
+      });
+    }
+    var eWins = AFTER && AFTER.agg && AFTER.agg.b1 ? AFTER.agg.b1.outcomes.win : -1;
+    var eEnv = AFTER ? AFTER.env : null;
+    var eSeeds = !!eEnv && eEnv.maxActions === 2500 && eEnv.seeds && eEnv.seeds.length === 50;
+    var eAgg = !!(AFTER && BASE && eWins === 14 && BASE.agg.b1.outcomes.win === 14 &&
+      AFTER.agg.g2.f5.reached === BASE.agg.g2.f5.reached &&
+      AFTER.agg.s1.f5.reached === BASE.agg.s1.f5.reached &&
+      AFTER.agg.m1.floorReach['4'] === BASE.agg.m1.floorReach['4']);
+    rec('E_four_strategies_match_d52', !!AFTER && !!BASE && eSeeds && eBad.length === 0 && eAgg, {
+      rule: 'B1/G2/S1/M1 同种子 1001–1050、maxActions 2500：逐局 outcome/击杀/金币/等级/战斗场次/楼层与 D-52 完全一致；B1 仍 14/50',
+      env: eEnv, runs: eCount, b1Wins: eWins,
+      agg: AFTER ? { g2f5: AFTER.agg.g2.f5.reached, s1f5: AFTER.agg.s1.f5.reached, m1f4: AFTER.agg.m1.floorReach['4'] } : null,
+      mismatches: eBad.slice(0, 10), mismatchCount: eBad.length
+    });
+
+    out.errs = window.__D53ERR;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D53ERR.length === 0;
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String((e && (e.stack || e.message)) || e);
+    out.ok = false;
+  }
+
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result').textContent = txt;
+  var rows = '';
+  Object.keys(out.sub).forEach(function (k) {
+    var v = out.sub[k];
+    rows += '<tr><td>' + k + '</td><td>' + (v.ok ? 'PASS' : 'FAIL') + '</td><td>' +
+      (v.d && v.d.rule ? v.d.rule : '') + '</td></tr>';
+  });
+  document.getElementById('detail').innerHTML = '<table><tr><th>组</th><th>结果</th><th>判据</th></tr>' + rows + '</table>';
+})();
+</script>
+</body>
+</html>

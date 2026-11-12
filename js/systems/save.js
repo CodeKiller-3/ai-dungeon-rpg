@@ -27,6 +27,8 @@
         saveVersion: SAVE_VERSION,
         savedAt: new Date().toISOString(),
         floor: M.getFloor(),
+        /* D-53：落点只新增字段（层 + 格子）。旧档没有 pos → 读档回出生点，不报错。 */
+        pos: { floor: M.getFloor(), x: p.x, y: p.y },
         player: {
           hp: p.hp, maxHp: p.maxHp,
           mp: p.mp, maxMp: p.maxMp, /* M8-1：MP 存档字段 */
@@ -137,9 +139,23 @@
           else if (diff < 0) { for (var j = 0; j < -diff; j++) M.changeFloor(-1); }
         }
         var sp = M.getSpawn();
-        p.x = sp.x;
-        p.y = sp.y;
+        /* D-53：落点解析——坐标只在"存档层 = 目标层"时可信；
+         * 旧档缺 pos / 层号对不上 → 回出生点；墙/水/楼梯/被实体或可拾取物占用 →
+         * 同连通块 BFS 最近可站立格；整块都没有才回出生点。
+         * 该函数是纯查询，不移动实体、不拾取、不发奖励，反复存读档不会产生资源。 */
+        var landing = null;
+        if (data.pos && typeof data.pos === 'object' &&
+            typeof data.pos.x === 'number' && typeof data.pos.y === 'number' &&
+            typeof data.pos.floor === 'number' && Math.floor(data.pos.floor) === targetFloor &&
+            targetFloor === M.getFloor() &&
+            typeof M.resolveLanding === 'function') {
+          landing = M.resolveLanding(data.pos.x, data.pos.y);
+        }
+        if (!landing) landing = { x: sp.x, y: sp.y, reason: 'spawn', distance: -1 };
+        p.x = landing.x;
+        p.y = landing.y;
         p.floor = M.getFloor();
+        Game.Systems.Save.lastLanding = landing;
         /* D-52：恢复本局统计与结局记录。旧档没有 run 字段 → unknown（结局页隐藏未知项）；
          * 没有 ending → null（不影响任何既有字段） */
         var MM = Game.Core && Game.Core.Main;

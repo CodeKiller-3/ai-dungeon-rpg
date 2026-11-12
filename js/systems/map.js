@@ -829,6 +829,65 @@
     return out;
   }
 
+  /* ---------- D-53：读档落点解析 ----------
+   * 目标：续玩回到存档时的格子，而不是本层出生点；落点非法/被占时，
+   * 在**同一连通块**内用 BFS 找最近的可站立格，找不到才回出生点。
+   * 纯查询，不移动任何实体、不发任何奖励、不生成资源。 */
+  var LAND_DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]]; /* 上/左/下/右：并列时固定取先者 */
+  function inGrid(x, y) {
+    return !!(grid && y >= 0 && x >= 0 && y < grid.length && x < grid[0].length);
+  }
+  /* 可站立 = 地板/楼梯（grid≠0）且不压任何实体或可拾取物。
+   * 楼梯也排除：读档直接站在梯子上会让"再走一步"立刻换层，落点语义不干净。 */
+  function landableAt(x, y) {
+    if (!inGrid(x, y)) return false;
+    var t = grid[y][x];
+    if (t === 0 || t === 2 || t === 3) return false;
+    var i;
+    for (i = 0; i < enemies.length; i++) {
+      if (enemies[i] && enemies[i].x === x && enemies[i].y === y) return false;
+    }
+    for (i = 0; i < npcs.length; i++) {
+      if (npcs[i] && npcs[i].x === x && npcs[i].y === y) return false;
+    }
+    if (decor && decor[y] && decor[y][x]) return false; /* 宝箱/奖励点/火把等 */
+    if (traps && traps[y] && traps[y][x]) return false; /* 未触发/已显现陷阱 */
+    return true;
+  }
+  /* 从 (sx,sy) 出发，在单一连通块内 BFS。起点若可走则从起点开始；
+   * 起点是墙时只取"上/左/下/右"里第一个可走邻格所在的连通块（确定、可复现）。 */
+  function nearestLanding(sx, sy) {
+    if (!inGrid(sx, sy)) return null;
+    var seen = {}, q = [], qi = 0, i;
+    function push(x, y, d) {
+      if (!inGrid(x, y)) return;
+      if (grid[y][x] === 0) return;
+      var key = x + ',' + y;
+      if (seen[key]) return;
+      seen[key] = 1;
+      q.push({ x: x, y: y, d: d });
+    }
+    if (grid[sy][sx] !== 0) {
+      push(sx, sy, 0);
+    } else {
+      var seed = null;
+      for (i = 0; i < LAND_DIRS.length; i++) {
+        var nx0 = sx + LAND_DIRS[i][0], ny0 = sy + LAND_DIRS[i][1];
+        if (inGrid(nx0, ny0) && grid[ny0][nx0] !== 0) { seed = { x: nx0, y: ny0 }; break; }
+      }
+      if (!seed) return null;
+      push(seed.x, seed.y, 1);
+    }
+    while (qi < q.length) {
+      var c = q[qi++];
+      if (landableAt(c.x, c.y)) return { x: c.x, y: c.y, distance: c.d };
+      for (i = 0; i < LAND_DIRS.length; i++) {
+        push(c.x + LAND_DIRS[i][0], c.y + LAND_DIRS[i][1], c.d + 1);
+      }
+    }
+    return null;
+  }
+
   Game.Systems.Map = {
     /* opts.quietQuest：读档恢复时跳过 floor 任务推进。
      * 否则"恢复存档"会被当成一次"到达该层"，把楼层任务奖励再发一次（读档刷奖励）。 */
@@ -940,6 +999,24 @@
       if (!grid) return false;
       if (x < 0 || y < 0 || x >= grid[0].length || y >= grid.length) return false;
       return grid[y][x] !== 0;
+    },
+
+    /* D-53：该格能否作为读档落点（地板、无实体、无装饰/陷阱、非楼梯） */
+    canLand: function (x, y) { return landableAt(x, y); },
+
+    /* D-53：解析读档落点。
+     *   reason='saved' 原格可用；'bfs' 同连通块最近可站立格；'spawn' 找不到才回出生点。
+     * 坐标非法/墙/水/楼梯/被实体或可拾取物占用时都会走 BFS；越界或整块无空地才回出生点。
+     * 纯查询：不移动实体、不拾取、不发奖励，因此反复存读档不会产生任何资源。 */
+    resolveLanding: function (x, y) {
+      var ix = Math.floor(Number(x)), iy = Math.floor(Number(y));
+      var sp = { x: spawn.x, y: spawn.y, reason: 'spawn', distance: -1 };
+      if (!isFinite(ix) || !isFinite(iy)) return sp;
+      if (!inGrid(ix, iy)) return sp;
+      if (landableAt(ix, iy)) return { x: ix, y: iy, reason: 'saved', distance: 0 };
+      var hit = nearestLanding(ix, iy);
+      if (!hit) return sp;
+      return { x: hit.x, y: hit.y, reason: 'bfs', distance: hit.distance };
     },
 
     tileAt: function (x, y) {
