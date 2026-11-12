@@ -200,6 +200,55 @@
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
+  /* ── D-55：任务指引小条 ────────────────────────────────────────
+   * 画在右侧边缘、纵向约 45% 处：不压顶部血条、不压底部提示/战斗提示。
+   * 纯展示层：数据只来自 NpcQuest.guidance()（BFS），本模块不做任何寻路。 */
+  function barHeight(narrow) { return narrow ? 18 : BAR_H; }
+
+  /* 纯函数：给定视口与文案返回小条矩形（验证页 F 组直接调用） */
+  function guideBox(W, H, narrow, g, measure) {
+    var fs = narrow ? 10 : 11;
+    var text = (g.label || '目标') + (g.distance > 0 ? (' ' + g.distance + ' 步') : ' 就在旁边');
+    var tw = measure ? measure(text) : text.length * fs * 0.62;
+    var w = Math.min(W - 8, Math.ceil(tw) + 34);
+    var h = narrow ? 18 : 20;
+    var x = Math.max(4, W - 8 - w);
+    var bh = barHeight(narrow);
+    var y = Math.max(bh + 6, Math.round(H * 0.45));
+    if (y + h > H - 6) y = Math.max(bh + 6, H - 6 - h);
+    return { x: x, y: y, w: w, h: h, text: text, fs: fs };
+  }
+
+  function drawGuide(ctx, box, g) {
+    ctx.fillStyle = 'rgba(6,6,12,0.82)';
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+    ctx.strokeStyle = 'rgba(255,207,110,0.75)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
+    /* 方向箭头：四方向三角形，指向 BFS 的第一步 */
+    var cx = box.x + 12, cy = box.y + box.h / 2;
+    var dir = g.dir || { dx: 1, dy: 0 };
+    var ang = dir.dx === 1 ? 0 : (dir.dx === -1 ? Math.PI : (dir.dy === 1 ? Math.PI / 2 : -Math.PI / 2));
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(ang);
+    ctx.fillStyle = '#ffcf6e';
+    ctx.beginPath();
+    ctx.moveTo(5, 0);
+    ctx.lineTo(-4, -4.5);
+    ctx.lineTo(-4, 4.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#e8e8f0';
+    ctx.font = box.fs + 'px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(box.text, box.x + 21, cy + 0.5);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+
   Game.hud = {
     last: null,
     lowHp: lowHpInfo,
@@ -288,6 +337,20 @@
       }
       /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏） */
       drawStatusRow(ctx, s.status, W, barH);
+      /* D-55：任务指引（只在探索场景、已接任务、设置开启时由 guidance 返回非空） */
+      var gd = null;
+      try {
+        var NQ = Game.Systems && Game.Systems.NpcQuest;
+        if (NQ && typeof NQ.guidance === 'function') gd = NQ.guidance();
+      } catch (e) { gd = null; }
+      if (gd) {
+        var H0 = (R && typeof R.cssH === 'number') ? R.cssH : (cv.clientHeight || 0);
+        var gbox = guideBox(W, H0, narrow, gd, function (t) {
+          ctx.font = (narrow ? 10 : 11) + 'px monospace';
+          return ctx.measureText(t).width;
+        });
+        drawGuide(ctx, gbox, gd);
+      }
       /* D-14：低血量可见警示——HP ≤ 25% 时屏幕内缘红色脉动框 + 右侧文字。
        * 纯展示层，不读写任何数值，也不改战斗公式。 */
       var low = lowHpInfo();
@@ -312,6 +375,9 @@
 
     show: function () { visible = true; },
     hide: function () { visible = false; },
+
+    /* D-55：指引小条布局（纯函数，验证页 F 组用它断言不溢出/不压顶栏） */
+    guideBox: guideBox,
 
     /* M9-5：暴露击杀统计供死亡结算弹窗使用 */
     getKills: function () { return kills; },

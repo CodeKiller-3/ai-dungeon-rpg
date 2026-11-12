@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-55：读取 selfcheck/d55-after.json 与 d53-after.json，故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-55 任务指引</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-55 · 任务指引：50 种子可达 / BFS 方位 / 两态 / 开关 / 布局 / 战斗隔离 / 回归（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D55ERR = [];
+window.addEventListener('error', function (e) { window.__D55ERR.push('error: ' + (e.message || '')); });
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var M = Game.Core.Main, NQ = Game.Systems.NpcQuest, Map = Game.Systems.Map;
+  var P = Game.Data.Player, HUD = Game.hud;
+  var ORAND = Math.random;
+  var NPC_ID = 'warden_f1';
+
+  function gen(seed) {
+    Math.random = mulberry32(seed);
+    try {
+      /* 首次调用前 Map.cfg 还是 null：先 generate 一次完成初始化 */
+      if (!gen._boot) { Map.generate(); gen._boot = true; }
+      Map.setFloor(1);
+      P.floor = 1;
+      var sp = Map.getSpawn();
+      P.x = sp.x; P.y = sp.y;
+      NQ.reset();
+      M._scene = 'explore';
+    } finally { Math.random = ORAND; }
+    var ns = Map.getNpcs() || [];
+    for (var i = 0; i < ns.length; i++) if (ns[i].id === NPC_ID) return ns[i];
+    return null;
+  }
+  function setReady() {
+    NQ.accept(NPC_ID);
+    var st = P.npcQuests[NPC_ID];
+    if (st) st.progress = 1;
+  }
+  /* 独立 BFS（验证页自己实现，不复用被测实现） */
+  var DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+  function bfsExp(sx, sy, tx, ty) {
+    var seen = {}, q = [{ x: sx, y: sy, d: 0, first: null }], qi = 0;
+    seen[sx + ',' + sy] = 1;
+    while (qi < q.length) {
+      var c = q[qi++];
+      if (c.x === tx && c.y === ty) return { distance: c.d, dir: c.first };
+      for (var i = 0; i < DIRS.length; i++) {
+        var nx = c.x + DIRS[i][0], ny = c.y + DIRS[i][1];
+        var t = Map.tileAt(nx, ny);
+        var total = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+        var teleporting = (t === 2 && 1 < total) || (t === 3 && 1 > 1);
+        if (t === 0 || teleporting) continue;
+        var k = nx + ',' + ny;
+        if (seen[k]) continue;
+        seen[k] = 1;
+        q.push({ x: nx, y: ny, d: c.d + 1, first: c.first || { dx: DIRS[i][0], dy: DIRS[i][1] } });
+      }
+    }
+    return null;
+  }
+
+  /* ── A. 50 个种子：从出生点只按指引方向走，必须 50/50 抵达 NPC ─── */
+  (function () {
+    var okCount = 0, stepsList = [], bad = [];
+    for (var seed = 1001; seed <= 1050; seed++) {
+      var npc = gen(seed);
+      if (!npc) { bad.push({ seed: seed, why: 'no npc' }); continue; }
+      NQ.accept(NPC_ID);
+      var steps = 0, ok = true, lastKind = '';
+      while (steps < 2000) {
+        var g = NQ.guidance();
+        if (!g) { ok = false; bad.push({ seed: seed, why: 'guidance null at step ' + steps }); break; }
+        lastKind = g.kind;
+        /* 抵达 NPC = 与 NPC 相邻（可对话），不踩到 NPC 格 */
+        var cheb = Math.max(Math.abs(P.x - npc.x), Math.abs(P.y - npc.y));
+        if (cheb <= 1) break;
+        if (!g.dir) { ok = false; bad.push({ seed: seed, why: 'dir null' }); break; }
+        var nx = P.x + g.dir.dx, ny = P.y + g.dir.dy;
+        var t = Map.tileAt(nx, ny);
+        var total = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+        var teleporting = (t === 2 && P.floor < total) || (t === 3 && P.floor > 1);
+        if (t === 0 || teleporting) {
+          ok = false; bad.push({ seed: seed, why: 'illegal step (' + nx + ',' + ny + ') tile=' + t }); break;
+        }
+        P.x = nx; P.y = ny;
+        NQ.checkPosition(nx, ny);
+        steps++;
+      }
+      if (steps >= 2000) { ok = false; bad.push({ seed: seed, why: 'loop cap' }); }
+      if (ok) { okCount++; stepsList.push(steps); }
+    }
+    var avg = 0;
+    for (var i = 0; i < stepsList.length; i++) avg += stepsList[i];
+    avg = stepsList.length ? Math.round(avg / stepsList.length * 10) / 10 : 0;
+    rec('A_follow_guide_reaches', okCount === 50 && bad.length === 0, {
+      rule: '50 个种子：出生点起只按指引方向走，必须走到 NPC 相邻格；任一步非法/为空即 FAIL',
+      reached: okCount + '/50', avgSteps: avg, bad: bad.slice(0, 5)
+    });
+  })();
+
+  /* ── B. 方位与 BFS 距离逐格一致（≥200 采样），直线距离作负例 ───── */
+  (function () {
+    var samples = 0, bad = [], straightDiffers = 0, straightDirDiffers = 0;
+    var seeds = [1001, 1002, 1003];
+    for (var s = 0; s < seeds.length && samples < 240; s++) {
+      var npc = gen(seeds[s]);
+      if (!npc) continue;
+      setReady();
+      var grid = Map.getGrid();
+      for (var y = 0; y < grid.length && samples < 240; y++) {
+        for (var x = 0; x < grid[y].length && samples < 240; x++) {
+          if (Map.tileAt(x, y) !== 1) continue;
+          if (x === npc.x && y === npc.y) continue;
+          var exp = bfsExp(x, y, npc.x, npc.y);
+          if (!exp) continue;
+          P.x = x; P.y = y;
+          var g = NQ.guidance();
+          if (!g) { bad.push({ x: x, y: y, why: 'null' }); continue; }
+          var dirOk = (g.dir && g.dir.dx === exp.dir.dx && g.dir.dy === exp.dir.dy);
+          if (g.distance !== exp.distance || !dirOk) {
+            bad.push({ x: x, y: y, got: g.distance, want: exp.distance, gotDir: g.dir, wantDir: exp.dir });
+          }
+          var cheb = Math.max(Math.abs(npc.x - x), Math.abs(npc.y - y));
+          if (cheb !== exp.distance) straightDiffers++;
+          var sdx = npc.x === x ? 0 : (npc.x > x ? 1 : -1);
+          var sdy = npc.y === y ? 0 : (npc.y > y ? 1 : -1);
+          if (!(exp.dir.dx === sdx || exp.dir.dy === sdy)) straightDirDiffers++;
+          samples++;
+        }
+      }
+    }
+    rec('B_bfs_not_straight', samples >= 200 && bad.length === 0 && straightDiffers > 0,
+      {
+        rule: '逐格对照独立 BFS 的步数与第一步；直线距离/直线方向必须在样本里出现不一致',
+        samples: samples, bad: bad.slice(0, 5),
+        straightDistanceDiffers: straightDiffers, straightDirDiffers: straightDirDiffers
+      });
+  })();
+
+  /* ── C. 未接任务无指引；完成后消失 ─────────────────────────── */
+  (function () {
+    var npc = gen(1001);
+    var g0 = NQ.guidance();
+    NQ.accept(NPC_ID);
+    var g1 = NQ.guidance();
+    var target = g1 && g1.target;
+    var g2 = null, g3 = null;
+    if (target) {
+      P.x = target.x; P.y = target.y;
+      NQ.checkPosition(P.x, P.y);
+      g2 = NQ.guidance();
+    }
+    NQ.deliver(NPC_ID);
+    g3 = NQ.guidance();
+    rec('C_only_accepted_and_gone_after_done',
+      !g0 && !!g1 && g1.kind === 'stairs' && !!g2 && g2.kind === 'npc' && !g3,
+      {
+        rule: '未接取=null；进行中=下行梯；可交付=NPC；已交付=null',
+        unaccepted: g0, active: g1 && { kind: g1.kind, d: g1.distance },
+        ready: g2 && { kind: g2.kind, d: g2.distance }, done: g3
+      });
+  })();
+
+  /* ── D. 不泄露未探索信息：指引不读 FOV/绘制状态 ─────────────── */
+  (function () {
+    gen(1001); setReady();
+    var before = JSON.stringify(NQ.guidance());
+    var F = Game.fov, thrown = false;
+    Game.fov = {
+      isVisible: function () { thrown = true; throw new Error('fov'); },
+      isExplored: function () { thrown = true; throw new Error('fov'); }
+    };
+    var after = null;
+    try { after = JSON.stringify(NQ.guidance()); } catch (e) { after = 'THROW:' + e.message; }
+    Game.fov = F;
+    var src = readDoc('../js/systems/quest.js');
+    rec('D_no_fov_dependency',
+      !thrown && after === before && src.indexOf('fov') < 0,
+      {
+        rule: '把 FOV 换成一调用就抛错的桩，指引结果必须不变；quest.js 不得引用 fov',
+        fovTouched: thrown, same: after === before, sourceHasFov: src.indexOf('fov') >= 0
+      });
+  })();
+
+  /* ── E. 设置开关：关闭后 HUD 与 D-54 一致；持久化 ─────────── */
+  function captureHud() {
+    var R = Game.Core.Render;
+    var old = { ctx: R._ctx, canvas: R._canvas, w: R.cssW, h: R.cssH, narrow: R._isNarrow };
+    var texts = [];
+    var ctx = {
+      font: '', fillStyle: '', strokeStyle: '', lineWidth: 1, textAlign: '', textBaseline: '',
+      fillRect: function () {}, strokeRect: function () {}, drawImage: function () {},
+      beginPath: function () {}, moveTo: function () {}, lineTo: function () {}, closePath: function () {},
+      fill: function () {}, save: function () {}, restore: function () {},
+      translate: function () {}, rotate: function () {},
+      fillText: function (t) { texts.push(String(t)); },
+      measureText: function (t) { return { width: String(t).length * 6 }; }
+    };
+    R._ctx = ctx;
+    R._canvas = { clientWidth: 640, clientHeight: 480 };
+    R.cssW = 640; R.cssH = 480;
+    R._isNarrow = function () { return false; };
+    HUD.update({ hp: 80, hpMax: 100, mp: 30, mpMax: 50, gold: 10, floor: 1, level: 2, exp: 5, expNext: 30, status: [] });
+    HUD.draw();
+    R._ctx = old.ctx; R._canvas = old.canvas; R.cssW = old.w; R.cssH = old.h; R._isNarrow = old.narrow;
+    return texts;
+  }
+  (function () {
+    gen(1001); setReady();
+    M.setSetting('guide', true);
+    var on = captureHud();
+    var onGuide = on.filter(function (t) { return /步|就在旁边/.test(t); });
+    M.setSetting('guide', false);
+    var off = captureHud();
+    var offGuide = off.filter(function (t) { return /步|就在旁边/.test(t); });
+    var nonOn = on.filter(function (t) { return !/步|就在旁边/.test(t); }).join('|');
+    var nonOff = off.filter(function (t) { return !/步|就在旁边/.test(t); }).join('|');
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem('aiDungeon_settings_v1')); } catch (e) { saved = null; }
+    var sNow = M.getSettings();
+    var persist = !!saved && saved.guide === false;
+    M.setSetting('guide', true);
+    rec('E_switch_off_matches_d54', onGuide.length === 1 && offGuide.length === 0 &&
+      nonOn === nonOff && sNow.guide === false && persist,
+      {
+        rule: '关掉后 HUD 除指引外逐项不变；设置键落盘 guide=false；其余设置项不变',
+        onGuide: onGuide, offGuide: offGuide,
+        sameOtherHud: nonOn === nonOff, persisted: persist,
+        settings: sNow
+      });
+  })();
+
+  /* ── F. 窄屏 / 150% 缩放下小条不溢出、不压顶栏 ───────────── */
+  (function () {
+    var g = { label: '守夜人', distance: 12, dir: { dx: 0, dy: -1 } };
+    var cases = [
+      { name: '320×480 窄屏', W: 320, H: 480, narrow: true },
+      { name: '960×720 正常', W: 960, H: 720, narrow: false },
+      { name: '640×480（150% 等效）', W: 640, H: 480, narrow: false }
+    ];
+    var rows = [], bad = [];
+    for (var i = 0; i < cases.length; i++) {
+      var c = cases[i];
+      var b = HUD.guideBox(c.W, c.H, c.narrow, g, function (t) { return t.length * 6.5; });
+      var barH = c.narrow ? 18 : 22;
+      var ok = b.x >= 0 && b.y >= barH + 1 && b.x + b.w <= c.W && b.y + b.h <= c.H - 4 && b.w <= c.W - 8;
+      rows.push({ name: c.name, box: b, barH: barH, ok: ok });
+      if (!ok) bad.push(c.name);
+    }
+    rec('F_layout_no_overflow', bad.length === 0 && rows.length >= 2, {
+      rule: '小条矩形必须在视口内、位于顶栏之下、右侧不越界；至少两种尺寸',
+      rows: rows, bad: bad
+    });
+  })();
+
+  /* ── G. 四策略同种子复跑，与 D-53 逐局一致 ───────────────── */
+  (function () {
+    var A = readJson('selfcheck/d55-after.json');
+    var B = readJson('selfcheck/d53-after.json');
+    var bad = [], keys = ['seed', 'outcome', 'deathFloor', 'floor', 'gold', 'level', 'kills', 'battles', 'actions', 'steps', 'battleActs', 'potions', 'shopSpent'];
+    var b1Wins = -1;
+    if (!A || !B || !A.runs || !B.runs) {
+      rec('G_four_strategies_match', false, { rule: '读取 d55-after.json / d53-after.json 逐局比对', bad: ['缺少跑局产物'] });
+      return;
+    }
+    var strat = ['b1', 'g2', 's1', 'm1'];
+    for (var s = 0; s < strat.length; s++) {
+      var ra = A.runs[strat[s]] || [], rb = B.runs[strat[s]] || [];
+      if (ra.length !== 50 || rb.length !== 50) { bad.push(strat[s] + ' length'); continue; }
+      if (strat[s] === 'b1') b1Wins = A.summary.b1.win;
+      for (var i = 0; i < 50; i++) {
+        for (var k = 0; k < keys.length; k++) {
+          var ka = keys[k];
+          if (ka === 'seed') { if (ra[i].seed !== rb[i].seed) bad.push(strat[s] + ' seed@' + i); continue; }
+          if (KA(ra[i], ka) !== KA(rb[i], ka)) bad.push(strat[s] + ' ' + ka + '@' + i);
+        }
+      }
+    }
+    function KA(r, k) {
+      if (k === 'gold' || k === 'potions') return r[k];
+      if (k === 'shopSpent') return (r.d46 && typeof r.d46.spentGross === 'number') ? r.d46.spentGross : r.shopSpent;
+      return r[k];
+    }
+    rec('G_four_strategies_match', bad.length === 0 && b1Wins === 14,
+      { rule: 'B1/G2/S1/M1 同种子 1001–1050，逐局 outcome/金币/等级/击杀/动作逐项与 D-53 相同；B1 仍 14/50', b1Wins: b1Wins, mismatchCount: bad.length, bad: bad.slice(0, 8) });
+  })();
+
+  /* ── H. 战斗进行中不出现探索指引 ─────────────────────────── */
+  (function () {
+    gen(1001); setReady();
+    var explore = NQ.guidance();
+    var oldScene = M._scene;
+    M._scene = 'battle';
+    var inBattle = NQ.guidance();
+    var battleHud = captureHud();
+    var battleGuide = battleHud.filter(function (t) { return /步|就在旁边/.test(t); });
+    M._scene = oldScene;
+    rec('H_no_guide_in_battle', !!explore && !inBattle && battleGuide.length === 0, {
+      rule: '场景切到 battle：guidance 返回 null，HUD 不画指引；回探索恢复',
+      exploreKind: explore && explore.kind, inBattle: inBattle, hudGuideTexts: battleGuide
+    });
+  })();
+
+  var ok = true;
+  var names = Object.keys(out.sub);
+  for (var i = 0; i < names.length; i++) ok = ok && out.sub[names[i]].ok;
+  out.ok = ok && window.__D55ERR.length === 0;
+  out.errs = window.__D55ERR;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+})();
+</script>
+</body>
+</html>

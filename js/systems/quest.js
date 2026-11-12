@@ -130,6 +130,75 @@
     }
   }
 
+  /* ── D-55：任务指引（只读，不入档）─────────────────────────────
+   * 目标：接了「探路」之后，HUD 给出真实可走的方向与步数。
+   * 只指引已接任务：unaccepted / done 一律 null；active 指"下行梯旁"，
+   * ready 指本层可复命的 NPC。全部用 BFS 实测，不读 FOV/未探索状态。 */
+  var GUIDE_DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]]; /* 上/左/下/右：并列固定取先者 */
+
+  /* 可走 = 地板；会真正传送的楼梯不是走廊，指引绝不从梯子上穿过去。
+   * 与 D-18 的真实移动语义一致：第 1 层的上行梯、最深层的下行梯是空转，等同地板。 */
+  function guideWalkable(x, y) {
+    var Map = Game.Systems.Map;
+    if (!Map || typeof Map.tileAt !== 'function') return false;
+    var t = Map.tileAt(x, y);
+    if (t === 0) return false;
+    var p = Game.Data && Game.Data.Player;
+    var floor = p ? p.floor : 1;
+    var total = (Game.Data && Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    if (t === 2 && floor < total) return false;
+    if (t === 3 && floor > 1) return false;
+    return true;
+  }
+
+  /* 下行梯"旁边"的可站立格（Chebyshev 1，与 checkPosition 的达成判定同口径） */
+  function stairsSideCells() {
+    var Map = Game.Systems.Map;
+    var g = Map && typeof Map.getGrid === 'function' ? Map.getGrid() : null;
+    var out = [];
+    if (!g) return out;
+    var ring = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
+    for (var y = 0; y < g.length; y++) {
+      for (var x = 0; x < g[y].length; x++) {
+        if (g[y][x] !== 2) continue;
+        for (var i = 0; i < ring.length; i++) {
+          var nx = x + ring[i][0], ny = y + ring[i][1];
+          if (Map.tileAt(nx, ny) === 1) out.push({ x: nx, y: ny });
+        }
+      }
+    }
+    return out;
+  }
+
+  /* 单源 BFS：返回 {x,y,distance,dir:{dx,dy}}；dir 是"从起点出发的第一步"。
+   * target(x,y) 为目标判定；起点本身是目标时 dir=null、distance=0。 */
+  function bfsGuide(sx, sy, target) {
+    var seen = {}, q = [{ x: sx, y: sy, d: 0, first: null }], qi = 0;
+    seen[sx + ',' + sy] = 1;
+    while (qi < q.length) {
+      var c = q[qi++];
+      if (target(c.x, c.y)) return { x: c.x, y: c.y, distance: c.d, dir: c.first };
+      for (var i = 0; i < GUIDE_DIRS.length; i++) {
+        var nx = c.x + GUIDE_DIRS[i][0], ny = c.y + GUIDE_DIRS[i][1];
+        if (!guideWalkable(nx, ny)) continue;
+        var key = nx + ',' + ny;
+        if (seen[key]) continue;
+        seen[key] = 1;
+        q.push({
+          x: nx, y: ny, d: c.d + 1,
+          first: c.first || { dx: GUIDE_DIRS[i][0], dy: GUIDE_DIRS[i][1] }
+        });
+      }
+    }
+    return null;
+  }
+
+  function shortName(def) {
+    var n = (def && def.name) || '目标';
+    var k = n.indexOf('·');
+    return k > 0 ? n.slice(0, k) : n;
+  }
+
   Game.Systems.NpcQuest = {
     STATES: NPC_STATES,
 
@@ -245,6 +314,46 @@
         ok: true, msg: '任务完成：+金币' + gold + (exp ? ' +经验' + exp : ''),
         state: NPC_STATES.DONE, gold: gold, exp: exp,
         exclusiveItem: rw.exclusiveItem || null
+      };
+    },
+
+    /* D-55：HUD 指引快照。只读；state 不入档，由 npcQuests 推导。
+     * 返回 null 的场景：设置关闭 / 非探索场景 / 无本层 NPC / 未接取 / 已交付 /
+     * 找不到可走目标。返回 {kind,label,target,distance,dir}。 */
+    guidance: function () {
+      var M = Game.Core && Game.Core.Main;
+      var Map = Game.Systems.Map;
+      var p = Game.Data && Game.Data.Player;
+      if (!M || !Map || !p) return null;
+      if (M._scene && M._scene !== 'explore') return null;
+      var s = (typeof M.getSettings === 'function') ? M.getSettings() : null;
+      if (s && s.guide === false) return null;
+      var def = npcDefOnFloor(p.floor);
+      if (!def) return null;
+      var st = npcStateOf(def.id);
+      if (st !== NPC_STATES.ACTIVE && st !== NPC_STATES.READY) return null;
+      if (st === NPC_STATES.READY) {
+        var ns = (typeof Map.getNpcs === 'function') ? Map.getNpcs() : [];
+        var npc = null;
+        for (var i = 0; i < ns.length; i++) if (ns[i].id === def.id) { npc = ns[i]; break; }
+        if (!npc) return null;
+        var r = bfsGuide(p.x, p.y, function (x, y) { return x === npc.x && y === npc.y; });
+        if (!r) return null;
+        return {
+          kind: 'npc', label: shortName(def), target: { x: npc.x, y: npc.y },
+          distance: r.distance, dir: r.dir
+        };
+      }
+      var cells = stairsSideCells();
+      if (!cells.length) return null;
+      var r2 = bfsGuide(p.x, p.y, function (x, y) {
+        for (var j = 0; j < cells.length; j++) if (cells[j].x === x && cells[j].y === y) return true;
+        return false;
+      });
+      if (!r2) return null;
+      return {
+        kind: 'stairs', label: '下行梯', target: { x: r2.x, y: r2.y },
+        distance: r2.distance, dir: r2.dir
       };
     },
 

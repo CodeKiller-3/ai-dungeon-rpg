@@ -55,7 +55,7 @@
   var ZOOM_LEVELS = ['auto', '1', '1.25', '1.5'];
   var FX_LABEL = { off: '关', low: '低', high: '高' };
   var ZOOM_LABEL = { auto: '自动（自适应）', '1': '100%', '1.25': '125%', '1.5': '150%' };
-  var settings = { fx: 'low', muted: false, zoom: 'auto', adaptive: true };
+  var settings = { fx: 'low', muted: false, zoom: 'auto', adaptive: true, guide: true };
 
   function loadSettings() {
     try {
@@ -66,6 +66,8 @@
       if (d) settings.muted = !!d.muted;
       if (d && ZOOM_LEVELS.indexOf(d.zoom) >= 0) settings.zoom = d.zoom;
       if (d) settings.adaptive = (d.adaptive === undefined) ? true : !!d.adaptive;
+      /* D-55：旧设置没有 guide 字段 → 默认开（与 D-54 的默认表现一致） */
+      if (d) settings.guide = (d.guide === undefined) ? true : !!d.guide;
     } catch (e) { /* 存储损坏/禁用 → 保留默认 */ }
   }
   function saveSettings() {
@@ -911,7 +913,7 @@
     shouldShowMenu: shouldShowMenu,
 
     /* 当前设置快照（只读副本；验证页断言三项且无第四项） */
-    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive }; },
+    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive, guide: settings.guide }; },
 
     /* 设置项列表：三项既有开关（D-48 的断言口径不变） */
     _settingsSpec: function () {
@@ -929,6 +931,9 @@
       /* D-51：清除存档是"动作行"而不是开关，由 Enter 触发二次确认 */
       var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
       rows.push({ id: 'clearSave', label: '清除存档', value: hasSave ? '删除' : '无存档', danger: true });
+      /* D-55：任务指引开关（默认开；关闭后 HUD 与 D-54 完全一致）。
+       * 追加在动作行之后，保持 D-51 对「清除存档 = 第 5 行」的既有断言不变。 */
+      rows.push({ id: 'guide', label: '任务指引', value: settings.guide ? '开' : '关' });
       return rows;
     },
 
@@ -952,6 +957,9 @@
         settings.adaptive = !!value;
         var D = Game.Systems && Game.Systems.Adaptive;
         if (D && typeof D.setEnabled === 'function') D.setEnabled(settings.adaptive);
+      } else if (id === 'guide') {
+        /* D-55：默认开；关闭只影响 HUD 指引，不碰任务状态、不写存档 */
+        settings.guide = !!value;
       } else {
         return false;
       }
@@ -972,6 +980,7 @@
         return this.setSetting('zoom', ZOOM_LEVELS[(z + d + ZOOM_LEVELS.length) % ZOOM_LEVELS.length]);
       }
       if (id === 'adaptive') return this.setSetting('adaptive', !settings.adaptive);
+      if (id === 'guide') return this.setSetting('guide', !settings.guide);
       return false;
     },
 

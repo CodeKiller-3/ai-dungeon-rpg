@@ -1,0 +1,7 @@
+{
+    "diffStat":  " js/core/main.js     |  13 +++++--\n js/systems/hud.js   |  66 ++++++++++++++++++++++++++++++++++\n js/systems/quest.js | 102 ++++++++++++++++++++++++++++++++++++++++++++++++++++\n 3 files changed, 179 insertions(+), 2 deletions(-)",
+    "head":  "f67b63c2f19dc72bfda13a4a3e3ff7db04e95284",
+    "at":  "2026-11-13T06:54:34",
+    "adaptive":  1,
+    "form":  "d50"
+}
