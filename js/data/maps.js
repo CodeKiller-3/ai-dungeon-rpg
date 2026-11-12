@@ -70,6 +70,15 @@
     vine:   { id: 'vine',   name: '藤蔓', desc: '装饰物' }
   };
 
+  /* D-43：宝箱道具池（数据化）——takeDecor 从这里抽取，验证页可整体换回改前池做负例。
+   * 改前（D-42）：chest = [potion_small, sword_bone, armor_leather]；
+   *               room_chest = [potion_small, sword_bone, armor_leather, scroll_upgrade]。
+   * 现在把药水权重调高并把小血瓶换成大/特大盘，属于"宝箱出药水的概率与数量"这一条补给线。 */
+  Game.Data.CHEST_LOOT = {
+    chest: ['potion_large', 'potion_large', 'potion_small', 'sword_bone', 'armor_leather'],
+    room_chest: ['potion_xl', 'potion_large', 'sword_bone', 'armor_leather', 'scroll_upgrade']
+  };
+
   /* S-05：特殊房间（密室）——每层最多 1 间，F2 起出现；房内只放 1 个密室宝箱与 2 个火把，
    * 不放陷阱、不放普通装饰、不放楼梯；单扇门与主迷宫相连，生成后必须通过可达性校验 */
   Game.Data.ROOMS = {

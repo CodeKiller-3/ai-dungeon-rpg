@@ -17,7 +17,7 @@
       id: 'bat', name: '暗影蝙蝠',
       hp: 30, atk: 9, def: 1,
       exp: 12, gold: [4, 10],
-      drops: [{ itemId: 'potion_small', rate: 0.2 }],
+      drops: [{ itemId: 'potion_large', rate: 0.2 }],
       color: '#9eacea'
     },
     skeleton: {
@@ -32,7 +32,7 @@
           { itemId: 'sword_bone_rare', w: 30 },
           { itemId: 'sword_bone_epic', w: 10 }
         ]
-      }],
+      }, { itemId: 'potion_xl', rate: 0.22 }],
       color: '#e1b98f'
     },
     dragon: {
@@ -73,14 +73,14 @@
       id: 'goblin', name: '哥布林',
       hp: 45, atk: 7, def: 3,
       exp: 14, gold: [4, 10],
-      drops: [{ itemId: 'potion_small', rate: 0.25 }],
+      drops: [{ itemId: 'potion_large', rate: 0.25 }],
       color: '#7ac143'
     },
     tiny_zombie: {
       id: 'tiny_zombie', name: '小僵尸',
       hp: 50, atk: 8, def: 2,
       exp: 16, gold: [5, 12],
-      drops: [{ itemId: 'potion_small', rate: 0.2 }],
+      drops: [{ itemId: 'potion_large', rate: 0.2 }],
       color: '#8fa88f'
     },
     orc_warrior: {
@@ -94,14 +94,14 @@
           { itemId: 'sword_bone_rare', w: 30 },
           { itemId: 'sword_bone_epic', w: 10 }
         ]
-      }],
+      }, { itemId: 'potion_xl', rate: 0.2 }],
       color: '#c98a4b'
     },
     orc_shaman: {
       id: 'orc_shaman', name: '兽人萨满',
       hp: 75, atk: 16, def: 4,
       exp: 32, gold: [14, 26],
-      drops: [{ itemId: 'potion_large', rate: 0.2 }],
+      drops: [{ itemId: 'potion_xl', rate: 0.22 }],
       color: '#9b6bd6'
     },
     wogol: {
@@ -115,7 +115,7 @@
           { itemId: 'sword_bone_rare', w: 30 },
           { itemId: 'sword_bone_epic', w: 10 }
         ]
-      }],
+      }, { itemId: 'potion_xl', rate: 0.28 }],
       color: '#b07a3a'
     },
     ogre: {
@@ -129,7 +129,7 @@
           { itemId: 'sword_dragon_rare', w: 30 },
           { itemId: 'sword_dragon_epic', w: 10 }
         ]
-      }],
+      }, { itemId: 'potion_xl', rate: 0.28 }],
       color: '#a0522d'
     },
     /* P2-3：imp 由 bat 的视觉帧组转为独立怪物（F3 登场）；数值按 F3 期望介于 F2/F4 配平 */
@@ -137,7 +137,7 @@
       id: 'imp', name: '小恶魔',
       hp: 60, atk: 12, def: 4,
       exp: 24, gold: [8, 16],
-      drops: [{ itemId: 'potion_small', rate: 0.2 }],
+      drops: [{ itemId: 'potion_xl', rate: 0.36 }],
       color: '#ff8c42'
     },
     /* P2-3b：F4/F5 数值上调（F1~F3 不动）——目标 F4 期望 35~38、F5 44~48。
@@ -146,14 +146,14 @@
       id: 'big_zombie', name: '大僵尸',
       hp: 240, atk: 26, def: 10,
       exp: 55, gold: [26, 48],
-      drops: [{ itemId: 'potion_large', rate: 0.3 }],
+      drops: [{ itemId: 'potion_xl', rate: 0.45 }],
       color: '#8f9b6e'
     },
     necromancer: {
       id: 'necromancer', name: '死灵法师',
       hp: 135, atk: 24, def: 6,
       exp: 42, gold: [20, 36],
-      drops: [{ itemId: 'potion_mana', rate: 0.35 }],
+      drops: [{ itemId: 'potion_mana', rate: 0.35 }, { itemId: 'potion_xl', rate: 0.25 }],
       color: '#7b5aa6'
     },
     masked_orc: {
@@ -167,21 +167,21 @@
           { itemId: 'sword_bone_rare', w: 30 },
           { itemId: 'sword_bone_epic', w: 10 }
         ]
-      }],
+      }, { itemId: 'potion_xl', rate: 0.3 }],
       color: '#b3743f'
     },
     pumpkin_dude: {
       id: 'pumpkin_dude', name: '南瓜怪',
       hp: 120, atk: 22, def: 7,
       exp: 40, gold: [17, 32],
-      drops: [{ itemId: 'potion_xl', rate: 0.2 }],
+      drops: [{ itemId: 'potion_xl', rate: 0.3 }],
       color: '#e88a2a'
     },
     angel: {
       id: 'angel', name: '天使',
       hp: 180, atk: 28, def: 5,
       exp: 45, gold: [22, 40],
-      drops: [{ itemId: 'potion_mana', rate: 0.3 }],
+      drops: [{ itemId: 'potion_mana', rate: 0.3 }, { itemId: 'potion_xl', rate: 0.25 }],
       color: '#cfe6ff'
     },
     /* P2-4：层 Boss 2 种（enrage 结构复用 battle.js 既有通用实现，不改战斗逻辑；

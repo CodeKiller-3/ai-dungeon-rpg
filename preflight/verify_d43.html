@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-43：读取 selfcheck/d43-before.json、d43-after.json、d43-neg.json、d42-after.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-43 血量经济审计</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-43 · 血量经济：承伤 vs 回复、每层比值、补给护栏（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function r3(v) { return Math.round(v * 1000) / 1000; }
+  function sum(o) { var s = 0; for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) s += o[k]; return s; }
+  function runsOf(J, s) { return (J && J.runs && J.runs[s]) || []; }
+
+  var BEFORE = readJson('selfcheck/d43-before.json');
+  var AFTER = readJson('selfcheck/d43-after.json');
+  var NEG = readJson('selfcheck/d43-neg.json');
+  var D42 = readJson('selfcheck/d42-after.json');
+
+  try {
+    if (!BEFORE || !AFTER || !NEG || !D42) throw new Error('缺少 d43-before/after/neg 或 d42-after 测量产物');
+    var STR = ['m1', 's1', 'g2'];
+
+    /* ── A 组：血量账可复算——任取 3 局，承伤 + 回复 + 期初期末 HP 三者必须配平，误差 ≤ 0 ── */
+    var badA = [], samples = [], nFloorRows = 0;
+    for (var si = 0; si < STR.length; si++) {
+      var rs = runsOf(AFTER, STR[si]);
+      for (var ri = 0; ri < rs.length; ri++) {
+        var fs = (rs[ri].d43 && rs[ri].d43.floors) || [];
+        for (var fi = 0; fi < fs.length; fi++) {
+          var f = fs[fi];
+          var err = f.hpIn + f.healTotal - f.damageTotal - f.hpOut;
+          nFloorRows++;
+          if (err !== 0) badA.push({ strategy: STR[si], seed: rs[ri].seed, floor: f.floor, err: err });
+        }
+      }
+    }
+    /* 例：M1 的 1001（早死）、1028（长局）、1049（深局） */
+    var pickSeeds = [1001, 1028, 1049];
+    var m1runs = runsOf(AFTER, 'm1');
+    for (var pi = 0; pi < pickSeeds.length; pi++) {
+      var rr = null;
+      for (var q = 0; q < m1runs.length; q++) if (m1runs[q].seed === pickSeeds[pi]) rr = m1runs[q];
+      if (!rr) continue;
+      var lines = [], bad = 0;
+      for (var q2 = 0; q2 < rr.d43.floors.length; q2++) {
+        var z = rr.d43.floors[q2];
+        var e2 = z.hpIn + z.healTotal - z.damageTotal - z.hpOut;
+        if (e2 !== 0) bad++;
+        lines.push({
+          floor: z.floor, hpIn: z.hpIn, damage: z.damageTotal, heal: z.healTotal,
+          hpOut: z.hpOut, balance: e2,
+          byDamage: z.damage, byHeal: z.heal
+        });
+      }
+      samples.push({ seed: rr.seed, outcome: rr.outcome, deathFloor: rr.deathFloor || null,
+        potionUses: rr.d43.final.potionUses, floors: lines, bad: bad });
+    }
+    rec('A_hp_balance_exact', badA.length === 0 && samples.length === 3, {
+      checkedFloorRows: nFloorRows, bad: badA.slice(0, 5),
+      rule: '每层：hpIn + healTotal − damageTotal − hpOut = 0（致死溢出按实际掉血记，误差必须为 0）',
+      samples: samples
+    });
+
+    /* ── B 组：每层承伤/回复比值可复算，且与页面表格逐项相等 ─────── */
+    function rebuildAgg(runs) {
+      var per = {};
+      for (var i = 0; i < runs.length; i++) {
+        var fs2 = runs[i].d43.floors;
+        for (var j = 0; j < fs2.length; j++) {
+          var z2 = fs2[j];
+          var p = per[z2.floor] || (per[z2.floor] = {
+            n: 0, dmg: 0, heal: 0, hpIn: 0, hpOut: 0, pct: 0, gain: 0, use: 0, lv: 0
+          });
+          p.n++; p.dmg += z2.damageTotal; p.heal += z2.healTotal;
+          p.hpIn += z2.hpIn; p.hpOut += z2.hpOut;
+          p.pct += z2.maxHpOut ? (z2.hpOut / z2.maxHpOut) * 100 : 0;
+          p.gain += z2.potionsGained; p.use += z2.potionUses; p.lv += z2.levelOut;
+        }
+      }
+      var rows = [];
+      for (var k in per) {
+        var a = per[k];
+        rows.push({
+          floor: +k, runs: a.n,
+          avgDamage: r2(a.dmg / a.n), avgHeal: r2(a.heal / a.n),
+          ratio: a.heal > 0 ? r3(a.dmg / a.heal) : null,
+          avgHpIn: r2(a.hpIn / a.n), avgHpOut: r2(a.hpOut / a.n),
+          avgHpPctOut: Math.round((a.pct / a.n) * 10) / 10,
+          avgPotionsGained: r2(a.gain / a.n), avgPotionUses: r2(a.use / a.n),
+          avgLevelOut: r2(a.lv / a.n)
+        });
+      }
+      rows.sort(function (x, y) { return x.floor - y.floor; });
+      return rows;
+    }
+    var tableMismatch = [], ratioMismatch = [];
+    for (var b = 0; b < STR.length; b++) {
+      var tbl = AFTER.d43[STR[b]].floors;
+      var re = rebuildAgg(runsOf(AFTER, STR[b]));
+      if (tbl.length !== re.length) tableMismatch.push({ strategy: STR[b], len: [tbl.length, re.length] });
+      for (var c = 0; c < Math.min(tbl.length, re.length); c++) {
+        var A1 = tbl[c], B1 = re[c];
+        var fields = ['runs', 'avgDamage', 'avgHeal', 'ratio', 'avgHpIn', 'avgHpOut', 'avgHpPctOut',
+          'avgPotionsGained', 'avgPotionUses', 'avgLevelOut'];
+        for (var d1 = 0; d1 < fields.length; d1++) {
+          if (A1[fields[d1]] !== B1[fields[d1]]) {
+            tableMismatch.push({ strategy: STR[b], floor: A1.floor, field: fields[d1], page: A1[fields[d1]], recalc: B1[fields[d1]] });
+          }
+        }
+        if (A1.ratio !== null) {
+          var direct = r3(A1.avgDamage / A1.avgHeal);
+          if (Math.abs(direct - A1.ratio) > 0.011) {
+            ratioMismatch.push({ strategy: STR[b], floor: A1.floor, page: A1.ratio, fromAvgs: direct });
+          }
+        }
+      }
+    }
+    rec('B_floor_ratio_recalc_equal', tableMismatch.length === 0 && ratioMismatch.length === 0, {
+      rule: '从原始 runs 重新分桶求平均，与 d43-after.json 的页面表格逐项比对（10 个字段）',
+      floors: { m1: AFTER.d43.m1.floors, s1: AFTER.d43.s1.floors, g2: AFTER.d43.g2.floors },
+      mismatch: tableMismatch.slice(0, 8), ratioNote: ratioMismatch.slice(0, 8)
+    });
+
+    /* ── C 组：负例——还原药水补给必须复现改前基线，且让差值断言 FAIL ── */
+    var oldF3 = NEG.neg.old.f3exit, newF3 = NEG.neg.new.f3exit;
+    var baseF3 = BEFORE.d43.m1.f3exit;
+    var floorMatch = true, floorDiff = [];
+    var oldTbl = NEG.neg.old.floors, baseTbl = BEFORE.d43.m1.floors;
+    for (var e1 = 0; e1 < Math.min(oldTbl.length, baseTbl.length); e1++) {
+      var o1 = oldTbl[e1], b1 = baseTbl[e1];
+      if (o1.floor !== b1.floor || o1.avgDamage !== b1.avgDamage || o1.avgHeal !== b1.avgHeal ||
+        o1.avgHpOut !== b1.avgHpOut || o1.avgPotionsGained !== b1.avgPotionsGained ||
+        o1.avgPotionUses !== b1.avgPotionUses || o1.runs !== b1.runs) {
+        floorMatch = false;
+        floorDiff.push({ restored: o1, before: b1 });
+      }
+    }
+    var deltaOk = (AFTER.d43.m1.f3exit.avgHp - baseF3.avgHp) >= 10;
+    var deltaNeg = (oldF3.avgHp - baseF3.avgHp) >= 10;
+    rec('C_negative_restore_baseline', floorMatch &&
+      oldF3.n === baseF3.n && oldF3.avgHp === baseF3.avgHp && oldF3.avgHpPct === baseF3.avgHpPct &&
+      deltaOk && !deltaNeg, {
+      rule: '把 drops 与宝箱道具池整体还原后：①逐项复现 d43-before 的每层账；②“F3 出口比改前 +≥10HP”在还原后必须 FAIL',
+      before: baseF3, restored: oldF3, restoredCurrentConfig: newF3,
+      after: AFTER.d43.m1.f3exit,
+      deltaAssertion: { thresholdHp: 10, onAfter: r2(AFTER.d43.m1.f3exit.avgHp - baseF3.avgHp), onRestored: r2(oldF3.avgHp - baseF3.avgHp), passOnAfter: deltaOk, failOnRestored: !deltaNeg },
+      floorMismatch: floorDiff.slice(0, 4)
+    });
+
+    /* ── D 组：通胀护栏两条上限有断言，超限必须 FAIL ───────────── */
+    function guardEval(g) {
+      return (g.avgPotionsGainedPerFloor <= 3) && (g.maxPotionUsesPerRun <= 15) &&
+        (typeof g.avgPotionsGainedPerFloor === 'number') && (typeof g.maxPotionUsesPerRun === 'number');
+    }
+    var guardRows = {}, guardOk = true;
+    for (var g1 = 0; g1 < STR.length; g1++) {
+      var s3 = STR[g1], runs3 = runsOf(AFTER, s3);
+      var gaineds = [], maxUse = 0, perFloorMax = {};
+      for (var h1 = 0; h1 < runs3.length; h1++) {
+        var fin = runs3[h1].d43.final, fs3 = runs3[h1].d43.floors;
+        if (fin.potionUses > maxUse) maxUse = fin.potionUses;
+        for (var h2 = 0; h2 < fs3.length; h2++) {
+          gaineds.push(fs3[h2].potionsGained);
+          perFloorMax[fs3[h2].floor] = Math.max(perFloorMax[fs3[h2].floor] || 0, fs3[h2].potionsGained);
+        }
+      }
+      var avgG = 0;
+      for (var h3 = 0; h3 < gaineds.length; h3++) avgG += gaineds[h3];
+      avgG = gaineds.length ? r2(avgG / gaineds.length) : 0;
+      var gObj = { avgPotionsGainedPerFloor: avgG, maxPotionUsesPerRun: maxUse, perFloorMaxGained: perFloorMax };
+      guardRows[s3] = gObj;
+      if (!guardEval(gObj)) guardOk = false;
+    }
+    var selfTest = guardEval({ avgPotionsGainedPerFloor: 3, maxPotionUsesPerRun: 15 }) === true &&
+      guardEval({ avgPotionsGainedPerFloor: 3.01, maxPotionUsesPerRun: 15 }) === false &&
+      guardEval({ avgPotionsGainedPerFloor: 3, maxPotionUsesPerRun: 16 }) === false;
+    rec('D_inflation_guard', guardOk && selfTest, {
+      rule: '每层新获得药水平均 ≤3；单局总消耗药水 ≤15；护栏函数对 3.01 / 16 必须判 FAIL',
+      rows: guardRows, checkerSelfTest: selfTest,
+      worstRunPotionsGained: (function () {
+        var mx = 0, sd = null, st = null;
+        for (var x1 = 0; x1 < STR.length; x1++) {
+          var rr2 = runsOf(AFTER, STR[x1]);
+          for (var x2 = 0; x2 < rr2.length; x2++) if (rr2[x2].d43.final.potionsGained > mx) {
+            mx = rr2[x2].d43.final.potionsGained; sd = rr2[x2].seed; st = STR[x1];
+          }
+        }
+        return { maxGained: mx, seed: sd, strategy: st };
+      })()
+    });
+
+    /* ── E 组：三组同种子 1001–1050 / maxActions 2500，字段与 D-42 逐项可比 ── */
+    var seedsOk = true, schemaOk = true, schemaBad = [];
+    for (var y1 = 0; y1 < STR.length; y1++) {
+      var sk = STR[y1], ra = runsOf(AFTER, sk), rb = runsOf(D42, sk);
+      if (ra.length !== 50 || rb.length !== 50) seedsOk = false;
+      for (var y2 = 0; y2 < 50; y2++) {
+        if (ra[y2].seed !== 1001 + y2 || rb[y2].seed !== 1001 + y2) seedsOk = false;
+      }
+      for (var y3 = 0; y3 < Math.min(ra.length, rb.length); y3++) {
+        var kb = Object.keys(rb[y3]);
+        for (var y4 = 0; y4 < kb.length; y4++) {
+          if (!Object.prototype.hasOwnProperty.call(ra[y3], kb[y4])) {
+            schemaOk = false;
+            schemaBad.push({ strategy: sk, seed: ra[y3].seed, missing: kb[y4] });
+          }
+        }
+      }
+    }
+    var optOk = true, optBad = [];
+    for (var y5 = 0; y5 < STR.length; y5++) {
+      var oa = AFTER.strategy[STR[y5]], ob = D42.strategy[STR[y5]];
+      var ka = JSON.parse(JSON.stringify(oa)); delete ka.d43;
+      if (JSON.stringify(ka) !== JSON.stringify(ob)) optOk = false;
+    }
+    var cmp = {};
+    for (var y6 = 0; y6 < STR.length; y6++) {
+      var s6 = STR[y6];
+      cmp[s6] = {
+        d42: { f5: D42.agg[s6].agg.f5.reached, f4: D42.agg[s6].agg.floorReach['4'] || 0, deaths: D42.agg[s6].agg.deathFloor },
+        d43: { f5: AFTER.agg[s6].agg.f5.reached, f4: AFTER.agg[s6].agg.floorReach['4'] || 0, deaths: AFTER.agg[s6].agg.deathFloor },
+        runs: [runsOf(D42, s6).length, runsOf(AFTER, s6).length]
+      };
+    }
+    rec('E_rerun_comparable', seedsOk && schemaOk && optOk &&
+      AFTER.env.maxActions === 2500 && D42.env.maxActions === 2500, {
+      rule: '同种子 1001–1050；D-42 的每个 run 字段在 D-43 中原名保留；策略 opts 除 d43 外逐项相同',
+      seedsOk: seedsOk, schemaOk: schemaOk, optsOk: optOk, missingFields: schemaBad.slice(0, 5),
+      compare: cmp, note: 'd43-after 的数值差异来自补给改动，不是种子/动作上限变化'
+    });
+
+    /* ── F 组：怪物指纹、巨龙三项、物品哈希、价格全部未变 ───────── */
+    var MONS = Game.Data.MONSTERS, IT = Game.Data.ITEMS, MP = Game.Data.MAPS;
+    var mkeys = Object.keys(MONS).sort();
+    var fpStr = mkeys.map(function (k) {
+      return k + ':' + MONS[k].hp + ':' + MONS[k].atk + ':' + MONS[k].def + ':' + MONS[k].exp;
+    }).join('|');
+    var fh = 2166136261;
+    for (var z1 = 0; z1 < fpStr.length; z1++) {
+      fh ^= fpStr.charCodeAt(z1);
+      fh = Math.imul(fh, 16777619) >>> 0;
+    }
+    var dr = MONS.dragon, en = dr.enrage;
+    var bs = MP.bosses;
+    var dragonOk = dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+      en && en.hpPct === 0.5 && en.atkMul === 1.5 && en.defMul === 1.3 &&
+      en.skill && en.skill.name === '烈焰吐息' && en.skill.chance === 0.3 && en.skill.dmgMul === 1.4;
+    var bossUntouched = D42.env.bossStats.ogre_boss.hp === MONS.ogre_boss.hp &&
+      D42.env.bossStats.ogre_boss.atk === MONS.ogre_boss.atk &&
+      D42.env.bossStats.ogre_boss.def === MONS.ogre_boss.def &&
+      D42.env.bossStats.zombie_king.hp === MONS.zombie_king.hp &&
+      D42.env.bossStats.zombie_king.atk === MONS.zombie_king.atk &&
+      D42.env.bossStats.zombie_king.def === MONS.zombie_king.def &&
+      D42.env.bossStats.dragon.hp === MONS.dragon.hp &&
+      D42.env.bossStats.dragon.atk === MONS.dragon.atk &&
+      D42.env.bossStats.dragon.def === MONS.dragon.def;
+    var ikeys = Object.keys(IT).sort();
+    var sumP = 0, sumS = 0, badP = [];
+    for (var z2 = 0; z2 < ikeys.length; z2++) {
+      var it = IT[ikeys[z2]];
+      if (typeof it.price === 'number') sumP += it.price;
+      if (typeof it.sell === 'number') sumS += it.sell;
+      if (typeof it.price === 'number' && typeof it.sell === 'number' && !(it.price > it.sell)) badP.push(ikeys[z2]);
+    }
+    var istr = ikeys.map(function (k) { return k + ':' + IT[k].price + ':' + IT[k].sell; }).join('|');
+    var ih = 2166136261;
+    for (var z3 = 0; z3 < istr.length; z3++) {
+      ih ^= istr.charCodeAt(z3);
+      ih = Math.imul(ih, 16777619) >>> 0;
+    }
+    rec('F_fingerprints_untouched', mkeys.length === 18 && fh === 0x20ba6b60 && bossUntouched &&
+      dragonOk && bs.length === 3 && bs[0].id === 'ogre_boss' && bs[1].id === 'zombie_king' && bs[2].id === 'dragon' &&
+      ikeys.length === 48 && sumP === 10165 && sumS === 5081 && ih === 0x331540f9 && badP.length === 0, {
+      rule: '怪物指纹只含 hp/atk/def/exp（drops 是 D-43 唯一允许改的怪物字段）；物品与价格必须逐项不变',
+      monsterFingerprint: { keys: mkeys.length, fnv: fh.toString(16), expect: '20ba6b60', excludes: 'drops' },
+      bosses: { ogre_boss: [MONS.ogre_boss.hp, MONS.ogre_boss.atk, MONS.ogre_boss.def],
+        zombie_king: [MONS.zombie_king.hp, MONS.zombie_king.atk, MONS.zombie_king.def],
+        dragon: [MONS.dragon.hp, MONS.dragon.atk, MONS.dragon.def] },
+      bossUntouched: bossUntouched, dragonOk: dragonOk, bossPositions: bs,
+      items: { count: ikeys.length, sumPrice: sumP, sumSell: sumS, fnv: ih.toString(16), badPrice: badP }
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D43_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  /* 裁决行必须是行首 "PASS {json}" / "FAIL {json}"（run-all.ps1 的 Get-PageVerdict 只认这种形态） */
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

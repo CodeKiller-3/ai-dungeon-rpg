@@ -164,7 +164,37 @@
      * 因此临时把曲线钉回 60，跑完恢复。曲线本身由 verify_d41 负责。 */
     var curveNow38 = Game.Systems.Battle.expEarlyBase;
     Game.Systems.Battle.expEarlyBase = 60;
+    /* D-43：补给条目也会改变随机数消耗顺序；本组只验死亡分类逻辑，活体段把补给钉回改前 */
+    var d43Pot38 = {
+      bat: ['potion_small', 0.2], goblin: ['potion_small', 0.25], tiny_zombie: ['potion_small', 0.2],
+      imp: ['potion_small', 0.2], orc_shaman: ['potion_large', 0.2], big_zombie: ['potion_large', 0.3],
+      necromancer: ['potion_mana', 0.35], pumpkin_dude: ['potion_xl', 0.2], angel: ['potion_mana', 0.3]
+    };
+    var d43Tier38 = {
+      skeleton: ['sword_bone', 0.15], orc_warrior: ['sword_bone', 0.12], wogol: ['sword_bone', 0.15],
+      ogre: ['sword_dragon', 0.2], masked_orc: ['sword_bone', 0.18]
+    };
+    function d43Tier38Of(id, rate) {
+      return [{ itemId: id, rate: rate, tiers: [
+        { itemId: id, w: 60 }, { itemId: id + '_rare', w: 30 }, { itemId: id + '_epic', w: 10 }
+      ] }];
+    }
+    var snap38 = { drops: {}, chest: JSON.parse(JSON.stringify(Game.Data.CHEST_LOOT)) };
+    for (var p38 in d43Pot38) {
+      snap38.drops[p38] = Game.Data.MONSTERS[p38].drops;
+      Game.Data.MONSTERS[p38].drops = [{ itemId: d43Pot38[p38][0], rate: d43Pot38[p38][1] }];
+    }
+    for (var t38 in d43Tier38) {
+      snap38.drops[t38] = Game.Data.MONSTERS[t38].drops;
+      Game.Data.MONSTERS[t38].drops = d43Tier38Of(d43Tier38[t38][0], d43Tier38[t38][1]);
+    }
+    Game.Data.CHEST_LOOT = {
+      chest: ['potion_small', 'sword_bone', 'armor_leather'],
+      room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade']
+    };
     var liveC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    for (var r38 in snap38.drops) Game.Data.MONSTERS[r38].drops = snap38.drops[r38];
+    Game.Data.CHEST_LOOT = snap38.chest;
     Game.Systems.Battle.expEarlyBase = curveNow38;
     rec('C_status_death_classified', got === expect && oldGot !== expect &&
       caseBad.length === 0 && liveC.deathCause === '状态效果' &&

@@ -15,6 +15,18 @@
   var state = null; /* { monster, log, turn, defending, shieldValue, enraged, enrageAtk, enrageDef, dying, dyingAt, dyingMs, playerActionAt, monsterActionAt,
                        D-16: phase, pending, buffered, lockUntil, roundNo, turnRec, events, lastAction } */
 
+  /* D-43：血量账遥测（默认关闭，不参与任何数值/顺序/随机数）。
+   * 只把"已经发生的 HP 增减"复制成一条 {kind,source,amount}，供测量页按楼层对账；
+   * 不注册时 hpLog 为 null，所有调用立即返回，游戏行为与改动前逐帧一致。 */
+  var hpLog = null;
+  function logHp(kind, source, amount, extra) {
+    if (typeof hpLog !== 'function') return;
+    if (typeof amount !== 'number' || !isFinite(amount) || amount === 0) return;
+    var e = { kind: kind, source: source, amount: amount };
+    if (extra) for (var k in extra) if (Object.prototype.hasOwnProperty.call(extra, k)) e[k] = extra[k];
+    hpLog(e);
+  }
+
   var DYING_MS = 700; /* 死亡消散动画时长 ms（渐隐+上浮+缩小） */
 
   /* D-16：单回合表现时间轴（ms）。
@@ -85,6 +97,7 @@
     if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
     if (typeof p.exp !== 'number' || !isFinite(p.exp)) p.exp = 0;
     var oldLv = p.level, oldAtk = p.atk || 0, oldDef = p.def || 0, oldMax = p.maxHp || 0;
+    var hpBeforeUp = p.hp; /* D-43：升级回满的实际回血量 = 新上限 − 旧 HP */
     var ups = 0;
     while (p.exp >= expToNext(p.level)) {
       p.exp -= expToNext(p.level);
@@ -101,6 +114,7 @@
       }
       p.hp = p.maxHp;   /* 升级回满 HP */
       p.mp = p.maxMp;   /* 升级回满 MP */
+      logHp('heal', 'levelup', p.hp - hpBeforeUp, { level: p.level });
       /* P2-5：level 任务推进——只在确实升级时调用（ups>0），避免每战重复 */
       if (Game.Systems.Quest && typeof Game.Systems.Quest.progress === 'function') {
         Game.Systems.Quest.progress('level', p.level);
@@ -322,10 +336,15 @@
     }
     var dmg = raw - absorbed;
     if (dmg > 0) {
+      var hpBeforeHit = p.hp;
       p.hp = Math.max(p.hp - dmg, 0);
+      /* D-43：按机制分账——二阶段技能记为 boss_skill，其余为 monster_attack；
+       * 记账用实际掉血量（致死溢出不算），保证 hpIn−hpOut 能严格配平 */
+      logHp('damage', useBreath ? 'boss_skill' : 'monster_attack', hpBeforeHit - p.hp, { monsterId: m.id });
       spawnHurtPlayer(dmg); /* S3-4：玩家受击反馈（仅展示，不改数值） */
     }
     if (absorbed > 0) {
+      logHp('absorb', 'shield', absorbed, { monsterId: m.id });
       logPush('护盾抵挡了 ' + absorbed + ' 点伤害' + (state.shieldValue <= 0 ? '（护盾破碎）' : ''));
     }
     logPush(dmg > 0 ? m.name + ' 攻击了你，造成 ' + dmg + ' 伤害' : m.name + ' 的攻击被护盾完全抵挡');
@@ -437,7 +456,11 @@
         if (typeof left !== 'number' || left <= 0) { delete p.status[id]; continue; }
         var def = Game.Data.STATUS && Game.Data.STATUS[id];
         var dmg = (def && typeof def.tickDmg === 'number') ? def.tickDmg : 0;
-        if (dmg > 0) p.hp = Math.max(p.hp - dmg, 0);
+        if (dmg > 0) {
+          var hpBeforeTick = p.hp;
+          p.hp = Math.max(p.hp - dmg, 0);
+          logHp('damage', 'status:' + id, hpBeforeTick - p.hp);
+        }
         left -= 1;
         if (left > 0) p.status[id] = left; else delete p.status[id];
         res.push({ id: id, name: (def ? def.name : id), dmg: dmg, left: left });
@@ -669,6 +692,10 @@
     expToNext: expToNext,
     expEarlyBase: EXP_EARLY_DEFAULT,
     expCurveBase: EXP_LATE_DEFAULT,
+    /* D-43：血量账钩子（验证/测量页注入；传 null 关闭）。手动用药与陷阱的记账点
+     * 分别在 inventory.js / map.js，统一调用这里，保证"一处口径" */
+    _setHpLog: function (fn) { hpLog = (typeof fn === 'function') ? fn : null; return !!hpLog; },
+    _logHp: logHp,
     checkLevelUp: checkLevelUp,
 
     /* M8-1：技能伤害落地（由 Game.Skills.cast 调用）——倍率版既有伤害公式

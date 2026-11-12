@@ -847,7 +847,11 @@
       if (def.dmgPct > 0) {
         var cap = (floorIndex === 0 && def.dmgCap1) ? def.dmgCap1 : def.dmgCap30;
         var d = Math.min(Math.max(1, Math.floor(p.hp * def.dmgPct)), cap);
+        var hpBeforeTrap = p.hp;
         p.hp = Math.max(p.hp - d, 0);
+        /* D-43：血量账——陷阱直接伤害（地刺）单独记一笔，按实际掉血计 */
+        var TB = Game.Systems.Battle;
+        if (TB && typeof TB._logHp === 'function') TB._logHp('damage', 'trap:' + tr.id, hpBeforeTrap - p.hp);
         res.dmg = d;
       }
       if (def.status && Game.Systems.Status && typeof Game.Systems.Status.apply === 'function') {
@@ -933,7 +937,8 @@
         var rich = Math.floor((8 + Math.floor(Math.random() * 20)) * (floorIndex + 1) * mul);
         Game.Data.Player.gold += rich;
         Game.Core.EventBus.emit('ui:notice', { msg: '密室宝箱：获得 ' + rich + ' 金币' });
-        var richPool = ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade'];
+        var richPool = (Game.Data.CHEST_LOOT && Game.Data.CHEST_LOOT.room_chest) ||
+          ['potion_xl', 'potion_large', 'sword_bone', 'armor_leather', 'scroll_upgrade'];
         var richId = richPool[Math.floor(Math.random() * richPool.length)];
         if (Game.Systems.Inventory && Game.Systems.Inventory.add) {
           Game.Systems.Inventory.add(richId, 1);
@@ -945,7 +950,8 @@
         Game.Data.Player.gold += gold;
         Game.Core.EventBus.emit('ui:notice', { msg: '宝箱：获得 ' + gold + ' 金币' });
       } else {
-        var items = ['potion_small', 'sword_bone', 'armor_leather'];
+        var items = (Game.Data.CHEST_LOOT && Game.Data.CHEST_LOOT.chest) ||
+          ['potion_large', 'potion_large', 'potion_small', 'sword_bone', 'armor_leather'];
         var itemId = items[Math.floor(Math.random() * items.length)];
         if (Game.Systems.Inventory && Game.Systems.Inventory.add) {
           Game.Systems.Inventory.add(itemId, 1);

@@ -178,6 +178,36 @@
     };
     MON37.ogre_boss.hp = 280; MON37.ogre_boss.atk = 24; MON37.ogre_boss.def = 10;
     MON37.zombie_king.hp = 420; MON37.zombie_king.atk = 30; MON37.zombie_king.def = 12;
+    /* D-43：补给侧（药水掉落条目 / 宝箱道具池）也被授权改过。掉落条目数会改变
+     * Math.random 的消耗次数，从而改变地图与战况；本组只验测量台没变，所以活体段
+     * 把补给临时钉回 D-34 基线，跑完恢复。数值/公式/策略一概不动。 */
+    var D43_POT = {
+      bat: ['potion_small', 0.2], goblin: ['potion_small', 0.25], tiny_zombie: ['potion_small', 0.2],
+      imp: ['potion_small', 0.2], orc_shaman: ['potion_large', 0.2], big_zombie: ['potion_large', 0.3],
+      necromancer: ['potion_mana', 0.35], pumpkin_dude: ['potion_xl', 0.2], angel: ['potion_mana', 0.3]
+    };
+    var D43_TIER = {
+      skeleton: ['sword_bone', 0.15], orc_warrior: ['sword_bone', 0.12], wogol: ['sword_bone', 0.15],
+      ogre: ['sword_dragon', 0.2], masked_orc: ['sword_bone', 0.18]
+    };
+    function d43Tier(id, rate) {
+      return [{ itemId: id, rate: rate, tiers: [
+        { itemId: id, w: 60 }, { itemId: id + '_rare', w: 30 }, { itemId: id + '_epic', w: 10 }
+      ] }];
+    }
+    var supplySnap = { drops: {}, chest: JSON.parse(JSON.stringify(Game.Data.CHEST_LOOT)) };
+    for (var dp in D43_POT) {
+      supplySnap.drops[dp] = MON37[dp].drops;
+      MON37[dp].drops = [{ itemId: D43_POT[dp][0], rate: D43_POT[dp][1] }];
+    }
+    for (var dt in D43_TIER) {
+      supplySnap.drops[dt] = MON37[dt].drops;
+      MON37[dt].drops = d43Tier(D43_TIER[dt][0], D43_TIER[dt][1]);
+    }
+    Game.Data.CHEST_LOOT = {
+      chest: ['potion_small', 'sword_bone', 'armor_leather'],
+      room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade']
+    };
     M.init();
     M.closeGuide();
     Bot.install();
@@ -232,6 +262,8 @@
     Game.Systems.Battle.expEarlyBase = curveNow;
     MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;
     MON37.zombie_king.hp = bossNow.zombie_king.hp; MON37.zombie_king.atk = bossNow.zombie_king.atk; MON37.zombie_king.def = bossNow.zombie_king.def;
+    for (var rp in supplySnap.drops) MON37[rp].drops = supplySnap.drops[rp];
+    Game.Data.CHEST_LOOT = supplySnap.chest;
     var cLiveSame = !!ev1023 && JSON.stringify(live1023.d37.fleeLog) === JSON.stringify(ev1023.d37.fleeLog);
     var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
       liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });

@@ -937,6 +937,8 @@
     if (rec.d39) { d39LedgerEnd(rec); }
     /* D-40：M1 每层收尾快照 */
     if (rec.m1) m1End(rec);
+    /* D-43：血量账换层——先结上一层，再给新一层起账 */
+    if (rec.d43) { d43End(rec); }
     rec.floorNow = P.floor;
     rec.floorActions = 0;
     /* D-37：刷级额度按层计，换层清零 */
@@ -945,6 +947,8 @@
     if (rec.d39) d39LedgerStart(rec);
     /* D-40：M1 新一层起账 */
     if (rec.m1) m1Start(rec);
+    /* D-43：新一层起账 */
+    if (rec.d43) d43Start(rec);
   }
 
   /* ── 一局 ────────────────────────────────────────────────────── */
@@ -1173,6 +1177,79 @@
     if (st.monster.hp < row.minHp) row.minHp = st.monster.hp;
   }
 
+  /* D-43：血量账（只测量）。battle/inventory/map 在数值已定后回报 {kind,source,amount}，
+   * 这里按"当前楼层"分桶；每层收尾时用 hpIn/hpOut 与分桶和互相对账。
+   * 不传 opts.d43 时 rec.d43 为 null，钩子不安装，游戏行为零变化。 */
+  function d43New() {
+    return {
+      cur: null, floors: [],
+      totals: { damage: {}, damageByMonster: {}, heal: {}, absorb: 0, potionUses: 0, potionsGained: 0 },
+      final: null
+    };
+  }
+  function d43Sum(o) {
+    var s = 0;
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) s += o[k];
+    return s;
+  }
+  function d43Start(rec) {
+    var P = Game.Data.Player;
+    rec.d43.cur = {
+      floor: P.floor, hpIn: P.hp, maxHpIn: P.maxHp, levelIn: P.level,
+      potionsIn: hpPotionCount(), at: rec.actions,
+      damage: {}, damageByMonster: {}, heal: {}, absorb: 0, potionUses: 0
+    };
+  }
+  function d43End(rec) {
+    var d = rec.d43, c = d && d.cur, P = Game.Data.Player;
+    if (!c) return;
+    var out = {
+      floor: c.floor, actions: rec.actions - c.at,
+      hpIn: c.hpIn, maxHpIn: c.maxHpIn, levelIn: c.levelIn, potionsIn: c.potionsIn,
+      hpOut: P.hp, maxHpOut: P.maxHp, levelOut: P.level, potionsOut: hpPotionCount(),
+      damage: c.damage, damageByMonster: c.damageByMonster, heal: c.heal,
+      absorb: c.absorb, potionUses: c.potionUses
+    };
+    out.damageTotal = d43Sum(c.damage);
+    out.healTotal = d43Sum(c.heal);
+    out.potionsGained = out.potionsOut - out.potionsIn + out.potionUses;
+    /* 对账残差：必须为 0（A 组复算同一口径） */
+    out.balance = out.hpIn + out.healTotal - out.damageTotal - out.hpOut;
+    out.ratio = out.healTotal > 0 ? Math.round((out.damageTotal / out.healTotal) * 1000) / 1000 : null;
+    d.floors.push(out);
+    d.cur = null;
+  }
+  function d43Log(rec, e) {
+    var d = rec.d43, c = d && d.cur;
+    if (!c || !e) return;
+    if (e.kind === 'damage') {
+      c.damage[e.source] = (c.damage[e.source] || 0) + e.amount;
+      if (e.monsterId) c.damageByMonster[e.monsterId] = (c.damageByMonster[e.monsterId] || 0) + e.amount;
+      d.totals.damage[e.source] = (d.totals.damage[e.source] || 0) + e.amount;
+      if (e.monsterId) {
+        d.totals.damageByMonster[e.monsterId] = (d.totals.damageByMonster[e.monsterId] || 0) + e.amount;
+      }
+    } else if (e.kind === 'heal') {
+      c.heal[e.source] = (c.heal[e.source] || 0) + e.amount;
+      d.totals.heal[e.source] = (d.totals.heal[e.source] || 0) + e.amount;
+      if (e.source === 'potion') { c.potionUses++; d.totals.potionUses++; }
+    } else if (e.kind === 'absorb') {
+      c.absorb += e.amount;
+      d.totals.absorb += e.amount;
+    }
+  }
+  function d43Finalize(rec) {
+    var d = rec.d43;
+    d43End(rec);
+    d.totals.potionsGained = d.floors.reduce(function (s, f) { return s + f.potionsGained; }, 0);
+    d.final = {
+      floors: d.floors.length,
+      damageTotal: d43Sum(d.totals.damage), healTotal: d43Sum(d.totals.heal),
+      potionUses: d.totals.potionUses, potionsGained: d.totals.potionsGained,
+      absorb: d.totals.absorb
+    };
+  }
+
   Bot.run = function (seed, opts) {
     opts = opts || {};
     var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player;
@@ -1187,6 +1264,8 @@
     if (opts.m1) rec.m1 = m1New(opts.m1);
     /* D-42：Boss 伤害遥测（不传 opts.d42 时完全不启用，既有四组行为不变） */
     if (opts.d42) rec.d42 = { boss: {} };
+    /* D-43：血量账遥测（不传 opts.d43 时不安装钩子，行为与 D-42 完全一致） */
+    if (opts.d43) rec.d43 = d43New();
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -1194,6 +1273,11 @@
     Math.random = mulberry32(seed);
     if (Game.Fx && typeof Game.Fx._reset === 'function') Game.Fx._reset();
     M.restart();
+    /* D-43：装血量账钩子并起第一层账（restart 之后，避免把开局满血记成回复） */
+    if (rec.d43) {
+      Game.Systems.Battle._setHpLog(function (e) { if (cur && cur.d43) d43Log(cur, e); });
+      d43Start(rec);
+    }
     rec.floorNow = P.floor;
     rec.shieldOn = false;
     rec.startPos = P.x + ',' + P.y;
@@ -1248,6 +1332,11 @@
       m1End(rec);
       m1Extrapolate(rec);
       rec.m1.final = d37Snap(P, P.floor);
+    }
+    /* D-43：收尾结账并卸钩子（下一局重新安装，避免跨局串账） */
+    if (rec.d43) {
+      d43Finalize(rec);
+      Game.Systems.Battle._setHpLog(null);
     }
     if (rec.d42) {
       for (var bid in rec.d42.boss) {

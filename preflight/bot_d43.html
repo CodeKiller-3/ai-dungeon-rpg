@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-43 血量经济测量</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-43 · M1 / S1 / G2 三组同种子跑局 + 按来源血量账（不参与 run-all，只产出 d43-*.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-43 三组跑局器（只测量）：
+ *   ?n=50            种子 1001..1000+n（默认 50）
+ *   ?only=m1|s1|g2   只跑一组（默认三组都跑）
+ *   ?mode=neg        10 种子：当前补给 vs 把药水掉落/宝箱还原到 D-42 基线
+ * 口径与 D-42 完全一致：同种子、maxActions 2500、同一起点；额外带 d43 血量账。 */
+(function () {
+  'use strict';
+  var out = { protocol: 'D-43', mode: 'all', strategy: {}, env: {}, summary: null, runs: {}, agg: {}, d43: {}, ok: false };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  function pct(v, m) { return (m > 0) ? Math.round((v / m) * 1000) / 10 : null; }
+  function addTo(o, k, v) { o[k] = (o[k] || 0) + v; }
+  /* 与 D-42 同口径的到达/死层汇总（保证 E 组可逐项对照） */
+  function aggBase(strategy, runs) {
+    var d = {
+      outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {},
+      floorReach: {}, floorKills: {}, floorLevel: {}, floorHp: {},
+      f5: { reached: 0, states: [], enterStates: [] },
+      l5ByF3: 0, killsTotal: 0, killsPerRun: 0, boss: {}
+    };
+    var perFloor = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, ends = (r.d43 && r.d43.floors) || [];
+      for (var f = 0; f < ends.length; f++) {
+        var z = ends[f], fl = z.floor;
+        reached[fl] = 1;
+        if (!perFloor[fl]) perFloor[fl] = { kills: [], level: [], hp: [], n: 0 };
+        perFloor[fl].n++;
+        if (typeof r.m1 === 'object' && r.m1 && r.m1.floors) {
+          var mf = r.m1.floors.filter(function (x) { return x.floor === fl; })[0];
+          if (mf && typeof mf.kills === 'number') perFloor[fl].kills.push(mf.kills);
+        }
+        perFloor[fl].level.push(z.levelOut);
+        perFloor[fl].hp.push(z.hpOut);
+        if (z.floor === 5) {
+          d.f5.states.push({
+            seed: r.seed, hp: z.hpOut, maxHp: z.maxHpOut, level: z.levelOut,
+            outcome: r.outcome
+          });
+        }
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      if (r.d39 && r.d39.floorEnter) {
+        for (var fe = 0; fe < r.d39.floorEnter.length; fe++) {
+          var en = r.d39.floorEnter[fe];
+          if (en.floor === 5) d.f5.enterStates.push({
+            seed: r.seed, hp: en.hp, maxHp: en.maxHp, level: en.level,
+            hpPct: en.maxHp ? Math.round((en.hp / en.maxHp) * 1000) / 10 : null
+          });
+        }
+      }
+      var lvF3 = 0;
+      for (var q = 0; q < ends.length; q++) if (ends[q].floor <= 3 && ends[q].levelOut > lvF3) lvF3 = ends[q].levelOut;
+      if (lvF3 >= 5) d.l5ByF3++;
+      if (r.d42 && r.d42.boss) {
+        for (var bid in r.d42.boss) {
+          if (!Object.prototype.hasOwnProperty.call(r.d42.boss, bid)) continue;
+          var b = r.d42.boss[bid];
+          var cur = d.boss[bid] || (d.boss[bid] = { encounters: 0, maxDealtPct: 0, bestSeed: null, killed: 0 });
+          cur.encounters++;
+          if (b.dealtPct > cur.maxDealtPct) { cur.maxDealtPct = b.dealtPct; cur.bestSeed = r.seed; }
+          if (b.killed) cur.killed++;
+        }
+      }
+    }
+    for (var k2 in perFloor) {
+      d.floorKills[k2] = mean(perFloor[k2].kills);
+      d.floorLevel[k2] = mean(perFloor[k2].level);
+      d.floorHp[k2] = mean(perFloor[k2].hp);
+    }
+    d.f5.reached = d.f5.states.length;
+    d.killsPerRun = Math.round((d.killsTotal / Math.max(1, runs.length)) * 100) / 100;
+    return d;
+  }
+  /* D-43：血量账汇总（每层承伤/回复/比值、按来源拆分、药水护栏） */
+  function aggD43(runs) {
+    var perFloor = {}, dmgSrc = {}, dmgByMonster = {}, healSrc = {}, absorb = 0;
+    var gained = [], used = [], f3exit = [], runMaxUse = 0;
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], d = r.d43;
+      if (!d) continue;
+      var use = d.final ? d.final.potionUses : 0;
+      if (use > runMaxUse) runMaxUse = use;
+      used.push(use);
+      for (var s in d.totals.damage) if (Object.prototype.hasOwnProperty.call(d.totals.damage, s)) {
+        addTo(dmgSrc, s, d.totals.damage[s]);
+      }
+      for (var ms in d.totals.damageByMonster) if (Object.prototype.hasOwnProperty.call(d.totals.damageByMonster, ms)) {
+        addTo(dmgByMonster, ms, d.totals.damageByMonster[ms]);
+      }
+      for (var hs in d.totals.heal) if (Object.prototype.hasOwnProperty.call(d.totals.heal, hs)) {
+        addTo(healSrc, hs, d.totals.heal[hs]);
+      }
+      absorb += d.totals.absorb;
+      for (var f = 0; f < d.floors.length; f++) {
+        var z = d.floors[f];
+        var p = perFloor[z.floor] || (perFloor[z.floor] = {
+          n: 0, damage: 0, heal: 0, hpIn: 0, hpOut: 0, hpPctOut: 0,
+          potionsGained: 0, potionUses: 0, levelOut: 0, actions: 0, balanceBad: 0, ratioSum: 0, ratioN: 0
+        });
+        p.n++;
+        p.damage += z.damageTotal; p.heal += z.healTotal;
+        p.hpIn += z.hpIn; p.hpOut += z.hpOut;
+        p.hpPctOut += (z.maxHpOut ? (z.hpOut / z.maxHpOut) * 100 : 0);
+        p.potionsGained += z.potionsGained;
+        p.potionUses += z.potionUses;
+        p.levelOut += z.levelOut;
+        p.actions += z.actions;
+        p.balanceBad += (z.balance === 0) ? 0 : 1;
+        if (z.ratio !== null) { p.ratioSum += z.ratio; p.ratioN++; }
+        gained.push(z.potionsGained);
+        if (z.floor === 3) f3exit.push({ seed: r.seed, hp: z.hpOut, maxHp: z.maxHpOut,
+          hpPct: z.maxHpOut ? Math.round((z.hpOut / z.maxHpOut) * 1000) / 10 : null });
+      }
+    }
+    var floors = [];
+    for (var k in perFloor) {
+      var q = perFloor[k];
+      floors.push({
+        floor: +k, runs: q.n,
+        avgDamage: Math.round((q.damage / q.n) * 100) / 100,
+        avgHeal: Math.round((q.heal / q.n) * 100) / 100,
+        ratio: q.heal > 0 ? Math.round((q.damage / q.heal) * 1000) / 1000 : null,
+        avgRatioOfRuns: q.ratioN ? Math.round((q.ratioSum / q.ratioN) * 1000) / 1000 : null,
+        avgHpIn: Math.round((q.hpIn / q.n) * 100) / 100,
+        avgHpOut: Math.round((q.hpOut / q.n) * 100) / 100,
+        avgHpPctOut: Math.round((q.hpPctOut / q.n) * 10) / 10,
+        avgPotionsGained: Math.round((q.potionsGained / q.n) * 100) / 100,
+        avgPotionUses: Math.round((q.potionUses / q.n) * 100) / 100,
+        avgLevelOut: Math.round((q.levelOut / q.n) * 100) / 100,
+        balanceBad: q.balanceBad
+      });
+    }
+    floors.sort(function (a, b) { return a.floor - b.floor; });
+    var tDmg = 0;
+    for (var ds in dmgSrc) tDmg += dmgSrc[ds];
+    var srcShare = {};
+    for (var ds2 in dmgSrc) srcShare[ds2] = tDmg ? Math.round((dmgSrc[ds2] / tDmg) * 1000) / 10 : 0;
+    return {
+      runs: runs.length, floors: floors,
+      damageBySource: dmgSrc, damageSharePct: srcShare,
+      damageByMonster: dmgByMonster, healBySource: healSrc, shieldAbsorb: absorb,
+      guard: {
+        avgPotionsGainedPerFloor: mean(gained),
+        maxPotionsGainedPerFloor: gained.length ? Math.max.apply(null, gained) : 0,
+        avgPotionUsesPerRun: mean(used),
+        maxPotionUsesPerRun: runMaxUse
+      },
+      f3exit: {
+        n: f3exit.length, avgHp: mean(f3exit.map(function (x) { return x.hp; })),
+        avgHpPct: mean(f3exit.map(function (x) { return x.hpPct || 0; })),
+        minHpPct: f3exit.length ? Math.min.apply(null, f3exit.map(function (x) { return x.hpPct || 0; })) : null
+      }
+    };
+  }
+  function statOf(res, strategy) {
+    var s = res.summary;
+    return {
+      runs: s.runs, win: s.win, dead: s.dead, stuck: s.stuck,
+      deathFloorDist: s.deathFloorDist, deathCauses: s.deathCauses,
+      avgActions: s.avgActions, avgSimSec: s.avgSimSec,
+      floorStats: s.floorStats, shop: s.shop, potions: s.potions, crashes: s.crashes,
+      agg: aggBase(strategy, res.runs)
+    };
+  }
+  function monsterStats() {
+    var M = Game.Data.MONSTERS, o = {};
+    for (var k in M) if (Object.prototype.hasOwnProperty.call(M, k)) {
+      var m = M[k];
+      o[k] = { hp: m.hp, atk: m.atk, def: m.def, exp: m.exp,
+        drops: JSON.parse(JSON.stringify(m.drops || [])) };
+    }
+    return o;
+  }
+  /* 负例：把药水补给还原到 D-42 基线（drops 与宝箱道具池一起还原）。
+   * 这些数组必须与 D-43 改动前逐项一致（含 tiers 与顺序），否则 Math.random 的
+   * 消耗次数会变，无法复现"改前基线"。 */
+  var OLD_DROPS = window.D43_OLD_DROPS || {
+    bat: [{ itemId: 'potion_small', rate: 0.2 }],
+    goblin: [{ itemId: 'potion_small', rate: 0.25 }],
+    tiny_zombie: [{ itemId: 'potion_small', rate: 0.2 }],
+    skeleton: [{
+      itemId: 'sword_bone', rate: 0.15,
+      tiers: [{ itemId: 'sword_bone', w: 60 }, { itemId: 'sword_bone_rare', w: 30 }, { itemId: 'sword_bone_epic', w: 10 }]
+    }],
+    orc_warrior: [{
+      itemId: 'sword_bone', rate: 0.12,
+      tiers: [{ itemId: 'sword_bone', w: 60 }, { itemId: 'sword_bone_rare', w: 30 }, { itemId: 'sword_bone_epic', w: 10 }]
+    }],
+    orc_shaman: [{ itemId: 'potion_large', rate: 0.2 }],
+    wogol: [{
+      itemId: 'sword_bone', rate: 0.15,
+      tiers: [{ itemId: 'sword_bone', w: 60 }, { itemId: 'sword_bone_rare', w: 30 }, { itemId: 'sword_bone_epic', w: 10 }]
+    }],
+    ogre: [{
+      itemId: 'sword_dragon', rate: 0.2,
+      tiers: [{ itemId: 'sword_dragon', w: 60 }, { itemId: 'sword_dragon_rare', w: 30 }, { itemId: 'sword_dragon_epic', w: 10 }]
+    }],
+    imp: [{ itemId: 'potion_small', rate: 0.2 }],
+    big_zombie: [{ itemId: 'potion_large', rate: 0.3 }],
+    necromancer: [{ itemId: 'potion_mana', rate: 0.35 }],
+    masked_orc: [{
+      itemId: 'sword_bone', rate: 0.18,
+      tiers: [{ itemId: 'sword_bone', w: 60 }, { itemId: 'sword_bone_rare', w: 30 }, { itemId: 'sword_bone_epic', w: 10 }]
+    }],
+    pumpkin_dude: [{ itemId: 'potion_xl', rate: 0.2 }],
+    angel: [{ itemId: 'potion_mana', rate: 0.3 }]
+  };
+  var OLD_CHEST = { chest: ['potion_small', 'sword_bone', 'armor_leather'],
+    room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade'] };
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(m1|s1|g2)/.exec(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    out.env.maxActions = 2500;
+    out.env.monsterStats = monsterStats();
+    var seeds = [];
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    if (/mode=neg/.test(qs)) {
+      var NS = seeds; /* 与正式跑同一种子集，改前基线可直接对齐 d43-before.json */
+      var oNew = Game.Bot.batch(NS, { maxActions: 2500, m1: { clear: true }, d43: true, d42: true });
+      /* 还原：把 D-43 改过的药水掉落与宝箱道具池换回改前值 */
+      var restoreLog = [];
+      for (var mid in OLD_DROPS) {
+        if (!Object.prototype.hasOwnProperty.call(OLD_DROPS, mid)) continue;
+        var mm = Game.Data.MONSTERS[mid];
+        if (!mm) continue;
+        restoreLog.push({ id: mid, from: JSON.parse(JSON.stringify(mm.drops)), to: OLD_DROPS[mid] });
+        mm.drops = JSON.parse(JSON.stringify(OLD_DROPS[mid]));
+      }
+      var chestNow = JSON.parse(JSON.stringify(Game.Data.CHEST_LOOT));
+      Game.Data.CHEST_LOOT = JSON.parse(JSON.stringify(OLD_CHEST));
+      var oOld = Game.Bot.batch(NS, { maxActions: 2500, m1: { clear: true }, d43: true, d42: true });
+      for (var ri = 0; ri < restoreLog.length; ri++) {
+        Game.Data.MONSTERS[restoreLog[ri].id].drops = restoreLog[ri].from;
+      }
+      Game.Data.CHEST_LOOT = chestNow;
+      out.neg = {
+        seeds: NS, new: aggD43(oNew.runs), old: aggD43(oOld.runs),
+        restore: restoreLog.map(function (x) { return { id: x.id, to: x.to }; }),
+        restoredChest: OLD_CHEST,
+        curMonsters: monsterStats()
+      };
+      out.ok = true;
+      document.title = 'NEG_DONE newF3=' + out.neg.new.f3exit.avgHp +
+        '(' + out.neg.new.f3exit.avgHpPct + '%) oldF3=' + out.neg.old.f3exit.avgHp +
+        '(' + out.neg.old.f3exit.avgHpPct + '%)';
+      window.__D43__ = out;
+      document.getElementById('report').textContent = JSON.stringify(out);
+      return;
+    }
+    var plan = mo ? [mo[1]] : ['m1', 's1', 'g2'];
+    var optsOf = {
+      m1: { maxActions: 2500, m1: { clear: true }, d43: true, d42: true },
+      s1: { maxActions: 2500, d39: { avoid: true }, d43: true, d42: true },
+      g2: { maxActions: 2500, d37: { fireball: true, flee: true }, d43: true, d42: true }
+    };
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(seeds, optsOf[key]);
+      out.runs[key] = res.runs;
+      out.summary = out.summary || {};
+      out.summary[key] = res.summary;
+      out.agg[key] = statOf(res, key);
+      out.d43[key] = aggD43(res.runs);
+      out.strategy[key] = JSON.parse(JSON.stringify(optsOf[key]));
+      out.env['startPosSet_' + key] = (function (runs) {
+        var s = {};
+        for (var j = 0; j < runs.length; j++) s[runs[j].startPos] = 1;
+        return Object.keys(s).sort();
+      })(res.runs);
+    }
+    out.wallMs = Date.now() - t0;
+    out.env.seeds = seeds;
+    out.env.seedList = seeds;
+    out.ok = true;
+    var a = out.d43.m1, s1 = out.d43.s1;
+    var base = out.agg.m1.agg;
+    document.title = 'BATCH_DONE n=' + n +
+      ' m1_f4=' + ((base.floorReach && base.floorReach[4]) || 0) +
+      ' m1_f5=' + base.f5.reached +
+      ' m1_f3exit=' + (a ? a.f3exit.avgHp + '/' + a.f3exit.avgHpPct + '%' : '-') +
+      ' s1_f5=' + out.agg.s1.agg.f5.reached +
+      ' g2_f5=' + out.agg.g2.agg.f5.reached +
+      ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String(e && (e.message + '\n' + (e.orig || e.stack)) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D43__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

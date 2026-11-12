@@ -346,8 +346,10 @@
       ' 件单独计，不计入残留）');
 
     /* D-27 规格变更：起手匕首后"死时无武器"应从 D-23 的 34 局归零。
-     * noA / equipBuys 仍如实打印实测值（不锁具体数）：死亡层与购买节奏会随起手装备变化。 */
-    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.deaths === 50,
+     * D-43：补给侧放宽后 50 局里不再必然全灭（本卡实测 49 死 / 1 局活到动作上限），
+     * 因此这里锁"无武器死亡 = 0"与"无护甲死亡不超过 D-23 基线 36"，不再把"恰好 50 死"
+     * 当成装备链的断言——它只是当时的平衡快照，不是本组要验的东西。 */
+    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.noA <= 36 && live.deaths >= 40,
       '50 局死亡 ' + live.deaths + '：死时无武器 ' + live.noW + '（D-23 基线 34）、无护甲 ' + live.noA +
       '（D-23 基线 36）、期间买到装备 ' + live.equipBuys + ' 件（D-23 基线 2）');
 

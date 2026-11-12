@@ -47,8 +47,14 @@
         return { ok: false, msg: '生命已满，无需使用 ' + item.name };
       }
       if (mpGain > 0 && p.mp >= p.maxMp) return { ok: false, msg: '魔法已满，无需使用 ' + item.name };
+      var hpBefore = p.hp;
       p.hp = Math.min(p.hp + hpGain, p.maxHp);
       p.mp = Math.min((p.mp || 0) + mpGain, p.maxMp);
+      /* D-43：血量账——只记实际恢复量（满血部分被钳掉的不算） */
+      if (p.hp > hpBefore) {
+        var B = Game.Systems.Battle;
+        if (B && typeof B._logHp === 'function') B._logHp('heal', 'potion', p.hp - hpBefore, { itemId: id });
+      }
       p.inventory[id]--;
       if (p.inventory[id] === 0) delete p.inventory[id];
       notify();
@@ -118,7 +124,13 @@
       p.maxHp = baseMaxHp +
         (w && w.effect.maxHp ? w.effect.maxHp : 0) +
         (a && a.effect.maxHp ? a.effect.maxHp : 0);
-      if (p.hp > p.maxHp) p.hp = p.maxHp;
+      if (p.hp > p.maxHp) {
+        var hpLostByCap = p.hp - p.maxHp;
+        p.hp = p.maxHp;
+        /* D-43：换装导致上限回落时的 HP 钳制记一笔，避免血量账出现无主缺口 */
+        var B2 = Game.Systems.Battle;
+        if (B2 && typeof B2._logHp === 'function') B2._logHp('damage', 'adjust:maxhp', hpLostByCap);
+      }
     },
 
     add: function (id, count) {
