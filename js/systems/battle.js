@@ -44,7 +44,17 @@
 
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
-  function damage(atk, def) { return Math.max(atk - def, 1); }
+  /* D-34：伤害公式解冻（仅此一项）——减法改「比例减伤」。
+   *   dmg = max(1, round(atk² / (atk + def)))
+   *   等价形式：减伤率 = def / (atk + def)，攻击越高越难被完全防住。
+   * 旧式 max(atk-def,1) 的问题：def ≥ atk-1 时恒为 1（免疫点），且 def 越高曲线越平，
+   * 导致第 5 层（玩家 def≈26）普通怪只能打 1~3 点、最终 Boss 反而比普通怪更软。 */
+  function damage(atk, def) {
+    var a = Math.max(Number(atk) || 0, 0);
+    var d = Math.max(Number(def) || 0, 0);
+    if (a + d <= 0) return 1;
+    return Math.max(1, Math.round(a * a / (a + d)));
+  }
 
   /* M8-6：升级成长——经验阈值 expToNext(level) = 60 × level（L1→L2 需 60，全部可复算） */
   function expToNext(level) {

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-34 数值解冻：伤害公式 + 最终 Boss</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-34 · 伤害公式（比例减伤）+ 最终 Boss 数值解冻</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var B = Game.Systems.Battle, P = Game.Data.Player, I = Game.Systems.Inventory;
+  var MON = Game.Data.MONSTERS, MAPS = Game.Data.MAPS;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function readSrc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+
+  /* ── 独立实现（不从被测函数取值）─────────────────────────────
+   * 新公式：max(1, round(atk²/(atk+def)))；旧公式：max(atk-def,1)。
+   * 两个都自己写一遍，用来与被测 battle.js 的实测伤害对照。 */
+  function fNew(a, d) { return Math.max(1, Math.round(a * a / (a + d))); }
+  function fOld(a, d) { return Math.max(a - d, 1); }
+  /* 实数版（不取整）：用来证明"曲线本体"没有常数段 */
+  function realNew(a, d) { return a * a / (a + d); }
+  /* 候选 C2 / C3（只用于文档对照，游戏未采用） */
+  function fC2(a, d) { return Math.max(1, Math.round(a * 100 / (100 + 4 * d))); }
+  function fC3(a, d) { return Math.max(1, Math.round(a * 30 / (30 + d))); }
+
+  /* 玩家在各层的典型 build（等级 2/4/6/8/10 + 该层可达武器/护甲） */
+  var PLY = {
+    1: { atk: 14, def: 9, maxHp: 110 },
+    2: { atk: 21, def: 13, maxHp: 130 },
+    3: { atk: 23, def: 16, maxHp: 150 },
+    4: { atk: 29, def: 20, maxHp: 170 },
+    5: { atk: 31, def: 26, maxHp: 190 }
+  };
+  /* 基线 a92e6a3 的 18 只怪数值（17 只不允许变，dragon 是本卡唯一被授权的改动） */
+  var SNAP = {
+    slime: [40, 6, 2], bat: [30, 9, 1], skeleton: [70, 12, 5], goblin: [45, 7, 3],
+    tiny_zombie: [50, 8, 2], orc_warrior: [85, 14, 6], orc_shaman: [75, 16, 4],
+    wogol: [95, 17, 7], ogre: [130, 20, 9], imp: [60, 12, 4], big_zombie: [240, 26, 10],
+    necromancer: [135, 24, 6], masked_orc: [150, 23, 8], pumpkin_dude: [120, 22, 7],
+    angel: [180, 28, 5], ogre_boss: [280, 24, 10], zombie_king: [420, 30, 12],
+    dragon: [260, 32, 8]
+  };
+  var OTHER17 = ['slime', 'bat', 'skeleton', 'goblin', 'tiny_zombie', 'orc_warrior', 'orc_shaman',
+    'wogol', 'ogre', 'imp', 'big_zombie', 'necromancer', 'masked_orc', 'pumpkin_dude',
+    'angel', 'ogre_boss', 'zombie_king'];
+
+  /* 实测：通过真实战斗入口量一次玩家普攻伤害（伤害只认 battle.js 的实现） */
+  function measurePlayerHit(atk, def) {
+    B.start('slime');
+    var st = B.getState();
+    P.atk = atk;
+    P.maxHp = 999999; P.hp = 999999; P.mp = 999;
+    st.monster.hp = 999999; st.monster.maxHp = 999999;
+    st.monster.def = def;
+    st.monster.atk = 1;
+    var hp0 = st.monster.hp;
+    B.playerAction('attack');
+    return hp0 - st.monster.hp;
+  }
+  /* 实测：怪物打玩家（玩家先普攻，再 flush 怪物段） */
+  function measureMonsterHit(atk, pdef) {
+    B.start('slime');
+    var st = B.getState();
+    P.atk = 1; P.maxHp = 999999; P.hp = 999999; P.def = pdef;
+    st.monster.hp = 999999; st.monster.maxHp = 999999;
+    st.monster.atk = atk; st.monster.def = 0;
+    var hp0 = P.hp;
+    Math.random = function () { return 0.99; };  /* 不触发任何随机分支 */
+    B.playerAction('attack');
+    B.flush();
+    return hp0 - P.hp;
+  }
+  /* 五层期望强度 = Σ rate × (atk + hp/10)（P2 卡既有算法，本卡不动） */
+  function strength(fi, table, mons) {
+    var t = table || MAPS.enemyTable[fi], s = 0;
+    for (var i = 0; i < t.length; i++) {
+      var m = (mons || MON)[t[i].id];
+      s += t[i].rate * (m.atk + m.hp / 10);
+    }
+    return s;
+  }
+  function f5Normal(mons) {
+    var t = MAPS.enemyTable[4], out2 = [];
+    for (var i = 0; i < t.length; i++) out2.push((mons || MON)[t[i].id]);
+    return out2;
+  }
+  /* Boss 强于同层最强普通怪：atk 与 hp 双项严格大于 */
+  function bossStrictlyStronger(boss, mons) {
+    var list = f5Normal(mons), ma = 0, mh = 0;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].atk > ma) ma = list[i].atk;
+      if (list[i].hp > mh) mh = list[i].hp;
+    }
+    return { ok: boss.atk > ma && boss.hp > mh, maxAtk: ma, maxHp: mh };
+  }
+
+  try {
+    Game.Core.Input.bind();
+    Game.Core.Main.init();
+    Game.Core.Main.closeGuide();
+
+    /* ══ A. 公式逐点正确性：独立实现 vs 真实战斗实测 ═════════════ */
+    var atks = [6, 7, 8, 9, 12, 14, 16, 17, 20, 22, 23, 24, 26, 28, 30, 32, 40];
+    var defs = [0, 2, 5, 9, 12, 18, 26, 32, 37, 45];
+    var pts = 0, bad = [];
+    for (var ai = 0; ai < atks.length; ai++) {
+      for (var di = 0; di < defs.length; di++) {
+        var exp = fNew(atks[ai], defs[di]);
+        var got = measurePlayerHit(atks[ai], defs[di]);
+        pts++;
+        if (got !== exp) bad.push('atk' + atks[ai] + '/def' + defs[di] + ' 实测' + got + '≠独立' + exp);
+      }
+    }
+    var monPts = 0, monBad = [];
+    var mAtks = [6, 9, 12, 16, 20, 26, 28, 32];
+    var pDefs = [5, 9, 13, 16, 20, 26, 37, 45];
+    for (var mi = 0; mi < mAtks.length; mi++) {
+      for (var pi = 0; pi < pDefs.length; pi++) {
+        var e2 = fNew(mAtks[mi], pDefs[pi]);
+        var g2 = measureMonsterHit(mAtks[mi], pDefs[pi]);
+        monPts++;
+        if (g2 !== e2) monBad.push('atk' + mAtks[mi] + '/def' + pDefs[pi] + ' 实测' + g2 + '≠独立' + e2);
+      }
+    }
+    rec('A1_playerHitMatchesIndependent', bad.length === 0 && pts === atks.length * defs.length,
+      '玩家普攻 ' + pts + ' 个 (atk,def) 点：真实战斗实测与独立实现 max(1,round(atk²/(atk+def))) 全部一致；不一致 ' +
+      bad.length + ' 处' + (bad.length ? '：' + bad.join('；') : ''));
+    rec('A2_monsterHitMatchesIndependent', monBad.length === 0 && monPts === mAtks.length * pDefs.length,
+      '怪物→玩家 ' + monPts + ' 个 (atk,def) 点：实测与独立实现全部一致；不一致 ' + monBad.length +
+      ' 处' + (monBad.length ? '：' + monBad.join('；') : ''));
+
+    /* 与旧公式的差异样本（证明解冻确实生效，不是"看起来改了"） */
+    var diffRows = [];
+    for (var xi = 0; xi < atks.length; xi++) {
+      var a0 = atks[xi], o0 = fOld(a0, 26), n0 = fNew(a0, 26);
+      if (o0 !== n0) diffRows.push('atk' + a0 + '@def26: ' + o0 + '→' + n0);
+    }
+    rec('A3_formulaReallyChanged', diffRows.length >= 8,
+      '在 def=26（F5 玩家典型防御）上，旧/新公式结果不同的 atk 点 ' + diffRows.length + '/' + atks.length +
+      '：' + diffRows.slice(0, 6).join('、') + '…');
+
+    /* ══ B. 无常数段 / 无免疫 / 无断崖 ═══════════════════════════ */
+    var allAtks = [];
+    for (var id in MON) {
+      if (Object.prototype.hasOwnProperty.call(MON, id)) allAtks.push(MON[id].atk);
+    }
+    var nonDecreasing = [], cliff = [], maxDrop = 0, maxDropAtk = 0;
+    for (var k = 0; k < allAtks.length; k++) {
+      var A = allAtks[k];
+      for (var D = 5; D < 45; D++) {
+        var v0 = realNew(A, D), v1 = realNew(A, D + 1);
+        if (!(v1 < v0)) nonDecreasing.push('atk' + A + '@def' + D);
+        var drop = (v0 - v1) / v0;
+        if (drop > maxDrop) { maxDrop = drop; maxDropAtk = A; }
+        if (drop > 0.2) cliff.push('atk' + A + '@def' + D + ' 降幅' + (drop * 100).toFixed(1) + '%');
+      }
+    }
+    rec('B1_realCurveStrictlyDecreasing', nonDecreasing.length === 0,
+      '18 只怪的 atk × def 5→45 实数曲线逐点扫描：相邻差值 <0 的点 ' +
+      (18 * 40 - nonDecreasing.length) + '/' + (18 * 40) + '；非递减 ' + nonDecreasing.length + ' 处（必须 0）');
+    rec('B2_noCliff', cliff.length === 0,
+      '同一扫描的最大单步降幅 = ' + (maxDrop * 100).toFixed(1) + '%（atk=' + maxDropAtk +
+      '），阈值 20%；超阈值 ' + cliff.length + ' 处（必须 0）');
+
+    /* 无免疫：任意 atk/def 下伤害 ≥1，且每层普通怪在该层典型 def 下不存在"全部打 1" */
+    var immune = [];
+    for (var j = 0; j < allAtks.length; j++) {
+      for (var D2 = 5; D2 <= 45; D2++) {
+        if (fNew(allAtks[j], D2) < 1) immune.push('atk' + allAtks[j] + '@def' + D2);
+      }
+    }
+    var floorMin = [], allOneFloor = [];
+    for (var fi = 1; fi <= 5; fi++) {
+      var tab = MAPS.enemyTable[fi - 1], mn = 999, mx = 0;
+      for (var ti = 0; ti < tab.length; ti++) {
+        var dv = fNew(MON[tab[ti].id].atk, PLY[fi].def);
+        if (dv < mn) mn = dv;
+        if (dv > mx) mx = dv;
+      }
+      floorMin.push('F' + fi + '(' + mn + '~' + mx + ')');
+      if (mx <= 1) allOneFloor.push('F' + fi);
+    }
+    rec('B3_noImmunity', immune.length === 0 && allOneFloor.length === 0,
+      '伤害 <1 的点 ' + immune.length + ' 处（必须 0）；各层普通怪在该层典型 def 下的伤害区间 ' +
+      floorMin.join(' ') + '；"全层都只打 1"的楼层 ' + allOneFloor.length + ' 个（必须 0）');
+
+    /* 整数平台：只能由取整产生（实数跨度 <1），且必须显著短于旧公式 */
+    var eqSpanMax = 0, plateauRows = [], plateauWorse = [];
+    for (var q = 0; q < allAtks.length; q++) {
+      var A2 = allAtks[q], prev = fNew(A2, 5), run = 1, best = 1, bestDef = 5;
+      for (var D3 = 6; D3 <= 45; D3++) {
+        var cur = fNew(A2, D3);
+        if (cur === prev) {
+          var span = realNew(A2, D3 - run) - realNew(A2, D3);
+          if (span > eqSpanMax) eqSpanMax = span;
+          run++;
+          if (run > best) { best = run; bestDef = D3 - run + 1; }
+        } else { run = 1; }
+        prev = cur;
+      }
+      var oprev = fOld(A2, 5), orun = 1, obest = 1;
+      for (var D4 = 6; D4 <= 45; D4++) {
+        var ocur = fOld(A2, D4);
+        if (ocur === oprev) { orun++; if (orun > obest) obest = orun; } else { orun = 1; }
+        oprev = ocur;
+      }
+      plateauRows.push('atk' + A2 + ':' + best + '(旧' + obest + ')');
+      if (best >= obest) plateauWorse.push('atk' + A2 + ' 新' + best + '≥旧' + obest);
+    }
+    rec('B4_integerPlateauExplained', eqSpanMax < 1 && plateauWorse.length === 0,
+      '整数伤害的相等段最大实数跨度 = ' + eqSpanMax.toFixed(3) + '（<1 说明只是取整，曲线本体没有常数段）；' +
+      '每个 atk 的最长平台（新 vs 旧）：' + plateauRows.join(' ') +
+      '；新公式平台不短于旧公式的 atk 数 = ' + plateauWorse.length + '（必须 0）');
+
+    /* 难度曲线：五层期望受击伤害（按各层怪物权重）必须严格递增，且 F1 不过难 */
+    var inc = [], curveRows = [], prevS = -1;
+    for (var f2 = 1; f2 <= 5; f2++) {
+      var tab2 = MAPS.enemyTable[f2 - 1], ss = 0;
+      for (var t2 = 0; t2 < tab2.length; t2++) ss += tab2[t2].rate * fNew(MON[tab2[t2].id].atk, PLY[f2].def);
+      curveRows.push('F' + f2 + '=' + ss.toFixed(2));
+      if (ss <= prevS) inc.push('F' + f2);
+      prevS = ss;
+    }
+    rec('B5_floorCurveIncreasingAndF1Gentle', inc.length === 0 && prevS < 15 &&
+      curveRows[0] === 'F1=3.25',
+      '按各层权重与典型 def 的期望受击伤害：' + curveRows.join(' ') +
+      '（严格递增失败 ' + inc.length + ' 层；F1=3.25 且 F5 最难，旧公式是 F4 3.35 > F5 1.25 的倒挂）');
+
+    /* ══ C. 最终 Boss ═══════════════════════════════════════════ */
+    var strong = bossStrictlyStronger(MON.dragon);
+    var f5 = f5Normal();
+    var f5Text = f5.map(function (m) { return m.name + '(hp' + m.hp + '/atk' + m.atk + ')'; }).join('、');
+    rec('C1_bossStrictlyStrongerThanF5Max', strong.ok,
+      'dragon hp=' + MON.dragon.hp + '、atk=' + MON.dragon.atk + '；F5 普通怪 ' + f5Text +
+      '；同层最强普通怪 maxHp=' + strong.maxHp + '、maxAtk=' + strong.maxAtk +
+      ' → atk 与 hp 双项严格大于=' + strong.ok);
+
+    var inTable = false;
+    for (var g = 0; g < MAPS.enemyTable[4].length; g++) {
+      if (MAPS.enemyTable[4][g].id === 'dragon') inTable = true;
+    }
+    var eg = MON.dragon.enrage || {};
+    rec('C2_enrageMechanismUntouched', !inTable && eg.hpPct === 0.5 && eg.atkMul === 1.5 &&
+      eg.defMul === 1.3 && eg.skill && eg.skill.chance === 0.3 && eg.skill.dmgMul === 1.4,
+      'dragon 不在 F5 普通表（所以期望强度 44.1 不因改 Boss 而变）=' + (!inTable) +
+      '；二阶段参数 hpPct=' + eg.hpPct + '、atkMul=' + eg.atkMul + '、defMul=' + eg.defMul +
+      '、吐息 ' + (eg.skill ? eg.skill.chance + '/' + eg.skill.dmgMul : '无') + '（全部未动）');
+
+    var pd = PLY[5];
+    var bossRounds = Math.ceil(MON.dragon.hp / fNew(pd.atk, MON.dragon.def));
+    var hitPre = fNew(MON.dragon.atk, pd.def);
+    var surviveHits = Math.floor(pd.maxHp / hitPre);
+    rec('C3_bossNotTrivialNotGuaranteedDeath', bossRounds >= 8 && bossRounds <= 30 && surviveHits >= 3,
+      'F5 典型 build（atk' + pd.atk + '/def' + pd.def + '/hp' + pd.maxHp + '）：玩家每回合 ' +
+      fNew(pd.atk, MON.dragon.def) + ' → 击杀 Boss ' + bossRounds + ' 回合（阈值 8~30）；' +
+      'Boss 狂暴前每回合 ' + hitPre + ' → 不吃药可挨 ' + surviveHits + ' 下（阈值 ≥3）');
+
+    var oldBoss = { atk: 18, hp: 150 };
+    var oldStrong = bossStrictlyStronger(oldBoss);
+    rec('C4_negativeOldBossWouldFail', oldStrong.ok === false,
+      '负例：把 dragon 改回 150/18（旧值）后，"严格强于 F5 最强普通怪"判定 = ' + oldStrong.ok +
+      '（必须 false：旧 hp150 < ' + oldStrong.maxHp + '、旧 atk18 < ' + oldStrong.maxAtk + '）');
+
+    /* ══ D. 期望强度：F1~F4 一字未变，F5 仍 44.1 ═══════════════ */
+    var s1 = strength(0), s2 = strength(1), s3 = strength(2), s4 = strength(3), s5 = strength(4);
+    var near = function (a, b) { return Math.abs(a - b) < 1e-9; };
+    rec('D1_f1ToF4StrengthUnchanged', near(s1, 11.125) && near(s2, 20.125) &&
+      near(s3, 23.75) && near(s4, 36.85),
+      'baseline 硬断言：F1=' + s1 + '（期望 11.125）、F2=' + s2 + '（20.125）、F3=' + s3 +
+      '（23.75）、F4=' + s4 + '（36.85）——本卡未改这四层任何权重或数值');
+    rec('D2_f5StrengthStill44_1', near(s5, 44.1),
+      'F5=' + s5 + '（期望 44.1）：dragon 不在普通表，改 Boss 数值不改期望强度；' +
+      '本卡对 DC-04 基线数字的改动 = 0 处');
+    rec('D3_monstersOutOfScopeUnchanged', OTHER17.every(function (id) {
+      var m = MON[id], snap = SNAP[id];
+      return m && m.hp === snap[0] && m.atk === snap[1] && m.def === snap[2];
+    }), '17 只非 Boss 怪 hp/atk/def 与基线 a92e6a3 逐只相同（负向：任何一只被改即 FAIL）');
+
+    /* 负例：把 F2 的某条权重挪 0.01，D1 必须 FAIL */
+    var t2copy = [];
+    for (var w = 0; w < MAPS.enemyTable[1].length; w++) {
+      t2copy.push({ id: MAPS.enemyTable[1][w].id, rate: MAPS.enemyTable[1][w].rate });
+    }
+    t2copy[0].rate -= 0.01; t2copy[1].rate += 0.01;
+    var s2neg = strength(1, t2copy);
+    rec('D4_negativeF2StrengthWouldFail', !near(s2neg, 20.125),
+      '负例：把 F2 的 bat 权重 -0.01、skeleton +0.01 后，F2 期望强度 = ' + s2neg.toFixed(6) +
+      ' ≠ 20.125 → D1 的硬断言会 FAIL（证明四个数字不是空转）');
+
+    /* ══ E. 源码守卫：公式/Boss 数值的真实来源 ═══════════════════
+     * 负例通过"把源码文本改回旧实现"来证明守卫能抓到回滚。 */
+    var battleSrc = readSrc('../js/systems/battle.js');
+    function formulaGuard(src) {
+      var isNew = src.indexOf('Math.round(a * a / (a + d))') >= 0;
+      var isOld = /return\s+Math\.max\(\s*atk\s*-\s*def\s*,\s*1\s*\)/.test(src);
+      return { newOk: isNew, oldGone: !isOld };
+    }
+    var gReal = formulaGuard(battleSrc);
+    rec('E1_sourceGuardFormula', gReal.newOk && gReal.oldGone,
+      'battle.js：新公式存在=' + gReal.newOk + '、旧公式 max(atk-def,1) 已不存在=' + gReal.oldGone);
+    var gNeg = formulaGuard('function damage(atk, def) { return Math.max(atk - def, 1); }');
+    rec('E2_negativeFormulaRevertWouldFail', gNeg.newOk === false && gNeg.oldGone === false,
+      '负例：把 damage 换回 max(atk-def,1) 的源码文本后守卫 = ' + JSON.stringify(gNeg) +
+      '（newOk/oldGone 均 false → 本页 FAIL）');
+
+    /* ══ F. 18 只怪的实测报表（数据行，供人工核对）═══════════════ */
+    var rows = [], ratioMin = 99, ratioMax = 0, ratioMaxId = '';
+    var order = ['slime', 'bat', 'goblin', 'tiny_zombie', 'skeleton', 'orc_warrior', 'orc_shaman',
+      'imp', 'ogre', 'wogol', 'pumpkin_dude', 'masked_orc', 'big_zombie', 'necromancer', 'angel',
+      'ogre_boss', 'zombie_king', 'dragon'];
+    var flOf = { slime: 1, bat: 1, goblin: 1, tiny_zombie: 1, skeleton: 2, orc_warrior: 2, orc_shaman: 2,
+      imp: 3, ogre: 3, wogol: 3, pumpkin_dude: 4, zombie_king: 4, big_zombie: 5, necromancer: 5,
+      masked_orc: 5, angel: 5, ogre_boss: 2, dragon: 5 };
+    for (var oi = 0; oi < order.length; oi++) {
+      var oid = order[oi], mon = MON[oid], fl = flOf[oid];
+      var oldAtk = (oid === 'dragon') ? 18 : mon.atk;
+      var oldHp = (oid === 'dragon') ? 150 : mon.hp;
+      var hOld = fOld(oldAtk, PLY[fl].def), hNew = fNew(mon.atk, PLY[fl].def);
+      var rt = hOld > 0 ? hNew / hOld : 0;
+      if (rt < ratioMin) ratioMin = rt;
+      if (rt > ratioMax) { ratioMax = rt; ratioMaxId = oid; }
+      var rOld = Math.ceil(oldHp / fOld(PLY[fl].atk, mon.def));
+      var rNew = Math.ceil(mon.hp / fNew(PLY[fl].atk, mon.def));
+      rows.push(mon.name + ' F' + fl + ' 受击 ' + hOld + '→' + hNew + '（×' + rt.toFixed(2) +
+        '）击杀 ' + rOld + '→' + rNew + ' 回合');
+    }
+    rec('F1_eighteenMonsterReport', rows.length === 18 && ratioMin >= 1 && ratioMax <= 20,
+      '18 只怪在各自楼层典型 def 下：受击伤害倍率 ' + ratioMin.toFixed(2) + '×~' + ratioMax.toFixed(2) +
+      '×（无一只变弱；最大倍率出现在 ' + ratioMaxId + '，其余 17 只 ≤' +
+      (ratioMaxId === 'dragon' ? '13' : ratioMax.toFixed(2)) + '×）｜' + rows.join('｜'));
+
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  document.getElementById('result').textContent =
+    (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out) + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+})();
+</script>
+</body>
+</html>

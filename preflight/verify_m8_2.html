@@ -39,22 +39,23 @@
       var B = G.Systems.Battle, P = G.Data.Player, D = G.Data.MONSTERS;
       var orand = Math.random;
 
-      /* 2. 狂暴数值公式复算：round(18×1.5)=27、round(8×1.3)=10、吐息 round(27×1.4)=38 */
-      var f_ok = (Math.round(D.dragon.atk * D.dragon.enrage.atkMul) === 27) &&
+      /* 2. 狂暴数值公式复算（D-34：Boss 基础 atk 18→32，机制不动）：
+       *    round(32×1.5)=48、round(8×1.3)=10、吐息 round(48×1.4)=67 */
+      var f_ok = (Math.round(D.dragon.atk * D.dragon.enrage.atkMul) === 48) &&
         (Math.round(D.dragon.def * D.dragon.enrage.defMul) === 10) &&
-        (Math.round(27 * D.dragon.enrage.skill.dmgMul) === 38);
+        (Math.round(48 * D.dragon.enrage.skill.dmgMul) === 67);
       sub.t2_formula = f_ok;
       ok = ok && f_ok;
 
-      /* 3. 触发：dragon hp 打到 ≤75 时 enraged=true，log 含"狂暴"；enrageAtk/Def 正确
+      /* 3. 触发：dragon hp 打到 ≤50%（260×0.5=130）时 enraged=true，log 含"狂暴"；enrageAtk/Def 正确
        *    mock random=0.5（≥0.3）确保怪物反击走普攻而非吐息，结果确定 */
       Math.random = function () { return 0.5; };
       B.start('dragon');
       P.atk = 10; P.def = 5; P.hp = 100; P.maxHp = 100;
       var st = B.getState();
-      st.monster.hp = 70; /* 直接压到阈值附近（≤75） */
-      B.playerAction('attack'); /* 这一击触发狂暴，怪物普攻反击 22 */
-      var trig_ok = st.enraged === true && (st.enrageAtk === 27) && (st.enrageDef === 10) &&
+      st.monster.hp = 70; /* 直接压到阈值附近（≤130） */
+      B.playerAction('attack'); /* 这一击触发狂暴，怪物普攻反击 damage(48,5)=43 */
+      var trig_ok = st.enraged === true && (st.enrageAtk === 48) && (st.enrageDef === 10) &&
         (st.log.join('|').indexOf('狂暴') >= 0);
       sub.t3_trigger = trig_ok;
       ok = ok && trig_ok;
@@ -68,7 +69,8 @@
       sub.t4_single = single_ok;
       ok = ok && single_ok;
 
-      /* 5. 吐息：狂暴后 mock Math.random<chance → 伤害 = max(round(27×1.4)-def,1)=max(38-5,1)=33 */
+      /* 5. 吐息（D-34 规格变更：伤害改比例减伤）：狂暴后 mock Math.random<chance →
+       *    原始 round(48×1.4)=67，对 def5 结算 damage(67,5)=round(67²/72)=62 */
       Math.random = function () { return 0.1; }; /* 稳定命中吐息（0.1 < 0.3） */
       B.flush(); /* D-16：先结清 t4 遗留的怪物段，否则它的伤害会被算进本次吐息 */
       P.hp = 100; /* 回满，避免前序普攻把 HP 压低导致钳制 */
@@ -76,18 +78,18 @@
       B.playerAction('attack'); /* 攻击不致死，触发怪物吐息 */
       B.flush(); /* D-16：怪物段改为下一帧结算，不走帧循环的验证页需显式 flush */
       var breathDmg = hpBefore - P.hp;
-      var breath_ok = (breathDmg === 33) && (st.log.join('|').indexOf('烈焰吐息') >= 0);
+      var breath_ok = (breathDmg === 62) && (st.log.join('|').indexOf('烈焰吐息') >= 0);
       sub.t5_breath = breath_ok;
       ok = ok && breath_ok;
 
-      /* 6. 防御减伤：玩家防御时吐息伤害减半（floor(33/2)=16） */
+      /* 6. 防御减伤：玩家防御时吐息伤害减半（floor(62/2)=31） */
       Math.random = function () { return 0.1; };
       P.hp = 100;
       var hpB2 = P.hp;
       B.playerAction('defend');
       B.flush(); /* D-16：怪物段改为下一帧结算，不走帧循环的验证页需显式 flush */
       var defDmg = hpB2 - P.hp;
-      var def_ok = (defDmg === 16);
+      var def_ok = (defDmg === 31);
       sub.t6_defend = def_ok;
       ok = ok && def_ok;
 
@@ -102,8 +104,8 @@
       sub.t7_normal = slime_ok;
       ok = ok && slime_ok;
 
-      /* 8. 不写回数据：monsters.js dragon 原始 atk/def 不变 */
-      var data_ok = (D.dragon.atk === 18) && (D.dragon.def === 8);
+      /* 8. 不写回数据：monsters.js dragon 原始 atk/def 不变（D-34：atk 已由 18 改为 32） */
+      var data_ok = (D.dragon.atk === 32) && (D.dragon.def === 8);
       sub.t8_dataImmutable = data_ok;
       ok = ok && data_ok;
 

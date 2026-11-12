@@ -12,6 +12,8 @@
 
 - 五层地牢：DFS 迷宫生成、上下楼梯换层、每层主题与期望强度单调递增（第 5 层 44.1）。<!-- 锚点: js/data/maps.js#floors -->
 - 回合制战斗：攻击 / 防御 / 逃跑，经验金币掉落、死亡结算。<!-- 锚点: js/systems/battle.js#Game.Systems.Battle -->
+- 伤害公式（D-34）：`max(1, round(atk²/(atk+def)))` 比例减伤，替换旧的 `max(atk-def,1)`——def 5→45 实数曲线严格递减、无免疫点、无断崖；五层期望受击伤害由 `1.00/1.50/1.75/3.35/1.25`（F4>F5 倒挂）修正为 `3.25/6.75/7.30/11.75/12.90`。<!-- 锚点: js/systems/battle.js#damage( -->
+- 最终 Boss（D-34）：地牢巨龙 `hp150/atk18` → `hp260/atk32`，atk 与 hp 双项严格大于第 5 层最强普通怪（天使 hp180/atk28、大僵尸 hp240/atk26）；二阶段 enrage 参数未动。Boss 不在普通表，五层期望强度与 DC-04 基线不变。<!-- 锚点: js/data/monsters.js#dragon -->
 - 三技能：火球 / 冲刺 / 护盾，消耗 MP、按回合冷却。<!-- 锚点: js/systems/skills.js#Game.Skills -->
 - 三名 Boss 二阶段：第 2 层独眼酋长、第 4 层僵尸王、第 5 层地牢巨龙（半血狂暴）。<!-- 锚点: js/data/monsters.js#enrage -->
 - 陷阱与状态：地刺 / 毒气，流血 / 中毒按回合结算。<!-- 锚点: js/systems/battle.js#Game.Systems.Status -->
@@ -39,7 +41,7 @@
 
 ### 工具
 
-- 回归批跑：74 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：75 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->

@@ -124,18 +124,19 @@
       sub.t7_cooldown = cdOk;
       ok = ok && cdOk;
 
-      /* 8. 护盾：cast('shield') 后 shieldValue = round(maxHp*0.25)，怪物命中先扣护盾 */
+      /* 8. 护盾：cast('shield') 后 shieldValue = round(maxHp*0.25)，怪物命中先扣护盾
+       *    D-34 规格变更：伤害公式改比例减伤，史莱姆 6 攻 vs 5 防 → round(36/11)=3 */
       B.start('slime');
       P.maxHp = 100; P.hp = 100; P.mp = 50;
       S.resetCooldowns();
       var sh = S.cast('shield');
       var st2 = B.getState();
       var sv0 = st2.shieldValue;
-      B.playerAction('attack'); /* 史莱姆 6 攻 - 5 防 = 1，全部由护盾抵挡 */
+      B.playerAction('attack'); /* 史莱姆 6 攻 → 3 点，全部由护盾抵挡 */
       /* D-16：怪物段已改为下一帧结算（分段播放），不走帧循环的验证页需显式 flush */
       B.flush();
       var sv1 = st2.shieldValue;
-      var shOk = (sh === true) && (sv0 === 25) && (P.hp === 100) && (sv1 === 24);
+      var shOk = (sh === true) && (sv0 === 25) && (P.hp === 100) && (sv1 === 22);
       sub.t8_shield = shOk;
       ok = ok && shOk;
 

@@ -87,7 +87,8 @@
     if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) data[k] = extra[k];
     try { localStorage.setItem(KEY, JSON.stringify(data)); return true; } catch (e) { return false; }
   }
-  function dmgOf(atk, def) { return Math.max(atk - def, 1); }
+  /* D-34 规格变更：伤害公式改为 max(1, round(atk²/(atk+def)))；判定形状不变，只换复算实现 */
+  function dmgOf(atk, def) { return Math.max(1, Math.round(atk * atk / (atk + def))); }
 
   try {
     Game.Core.Input.bind();
@@ -172,7 +173,7 @@
       roundsArmed === Math.ceil(monHp / armedHit) && roundsArmed < roundsBare,
       monName + '(def' + monDef + ', hp' + monHp + ')：起手匕首 atk=' + armedAtk + ' → 每回合 ' +
       armedHit + '，击杀 ' + roundsArmed + ' 回合；赤手 atk=' + bareAtk2 + ' → 每回合 ' +
-      bareHit + '，击杀 ' + roundsBare + ' 回合（max(atk-def,1) 复算；怪 atk=' + metaAtk + '）');
+      bareHit + '，击杀 ' + roundsBare + ' 回合（max(1,round(atk²/(atk+def))) 复算；怪 atk=' + metaAtk + '）');
 
     /* ══ A7. 范围最小：不给护甲、背包无护甲、匕首数值未改 ═══════ */
     var noArmorInBag = true;
