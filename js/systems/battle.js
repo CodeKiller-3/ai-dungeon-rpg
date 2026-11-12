@@ -350,11 +350,20 @@
     logPush(dmg > 0 ? m.name + ' 攻击了你，造成 ' + dmg + ' 伤害' : m.name + ' 的攻击被护盾完全抵挡');
     Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
     if (p.hp <= 0) {
+      /* D-50：一次原地复活（仅 F5、仅本层第 1 次死亡、需定档形态）。见 systems/adaptive.js。
+       * 不结束战斗、不重置怪物血量，只把玩家从 0 拉回；未启用时行为与 D-49 完全一致。 */
+      var Ad = Game.Systems && Game.Systems.Adaptive;
+      if (Ad && typeof Ad.reviveInPlace === 'function' && Ad.reviveInPlace(Pfloor())) {
+        logPush('守夜人把你按回地上：「还没到闭眼的时候。」');
+        return;
+      }
       logPush('你被击败了…');
       Game.Core.EventBus.emit('audio:play', { sfx: 'lose' });
       Game.Core.EventBus.emit('battle:end', loseTelemetry());
     }
   }
+
+  function Pfloor() { return (Game.Data.Player && Game.Data.Player.floor) || 1; }
 
   /* D-19：战斗内用药——候选严格限定为「消耗品 + 非卷轴 + 带 hp/mp 回复」。
    * 卷轴（S-03 强化）与装备不能在战斗中使用：前者作用于装备、属战斗外养成动作，

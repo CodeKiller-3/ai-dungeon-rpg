@@ -1,0 +1,112 @@
+{
+    "protocol":  "D-50 candidate forms",
+    "seeds":  "1001-1050",
+    "maxActions":  2500,
+    "strategy":  "b1",
+    "forms":  [
+                  {
+                      "form":  "d50a",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  120,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50b",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  140,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50c",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  140,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50d",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50e",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50f",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50g",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  110,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50h",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50i",
+                      "wins":  21,
+                      "f5":  30,
+                      "triggers":  83,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50j",
+                      "wins":  21,
+                      "f5":  30,
+                      "triggers":  83,
+                      "maxSpent":  110,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50k",
+                      "wins":  21,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  150,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d50l",
+                      "wins":  14,
+                      "f5":  30,
+                      "triggers":  83,
+                      "maxSpent":  110,
+                      "gear":  23
+                  },
+                  {
+                      "form":  "d49(D-49基线)",
+                      "wins":  10,
+                      "f5":  30,
+                      "triggers":  86,
+                      "maxSpent":  110,
+                      "gear":  23
+                  }
+              ]
+}

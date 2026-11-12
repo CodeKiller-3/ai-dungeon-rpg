@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-50：读取 selfcheck/d50-after.json / d50-legacy.json / d50-off.json 与 docs/平衡定档.md，声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-50 平衡定档</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:12px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; }
+  th { color:#9fd; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-50 · F5 拆解可复算 / 150 上限 / 还原 D-49 / 四策略不退化 / 文档=源码 / 数值指纹（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<h2>F5 逐局拆解</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D50ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D50ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D50ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readText(rel).replace(/^\uFEFF/, '')); } catch (e) { return null; } }
+  function fnv1a(s) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+  var AD = Game.Systems.Adaptive;
+  var ITEMS = Game.Data.ITEMS;
+
+  /* ── A：F5 触发逐局拆解（回合 / 药 / 输出），全部从逐回合实测日志复算 ── */
+  var AFTER = readJson('selfcheck/d50-after.json');
+  var LEG = readJson('selfcheck/d50-legacy.json');
+  var OFF = readJson('selfcheck/d50-off.json');
+  var D48 = readJson('selfcheck/d48-after.json');
+  var D49 = readJson('selfcheck/d49-after.json');
+
+  try {
+    if (!AFTER || !LEG || !OFF || !D48) {
+      throw new Error('缺少跑局产物: ' + JSON.stringify({
+        after: !!AFTER, legacy: !!LEG, off: !!OFF, d48: !!D48
+      }));
+    }
+    var runs = AFTER.runs.b1 || [];
+    var rows = [], bad = [];
+    for (var r = 0; r < runs.length; r++) {
+      var run = runs[r];
+      if (!run.f5fights || run.outcome === 'win') continue;
+      var losses = run.f5fights.filter(function (b) { return b.result !== 'win'; });
+      if (!losses.length) continue;
+      var b = losses[losses.length - 1];
+      var R = b.rounds || [];
+      if (!R.length) continue;
+      var dealt = 0, taken = 0, potHeal = 0, gain = 0, revive = 0, lastMhp = 0, lastHp = 0, prevHp = b.start.hp;
+      for (var i = 0; i < R.length; i++) {
+        dealt += R[i][2]; taken += R[i][3];
+        var itemHeal = (R[i][4] === 'potion_large') ? 80 : ((R[i][4] === 'potion_small') ? 30 : 0);
+        potHeal += itemHeal;
+        /* 本回合实际回血 = 回合末 HP − (回合初 HP − 本回合承伤)；多出名义药量的部分只可能来自原地复活 */
+        var g = R[i][5] - prevHp + R[i][3];
+        if (g > 0) { gain += g; if (g - itemHeal > 0) revive += g - itemHeal; }
+        prevHp = R[i][5];
+        lastMhp = R[i][6];
+        lastHp = R[i][5];
+      }
+      var bossLeft = Math.max(0, lastMhp);
+      var avgD = dealt / R.length, avgT = taken / R.length;
+      var tNeed = avgD > 0 ? Math.ceil(bossLeft / avgD) : -1;
+      var addTaken = tNeed > 0 ? Math.round(tNeed * avgT) : 0;
+      var potions = Math.ceil(addTaken / 80);
+      var hpPool = b.start.hp + gain;
+      var rep = run.f5split || {};
+      var ok = b.maxHp - dealt === bossLeft && dealt === b.dealt && taken === b.taken &&
+        R.length === b.nRounds && tNeed === rep.tNeed && addTaken === rep.addTaken &&
+        hpPool - taken === lastHp && lastHp < 2 * Math.max(1, avgT);
+      rows.push({ seed: run.seed, name: b.name, bossLeft: bossLeft, dealt: dealt, n: R.length,
+        taken: taken, potHeal: potHeal, revive: revive, hpPool: hpPool, tNeed: tNeed,
+        addTaken: addTaken, potions: potions });
+      if (!ok) bad.push(rows[rows.length - 1]);
+    }
+    rec('A_f5_split_recomputable', rows.length >= 10 && bad.length === 0, {
+      rule: '每局最后一战：bossMax−Σdealt=剩余血量；Σtaken=实测承伤；起点HP+实际回血−Σtaken=回合末HP(0)；' +
+        'tNeed=ceil(剩余/每回合输出)；addTaken=tNeed×每回合承伤；三项分量与 f5split 上报值逐项相等',
+      rows: rows.length, mismatches: bad,
+      sample: rows.slice(0, 6)
+    });
+
+    /* ── B：150 金币等价上限（含超限负例） ── */
+    function capCheck(ad) {
+      if (!ad) return { ok: false, why: 'no-adaptive' };
+      var sum = 0;
+      for (var i = 0; i < (ad.log || []).length; i++) sum += (ad.log[i].value || 0);
+      return {
+        ok: (ad.triggers || 0) <= 2 && (ad.spent || 0) <= 150 && sum === (ad.spent || 0) &&
+          (ad.log || []).length === (ad.triggers || 0),
+        triggers: ad.triggers, spent: ad.spent, sum: sum
+      };
+    }
+    var viol = [], maxT = 0, maxS = 0;
+    for (var q = 0; q < runs.length; q++) {
+      var ad = runs[q].adaptive || {};
+      if (!capCheck(ad).ok) viol.push({ seed: runs[q].seed, ad: ad });
+      if ((ad.triggers || 0) > maxT) maxT = ad.triggers || 0;
+      if ((ad.spent || 0) > maxS) maxS = ad.spent || 0;
+    }
+    var f3 = capCheck({ triggers: 3, spent: 120, log: [{ value: 40 }, { value: 40 }, { value: 40 }] });
+    var f200 = capCheck({ triggers: 2, spent: 200, log: [{ value: 100 }, { value: 100 }] });
+    var fsum = capCheck({ triggers: 1, spent: 40, log: [{ value: 60 }] });
+    rec('B_cap_150', viol.length === 0 && maxT <= 2 && maxS <= 150 &&
+      AD.MAX_VALUE === 150 && AD.MAX_TRIGGERS === 2 &&
+      f3.ok === false && f200.ok === false && fsum.ok === false, {
+      rule: '单局触发 ≤2、发放物金币等价 ≤150、Σlog=spent；三例负例（3 次 / 200 金 / 账实不符）必须 FAIL',
+      maxTriggers: maxT, maxSpent: maxS, violators: viol.length,
+      negative: { threeTriggers: f3.ok, over150: f200.ok, sumMismatch: fsum.ok },
+      consts: { MAX_TRIGGERS: AD.MAX_TRIGGERS, MAX_VALUE: AD.MAX_VALUE }
+    });
+
+    /* ── C：负例·还原 D-49 的 F5 形态 → 必须复现 10/50 ── */
+    var lruns = LEG.runs.b1 || [];
+    var lw = LEG.agg.b1.outcomes.win;
+    var lF5L1 = 0, lF5L3 = 0, lMulti = [];
+    for (var li = 0; li < lruns.length; li++) {
+      var lg = (lruns[li].adaptive && lruns[li].adaptive.log) || [];
+      for (var lj = 0; lj < lg.length; lj++) {
+        if (lg[lj].floor !== 5) continue;
+        if (lg[lj].level === 1) lF5L1++;
+        if (lg[lj].level === 3) lF5L3++;
+      }
+      var firstAt5 = lg.length > 0 && lg[0].floor === 5;
+      if (firstAt5 && lg[0].at !== 'death') lMulti.push(lruns[li].seed);
+    }
+    var perSeedSame = true, d49By = {};
+    ((D49 && D49.runs && D49.runs.b1) || []).forEach(function (x) { d49By[x.seed] = x.outcome; });
+    for (var lk = 0; lk < lruns.length; lk++) {
+      var s0 = lruns[lk].seed;
+      if (d49By[s0] && d49By[s0] !== lruns[lk].outcome) perSeedSame = false;
+    }
+    rec('C_legacy_reproduces_d49', LEG.env.form === 'd49' && lw === 10 &&
+      lF5L1 === 18 && lF5L3 === 20 && lMulti.length === 0 && perSeedSame, {
+      rule: '把 F5 救助形态还原成 D-49（form=d49）：B1 必须回到 10/50，逐局 outcome 与 d49-after 一致，' +
+        'F5 触发仍是 18 次一级 + 20 次三级',
+      wins: lw, f5Level1: lF5L1, f5Level3: lF5L3, nonRespawnAt5: lMulti, perSeedSame: perSeedSame
+    });
+
+    /* ── D：四策略复跑 + 未触发局不下降 ── */
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050 && AFTER.env.maxActions === 2500;
+    var g2 = AFTER.agg.g2, s1 = AFTER.agg.s1, m1 = AFTER.agg.m1;
+    var g2Ok = g2 && g2.f5.reached >= D48.agg.g2.f5.reached;
+    var s1Ok = s1 && s1.f5.reached >= D48.agg.s1.f5.reached;
+    var m1Ok = m1 && m1.floorReach['4'] >= D48.agg.m1.floorReach['4'];
+    var d48By = {};
+    (D48.runs.b1 || []).forEach(function (x) { d48By[x.seed] = x.outcome; });
+    var zero = 0, zMis = [], zw = 0, zb = 0;
+    for (var z = 0; z < runs.length; z++) {
+      if ((runs[z].adaptive && runs[z].adaptive.triggers) || 0) continue;
+      zero++;
+      if (runs[z].outcome === 'win') zw++;
+      if (d48By[runs[z].seed] === 'win') zb++;
+      if (d48By[runs[z].seed] !== runs[z].outcome) zMis.push({ seed: runs[z].seed, d48: d48By[runs[z].seed], on: runs[z].outcome });
+    }
+    var b1w = AFTER.agg.b1.outcomes.win;
+    rec('D_four_strategies', seedOk && !!g2 && !!s1 && !!m1 && g2Ok && s1Ok && m1Ok &&
+      zero > 0 && zMis.length === 0 && zw >= zb && b1w >= 13, {
+      rule: 'B1/G2/S1/M1 同种子 1001–1050、maxActions 2500；G2/S1/M1 不低于 D-48；' +
+        '零触发局逐局与 D-48 一致（未救援的玩家难度没动）；B1 ≥ 13/50',
+      b1: { wins: b1w, goal: 13, f5: AFTER.agg.b1.f5.reached },
+      g2: { on: g2 && g2.f5.reached, d48: D48.agg.g2.f5.reached },
+      s1: { on: s1 && s1.f5.reached, d48: D48.agg.s1.f5.reached },
+      m1: { on: m1 && m1.floorReach['4'], d48: D48.agg.m1.floorReach['4'] },
+      zeroTriggers: { runs: zero, wins: zw, d48Wins: zb, mismatches: zMis },
+      off: { wins: OFF.agg.b1.outcomes.win }
+    });
+
+    /* ── E：定档文档 ↔ 源码常量（≥10 项逐项相等） ── */
+    var doc = readText('../docs/平衡定档.md');
+    var LIVE = {
+      'monster.dragon.hp': Game.Data.MONSTERS.dragon.hp,
+      'monster.dragon.atk': Game.Data.MONSTERS.dragon.atk,
+      'monster.dragon.def': Game.Data.MONSTERS.dragon.def,
+      'monster.dragon.exp': Game.Data.MONSTERS.dragon.exp,
+      'monster.big_zombie.hp': Game.Data.MONSTERS.big_zombie.hp,
+      'monster.big_zombie.atk': Game.Data.MONSTERS.big_zombie.atk,
+      'monster.angel.hp': Game.Data.MONSTERS.angel.hp,
+      'monster.angel.atk': Game.Data.MONSTERS.angel.atk,
+      'monster.skeleton.hp': Game.Data.MONSTERS.skeleton.hp,
+      'monster.skeleton.def': Game.Data.MONSTERS.skeleton.def,
+      'monster.slime.hp': Game.Data.MONSTERS.slime.hp,
+      'boss.zombie_king.hp': Game.Data.MONSTERS.zombie_king.hp,
+      'boss.ogre_boss.hp': Game.Data.MONSTERS.ogre_boss.hp,
+      'item.potion_small.price': ITEMS.potion_small.price,
+      'item.potion_small.hp': ITEMS.potion_small.effect.hp,
+      'item.potion_large.price': ITEMS.potion_large.price,
+      'item.potion_large.hp': ITEMS.potion_large.effect.hp,
+      'item.potion_xl.hp': ITEMS.potion_xl.effect.hp,
+      'item.sword_dragon_rare.price': ITEMS.sword_dragon_rare.price,
+      'item.sword_dragon_epic.atk': ITEMS.sword_dragon_epic.effect.atk,
+      'rescue.gear_atk': AD.GEAR_ATK,
+      'rescue.gear_value': AD.GEAR_VALUE,
+      'rescue.max_triggers': AD.MAX_TRIGGERS,
+      'rescue.max_value': AD.MAX_VALUE,
+      'rescue.low_hp': Game.Systems.Adaptive.LOW_HP
+    };
+    var checked = [], eBad = [];
+    var re = /^\|\s*((?:monster|boss|item|rescue)\.[\w.]+)\s*\|\s*([\d.]+)\s*\|\s*$/gm, mm2;
+    while ((mm2 = re.exec(doc)) !== null) {
+      var k = mm2[1], v = Number(mm2[2]);
+      if (!(k in LIVE)) { eBad.push({ key: k, doc: v, live: '(未知键)' }); continue; }
+      checked.push({ key: k, doc: v, live: LIVE[k] });
+      if (LIVE[k] !== v) eBad.push({ key: k, doc: v, live: LIVE[k] });
+    }
+    rec('E_doc_matches_source', doc.length > 0 && checked.length >= 10 && eBad.length === 0, {
+      rule: '《平衡定档》第十五节的键值表与源码常量逐项相等（至少 10 项）；文档缺失或键不认识都算 FAIL',
+      docBytes: doc.length, checked: checked.length, mismatches: eBad,
+      sample: checked.slice(0, 8)
+    });
+
+    /* ── F：巨龙三项 / 狂暴参数 / 怪物指纹 / 物品 Σprice·Σsell·FNV ── */
+    var MS = Game.Data.MONSTERS;
+    var mk = Object.keys(MS).sort(), lines = [];
+    for (var mi = 0; mi < mk.length; mi++) lines.push(MS[mk[mi]].id + ':' + MS[mk[mi]].hp + ':' + MS[mk[mi]].atk + ':' + MS[mk[mi]].def);
+    var mfnv = fnv1a(lines.join('\n'));
+    var ik = Object.keys(ITEMS).sort(), ilines = [], sp = 0, ss = 0, arb = [];
+    for (var ii = 0; ii < ik.length; ii++) {
+      var it = ITEMS[ik[ii]];
+      ilines.push(it.id + ':' + it.price + ':' + it.sell);
+      sp += it.price; ss += it.sell;
+      if (!(it.price > it.sell)) arb.push(it.id);
+    }
+    var ifnv = fnv1a(ilines.join('\n'));
+    var dr = MS.dragon;
+    rec('F_numbers_unchanged', mk.length === 18 && mfnv === 'a8f05f90' &&
+      dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+      dr.enrage.hpPct === 0.5 && dr.enrage.atkMul === 1.5 && dr.enrage.defMul === 1.3 &&
+      dr.enrage.skill.chance === 0.3 && dr.enrage.skill.dmgMul === 1.4 &&
+      ik.length === 48 && sp === 10165 && ss === 5081 && ifnv === 'd814ef98' && arb.length === 0, {
+      rule: '18 只怪物指纹 a8f05f90、巨龙 260/32/8 与狂暴 0.5/1.5/1.3/0.3/1.4、' +
+        '物品 48 件 Σprice=10165 Σsell=5081 FNV=d814ef98、全表买价>卖价',
+      monsterFnv: mfnv, dragon: { hp: dr.hp, atk: dr.atk, def: dr.def },
+      items: { n: ik.length, sumPrice: sp, sumSell: ss, fnv: ifnv }, arbitrage: arb
+    });
+
+    out.rows = rows;
+    out.errs = window.__D50ERR;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D50ERR.length === 0;
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String((e && (e.stack || e.message)) || e);
+    out.ok = false;
+  }
+
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result').textContent = txt;
+  var h = ['<table><tr><th>seed</th><th>对手</th><th>剩余</th><th>已打</th><th>回合</th><th>承伤</th><th>药回</th><th>复活</th><th>还差回合</th><th>折算治疗</th><th>折大药</th></tr>'];
+  (out.rows || []).forEach(function (x) {
+    h.push('<tr><td>' + x.seed + '</td><td>' + x.name + '</td><td>' + x.bossLeft + '</td><td>' + x.dealt +
+      '</td><td>' + x.n + '</td><td>' + x.taken + '</td><td>' + x.potHeal + '</td><td>' + x.revive +
+      '</td><td>' + x.tNeed + '</td><td>' + x.addTaken + '</td><td>' + x.potions + '</td></tr>');
+  });
+  h.push('</table>');
+  document.getElementById('detail').innerHTML = h.join('');
+})();
+</script>
+</body>
+</html>
