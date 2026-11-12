@@ -138,7 +138,7 @@
   /* B1 专属汇总：主动/挡路/巡逻/ Boss 分类、进 F5 药量、每层进出状态、龙战 */
   function aggB1(runs) {
     var a = {
-      runs: runs.length, active: 0, forced: 0, patrol: 0, boss: 0, battles: 0,
+      runs: runs.length, active: 0, forced: 0, patrol: 0, boss: 0, battles: 0, race: 0,
       activeByFloor: {}, forcedByFloor: {},
       reserve: { need: 4, reachF5: 0, pass: 0, min: null, max: null, values: [], fails: [] },
       shop: { visits: 0, buys: 0, spent: 0, potionsBought: 0, equipBought: 0, soldCount: 0, soldGold: 0 },
@@ -155,6 +155,7 @@
       a.active += b.active || 0;
       a.forced += b.forced || 0;
       a.patrol += b.patrol || 0;
+      a.race += b.race || 0;
       a.boss += b.boss || 0;
       for (var af in b.activeByFloor) if (Object.prototype.hasOwnProperty.call(b.activeByFloor, af)) {
         a.activeByFloor[af] = (a.activeByFloor[af] || 0) + b.activeByFloor[af];

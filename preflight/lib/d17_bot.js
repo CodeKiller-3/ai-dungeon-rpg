@@ -728,7 +728,7 @@
       reserve: (typeof cfg.reserve === 'number') ? cfg.reserve : B1_RESERVE,
       negAvoid: cfg.negAvoid === true,
       negReserve: cfg.negReserve === true,
-      battles: 0, active: 0, forced: 0, patrol: 0, boss: 0, byBlock: 0,
+      battles: 0, active: 0, forced: 0, patrol: 0, boss: 0, byBlock: 0, race: 0,
       activeByFloor: {}, battleKind: null, lastStep: null,
       fleeAttempts: 0, fleeSuccess: 0, fleeFail: 0, fleeTriesThisBattle: 0,
       shopVisits: 0, shopBuys: 0, shopSpent: 0, potionsBought: 0, equipBought: 0,
@@ -1956,7 +1956,11 @@
         d.boss++; d.battleKind = 'boss';
       } else if (into) {
         if (ls.forced) { d.forced++; d.byBlock++; d.battleKind = 'blocked'; }
-        else {
+        else if (ls.boss) {
+          /* 计划踩的是 Boss 格，但 AI 先动、Boss 让位/杂兵占位：这不是"主动清杂兵"，
+           * 记为 patrol（遭遇战），避免把竞态误算成 active。 */
+          d.patrol++; d.race = (d.race || 0) + 1; d.battleKind = 'patrol';
+        } else {
           d.active++; d.battleKind = 'active';
           d.activeByFloor[P.floor] = (d.activeByFloor[P.floor] || 0) + 1;
         }

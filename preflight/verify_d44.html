@@ -81,7 +81,8 @@
       rule: 'B1 在 F1–F4 只能因挡路(forced)或巡逻贴脸(patrol)开战；active(主动踩怪) 必须为 0',
       activeF1F4: active14, activeF5: active5, activeRuns: badA,
       forced: B1.forced, patrol: B1.patrol, boss: B1.boss, battles: B1.battles,
-      note: 'F5 的 1 次 active 是通往 Boss 的路上被杂兵占位，不计入 A 组（A 只约束 F1–F4）'
+      race: B1.race || 0,
+      note: 'F5 的 0 次 active：有 1 次是"计划踩 Boss 格、AI 先动让杂兵占位"的竞态，按 patrol 计'
     });
     rec('A_neg_avoid_shortcircuit', negActive14 > 0 && negAvoid && negAvoid.active > 0, {
       rule: '负例：寻路不把怪当墙（negAvoid）必须产生 active>0，证明"A 组的 0"不是记账失灵',
