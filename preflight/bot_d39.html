@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-39 纯潜行测量</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-39 · 纯潜行（S1）测量页：本页不参与 run-all 回归，只产出 d39-s1.json / d39-neg.json</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-39 单组跑局器。种子 1001~1050、maxActions 2500 固定（与 D-37 G2 完全一致）。
+ *   ?mode=s1  （默认）S1 纯潜行：怪物格当障碍，只有绕不过去才撞上去
+ *   ?mode=neg        负例：关掉"绕怪"（avoid:false），沿用 D-34/D-37 的普通寻路 → 会主动踩怪
+ * 本页只产出数据，不做"游戏难不难/该不该平衡"的判断。 */
+(function () {
+  'use strict';
+  var out = { protocol: 'D-39', mode: '', strategy: null, env: {}, summary: null, runs: [] };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  function agg(runs) {
+    var d = {
+      encounters: { battles: 0, forced: 0, active: 0, byBlock: 0, byPatrol: 0, byBoss: 0, runsWithBattle: 0 },
+      flee: { attempts: 0, successes: 0, failures: 0, reengaged: 0, runsWithFlee: 0 },
+      blocked: { events: 0, runs: 0, byFloor: {}, samples: [] },
+      pathDiffs: [],
+      floorsEnter: [], floorsEnd: [],
+      f5: { reached: 0, states: [] },
+      deaths: { count: 0, bySource: {}, list: [] }
+    };
+    var fEn = {}, fEd = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], x = r.d39;
+      if (!x) continue;
+      d.encounters.battles += x.battles;
+      d.encounters.forced += x.forced;
+      d.encounters.active += x.active;
+      d.encounters.byBlock += x.byBlock;
+      d.encounters.byPatrol += x.byPatrol;
+      d.encounters.byBoss += x.byBoss;
+      if (x.battles > 0) d.encounters.runsWithBattle++;
+      d.flee.attempts += x.fleeAttempts;
+      d.flee.successes += x.fleeSuccess;
+      d.flee.failures += x.fleeFail;
+      d.flee.reengaged += x.reengaged;
+      if (x.fleeSuccess > 0) d.flee.runsWithFlee++;
+      if (x.blockedCount > 0) d.blocked.runs++;
+      d.blocked.events += x.blockedCount;
+      for (var b = 0; b < x.blocked.length; b++) {
+        var bk = x.blocked[b];
+        d.blocked.byFloor[bk.floor] = (d.blocked.byFloor[bk.floor] || 0) + 1;
+        if (d.blocked.samples.length < 8) {
+          d.blocked.samples.push({
+            seed: r.seed, floor: bk.floor, at: bk.at, from: bk.from, step: bk.step,
+            monsterId: bk.monsterId, goal: bk.goal, steps: bk.steps,
+            window: bk.window, hasGrid: !!bk.grid
+          });
+        }
+      }
+      for (var p = 0; p < x.pathDiffs.length; p++) {
+        if (d.pathDiffs.length < 6) {
+          var pd = x.pathDiffs[p];
+          d.pathDiffs.push({
+            seed: r.seed, tag: pd.tag, floor: pd.floor, from: pd.from, goal: pd.goal,
+            avoidSteps: pd.avoidSteps, plainSteps: pd.plainSteps,
+            avoidPath: pd.avoidPath, plainPath: pd.plainPath
+          });
+        }
+      }
+      for (var e = 0; e < x.floorEnter.length; e++) {
+        var s = x.floorEnter[e];
+        if (!fEn[s.floor]) fEn[s.floor] = { hp: [], mp: [], level: [], gold: [], equip: [] };
+        fEn[s.floor].hp.push(s.hp); fEn[s.floor].mp.push(s.mp);
+        fEn[s.floor].level.push(s.level); fEn[s.floor].gold.push(s.gold); fEn[s.floor].equip.push(s.equip);
+        if (s.floor === 5) {
+          d.f5.states.push({ seed: r.seed, hp: s.hp, maxHp: s.maxHp, mp: s.mp, maxMp: s.maxMp,
+            level: s.level, gold: s.gold, equip: s.equip, outcome: r.outcome });
+        }
+      }
+      for (var f = 0; f < x.floorEnd.length; f++) {
+        var z = x.floorEnd[f];
+        if (!fEd[z.floor]) fEd[z.floor] = { hp: [], mp: [], level: [], gold: [], equip: [] };
+        fEd[z.floor].hp.push(z.hp); fEd[z.floor].mp.push(z.mp);
+        fEd[z.floor].level.push(z.level); fEd[z.floor].gold.push(z.gold); fEd[z.floor].equip.push(z.equip);
+      }
+      if (r.death) {
+        d.deaths.count++;
+        var src = r.death.source || '(unknown)';
+        d.deaths.bySource[src] = (d.deaths.bySource[src] || 0) + 1;
+        d.deaths.list.push({ seed: r.seed, floor: r.deathFloor, cause: r.deathCause, t: r.death });
+      }
+    }
+    d.f5.reached = d.f5.states.length;
+    function pack(src, dst) {
+      for (var k in src) if (src.hasOwnProperty(k)) {
+        var g = src[k];
+        dst.push({
+          floor: +k, n: g.hp.length, avgHp: mean(g.hp), avgMp: mean(g.mp),
+          avgLevel: mean(g.level), avgGold: mean(g.gold), avgEquip: mean(g.equip)
+        });
+      }
+      dst.sort(function (a, b) { return a.floor - b.floor; });
+    }
+    pack(fEn, d.floorsEnter);
+    pack(fEd, d.floorsEnd);
+    return d;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var mm = /mode=(s1|neg)/.exec(qs);
+    var mode = mm ? mm[1] : 's1';
+    out.mode = mode;
+    out.strategy = mode === 's1' ? { avoid: true, skill: true } : { avoid: false, skill: true };
+    var mn = /n=(\d+)/.exec(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    var seeds = [];
+    for (var i = 1001; i < 1001 + n; i++) seeds.push(i);
+    var t0 = Date.now();
+    var res = Game.Bot.batch(seeds, { maxActions: 2500, d39: out.strategy });
+    out.wallMs = Date.now() - t0;
+    out.env = {
+      ua: navigator.userAgent,
+      stepMs: Game.Bot.STEP_MS,
+      actionSec: Game.Bot.ACTION_SEC,
+      seeds: 'seed 1001..' + (1000 + n) + ' (固定)',
+      seedList: seeds,
+      maxActions: 2500,
+      startPosSet: (function () {
+        var s = {};
+        for (var j = 0; j < res.runs.length; j++) s[res.runs[j].startPos] = 1;
+        return Object.keys(s).sort();
+      })()
+    };
+    out.summary = res.summary;
+    out.summary.d39 = agg(res.runs);
+    out.runs = res.runs;
+    out.spy = Game.Bot.spy();
+    out.ok = true;
+    var a = out.summary.d39;
+    document.title = 'BATCH_DONE mode=' + mode + ' runs=' + res.runs.length +
+      ' win=' + res.summary.win + ' dead=' + res.summary.dead + ' stuck=' + res.summary.stuck +
+      ' f5=' + a.f5.reached + ' battles=' + a.encounters.battles + ' active=' + a.encounters.active +
+      ' blocked=' + a.blocked.events + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D39__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out, null, 1);
+})();
+</script>
+</body>
+</html>

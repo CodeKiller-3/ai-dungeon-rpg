@@ -277,6 +277,241 @@
     return firstStep(prev, found);
   }
 
+  /* ── D-39：纯潜行（S1）——只测量"一路不打能走多远" ─────────────
+   * 规则：怪物格一律当障碍；走不通时才朝挡路的怪迈一步（记录为强制遭遇）。
+   * 遭遇战：巡逻怪（非必经）打不过就逃；走廊被怪堵死 / 最终 Boss → 不逃、直接打
+   * ——逃跑不会搬走挡路的怪，只会白挨一轮，所以这里放弃逃跑。 */
+  function d39New(cfg) {
+    return {
+      avoid: cfg.avoid !== false,   /* 负例开关：false = 不把怪当障碍（用来证明"绕怪"真的在起作用） */
+      skill: cfg.skill !== false,
+      battles: 0, forced: 0, active: 0, byBlock: 0, byPatrol: 0, byBoss: 0,
+      fleeAttempts: 0, fleeSuccess: 0, fleeFail: 0, fleeTriesThisBattle: 0,
+      reengaged: 0, respite: 0, lastFleeWhy: null,
+      blockedCount: 0, blocked: [],
+      pathDiffs: [],
+      lastStep: null, battleKind: null,
+      ledger: [], floorStart: null, floorEnter: [], floorEnd: [], final: null
+    };
+  }
+  /* 怪物格朝向：方向码 → 位移（负例寻路要按方向看目标格有没有怪） */
+  var DIR_DELTA = { ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowDown: [0, 1], ArrowLeft: [-1, 0] };
+  function d39BossId(floor) {
+    var bs = (Game.Data.MAPS && Game.Data.MAPS.bosses) || [];
+    for (var i = 0; i < bs.length; i++) if (bs[i].floor === floor) return bs[i].id;
+    return null;
+  }
+  /* 纯 BFS：起点→首个满足 goal 的格；pass 决定哪些格可走。
+   * 返回 { ok, first:{x,y}, steps, path }，供潜行寻路与 verify_d39 共用同一份实现。 */
+  function d39Bfs(gx, start, goalFn, passFn) {
+    var w = gx[0].length, h = gx.length;
+    var sk = start.x + ',' + start.y;
+    var prev = Object.create(null), dep = Object.create(null);
+    prev[sk] = null; dep[sk] = 0;
+    var q = [sk], head = 0, dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]], hit = null;
+    while (head < q.length) {
+      var k = q[head++], c = k.split(','), x = +c[0], y = +c[1];
+      if (k !== sk && goalFn(x, y, gx[y][x])) { hit = k; break; }
+      for (var i = 0; i < 4; i++) {
+        var nx = x + dirs[i][0], ny = y + dirs[i][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var nk = nx + ',' + ny;
+        if (prev[nk] !== undefined) continue;
+        if (!passFn(nx, ny, gx[ny][nx])) continue;
+        prev[nk] = k; dep[nk] = dep[k] + 1; q.push(nk);
+      }
+    }
+    if (!hit) return { ok: false, first: null, steps: -1, path: [] };
+    var path = [], cur = hit;
+    while (cur !== null) {
+      var cc = cur.split(',');
+      path.push({ x: +cc[0], y: +cc[1] });
+      cur = prev[cur];
+    }
+    path.reverse();
+    return { ok: true, first: path[1] || null, steps: dep[hit], path: path };
+  }
+  function d39Dir(P, cell) {
+    if (!cell) return null;
+    var dx = cell.x - P.x, dy = cell.y - P.y;
+    for (var i = 0; i < 4; i++) if (DIRS[i][0] === dx && DIRS[i][1] === dy) return DIRS[i][2];
+    return null;
+  }
+  /* 本层潜行目标：非最终层=下行梯，最终层=Boss（胜利条件） */
+  function d39Goal(P, Map) {
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    if (P.floor >= FLOORS) {
+      var bossId = d39BossId(P.floor);
+      if (!bossId) return null;
+      return {
+        boss: true, bossId: bossId, desc: 'boss:' + bossId,
+        fn: function (x, y) {
+          var e = Map.enemyAt(x, y);
+          return !!(e && e.monsterId === bossId);
+        }
+      };
+    }
+    return { boss: false, desc: 'stairs-down', fn: function (x, y, t) { return t === 2; } };
+  }
+  /* B 组证据：同一个起点、同一格终点，"把怪当墙"的路径 vs "无视怪"的直线路径。
+   * 只在真实运行中记录（不构造数据），最多 3 条；两条路径都必须是本次真实 BFS 的结果。 */
+  function d39Diff(rec, grid, start, goalCell, walkable, avoidPath, tag) {
+    var d = rec.d39;
+    if (d.pathDiffs.length >= 2 || !goalCell) return;
+    var goalFn = function (x, y) { return x === goalCell.x && y === goalCell.y; };
+    var plain = d39Bfs(grid, start, goalFn, walkable);
+    if (!plain.ok) return;
+    var same = plain.path.length === avoidPath.length;
+    if (same) {
+      for (var i = 0; i < plain.path.length; i++) {
+        if (plain.path[i].x !== avoidPath[i].x || plain.path[i].y !== avoidPath[i].y) { same = false; break; }
+      }
+    }
+    if (same) return;
+    d.pathDiffs.push({
+      tag: tag, floor: Game.Data.Player.floor,
+      from: start.x + ',' + start.y, goal: goalCell.x + ',' + goalCell.y,
+      avoidSteps: avoidPath.length - 1, plainSteps: plain.path.length - 1,
+      avoidPath: avoidPath, plainPath: plain.path
+    });
+  }
+  /* 三级规划：① 敌人当墙探图 → ② 敌人当墙去下楼/Boss → ③ 仍无路则走向最近的挡路怪（记录绕不过去） */
+  function d39Plan(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid();
+    var d = rec.d39;
+    if (!grid) { d.lastStep = null; return null; }
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
+    /* 注意：d39Bfs 以 passFn(nx, ny, tile) 三参调用，这里必须写成三参函数再转调 walkT，
+     * 否则 1 参函数会把 nx 当成 tile（D-38 踩过同一个坑）。 */
+    var walkT = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    var walkable = function (x, y, t) { return walkT(t); };
+    var free = function (x, y, t) { return walkT(t) && !Map.enemyAt(x, y); };
+    /* 目标格本身要允许入队：非最终层的下行梯是"终点"而不是走廊，
+     * 只走 walkT 会让楼梯永远不进队列，BFS 永远找不到它（本卡实测 catches 到的第一版 bug）。 */
+    var walkGoal = function (x, y, t) { return walkT(t) || t === 2; };
+    var freeGoal = function (x, y, t) { return free(x, y, t) || (t === 2 && !Map.enemyAt(x, y)); };
+    var start = { x: P.x, y: P.y };
+    var r = d39Bfs(grid, start, function (x, y) { return !Game.fov.isExplored(x, y); }, free);
+    if (r.ok) {
+      d39Diff(rec, grid, start, r.path[r.path.length - 1], walkGoal, r.path, 'explore');
+      d.lastStep = { intoEnemy: false, forced: false, boss: false };
+      return d39Dir(P, r.first);
+    }
+    var goal = d39Goal(P, Map);
+    if (!goal) { d.lastStep = null; return null; }
+    r = d39Bfs(grid, start, goal.fn, freeGoal);
+    if (r.ok) {
+      d39Diff(rec, grid, start, r.path[r.path.length - 1], walkGoal, r.path, goal.desc);
+      d.lastStep = { intoEnemy: false, forced: false, boss: false };
+      return d39Dir(P, r.first);
+    }
+    r = d39Bfs(grid, start, goal.fn, walkGoal);
+    if (!r.ok) { d.lastStep = null; return null; }
+    var fe = r.first ? Map.enemyAt(r.first.x, r.first.y) : null;
+    if (fe) {
+      var isBoss = !!(goal.boss && fe.monsterId === goal.bossId);
+      if (!isBoss) {
+        d.blockedCount++;
+        if (d.blocked.length < 40) {
+          var bk = {
+            floor: P.floor, at: rec.actions, from: P.x + ',' + P.y,
+            step: r.first.x + ',' + r.first.y, monsterId: fe.monsterId,
+            goal: goal.desc, steps: r.steps
+          };
+          if (d.blocked.length < 2) {
+            /* 前两条留完整网格 + 怪位，verify_d39 C 组据此复算"必经" */
+            bk.w = grid[0].length; bk.h = grid.length;
+            bk.grid = grid.map(function (row) { return row.join(''); }).join('|');
+            bk.enemies = Map.getEnemies().map(function (e) { return { id: e.monsterId, x: e.x, y: e.y }; });
+          }
+          bk.window = d39Window(grid, r.first, 5);
+          d.blocked.push(bk);
+        }
+      }
+      d.lastStep = { intoEnemy: true, forced: !isBoss, boss: isBoss, monsterId: fe.monsterId };
+      return d39Dir(P, r.first);
+    }
+    d.lastStep = { intoEnemy: false, forced: false, boss: false };
+    return d39Dir(P, r.first);
+  }
+  /* 局部地形（11×11 ASCII）：C 组"手工还原当时的走廊形态"直接看这个 */
+  function d39Window(grid, c, rad) {
+    var h = grid.length, w = grid[0].length, rows = [];
+    for (var y = c.y - rad; y <= c.y + rad; y++) {
+      var line = '';
+      for (var x = c.x - rad; x <= c.x + rad; x++) {
+        if (x < 0 || y < 0 || x >= w || y >= h) line += ' ';
+        else if (x === c.x && y === c.y) line += 'M';
+        else line += (grid[y][x] === 0 ? '#' : '.');
+      }
+      rows.push(line);
+    }
+    return { x0: c.x - rad, y0: c.y - rad, w: rad * 2 + 1, h: rad * 2 + 1, rows: rows.join('\n') };
+  }
+  /* D-39 负例寻路：不把怪当障碍（沿用 D-34/D-37 的 planPath），并记录"这一步是踩怪"。
+   * 只用于 verify_d39 A 组的负例对照，S1 永远走 d39Plan。 */
+  function d39FallbackDir(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map;
+    var dir = nextDir(rec);
+    if (!dir) { rec.d39.lastStep = null; return null; }
+    var dd = DIR_DELTA[dir];
+    var e = Map.enemyAt(P.x + dd[0], P.y + dd[1]);
+    rec.d39.lastStep = { intoEnemy: !!e, forced: false, boss: false, monsterId: e ? e.monsterId : null };
+    return dir;
+  }
+  /* D-39 逃跑判据（S1）：先分类，再决定跑不跑。
+   * 放弃逃跑、直接硬打的条件（任一满足）：
+   *   ① 本层 Boss —— 胜利条件就是杀它，逃跑只会拖时间；
+   *   ② 挡路怪（走廊/门口被堵）—— 逃跑后怪留在原地，下一步还会撞上，等于死循环；
+   *   ③ 本场已经连试 2 次都失败 —— 骰子赌两次够了，再赌是送命；
+   *   ④ 一击就能收掉（nKill ≤ 1）—— 转身逃反而多挨一轮。
+   * 其余（巡逻怪贴脸，非必经）一律先逃。 */
+  function d39FleeDecision(rec, P, st) {
+    var d = rec.d39;
+    if (d.fleeTriesThisBattle >= 2) { d.lastFleeWhy = 'tried2'; return false; }
+    if (d.battleKind === 'boss') { d.lastFleeWhy = 'boss'; return false; }
+    if (d.battleKind === 'blocked') { d.lastFleeWhy = 'blocked'; return false; }
+    var m = d37Stats(st);
+    var my = d37BestHit(P, m.def);
+    if (Math.ceil(m.hp / my) <= 1) { d.lastFleeWhy = 'onehit'; return false; }
+    d.lastFleeWhy = 'patrol';
+    return true;
+  }
+  /* 每层 HP 台账：按动作类型把 HP 增量分桶；桶和必须严格等于层内 hpIn→hpOut */
+  function d39LedgerStart(rec) {
+    var P = Game.Data.Player;
+    rec.d39.floorStart = {
+      floor: P.floor, hpIn: P.hp, mpIn: P.mp, battle: 0, explore: 0,
+      potionHeal: 0, trapDmg: 0, statusDmg: 0, levelUps: 0
+    };
+    rec.d39.floorEnter.push(d37Snap(P, P.floor));
+  }
+  function d39AfterAction(rec, kind, hp0, lv0) {
+    var d = rec.d39, P = Game.Data.Player;
+    if (!d.floorStart) d39LedgerStart(rec);
+    var delta = P.hp - hp0;
+    if (kind === 'battle') d.floorStart.battle += delta;
+    else d.floorStart.explore += delta;
+    if (P.level > lv0) d.floorStart.levelUps += (P.level - lv0);
+  }
+  function d39LedgerEnd(rec) {
+    var d = rec.d39, P = Game.Data.Player, s = d.floorStart;
+    if (!s) return;
+    d.ledger.push({
+      floor: s.floor, hpIn: s.hpIn, mpIn: s.mpIn, hpOut: P.hp, mpOut: P.mp,
+      battleDelta: s.battle, exploreDelta: s.explore,
+      potionHeal: s.potionHeal, trapDmg: s.trapDmg, statusDmg: s.statusDmg, levelUps: s.levelUps
+    });
+    d.floorEnd.push(d37Snap(P, s.floor));
+    d.floorStart = null;
+  }
+
   /* ── 寻路：BFS（只读 grid + fov 记忆；格子 0=墙、1=地板、2=下行梯、3=上行梯） ── */
   function firstStep(prev, key) {
     var P = Game.Data.Player;
@@ -512,10 +747,14 @@
       /* D-37：离开某层时的 HP/MP/等级/金币/装备快照（只读，追加在 rec.d37 下） */
       if (rec.d37) rec.d37.floorEnd.push(d37Snap(P, rec.floorNow));
     }
+    /* D-39：换层即结账——上一层台账收尾、新一层重新起账（上下楼都算） */
+    if (rec.d39) { d39LedgerEnd(rec); }
     rec.floorNow = P.floor;
     rec.floorActions = 0;
     /* D-37：刷级额度按层计，换层清零 */
     if (rec.d37) { rec.d37.grindKillsOnFloor = 0; rec.d37.grindTarget = null; rec.d37.grindEngaged = false; }
+    /* D-39：新一层重新起账 */
+    if (rec.d39) d39LedgerStart(rec);
   }
 
   /* ── 一局 ────────────────────────────────────────────────────── */
@@ -544,6 +783,15 @@
     else if (rec.d37 && rec.d37.cfg.fireball && d37DecideFireball(P, st)) {
       code = 'Digit4';
     }
+    /* D-39：S1 的强制遭遇分支（同样放在既有优先级之后，只有传了 opts.d39 才可能进入） */
+    else if (rec.d39 && d39FleeDecision(rec, P, st)) {
+      code = 'Digit3';
+      rec.d39.fleeAttempts++;
+      rec.d39.fleeTriesThisBattle++;
+    }
+    else if (rec.d39 && rec.d39.skill && d37DecideFireball(P, st)) {
+      code = 'Digit4';
+    }
     var pre = rec.d37 ? {
       mp: P.mp, mhp: st.monster.hp, round: st.roundNo,
       normalWould: dmgOf(P.atk, d37Stats(st).def)
@@ -565,7 +813,13 @@
     /* ① 低血用药（<45%），有药就立刻喝 */
     if (P.hp <= Math.floor(P.maxHp * 0.45)) {
       var hp = healPotions();
-      if (hp.length) { useIndex(hp[0].idx); rec.potions++; rec.actions++; return; }
+      if (hp.length) {
+        var hpB = P.hp;
+        useIndex(hp[0].idx); rec.potions++; rec.actions++;
+        /* D-39 台账：把药水回血量单独记一笔（只测量，不参与决策） */
+        if (rec.d39 && rec.d39.floorStart) rec.d39.floorStart.potionHeal += (P.hp - hpB);
+        return;
+      }
     }
     /* ② 有更好的装备就换 */
     var eq = betterEquipIndex();
@@ -587,13 +841,24 @@
         }
       }
     }
-    /* ⑤ 移动（未探索 → 下楼） */
-    var dir = nextDir(rec);
+    /* ④b D-39：逃跑后的 6 tick 喘息期只做倒计时（寻路本来就绕开所有怪，
+     * 这里只统计"喘息期内又被拉进战斗"的次数，见 battle:start 监听器） */
+    if (rec.d39 && rec.d39.respite > 0) rec.d39.respite--;
+    /* ⑤ 移动（D-39：潜行规划；其余情况沿用既有寻路） */
+    var dir;
+    if (rec.d39) dir = rec.d39.avoid ? d39Plan(rec) : d39FallbackDir(rec);
+    else dir = nextDir(rec);
     if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
-    var bx = P.x, by = P.y;
+    var bx = P.x, by = P.y, traps0 = rec.traps, hp0m = P.hp;
     rec.actions++;
     press(dir, MOVE_MS);
     if (P.x === bx && P.y === by) { rec.path = null; rec.blockedSteps++; }
+    /* D-39 台账：踩陷阱 / 探索期状态扣血各记一笔（否则"探索期掉血"混在一起无法对账） */
+    if (rec.d39 && rec.d39.floorStart) {
+      var dhp = P.hp - hp0m;
+      if (rec.traps > traps0) rec.d39.floorStart.trapDmg += dhp;
+      else if (dhp < 0) rec.d39.floorStart.statusDmg += dhp;
+    }
   }
 
   /* 卡关诊断：区分"楼梯把通路堵死"与"本层根本没有下部可走的路"。
@@ -688,6 +953,8 @@
     rec.noShop = !!opts.noShop;   /* D-18 负例开关：禁用商店步骤，验证"进店计数"确实来自这一步 */
     /* D-37：四组对照的开关。不传时 rec.d37 为 null，所有新增分支与记账都不执行。 */
     if (opts.d37) rec.d37 = d37New(opts.d37);
+    /* D-39：S1 纯潜行的开关与遥测。不传时 rec.d39 为 null，行为与 D-37/D-34 完全一致。 */
+    if (opts.d39) rec.d39 = d39New(opts.d39);
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -698,12 +965,20 @@
     rec.floorNow = P.floor;
     rec.shieldOn = false;
     rec.startPos = P.x + ',' + P.y;
+    /* D-39：开局（玩家已满血满蓝）起第一层台账 */
+    if (rec.d39) d39LedgerStart(rec);
     while (rec.actions < rec.maxActions) {
       if (M._scene === 'victory') { rec.outcome = 'win'; break; }
       if (Game.Modal.isOpen() && Game.Modal.current() === 'gameover') { rec.outcome = 'dead'; break; }
-      if (M._scene === 'battle') battleAct(rec);
-      else if (M._scene === 'explore') exploreAct(rec);
-      else { press('Escape', STEP); rec.actions++; }
+      if (M._scene === 'battle') {
+        var bhp = P.hp, blv = P.level;
+        battleAct(rec);
+        if (rec.d39) d39AfterAction(rec, 'battle', bhp, blv);
+      } else if (M._scene === 'explore') {
+        var ehp = P.hp, elv = P.level;
+        exploreAct(rec);
+        if (rec.d39) d39AfterAction(rec, 'explore', ehp, elv);
+      } else { press('Escape', STEP); rec.actions++; }
     }
     if (!rec.outcome) rec.outcome = 'stuck';
     if (rec.outcome === 'dead') classify(rec);
@@ -727,6 +1002,13 @@
       rec.d37.final = d37Snap(P, P.floor);
       rec.d37.fleeFail = rec.d37.fleeAttempts - rec.d37.fleeSuccess;
       if (rec.d37.fleeFail < 0) rec.d37.fleeFail = 0;
+    }
+    if (rec.d39) {
+      d39LedgerEnd(rec);
+      rec.d39.final = d37Snap(P, P.floor);
+      rec.d39.fleeFail = Math.max(0, rec.d39.fleeAttempts - rec.d39.fleeSuccess);
+      /* 强制遭遇 = 全部战斗 − 主动踩怪（S1 的 A 组断言就是 active === 0） */
+      rec.d39.forced = rec.d39.battles - rec.d39.active;
     }
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;
@@ -823,6 +1105,35 @@
         d.grindKillsOnFloor++;
         d.grindEngaged = false;
         d.grindTarget = null;
+      }
+    });
+    /* ── D-39：遭遇分类（再挂独立监听器，仍然不触碰上面任何既有 handler） ──
+     * 判据一律用"战斗开始那一刻玩家站的那格"：
+     *   · 站在静态怪格上 → 是我们走进去的（ambush）：lastStep.forced 决定算"挡路"还是负例的"主动"；
+     *   · 没站在怪格上 → 巡逻怪贴脸（ai:encounter），属于被动遭遇。
+     * 怪格用 Map.enemyAt（只含静态刷怪点，巡逻怪不在其中），所以不会把巡逻误判成踩怪。 */
+    EB.on('battle:start', function (e) {
+      if (!cur || !cur.d39) return;
+      var d = cur.d39, P = Game.Data.Player, Map = Game.Systems.Map;
+      var bid = d39BossId(P.floor);
+      var isBoss = !!(bid && e && e.monsterId === bid);
+      var onMe = Map.enemyAt(P.x, P.y);
+      var stepped = !!(onMe && e && onMe.monsterId === e.monsterId);
+      d.battles++;
+      if (isBoss) { d.byBoss++; d.battleKind = 'boss'; }
+      else if (stepped && d.lastStep && d.lastStep.forced) { d.byBlock++; d.battleKind = 'blocked'; }
+      else if (stepped) { d.active++; d.battleKind = 'active'; }
+      else { d.byPatrol++; d.battleKind = 'patrol'; }
+      /* "被 6 tick 喘息期拖回战斗"：上一次逃跑成功的喘息还没走完就又开打 */
+      if (d.respite > 0) d.reengaged++;
+      d.fleeTriesThisBattle = 0;
+      d.lastStep = null;
+    });
+    EB.on('battle:end', function (e) {
+      if (!cur || !cur.d39) return;
+      if (e && e.result === 'run') {
+        cur.d39.fleeSuccess++;
+        cur.d39.respite = 6;
       }
     });
   }
@@ -1015,6 +1326,8 @@
   Bot.ACTION_SEC = ACTION_SEC;
   Bot.STEP_MS = STEP;
   Bot.deathCauseOf = deathCauseOf; /* D-38：死因归类口径（verify_d38 C 组直接调用） */
+  Bot.d39Bfs = d39Bfs;             /* D-39：绕怪 BFS（verify_d39 B/C 组共用同一份实现） */
+  Bot.d39BossId = d39BossId;       /* D-39：本层 Boss id（verify 复算"必经"时用） */
   /* 诊断出口（只读，供 preflight 调试页/verify 观察内部状态） */
   Bot._planPath = function () { return planPath(); };
   Bot._diag = function () {

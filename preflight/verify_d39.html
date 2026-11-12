@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-39：读取 preflight/selfcheck/d39-s1.json、d39-neg.json、d37-g2.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-39 潜行可行性测量</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-39 · 纯潜行（S1）：真的没打 / 绕路真的在绕 / 绕不过去可复现 / 数据自洽 / 对照一致</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var M = Game.Core.Main, Bot = Game.Bot;
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  /* 与 d39Plan/d39Verify 相同的格子语义：楼梯不是走廊，但目标格本身允许入队 */
+  function passes(floor, enemyAt) {
+    var upNoop = floor <= 1, downNoop = floor >= 5;
+    var walkT = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    return {
+      walkT: walkT,
+      free: function (x, y, t) { return walkT(t) && !enemyAt(x, y); },
+      walkGoal: function (x, y, t) { return walkT(t) || t === 2; },
+      freeGoal: function (x, y, t) { return (walkT(t) && !enemyAt(x, y)) || (t === 2 && !enemyAt(x, y)); }
+    };
+  }
+  /* 记录里的 grid 是 map 的 tile 数字逐行拼接（0 墙 / 1 地板 / 2 下行梯 / 3 上行梯） */
+  function gridOf(entry) {
+    return entry.grid.split('|').map(function (row) {
+      var r = [];
+      for (var i = 0; i < row.length; i++) r.push(row.charCodeAt(i) - 48);
+      return r;
+    });
+  }
+
+  try {
+    M.init();
+    M.closeGuide();
+    Bot.install();
+
+    var s1 = readJson('selfcheck/d39-s1.json');
+    var neg = readJson('selfcheck/d39-neg.json');
+    var g2 = readJson('selfcheck/d37-g2.json');
+
+    /* ══ A 组：S1 真的没打（主动开战 = 0），负例关掉绕怪后必须 > 0 ═════ */
+    var aStored = { battles: 0, active: 0, forced: 0, byBlock: 0, byPatrol: 0, byBoss: 0 };
+    var aBadRuns = [];
+    if (s1) {
+      for (var i = 0; i < s1.runs.length; i++) {
+        var d = s1.runs[i].d39;
+        aStored.battles += d.battles; aStored.active += d.active; aStored.forced += d.forced;
+        aStored.byBlock += d.byBlock; aStored.byPatrol += d.byPatrol; aStored.byBoss += d.byBoss;
+        if (d.active !== 0 || d.battles !== d.forced ||
+            d.byBlock + d.byPatrol + d.byBoss !== d.battles) aBadRuns.push(s1.runs[i].seed);
+      }
+    }
+    var liveS1 = [];
+    var liveActive = 0;
+    var liveSeeds = [1001, 1004];
+    for (var li = 0; li < liveSeeds.length; li++) {
+      var rr = Bot.run(liveSeeds[li], { maxActions: 1200, d39: { avoid: true, skill: true } });
+      liveS1.push({ seed: rr.seed, battles: rr.d39.battles, active: rr.d39.active,
+        forced: rr.d39.forced, byBlock: rr.d39.byBlock, byPatrol: rr.d39.byPatrol,
+        byBoss: rr.d39.byBoss, outcome: rr.outcome, floor: rr.floor });
+      liveActive += rr.d39.active;
+    }
+    var liveNeg = [];
+    var negActive = 0;
+    for (var ni = 0; ni < liveSeeds.length; ni++) {
+      var rn = Bot.run(liveSeeds[ni], { maxActions: 1200, d39: { avoid: false, skill: true } });
+      liveNeg.push({ seed: rn.seed, battles: rn.d39.battles, active: rn.d39.active,
+        blockedCount: rn.d39.blockedCount, outcome: rn.outcome, floor: rn.floor });
+      negActive += rn.d39.active;
+    }
+    rec('A_stealth_no_pick_fight', !!s1 && !!neg &&
+      aStored.active === 0 && aStored.forced === aStored.battles && aBadRuns.length === 0 &&
+      liveActive === 0 && negActive > 0 && neg.summary.d39.encounters.active > 0, {
+      stored: aStored, badRuns: aBadRuns.slice(0, 5),
+      liveS1: liveS1, liveS1ActiveSum: liveActive,
+      liveNeg: liveNeg, liveNegActiveSum: negActive,
+      storedNegActive: neg ? neg.summary.d39.encounters.active : null,
+      note: 'S1=绕怪（active 必须 0）；neg=关掉绕怪（active 必须 >0）'
+    });
+
+    /* ══ B 组：绕怪 BFS 真的改变路径（真实例子 + 合成对照） ═══════════ */
+    var bExample = null, bChecked = 0, bBad = [];
+    if (s1) {
+      for (var bi = 0; bi < s1.runs.length && !bExample; bi++) {
+        var pdf = s1.runs[bi].d39.pathDiffs;
+        for (var pi = 0; pi < pdf.length; pi++) {
+          var p = pdf[pi];
+          if (p.avoidSteps > p.plainSteps && p.avoidPath.length > 1 && p.plainPath.length > 1) {
+            bExample = { seed: s1.runs[bi].seed, tag: p.tag, floor: p.floor,
+              from: p.from, goal: p.goal, avoidSteps: p.avoidSteps, plainSteps: p.plainSteps,
+              avoidHead: p.avoidPath.slice(0, 8), plainHead: p.plainPath.slice(0, 8) };
+            break;
+          }
+        }
+      }
+      /* 全部记录都必须：同起点、同终点、逐步相邻、绕怪路径更长（或至少不同） */
+      for (var ri = 0; ri < s1.runs.length; ri++) {
+        var arr = s1.runs[ri].d39.pathDiffs;
+        for (var ai = 0; ai < arr.length; ai++) {
+          var q = arr[ai]; bChecked++;
+          var p0 = q.avoidPath[0], pz = q.avoidPath[q.avoidPath.length - 1];
+          var s0 = q.plainPath[0], sz = q.plainPath[q.plainPath.length - 1];
+          if (p0.x + ',' + p0.y !== q.from || s0.x + ',' + s0.y !== q.from) bBad.push(s1.runs[ri].seed + ':start');
+          if (pz.x + ',' + pz.y !== q.goal || sz.x + ',' + sz.y !== q.goal) bBad.push(s1.runs[ri].seed + ':goal');
+          if (q.avoidSteps !== q.avoidPath.length - 1 || q.plainSteps !== q.plainPath.length - 1) bBad.push(s1.runs[ri].seed + ':steps');
+        }
+      }
+    }
+    /* 合成对照：一条直走廊（y=1，x=1..7），怪站在正中间 (4,1)；
+     * 两端各有一条绕行支路（y=2 → y=3），绕过去必须多走 6 步 */
+    var syn = [
+      [0, 0, 0, 0, 0, 0, 0, 0, 0],
+      [0, 1, 1, 1, 1, 1, 1, 1, 0],
+      [0, 1, 0, 0, 0, 0, 0, 1, 0],
+      [0, 1, 1, 1, 1, 1, 1, 1, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    ];
+    var synStart = { x: 1, y: 1 }, synGoal = { x: 7, y: 1 };
+    var synGoalFn = function (x, y) { return x === synGoal.x && y === synGoal.y; };
+    var synEnemy = { x: 4, y: 1 };
+    var synAt = function (x, y) { return (x === synEnemy.x && y === synEnemy.y) ? { monsterId: 'goblin' } : null; };
+    var synPass = passes(1, synAt);
+    var synAvoid = Bot.d39Bfs(syn, synStart, synGoalFn, synPass.free);
+    var synPlain = Bot.d39Bfs(syn, synStart, synGoalFn, synPass.walkGoal);
+    function hitsCell(path, c) {
+      for (var i = 0; i < path.length; i++) if (path[i].x === c.x && path[i].y === c.y) return true;
+      return false;
+    }
+    var synOk = synAvoid.ok && synPlain.ok &&
+      hitsCell(synPlain.path, synEnemy) && !hitsCell(synAvoid.path, synEnemy) &&
+      synAvoid.steps > synPlain.steps;
+    rec('B_detour_actually_detours', !!bExample && bBad.length === 0 && synOk, {
+      realExample: bExample, checkedDiffs: bChecked, badRecords: bBad.slice(0, 5),
+      synthetic: {
+        straightWithMonster: { steps: synPlain.steps, first: synPlain.first,
+          passesThroughMonster: hitsCell(synPlain.path, synEnemy) },
+        detourAroundMonster: { steps: synAvoid.steps, first: synAvoid.first,
+          passesThroughMonster: hitsCell(synAvoid.path, synEnemy) },
+        firstStepDiffers: !(synAvoid.first.x === synPlain.first.x && synAvoid.first.y === synPlain.first.y)
+      }
+    });
+
+    /* ══ C 组：绕不过去可复现（用记录的完整网格复算"必经"） ═════════ */
+    var cCases = [];
+    if (s1) {
+      for (var ci = 0; ci < s1.runs.length && cCases.length < 2; ci++) {
+        var bl = s1.runs[ci].d39.blocked;
+        for (var cj = 0; cj < bl.length && cCases.length < 2; cj++) {
+          var e = bl[cj];
+          if (!e.grid) continue;
+          var grid = gridOf(e);
+          var enemies = e.enemies || [];
+          var enemyAt = function (x, y) {
+            for (var k = 0; k < enemies.length; k++) if (enemies[k].x === x && enemies[k].y === y) return enemies[k];
+            return null;
+          };
+          var pp = passes(e.floor, enemyAt);
+          var gm = /^boss:(.+)$/.exec(e.goal);
+          var goalFn = gm
+            ? function (x, y) { var en = enemyAt(x, y); return !!(en && en.id === gm[1]); }
+            : function (x, y, t) { return t === 2; };
+          var from = e.from.split(',');
+          var st = { x: +from[0], y: +from[1] };
+          var rFree = Bot.d39Bfs(grid, st, goalFn, pp.freeGoal);
+          var rWalk = Bot.d39Bfs(grid, st, goalFn, pp.walkGoal);
+          var stepCell = rWalk.ok ? rWalk.first : null;
+          cCases.push({
+            seed: s1.runs[ci].seed, floor: e.floor, from: e.from, monster: e.monsterId,
+            monsterAt: e.step, goal: e.goal,
+            freeReachable: rFree.ok, walkReachable: rWalk.ok,
+            walkFirst: stepCell,
+            firstIsMonster: !!(stepCell && enemyAt(stepCell.x, stepCell.y)),
+            window: e.window ? e.window.rows : null
+          });
+        }
+      }
+    }
+    var cOk = cCases.length >= 1 && cCases.every(function (c) {
+      return c.freeReachable === false && c.walkReachable === true && c.firstIsMonster === true;
+    });
+    rec('C_unavoidable_reproducible', cOk, { cases: cCases });
+
+    /* ══ D 组：数据自洽 ═════════════════════════════════════════════ */
+    var dBad = [];
+    var dRuns = 0, dLedger = 0;
+    if (s1) {
+      for (var di = 0; di < s1.runs.length; di++) {
+        var r = s1.runs[di], dd = r.d39; dRuns++;
+        if (dd.forced !== dd.battles - dd.active) dBad.push(r.seed + ':forced');
+        if (dd.active !== 0) dBad.push(r.seed + ':active');
+        if (dd.byBlock + dd.byPatrol + dd.byBoss !== dd.battles) dBad.push(r.seed + ':kindSum');
+        if (dd.fleeAttempts < dd.fleeSuccess) dBad.push(r.seed + ':fleeOrder');
+        if (dd.fleeFail !== Math.max(0, dd.fleeAttempts - dd.fleeSuccess)) dBad.push(r.seed + ':fleeFail');
+        for (var lk = 0; lk < dd.ledger.length; lk++) {
+          var L = dd.ledger[lk]; dLedger++;
+          /* 恒等式：层内 HP 变化 = 战斗桶 + 探索桶 */
+          if (L.hpIn + L.battleDelta + L.exploreDelta !== L.hpOut) dBad.push(r.seed + ':F' + L.floor + ':hpId');
+          /* 探索桶必须覆盖 药水回血 / 陷阱 / 状态扣血 三者之和（升级回满落在当次动作的桶里） */
+          if (L.potionHeal < 0) dBad.push(r.seed + ':F' + L.floor + ':healNeg');
+          if (L.trapDmg > 0) dBad.push(r.seed + ':F' + L.floor + ':trapPos');
+          if (L.statusDmg > 0) dBad.push(r.seed + ':F' + L.floor + ':statusPos');
+        }
+      }
+    }
+    var dSum = s1 ? s1.summary : null;
+    rec('D_data_consistent', !!s1 && dBad.length === 0 && dRuns === 50 &&
+      dSum.win + dSum.dead + dSum.stuck === dSum.runs, {
+      runs: dRuns, ledgerEntries: dLedger, bad: dBad.slice(0, 8),
+      outcomeSum: dSum ? [dSum.win, dSum.dead, dSum.stuck, dSum.runs] : null,
+      note: '强制遭遇=战斗数；逃跑尝试≥成功；层内 HP 恒等式逐条成立'
+    });
+
+    /* ══ E 组：S1 与 G2 完全同一批种子与上限 ══════════════════════ */
+    var eBad = [];
+    if (s1 && g2) {
+      if (s1.env.seedList.join(',') !== g2.env.seedList.join(',')) eBad.push('seeds');
+      if (s1.env.maxActions !== g2.env.maxActions) eBad.push('maxActions');
+      if (s1.env.startPosSet.join(',') !== g2.env.startPosSet.join(',')) eBad.push('startPos');
+      if (s1.runs.length !== g2.runs.length) eBad.push('runs');
+    }
+    rec('E_same_seed_matrix_as_G2', !!s1 && !!g2 && eBad.length === 0, {
+      s1: s1 ? { seeds: s1.env.seedList[0] + '..' + s1.env.seedList[s1.env.seedList.length - 1],
+        n: s1.env.seedList.length, maxActions: s1.env.maxActions, startPos: s1.env.startPosSet } : null,
+      g2: g2 ? { seeds: g2.env.seedList[0] + '..' + g2.env.seedList[g2.env.seedList.length - 1],
+        n: g2.env.seedList.length, maxActions: g2.env.maxActions, startPos: g2.env.startPosSet } : null,
+      bad: eBad
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  var pre = document.getElementById('result');
+  pre.textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>
+</body>
+</html>
