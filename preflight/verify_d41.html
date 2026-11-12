@@ -176,19 +176,30 @@
     }
     var questExp = 0;
     for (var qi = 0; qi < Game.Data.QUESTS.length; qi++) questExp += (Game.Data.QUESTS[qi].reward.exp || 0);
-    var dragon = MONS.dragon, ogre = MONS.ogre_boss;
+    var dragon = MONS.dragon, ogre = MONS.ogre_boss, king = MONS.zombie_king;
+    /* D-42（2026-11-12）授权改动：ogre_boss 280/24/10→120/12/8、zombie_king 420/30/12→280/24/12。
+     * 本页保留 D-41 的"只改经验"结论，同时接受 D-42 基线；第三种数值仍然判 FAIL。 */
+    var ogreD41 = ogre.hp === 280 && ogre.atk === 24 && ogre.def === 10;
+    var ogreOk = ogreD41 || (ogre.hp === 120 && ogre.atk === 12 && ogre.def === 8);
+    var kingOk = (king.hp === 420 && king.atk === 30 && king.def === 12) ||
+      (king.hp === 280 && king.atk === 24 && king.def === 12);
     var f2row = JSON.stringify(MP.enemyTable[1]);
+    var f2Ok = f2row === '[{"id":"bat","rate":0.15},{"id":"skeleton","rate":0.3},{"id":"orc_warrior","rate":0.3},{"id":"orc_shaman","rate":0.25}]';
     var knobOk = after.env.expEarlyBase === 15 && after.env.expCurveBase === 60 &&
       legacy.env.expEarlyBase === 60 && legacy.env.expCurveBase === 60;
     var dataOk = expPerKill.join(',') === '11.8,26.3,32.35,41.45,47.1' && questExp === 640 &&
       MP.floors === 5 && dragon.hp === 260 && dragon.atk === 32 && dragon.def === 8 &&
-      ogre.hp === 280 && ogre.atk === 24 && ogre.def === 10 &&
+      ogreOk && kingOk &&
       f2row === '[{"id":"bat","rate":0.15},{"id":"skeleton","rate":0.3},{"id":"orc_warrior","rate":0.3},{"id":"orc_shaman","rate":0.25}]';
     rec('B_only_exp_changed', knobOk && dataOk, {
       afterCurve: '15/(L1-4) + 60/(L5+)', legacyCurve: '60/60',
-      expPerKill: expPerKill, questExp: questExp, f2TableUnchanged: dataOk,
+      expPerKill: expPerKill, questExp: questExp, f2TableUnchanged: f2Ok,
       dragon: { hp: dragon.hp, atk: dragon.atk, def: dragon.def },
-      ogre_boss: { hp: ogre.hp, atk: ogre.atk, def: ogre.def }
+      ogre_boss: { hp: ogre.hp, atk: ogre.atk, def: ogre.def },
+      zombieKing: { hp: king.hp, atk: king.atk, def: king.def },
+      bossSpecVersion: ogreD41 ? 'D-41' : 'D-42',
+      note: 'D-41 时点：唯一差异是经验曲线。D-42 另外授权改了两只层 Boss；' +
+        '本断言只接受"D-41 基线"或"D-42 基线"两套数值，任何第三种数值仍然 FAIL。'
     });
 
     var aM = after.agg.m1.agg, lM = legacy.agg.m1.agg;

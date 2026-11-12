@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-42：读取 selfcheck/d41-after.json、d42-after.json、d42-neg.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-42 Boss 断层审计</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-42 · 每层的门：F1–F5 Boss / 精英的击杀回合 vs 存活回合（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  /* D-34 §2.1 的玩家典型 build；每层的"期望攻击"取 DC-04 的五层期望强度基线
+   * （11.125 / 20.125 / 23.75 / 36.85 / 44.1），这正是 D-42 卡面"F2 期望攻击 20.1"的口径。 */
+  var PLAYER = {
+    1: { atk: 11.125, def: 9, hp: 110 },
+    2: { atk: 20.125, def: 13, hp: 130 },
+    3: { atk: 23.75, def: 16, hp: 150 },
+    4: { atk: 36.85, def: 20, hp: 170 },
+    5: { atk: 44.1, def: 26, hp: 190 }
+  };
+  /* 每层的门 = 该层 Boss（F2/F4/F5）+ 该层 enemyTable 里综合强度 atk+hp/10 最高的普通怪（精英） */
+  var SPECS = [
+    { f: 1, id: 'tiny_zombie', kind: '精英' },
+    { f: 2, id: 'ogre_boss', kind: 'Boss' },
+    { f: 2, id: 'orc_shaman', kind: '精英' },
+    { f: 3, id: 'ogre', kind: '精英' },
+    { f: 4, id: 'zombie_king', kind: 'Boss' },
+    { f: 4, id: 'big_zombie', kind: '精英' },
+    { f: 5, id: 'dragon', kind: 'Boss' },
+    { f: 5, id: 'big_zombie', kind: '精英' }
+  ];
+  /* A 组硬期望（先手算，再让页面复算；两侧必须逐项相等） */
+  var EXPECT = {
+    '1:tiny_zombie': { pd: 9, bd: 4, kill: 6, sur: 28, ratio: 0.214 },
+    '2:ogre_boss': { pd: 14, bd: 6, kill: 9, sur: 22, ratio: 0.409 },
+    '2:orc_shaman': { pd: 17, bd: 9, kill: 5, sur: 15, ratio: 0.333 },
+    '3:ogre': { pd: 17, bd: 11, kill: 8, sur: 14, ratio: 0.571 },
+    '4:zombie_king': { pd: 28, bd: 13, kill: 10, sur: 14, ratio: 0.714 },
+    '4:big_zombie': { pd: 29, bd: 15, kill: 9, sur: 12, ratio: 0.75 },
+    '5:dragon': { pd: 37, bd: 18, kill: 8, sur: 11, ratio: 0.727 },
+    '5:big_zombie': { pd: 36, bd: 13, kill: 7, sur: 15, ratio: 0.467 }
+  };
+  function dmgOf(atk, def) { return Math.max(1, Math.round(atk * atk / (atk + def))); }
+  function mkRow(spec, override) {
+    var M = Game.Data.MONSTERS, p = PLAYER[spec.f];
+    var st = (override && override[spec.id]) ? override[spec.id]
+      : { hp: M[spec.id].hp, atk: M[spec.id].atk, def: M[spec.id].def };
+    var pd = dmgOf(p.atk, st.def);
+    var bd = dmgOf(st.atk, p.def);
+    var kill = Math.ceil(st.hp / pd);
+    var sur = Math.ceil(p.hp / bd);
+    return {
+      floor: spec.f, id: spec.id, name: M[spec.id].name, kind: spec.kind,
+      boss: { hp: st.hp, atk: st.atk, def: st.def },
+      player: { atk: p.atk, def: p.def, hp: p.hp },
+      playerDmg: pd, bossDmg: bd, killRounds: kill, surviveRounds: sur,
+      ratio: Math.round((kill / sur) * 1000) / 1000
+    };
+  }
+  /* 独立复算实现（同样的公式，另一条代码路径；用来防止"页面输出即真相"） */
+  function recalc(r) {
+    var pd = Math.round((r.player.atk * r.player.atk) / (r.player.atk + r.boss.def));
+    if (pd < 1) pd = 1;
+    var bd = Math.round((r.boss.atk * r.boss.atk) / (r.boss.atk + r.player.def));
+    if (bd < 1) bd = 1;
+    var kill = Math.ceil(r.boss.hp / pd);
+    var sur = Math.ceil(r.player.hp / bd);
+    return { pd: pd, bd: bd, kill: kill, sur: sur, ratio: Math.round((kill / sur) * 1000) / 1000 };
+  }
+  function keyOf(r) { return r.floor + ':' + r.id; }
+
+  try {
+    var rows = [];
+    for (var i = 0; i < SPECS.length; i++) rows.push(mkRow(SPECS[i]));
+
+    /* ── A 组：8 行同公式复算，与页面输出逐项相等 ───────────────── */
+    var aBad = [];
+    for (var a = 0; a < rows.length; a++) {
+      var r = rows[a], e = EXPECT[keyOf(r)], c = recalc(r);
+      if (!e) { aBad.push('noExpect@' + keyOf(r)); continue; }
+      if (r.playerDmg !== e.pd) aBad.push('pd@' + keyOf(r));
+      if (r.bossDmg !== e.bd) aBad.push('bd@' + keyOf(r));
+      if (r.killRounds !== e.kill) aBad.push('kill@' + keyOf(r));
+      if (r.surviveRounds !== e.sur) aBad.push('sur@' + keyOf(r));
+      if (Math.abs(r.ratio - e.ratio) > 1e-9) aBad.push('ratio@' + keyOf(r));
+      if (c.pd !== r.playerDmg || c.bd !== r.bossDmg || c.kill !== r.killRounds ||
+          c.sur !== r.surviveRounds || Math.abs(c.ratio - r.ratio) > 1e-9) {
+        aBad.push('recalc@' + keyOf(r));
+      }
+    }
+    rec('A_eight_rows_same_formula', rows.length === 8 && aBad.length === 0, {
+      rows: rows, bad: aBad,
+      note: '玩家模型：atk=该层期望强度、def/hp=D-34 §2.1 典型 build；公式 max(1, round(atk²/(atk+def)))'
+    });
+
+    /* ── B 组：所有 Boss 比值 ≤ 0.75 且击杀回合 ≥ 6 ─────────────── */
+    var bosses = rows.filter(function (x) { return x.kind === 'Boss'; });
+    var bBad = [];
+    for (var b = 0; b < bosses.length; b++) {
+      if (!(bosses[b].ratio <= 0.75)) bBad.push(bosses[b].id + ':ratio=' + bosses[b].ratio);
+      if (!(bosses[b].killRounds >= 6)) bBad.push(bosses[b].id + ':kill=' + bosses[b].killRounds);
+    }
+    var eliteBad = rows.filter(function (x) { return x.kind === '精英' && x.ratio > 0.75; })
+      .map(function (x) { return x.id + '@F' + x.floor; });
+    rec('B_all_gates_within_budget', bBad.length === 0 && eliteBad.length === 0, {
+      bad: bBad, eliteOverBudget: eliteBad,
+      bosses: bosses.map(function (x) {
+        return { id: x.id, floor: x.floor, ratio: x.ratio, killRounds: x.killRounds, surviveRounds: x.surviveRounds };
+      }),
+      elites: rows.filter(function (x) { return x.kind === '精英'; }).map(function (x) {
+        return { id: x.id, floor: x.floor, ratio: x.ratio };
+      }),
+      rule: 'Boss：击杀 ≤ 存活×0.75 且击杀 ≥6；精英只要求不倒挂'
+    });
+
+    /* ── C 组：把独眼酋长还原成 280/24/10 必须让 B 组 FAIL ───────── */
+    var restored = [];
+    for (var ci = 0; ci < SPECS.length; ci++) {
+      restored.push(mkRow(SPECS[ci], { ogre_boss: { hp: 280, atk: 24, def: 10 } }));
+    }
+    var rOgre = restored.filter(function (x) { return x.id === 'ogre_boss'; })[0];
+    var cBossBad = restored.filter(function (x) { return x.kind === 'Boss'; })
+      .filter(function (x) { return x.ratio > 0.75 || x.killRounds < 6; })
+      .map(function (x) { return x.id + ':' + x.ratio; });
+    var neg = readJson('selfcheck/d42-neg.json');
+    var nNew = neg && neg.neg && neg.neg.new, nOld = neg && neg.neg && neg.neg.old;
+    var cLive = !!(nNew && nOld) &&
+      (nOld.floorReach[3] || 0) < (nNew.floorReach[3] || 0) &&
+      nOld.killsPerRun < nNew.killsPerRun;
+    rec('C_restore_ogre_fails_B', rOgre.ratio > 0.75 && cBossBad.length > 0 && cLive, {
+      restoredRow: rOgre, restoredBossBad: cBossBad,
+      live: nNew ? {
+        seeds: neg.neg.seeds.length,
+        newF3: nNew.floorReach[3] || 0, oldF3: nOld.floorReach[3] || 0,
+        newKillsPerRun: nNew.killsPerRun, oldKillsPerRun: nOld.killsPerRun
+      } : null,
+      note: '还原后酋长比值 2.444（击杀 22 / 存活 9）→ B 组立刻 FAIL；8 种子实跑 F3 3→0、击杀/局 17→10.13'
+    });
+
+    /* ── D 组：M1 / S1 / G2 同种子复跑，字段与 D-41 逐项可比 ─────── */
+    var before = readJson('selfcheck/d41-after.json');
+    var after = readJson('selfcheck/d42-after.json');
+    var dBad = [];
+    if (!before || !after) dBad.push('artifactMissing');
+    var dSeeds = [], dStart = {};
+    function aggOf(art, k) { return art.agg[k].agg; }
+    function statOf(a) {
+      return {
+        f3: a.floorReach[3] || 0, f4: a.floorReach[4] || 0, f5: a.f5.reached,
+        f2Kills: a.floorKills[2], killsPerRun: a.killsPerRun,
+        deathFloor: a.deathFloor
+      };
+    }
+    var dDeltas = {}, dTargets = {};
+    if (before && after) {
+      dSeeds = before.env.seedList;
+      if (before.env.seedList.join(',') !== after.env.seedList.join(',')) dBad.push('seeds');
+      if (before.env.maxActions !== 2500 || after.env.maxActions !== 2500) dBad.push('maxActions');
+      var keys = ['m1', 's1', 'g2'];
+      for (var ki = 0; ki < keys.length; ki++) {
+        var k = keys[ki];
+        if (before.runs[k].length !== 50 || after.runs[k].length !== 50) dBad.push('runs@' + k);
+        if (before.env['startPosSet_' + k].join(',') !== after.env['startPosSet_' + k].join(',')) {
+          dBad.push('startPos@' + k);
+        }
+        var need = ['seed', 'outcome', 'actions', 'deathFloor', 'hp', 'level', 'gold', 'kills', 'floors'];
+        for (var ri = 0; ri < after.runs[k].length; ri++) {
+          for (var fi = 0; fi < need.length; fi++) {
+            if (!(need[fi] in after.runs[k][ri])) { dBad.push('field@' + k + ':' + need[fi]); break; }
+          }
+          if (!Array.isArray(after.runs[k][ri].floors)) dBad.push('floors@' + k);
+        }
+      }
+      dDeltas = {
+        m1: { before: statOf(aggOf(before, 'm1')), after: statOf(aggOf(after, 'm1')) },
+        s1: { before: statOf(aggOf(before, 's1')), after: statOf(aggOf(after, 's1')) },
+        g2: { before: statOf(aggOf(before, 'g2')), after: statOf(aggOf(after, 'g2')) }
+      };
+      var totalF5 = (aggOf(after, 'm1').f5.reached + aggOf(after, 's1').f5.reached +
+        aggOf(after, 'g2').f5.reached);
+      var dragonPct = Math.max(
+        (aggOf(after, 'm1').boss.dragon && aggOf(after, 'm1').boss.dragon.maxDealtPct) || 0,
+        (aggOf(after, 's1').boss.dragon && aggOf(after, 's1').boss.dragon.maxDealtPct) || 0,
+        (aggOf(after, 'g2').boss.dragon && aggOf(after, 'g2').boss.dragon.maxDealtPct) || 0);
+      dTargets = {
+        m1_f3: [dDeltas.m1.after.f3, 20], m1_f4: [dDeltas.m1.after.f4, 8],
+        s1_f5: [dDeltas.s1.after.f5, 7], total_f5: [totalF5, 10], dragon_pct: [dragonPct, 30]
+      };
+    }
+    var dMiss = [];
+    for (var tk in dTargets) {
+      if (Object.prototype.hasOwnProperty.call(dTargets, tk) && dTargets[tk][0] < dTargets[tk][1]) {
+        dMiss.push(tk + ':' + dTargets[tk][0] + '<' + dTargets[tk][1]);
+      }
+    }
+    rec('D_same_seed_matrix_comparable', dBad.length === 0 && !!before && !!after, {
+      seeds: dSeeds.length ? (dSeeds[0] + '..' + dSeeds[dSeeds.length - 1]) : null,
+      maxActions: 2500, deltas: dDeltas, targets: dTargets, missed: dMiss, bad: dBad,
+      note: 'D 组只要求矩阵/字段可比；目标缺口如实列在 missed（M1 到 F4 差 2 局）'
+    });
+    rec('D_targets_recorded', !!after && Object.keys(dTargets).length === 5, {
+      targets: dTargets, missed: dMiss,
+      ship: '目标值只核对、不回头调 bot/断言；未达项在 docs/tasks/D-42 里写明差多少'
+    });
+
+    /* ── 归因：改前改后唯一的数值差异只能是两只层 Boss ──────────── */
+    var MONS = Game.Data.MONSTERS, MP = Game.Data.MAPS;
+    var expPerKill = [];
+    for (var f2 = 0; f2 < MP.enemyTable.length; f2++) {
+      var e2 = 0;
+      for (var t2 = 0; t2 < MP.enemyTable[f2].length; t2++) {
+        var row2 = MP.enemyTable[f2][t2];
+        e2 += row2.rate * MONS[row2.id].exp;
+      }
+      expPerKill.push(Math.round(e2 * 100) / 100);
+    }
+    var questExp = 0;
+    for (var q2 = 0; q2 < Game.Data.QUESTS.length; q2++) questExp += (Game.Data.QUESTS[q2].reward.exp || 0);
+    var nonBoss = Object.keys(MONS).filter(function (k) {
+      return k !== 'ogre_boss' && k !== 'zombie_king' && k !== 'dragon';
+    }).sort();
+    var nbStr = nonBoss.map(function (k) { return k + ':' + MONS[k].hp + ':' + MONS[k].atk + ':' + MONS[k].def; }).join('|');
+    var nbFnv = 2166136261;
+    for (var ni = 0; ni < nbStr.length; ni++) {
+      nbFnv ^= nbStr.charCodeAt(ni);
+      nbFnv = Math.imul(nbFnv, 16777619) >>> 0;
+    }
+    var attrOk = expPerKill.join(',') === '11.8,26.3,32.35,41.45,47.1' && questExp === 640 &&
+      JSON.stringify(MP.enemyTable[1]) === '[{"id":"bat","rate":0.15},{"id":"skeleton","rate":0.3},{"id":"orc_warrior","rate":0.3},{"id":"orc_shaman","rate":0.25}]' &&
+      nonBoss.length === 15 && nbFnv === 0x473fe857;
+    rec('D_attribution_only_two_bosses', attrOk, {
+      expPerKill: expPerKill, questExp: questExp, nonBossCount: nonBoss.length,
+      nonBossFnv: nbFnv.toString(16), f2TableUnchanged: true,
+      changed: {
+        ogre_boss: { before: [280, 24, 10], after: [MONS.ogre_boss.hp, MONS.ogre_boss.atk, MONS.ogre_boss.def] },
+        zombie_king: { before: [420, 30, 12], after: [MONS.zombie_king.hp, MONS.zombie_king.atk, MONS.zombie_king.def] }
+      },
+      note: '15 只非 Boss 怪的 hp/atk/def 指纹、经验/任务/F2 表逐项不变；差异只来自上面两只层 Boss'
+    });
+
+    /* ── E 组：巨龙三项与 enrage / 位置未变 ─────────────────────── */
+    var dr = MONS.dragon, en = dr.enrage;
+    var bs = MP.bosses;
+    var eOk = dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+      en && en.hpPct === 0.5 && en.atkMul === 1.5 && en.defMul === 1.3 &&
+      en.skill && en.skill.name === '烈焰吐息' && en.skill.chance === 0.3 && en.skill.dmgMul === 1.4 &&
+      MP.floors === 5 &&
+      bs.length === 3 && bs[0].floor === 2 && bs[0].id === 'ogre_boss' &&
+      bs[1].floor === 4 && bs[1].id === 'zombie_king' && bs[2].floor === 5 && bs[2].id === 'dragon';
+    rec('E_dragon_untouched', eOk, {
+      dragon: { hp: dr.hp, atk: dr.atk, def: dr.def },
+      enrage: en, bossPositions: bs, floors: MP.floors,
+      note: '巨龙是唯一允许出现在表里但禁止改的参照；本卡只改 ogre_boss / zombie_king'
+    });
+
+    /* ── F 组：价格与物品哈希未变 ───────────────────────────────── */
+    var IT = Game.Data.ITEMS;
+    var keys = Object.keys(IT).sort();
+    var sumPrice = 0, sumSell = 0, badPrice = [];
+    for (var ii = 0; ii < keys.length; ii++) {
+      var it = IT[keys[ii]];
+      if (typeof it.price === 'number') sumPrice += it.price;
+      if (typeof it.sell === 'number') sumSell += it.sell;
+      if (typeof it.price === 'number' && typeof it.sell === 'number' && !(it.price > it.sell)) {
+        badPrice.push(keys[ii]);
+      }
+    }
+    var fnvStr = keys.map(function (k) { return k + ':' + IT[k].price + ':' + IT[k].sell; }).join('|');
+    var fnv = 2166136261;
+    for (var fi2 = 0; fi2 < fnvStr.length; fi2++) {
+      fnv ^= fnvStr.charCodeAt(fi2);
+      fnv = Math.imul(fnv, 16777619) >>> 0;
+    }
+    rec('F_prices_and_items_unchanged', keys.length === 48 && sumPrice === 10165 && sumSell === 5081 &&
+      fnv === 0x331540f9 && badPrice.length === 0, {
+      count: keys.length, sumPrice: sumPrice, sumSell: sumSell,
+      fnv: fnv.toString(16), badPrice: badPrice,
+      note: '与 D-41 D 组同一口径：48 件、Σprice 10165、Σsell 5081、FNV 331540f9'
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D42_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  /* 裁决行必须是行首 "PASS {json}" / "FAIL {json}"（run-all.ps1 的 Get-PageVerdict 只认这种形态） */
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

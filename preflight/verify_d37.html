@@ -166,9 +166,18 @@
     var aNeg = cmpRuns(mutated.runs, D34.runs);
     /* 活体：同页现跑 3 个种子，证明"当前代码"仍复现，而不是只信落盘文件
      * D-41：D-34 的基线是在旧经验曲线（全程 60）下测的；本组只校验策略/测量台没变，
-     * 因此活体段把曲线临时钉回 60，跑完恢复。曲线本身的变化由 verify_d41 负责。 */
+     * 因此活体段把曲线临时钉回 60，跑完恢复。曲线本身的变化由 verify_d41 负责。
+     * D-42：层 Boss 数值也被授权改过（F2/F4）。活体段同样把两只 Boss 钉回 D-34 基线，
+     * 否则 seed 1023 的逃跑序列会随酋长数值变化——这里验的是测量台，不是平衡。 */
     var curveNow = Game.Systems.Battle.expEarlyBase;
     Game.Systems.Battle.expEarlyBase = 60;
+    var MON37 = Game.Data.MONSTERS;
+    var bossNow = {
+      ogre_boss: { hp: MON37.ogre_boss.hp, atk: MON37.ogre_boss.atk, def: MON37.ogre_boss.def },
+      zombie_king: { hp: MON37.zombie_king.hp, atk: MON37.zombie_king.atk, def: MON37.zombie_king.def }
+    };
+    MON37.ogre_boss.hp = 280; MON37.ogre_boss.atk = 24; MON37.ogre_boss.def = 10;
+    MON37.zombie_king.hp = 420; MON37.zombie_king.atk = 30; MON37.zombie_king.def = 12;
     M.init();
     M.closeGuide();
     Bot.install();
@@ -191,6 +200,7 @@
       negativeMutatedRunFails: !aNeg.ok, negativeBadSeed: aNeg.bad,
       negativeStrategyChangeDetected: aStrategyNeg,
       liveCurvePinned: 'expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）',
+      liveBossPinned: 'ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）',
       liveG1Actions: liveG1.map(function (r) { return r.actions; }),
       d34Actions: LIVE_SEEDS.map(function (s) {
         return D34.runs.filter(function (x) { return x.seed === s; })[0].actions;
@@ -220,6 +230,8 @@
     var ev1023 = G2.runs.filter(function (r) { return r.seed === 1023; })[0];
     var live1023 = live(1023, CFG.G2);
     Game.Systems.Battle.expEarlyBase = curveNow;
+    MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;
+    MON37.zombie_king.hp = bossNow.zombie_king.hp; MON37.zombie_king.atk = bossNow.zombie_king.atk; MON37.zombie_king.def = bossNow.zombie_king.def;
     var cLiveSame = !!ev1023 && JSON.stringify(live1023.d37.fleeLog) === JSON.stringify(ev1023.d37.fleeLog);
     var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
       liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });

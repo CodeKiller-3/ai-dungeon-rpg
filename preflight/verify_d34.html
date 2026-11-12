@@ -333,10 +333,22 @@
     rec('D2_f5StrengthStill44_1', near(s5, 44.1),
       'F5=' + s5 + '（期望 44.1）：dragon 不在普通表，改 Boss 数值不改期望强度；' +
       '本卡对 DC-04 基线数字的改动 = 0 处');
-    rec('D3_monstersOutOfScopeUnchanged', OTHER17.every(function (id) {
-      var m = MON[id], snap = SNAP[id];
-      return m && m.hp === snap[0] && m.atk === snap[1] && m.def === snap[2];
-    }), '17 只非 Boss 怪 hp/atk/def 与基线 a92e6a3 逐只相同（负向：任何一只被改即 FAIL）');
+    /* D-42（2026-11-12）授权改两只层 Boss：ogre_boss 280/24/10→120/12/8、
+     * zombie_king 420/30/12→280/24/12。这里只对这两只放行新基线；其余 15 只必须与
+     * a92e6a3 逐只相同，任何第三种数值仍然 FAIL。 */
+    var BOSS_D42 = { ogre_boss: [120, 12, 8], zombie_king: [280, 24, 12] };
+    var d3Bad = [];
+    OTHER17.forEach(function (id) {
+      var m = MON[id], snap = SNAP[id], alt = BOSS_D42[id];
+      var same = m && m.hp === snap[0] && m.atk === snap[1] && m.def === snap[2];
+      var d42 = alt && m && m.hp === alt[0] && m.atk === alt[1] && m.def === alt[2];
+      if (!same && !d42) d3Bad.push(id);
+    });
+    rec('D3_monstersOutOfScopeUnchanged', d3Bad.length === 0, {
+      bad: d3Bad,
+      d42Authorized: { ogre_boss: BOSS_D42.ogre_boss, zombie_king: BOSS_D42.zombie_king },
+      note: '15 只非 Boss 怪与 a92e6a3 逐只相同；D-42 授权改的两只层 Boss 接受新基线'
+    });
 
     /* 负例：把 F2 的某条权重挪 0.01，D1 必须 FAIL */
     var t2copy = [];

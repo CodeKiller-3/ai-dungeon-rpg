@@ -1,12 +1,12 @@
 {
-    "at":  "2026-11-12T20:43:54",
+    "at":  "2026-11-12T21:27:31",
     "scriptFnv":  "7bda9fd8",
     "scriptLen":  21663,
     "scriptTextFnv":  "768b758b",
     "scriptTextLen":  17995,
     "bomBytes":  "239,187,191",
     "baselinePath":  "page-baseline.json",
-    "baselineCount":  82,
+    "baselineCount":  83,
     "allAsExpected":  true,
     "cases":  [
                   {
@@ -16,23 +16,23 @@
                       "expect":  -1,
                       "exit":  0,
                       "wantExit":  0,
-                      "line":  "GUARD=OK expected=82 actual=82 missing=0 extra=0 source=page-baseline.json",
+                      "line":  "GUARD=OK expected=83 actual=83 missing=0 extra=0 source=page-baseline.json",
                       "emptySet":  false,
                       "stale":  false,
-                      "output":  "GUARD=OK expected=82 actual=82 missing=0 extra=0 source=page-baseline.json",
+                      "output":  "GUARD=OK expected=83 actual=83 missing=0 extra=0 source=page-baseline.json",
                       "ok":  true
                   },
                   {
                       "id":  "B_fewByExpect",
                       "desc":  "负例·少页：把期望页数调高 1",
                       "scanDir":  "\u003cpreflight\u003e",
-                      "expect":  83,
+                      "expect":  84,
                       "exit":  2,
                       "wantExit":  2,
-                      "line":  "GUARD=FAIL expected=83 actual=82 missing=0 extra=0 source=param -ExpectPages",
+                      "line":  "GUARD=FAIL expected=84 actual=83 missing=0 extra=0 source=param -ExpectPages",
                       "emptySet":  false,
                       "stale":  false,
-                      "output":  "GUARD=FAIL expected=83 actual=82 missing=0 extra=0 source=param -ExpectPages",
+                      "output":  "GUARD=FAIL expected=84 actual=83 missing=0 extra=0 source=param -ExpectPages",
                       "ok":  true
                   },
                   {
@@ -42,10 +42,10 @@
                       "expect":  -1,
                       "exit":  2,
                       "wantExit":  2,
-                      "line":  "GUARD=FAIL expected=82 actual=0 missing=82 extra=0 source=page-baseline.json",
+                      "line":  "GUARD=FAIL expected=83 actual=0 missing=83 extra=0 source=page-baseline.json",
                       "emptySet":  true,
                       "stale":  false,
-                      "output":  "GUARD=FAIL expected=82 actual=0 missing=82 extra=0 source=page-baseline.json | GUARD_EMPTY_SET=1 | GUARD_MISSING=verify_c02,verify_c03,verify_c03b,verify_c04,verify_c05,verify_d02,verify_d05,verify_d06,verify_d07,verify_d08,verify_d09,verify_d10,verify_d11,verify_d12,verify_d13,verify_d14,verify_d15,verify_d15b,verify_d16,verify_d17,verify_d18,verify_d19,verify_d20,verify_d21,verify_d22,verify_d23,verify_d24,verify_d25,verify_d26,verify_d27,verify_d28,verify_d29,verify_d30,verify_d31,verify_d32,verify_d34,verify_d35,verify_d36,verify_d37,verify_d38,verify_d39,verify_d40,verify_d41,verify_m1,verify_m2,verify_m3,verify_m4,verify_m5,verify_m7,verify_m8_1,verify_m8_2,verify_m8_3,verify_m8_4,verify_m8_5,verify_m8_6,verify_m9_1,verify_m9_2,verify_m9_3,verify_m9_4,verify_m9_5,verify_p1_1,verify_p1_2,verify_p1_3,verify_p1p2,verify_p2_1,verify_p2_2,verify_p2_3,verify_p2_3b,verify_p2_4,verify_p2_5,verify_resize,verify_s01_shop,verify_s02a,verify_s03,verify_s04,verify_s05,verify_s3_1,verify_s3_2,verify_s3_3,verify_s3_4,verify_selfcheck,verify_smoke",
+                      "output":  "GUARD=FAIL expected=83 actual=0 missing=83 extra=0 source=page-baseline.json | GUARD_EMPTY_SET=1 | GUARD_MISSING=verify_c02,verify_c03,verify_c03b,verify_c04,verify_c05,verify_d02,verify_d05,verify_d06,verify_d07,verify_d08,verify_d09,verify_d10,verify_d11,verify_d12,verify_d13,verify_d14,verify_d15,verify_d15b,verify_d16,verify_d17,verify_d18,verify_d19,verify_d20,verify_d21,verify_d22,verify_d23,verify_d24,verify_d25,verify_d26,verify_d27,verify_d28,verify_d29,verify_d30,verify_d31,verify_d32,verify_d34,verify_d35,verify_d36,verify_d37,verify_d38,verify_d39,verify_d40,verify_d41,verify_d42,verify_m1,verify_m2,verify_m3,verify_m4,verify_m5,verify_m7,verify_m8_1,verify_m8_2,verify_m8_3,verify_m8_4,verify_m8_5,verify_m8_6,verify_m9_1,verify_m9_2,verify_m9_3,verify_m9_4,verify_m9_5,verify_p1_1,verify_p1_2,verify_p1_3,verify_p1p2,verify_p2_1,verify_p2_2,verify_p2_3,verify_p2_3b,verify_p2_4,verify_p2_5,verify_resize,verify_s01_shop,verify_s02a,verify_s03,verify_s04,verify_s05,verify_s3_1,verify_s3_2,verify_s3_3,verify_s3_4,verify_selfcheck,verify_smoke",
                       "ok":  true
                   },
                   {
@@ -55,10 +55,10 @@
                       "expect":  -1,
                       "exit":  0,
                       "wantExit":  0,
-                      "line":  "GUARD=OK expected=82 actual=83 missing=0 extra=1 source=page-baseline.json",
+                      "line":  "GUARD=OK expected=83 actual=84 missing=0 extra=1 source=page-baseline.json",
                       "emptySet":  false,
                       "stale":  true,
-                      "output":  "GUARD=OK expected=82 actual=83 missing=0 extra=1 source=page-baseline.json | BASELINE_STALE=1 extra=verify_zz",
+                      "output":  "GUARD=OK expected=83 actual=84 missing=0 extra=1 source=page-baseline.json | BASELINE_STALE=1 extra=verify_zz",
                       "ok":  true
                   },
                   {
@@ -68,10 +68,10 @@
                       "expect":  -1,
                       "exit":  2,
                       "wantExit":  2,
-                      "line":  "GUARD=FAIL expected=82 actual=81 missing=1 extra=0 source=page-baseline.json",
+                      "line":  "GUARD=FAIL expected=83 actual=82 missing=1 extra=0 source=page-baseline.json",
                       "emptySet":  false,
                       "stale":  false,
-                      "output":  "GUARD=FAIL expected=82 actual=81 missing=1 extra=0 source=page-baseline.json | GUARD_MISSING=verify_smoke",
+                      "output":  "GUARD=FAIL expected=83 actual=82 missing=1 extra=0 source=page-baseline.json | GUARD_MISSING=verify_smoke",
                       "ok":  true
                   },
                   {
@@ -81,10 +81,10 @@
                       "expect":  -1,
                       "exit":  2,
                       "wantExit":  2,
-                      "line":  "GUARD=FAIL expected=82 actual=0 missing=82 extra=0 source=page-baseline.json",
+                      "line":  "GUARD=FAIL expected=83 actual=0 missing=83 extra=0 source=page-baseline.json",
                       "emptySet":  true,
                       "stale":  false,
-                      "output":  "TOTAL=0 PASS=0 FAIL=0 NONE=0 MIXED=0 | GUARD=FAIL expected=82 actual=0 missing=82 extra=0 source=page-baseline.json | GUARD_EMPTY_SET=1 | GUARD_MISSING=verify_c02,verify_c03,verify_c03b,verify_c04,verify_c05,verify_d02,verify_d05,verify_d06,verify_d07,verify_d08,verify_d09,verify_d10,verify_d11,verify_d12,verify_d13,verify_d14,verify_d15,verify_d15b,verify_d16,verify_d17,verify_d18,verify_d19,verify_d20,verify_d21,verify_d22,verify_d23,verify_d24,verify_d25,verify_d26,verify_d27,verify_d28,verify_d29,verify_d30,verify_d31,verify_d32,verify_d34,verify_d35,verify_d36,verify_d37,verify_d38,verify_d39,verify_d40,verify_d41,verify_m1,verify_m2,verify_m3,verify_m4,verify_m5,verify_m7,verify_m8_1,verify_m8_2,verify_m8_3,verify_m8_4,verify_m8_5,verify_m8_6,verify_m9_1,verify_m9_2,verify_m9_3,verify_m9_4,verify_m9_5,verify_p1_1,verify_p1_2,verify_p1_3,verify_p1p2,verify_p2_1,verify_p2_2,verify_p2_3,verify_p2_3b,verify_p2_4,verify_p2_5,verify_resize,verify_s01_shop,verify_s02a,verify_s03,verify_s04,verify_s05,verify_s3_1,verify_s3_2,verify_s3_3,verify_s3_4,verify_selfcheck,verify_smoke | GUARD_EXIT=EMPTY",
+                      "output":  "TOTAL=0 PASS=0 FAIL=0 NONE=0 MIXED=0 | GUARD=FAIL expected=83 actual=0 missing=83 extra=0 source=page-baseline.json | GUARD_EMPTY_SET=1 | GUARD_MISSING=verify_c02,verify_c03,verify_c03b,verify_c04,verify_c05,verify_d02,verify_d05,verify_d06,verify_d07,verify_d08,verify_d09,verify_d10,verify_d11,verify_d12,verify_d13,verify_d14,verify_d15,verify_d15b,verify_d16,verify_d17,verify_d18,verify_d19,verify_d20,verify_d21,verify_d22,verify_d23,verify_d24,verify_d25,verify_d26,verify_d27,verify_d28,verify_d29,verify_d30,verify_d31,verify_d32,verify_d34,verify_d35,verify_d36,verify_d37,verify_d38,verify_d39,verify_d40,verify_d41,verify_d42,verify_m1,verify_m2,verify_m3,verify_m4,verify_m5,verify_m7,verify_m8_1,verify_m8_2,verify_m8_3,verify_m8_4,verify_m8_5,verify_m8_6,verify_m9_1,verify_m9_2,verify_m9_3,verify_m9_4,verify_m9_5,verify_p1_1,verify_p1_2,verify_p1_3,verify_p1p2,verify_p2_1,verify_p2_2,verify_p2_3,verify_p2_3b,verify_p2_4,verify_p2_5,verify_resize,verify_s01_shop,verify_s02a,verify_s03,verify_s04,verify_s05,verify_s3_1,verify_s3_2,verify_s3_3,verify_s3_4,verify_selfcheck,verify_smoke | GUARD_EXIT=EMPTY",
                       "ok":  true
                   }
               ]

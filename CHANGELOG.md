@@ -43,10 +43,11 @@
 
 ### 工具
 
-- 回归批跑：82 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
+- 回归批跑：83 个 headless 验证页 + 页数兜底（页数不符即 FAIL，杜绝 `TOTAL=0` 假绿）。<!-- 锚点: preflight/selfcheck/run-all.ps1#Get-PageVerdict -->
 - 素材审计：207 张 PNG 的空帧 / 尺寸 / 编号 / 注册 / 60 色调色板一次性核对。<!-- 锚点: preflight/selfcheck/d21_audit.js#paletteSize -->
 - 三层自检：UI / 数据口径 / 文档一致性共 33 项，含 README 数字一致性。<!-- 锚点: preflight/selfcheck/selfcheck.js#SUMMARY -->
 - bot 跑局压测台：同种子批量跑局，产出死亡归因统计。<!-- 锚点: preflight/bot_d23.html#maxActions -->
+- Boss 断层审计（D-42）：用 D-34 五层期望（11.125/20.125/23.75/36.85/44.1）重算每层门位，只改比值倒挂的两只层 Boss——F2 独眼酋长 `280/24/10→120/12/8`（击杀 22→9 回合、可扛 9→22 回合，比值 2.44→0.41）、F4 僵尸王 `420/30/12→280/24/12`（15→10 回合、可扛 10→14 回合，比值 1.50→0.71）；巨龙 `260/32/8` 与 enrage、伤害公式、楼层结构、位置全部未动。`verify_d42` A–F 校验 8 个 Boss/精英同公式复算、全部比值 ≤0.75 且击杀 ≥6、还原负例、同种子跑局、巨龙与价格哈希不变。<!-- 锚点: js/data/monsters.js#ogre_boss -->
 - 成长节奏重排（D-41）：升级经验阈值改两段——L1–L4 为 15×level、L5 起仍 60×level（旧版全程 60×level）；普通推进在 F2–F3 可到 L5，全图清完约 L9–L10。伤害公式、Boss、楼层结构与升级增量（+1/+1/+10/+0）均未动；`verify_d41` A–E 校验同种子可复现、归因唯一、曲线负例、价格收敛与 D-40 公式复算。<!-- 锚点: js/systems/battle.js#expToNext -->
 - 成长上限审计（D-40）：`d17_bot` 只新增 `opts.m1` 刷满分支（全清怪/拿宝箱/买最贵/用卷轴，无逃跑）；同种子 1001–1050 / maxActions 2500 产出 `d40-m1.json`；`verify_d40` A–E 复算属性公式、追溯上限来源、校验同种子矩阵、强制外推值带 `extrapolated=true`。只读诊断，`js/` 一字未改。<!-- 锚点: preflight/lib/d17_bot.js#m1Plan -->
 - 潜行可行性测量（D-39）：`d17_bot` 只新增 `opts.d39` 纯潜行分支——怪物格一律当障碍（BFS 三级：绕怪探图 → 绕怪下楼/Boss → 绕不过去才撞上去并记录地形快照），强制遭遇时 Boss/挡路怪不逃、巡逻怪先逃（最多 2 次）、只用技能与药；同种子 1001–1050 / maxActions 2500 与 D-37 G2 完全对齐，`d39-s1.json` / `d39-neg.json` 分文件落盘，`verify_d39` A–E 守门。只产数据，不产平衡判决。<!-- 锚点: preflight/lib/d17_bot.js#d39Plan -->

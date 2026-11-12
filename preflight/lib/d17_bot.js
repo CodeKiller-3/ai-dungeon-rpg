@@ -994,6 +994,7 @@
     press(code, STEP);
     var n = 0;
     while (n < 30 && Game.Core.Main._scene === 'battle' && B.isInputLocked()) { frame(STEP); n++; }
+    d42Sample(rec, st);
     if (useItem && healPotions().length < potionsBefore) rec.battlePotions++;
     if (rec.d37) d37AfterBattleAct(rec, code, pre, st);
   }
@@ -1154,6 +1155,23 @@
     rec.noPotionAtDeath = healPotions().length === 0;
     rec.deathCause = deathCauseOf(rec);
   }
+  /* D-42：Boss 伤害遥测。只记录地图 Boss 表里的怪，在每次战斗行动后取
+   * Battle.getState().monster.hp 的最低点（= 打掉的血量上限）。纯只读：
+   * 不消耗随机数、不改战斗状态，只用于验收"有没有一局把巨龙打掉 30%"。 */
+  function d42BossIdOf(id) {
+    var bs = (Game.Data.MAPS && Game.Data.MAPS.bosses) || [];
+    for (var i = 0; i < bs.length; i++) if (bs[i].id === id) return true;
+    return false;
+  }
+  function d42Sample(rec, st) {
+    if (!rec.d42 || !st || !st.monster) return;
+    var id = st.monster.id;
+    if (!d42BossIdOf(id)) return;
+    var d = rec.d42.boss;
+    var row = d[id] || (d[id] = { maxHp: st.monster.maxHp, minHp: st.monster.maxHp, acts: 0 });
+    row.acts++;
+    if (st.monster.hp < row.minHp) row.minHp = st.monster.hp;
+  }
 
   Bot.run = function (seed, opts) {
     opts = opts || {};
@@ -1167,6 +1185,8 @@
     if (opts.d39) rec.d39 = d39New(opts.d39);
     /* D-40：M1 刷满（全清怪 / 买最贵 / 用卷轴），只测量。 */
     if (opts.m1) rec.m1 = m1New(opts.m1);
+    /* D-42：Boss 伤害遥测（不传 opts.d42 时完全不启用，既有四组行为不变） */
+    if (opts.d42) rec.d42 = { boss: {} };
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -1228,6 +1248,15 @@
       m1End(rec);
       m1Extrapolate(rec);
       rec.m1.final = d37Snap(P, P.floor);
+    }
+    if (rec.d42) {
+      for (var bid in rec.d42.boss) {
+        if (!Object.prototype.hasOwnProperty.call(rec.d42.boss, bid)) continue;
+        var br = rec.d42.boss[bid];
+        br.dealt = br.maxHp - Math.max(0, br.minHp);
+        br.dealtPct = br.maxHp ? Math.round((br.dealt / br.maxHp) * 1000) / 10 : 0;
+        br.killed = br.minHp <= 0;
+      }
     }
     delete rec.floorNow; delete rec.floorActions;
     delete rec.path; delete rec.pathKey; delete rec.pathFloor; delete rec.shieldOn;

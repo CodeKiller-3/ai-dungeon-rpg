@@ -159,32 +159,33 @@
       sub.t4_sample = sample;
       ok = ok && t4ok;
 
-      /* t5_enrage：半血触发，攻防按 enrage 公式取整 */
+      /* t5_enrage：半血触发，攻防按 enrage 公式取整
+       * D-42 起层 Boss 基础数值可配平；这里不再钉死 280/24/10，而是从 MONSTERS 读当前值，
+       * 断言"狂暴后 = round(基础 × 倍率)"这条公式关系（数值本身由 verify_d42 守）。 */
       var P = D.Player;
       P.hp = 99999; P.maxHp = 99999; P.def = 9999; P.atk = 10;
+      var ob = D.MONSTERS.ogre_boss, zk = D.MONSTERS.zombie_king;
       var e1ok = true;
       try {
         B.start('ogre_boss');
         var st1 = B.getState();
-        st1.monster.hp = 130; /* ≤ 280×0.5=140 */
+        st1.monster.hp = Math.floor(ob.hp * ob.enrage.hpPct); /* 半血线，受一击后仍 ≤ 阈值 */
         B.playerAction('attack');
-        e1ok = st1.enraged === true && st1.enrageAtk === Math.round(24 * 1.4) &&
-          st1.enrageDef === Math.round(10 * 1.2);
+        e1ok = st1.enraged === true && st1.enrageAtk === Math.round(ob.atk * ob.enrage.atkMul) &&
+          st1.enrageDef === Math.round(ob.def * ob.enrage.defMul);
         sub.t5_ogre = { enraged: st1.enraged, atk: st1.enrageAtk, def: st1.enrageDef };
       } catch (e) { e1ok = false; sub.t5_ogreErr = String(e); }
       var e2ok = true;
       try {
         B.start('zombie_king');
         var st2 = B.getState();
-        st2.monster.hp = 200; /* ≤ 420×0.5=210 */
+        st2.monster.hp = Math.floor(zk.hp * zk.enrage.hpPct);
         B.playerAction('attack');
-        e2ok = st2.enraged === true && st2.enrageAtk === Math.round(30 * 1.35) &&
-          st2.enrageDef === Math.round(12 * 1.25);
+        e2ok = st2.enraged === true && st2.enrageAtk === Math.round(zk.atk * zk.enrage.atkMul) &&
+          st2.enrageDef === Math.round(zk.def * zk.enrage.defMul);
         sub.t5_zombie = { enraged: st2.enraged, atk: st2.enrageAtk, def: st2.enrageDef };
       } catch (e) { e2ok = false; sub.t5_zombieErr = String(e); }
-      var t5ok = e1ok && e2ok &&
-        sub.t5_ogre.atk === 34 && sub.t5_ogre.def === 12 &&
-        sub.t5_zombie.atk === 41 && sub.t5_zombie.def === 15;
+      var t5ok = e1ok && e2ok;
       sub.t5_enrage = t5ok;
       ok = ok && t5ok;
 
