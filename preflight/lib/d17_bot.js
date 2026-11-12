@@ -698,6 +698,440 @@
     };
   }
 
+  /* ── D-44：B1「通关冲刺」——只跑图，不刷怪，药留给最终 Boss ─────────────
+   * 性质：只测量。不传 opts.b1 时 rec.b1 为 null，下面所有分支/钩子都不执行，
+   * G0/G1/G2/G3/M1/S1 的行为与 D-43 逐帧一致（由 verify_d44 B 组逐字段对照守门）。
+   *
+   * 判据（每条都能用肉眼复核，不写"最优解"）：
+   *   · F1–F4 只打挡路的：寻路把怪当墙（与 S1 同一套 BFS），只有"目标（下行梯/
+   *     最终 Boss）在无视怪物时可达、无视怪物时不可达"才朝挡路怪迈一步。走廊被堵 /
+   *     门口被守 = forced；巡逻怪贴脸 = patrol。主动踩怪（active）必须为 0。
+   *   · 宝箱只开顺路的：寻路目标只有楼梯/Boss，不专门去宝箱；踩到就自动拾取。
+   *   · 每层进一次商店：沿用 exploreAct 既有的"新层进店"节奏，但购买口径换成
+   *     b1ShopAct（见下）。不买卷轴（不刷怪就没有强化预算）。
+   *   · 留药：进 F5 至少带 4 瓶回血药。理由是一个可复算的下限：
+   *     龙 260 血、玩家 L3–L4 每回合 14–16 点、火球 4 发 → 约 14–16 回合；
+   *     龙普攻 23–24、狂暴后 38–40、烈焰吐息约 56，期望承伤 ≈ 450–500；
+   *     玩家 maxHp 110–140，嗑药只能补"缺口"，4 瓶 × 约 100 = 400，
+   *     加上自身血量才够覆盖一场 15 回合的换血。3 瓶少 100 左右，正好差一回合。
+   *   · F5：直奔 Boss，不碰沿途杂兵；打龙时火球只在"冷却好、MP≥12、这一发比普攻
+   *     多 ≥3 点、且普攻这一下收不掉"时用（MP 无回复，4 发是全部预算）；
+   *     血量 ≤45% 或下一击会死时嗑药。非 Boss 战只在火球能少打 ≥2 回合时才用，
+   *     否则普攻——把蓝留给龙。
+   *   · 巡逻怪：打不过就逃（nKill > nDie+1），每场最多赌 1 次；挡路怪/Boss 不逃
+   *     （逃跑不会搬走挡路的怪，只白挨一轮）。
+   *   · 负例开关（只给 verify 用）：negAvoid=true 时寻路不把怪当墙（应产生 active>0）；
+   *     negReserve=true 时不补药（应使"进 F5 ≥4 瓶"断言 FAIL）。 */
+  var B1_RESERVE = 4;
+  function b1New(cfg) {
+    return {
+      reserve: (typeof cfg.reserve === 'number') ? cfg.reserve : B1_RESERVE,
+      negAvoid: cfg.negAvoid === true,
+      negReserve: cfg.negReserve === true,
+      battles: 0, active: 0, forced: 0, patrol: 0, boss: 0, byBlock: 0,
+      activeByFloor: {}, battleKind: null, lastStep: null,
+      fleeAttempts: 0, fleeSuccess: 0, fleeFail: 0, fleeTriesThisBattle: 0,
+      shopVisits: 0, shopBuys: 0, shopSpent: 0, potionsBought: 0, equipBought: 0,
+      soldCount: 0, soldGold: 0,
+      floorEnter: [], floorExit: [], floorStart: null,
+      enterF5: null, reserveChecks: [], final: null, winSequence: null,
+      dragon: { reached: 0, battles: 0, killed: 0, best: null }
+    };
+  }
+  function b1Start(rec) {
+    var P = Game.Data.Player, d = rec.b1;
+    var snap = d37Snap(P, P.floor);
+    snap.potions = hpPotionCount();
+    snap.kills = rec.kills;
+    snap.actions = rec.actions;
+    snap.battles = rec.battles;
+    d.floorStart = snap;
+    d.floorEnter.push(snap);
+    if (P.floor === 5 && !d.enterF5) {
+      d.enterF5 = {
+        seed: rec.seed, potions: snap.potions, hp: snap.hp, maxHp: snap.maxHp,
+        level: snap.level, gold: snap.gold, equip: snap.equip, at: rec.actions
+      };
+      d.reserveChecks.push({ seed: rec.seed, need: d.reserve, have: snap.potions, pass: snap.potions >= d.reserve });
+    }
+  }
+  function b1End(rec) {
+    var P = Game.Data.Player, d = rec.b1, s = d.floorStart;
+    if (!s) return;
+    var out = d37Snap(P, s.floor);
+    out.potionsIn = s.potions;
+    out.potionsOut = hpPotionCount();
+    out.actions = rec.actions - s.actions;
+    out.kills = rec.kills - s.kills;
+    out.battles = rec.battles - (s.battles || 0);
+    d.floorExit.push(out);
+    d.floorStart = null;
+  }
+  function b1Finalize(rec) {
+    var d = rec.b1;
+    d.fleeFail = Math.max(0, d.fleeAttempts - d.fleeSuccess);
+    d.final = d37Snap(Game.Data.Player, Game.Data.Player.floor);
+    d.final.potions = hpPotionCount();
+    /* 龙战统计从逐回合日志汇总（b1 与 probe 同一份证据） */
+    var dragonBattles = 0, killed = 0, best = null;
+    var all = (rec.d44 && rec.d44.battles) || [];
+    for (var i = 0; i < all.length; i++) {
+      var b = all[i];
+      if (b.monsterId !== 'dragon') continue;
+      dragonBattles++;
+      if (b.result === 'win') killed++;
+      if (!best || b.dealt > best.dealt) {
+        best = { seed: rec.seed, rounds: b.nRounds, dealt: b.dealt, taken: b.taken,
+          maxHp: b.maxHp, potionUses: b.potionUses, result: b.result, end: b.end };
+      }
+    }
+    d.dragon.battles = dragonBattles;
+    d.dragon.killed = killed;
+    d.dragon.reached = dragonBattles > 0 ? 1 : 0;
+    d.dragon.best = best;
+    /* 通关事件序列：每层进出状态 + F5 全部战斗逐回合（由 d44 战斗日志提供） */
+    if (rec.outcome === 'win') {
+      d.winSequence = {
+        floors: { enter: d.floorEnter, exit: d.floorExit },
+        f5Battles: all.filter(function (x) { return x.floor === 5; })
+      };
+    }
+  }
+
+  /* 卖垃圾：B1 不刷怪，金币几乎全来自宝箱；把开出来的、低于当前装备且不带 maxHp 的
+   * 武器/护甲与用不上的卷轴卖掉（卖价=半价，仍严格低于买价）。这是"真人会把没用的
+   * 东西换钱"的落地，不新增任何数值规则。 */
+  function b1JunkIndex() {
+    var P = Game.Data.Player, it = items(), list = Game.Systems.Inventory.list();
+    var wAtk = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
+    var aDef = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
+    for (var i = 0; i < list.length; i++) {
+      var d = it[list[i].id];
+      if (!d) continue;
+      if (d.scroll) return i;
+      if (d.type === 'weapon' && P.equipment.weapon !== d.id) {
+        if ((d.effect.atk || 0) <= wAtk && !(d.effect.maxHp > 0)) return i;
+      } else if (d.type === 'armor' && P.equipment.armor !== d.id) {
+        if ((d.effect.def || 0) <= aDef && !(d.effect.maxHp > 0)) return i;
+      }
+    }
+    return -1;
+  }
+  function b1SellJunk(rec) {
+    var P = Game.Data.Player, d = rec.b1;
+    var idx = b1JunkIndex();
+    if (idx < 0) return 0;
+    press('Tab', STEP); /* 切到出售页 */
+    var gold0 = P.gold, sold = 0, guard = 0;
+    while (guard++ < 8) {
+      idx = b1JunkIndex();
+      if (idx < 0) break;
+      shopSelect(idx);
+      press('Enter', STEP);
+      if (P.gold === gold0 && sold > 0) break;
+      sold++;
+    }
+    press('Tab', STEP); /* 切回购买页 */
+    var gain = P.gold - gold0;
+    d.soldCount = (d.soldCount || 0) + sold;
+    d.soldGold = (d.soldGold || 0) + gain;
+    return gain;
+  }
+
+  /* B1 商店：F1–F3 先补一件能立刻提战力的装备（最多 2 件），再攒药；
+   * F4–F5 先把药补到 reserve（F5 多留 1 瓶余量），再补装备。从不买卷轴。 */
+  function b1ShopAct(rec) {
+    var P = Game.Data.Player, it = items(), d = rec.b1;
+    rec.shopVisitedFloor = P.floor;
+    press('KeyE', MOVE_MS);
+    if (Game.Modal.current() !== 'shop') { rec.shopFail++; return; }
+    rec.shopVisits++; d.shopVisits++; rec.actions++;
+    b1SellJunk(rec);
+    var potions = 0, equips = 0, guard = 0;
+    var cap = d.negReserve ? 0 : (d.reserve + (P.floor >= 5 ? 1 : 0));
+    var potionFirst = P.floor >= 4;
+    function findPotion(stock) {
+      if (hpPotionCount() >= cap) return -1;
+      var bestHeal = 0, best = -1;
+      for (var i = 0; i < stock.length; i++) {
+        var e = stock[i].item;
+        if (!e || e.type !== 'consumable' || !e.effect || !(e.effect.hp > 0)) continue;
+        if (e.price > P.gold) continue;
+        if (e.effect.hp > bestHeal) { bestHeal = e.effect.hp; best = i; }
+      }
+      return best;
+    }
+    function findEquip(stock) {
+      if (equips >= 2) return -1;
+      var bestGain = 0, best = -1;
+      for (var i = 0; i < stock.length; i++) {
+        var e = stock[i].item;
+        if (!e || !e.effect || (e.type !== 'weapon' && e.type !== 'armor')) continue;
+        if (e.price > P.gold || ownedCount(e.id)) continue;
+        var gain = 0;
+        if (e.type === 'weapon') {
+          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
+          gain = (e.effect.atk || 0) - ca;
+        } else {
+          var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
+          gain = (e.effect.def || 0) - cd;
+        }
+        if (gain > bestGain) { bestGain = gain; best = i; }
+      }
+      return best;
+    }
+    while (guard++ < 10) {
+      var stock = Game.Systems.Shop.getStock();
+      var pick = -1, kind = '';
+      if (potionFirst) {
+        pick = findPotion(stock); if (pick >= 0) kind = 'potion';
+        if (pick < 0) { pick = findEquip(stock); if (pick >= 0) kind = 'equip'; }
+      } else {
+        pick = findEquip(stock); if (pick >= 0) kind = 'equip';
+        if (pick < 0) { pick = findPotion(stock); if (pick >= 0) kind = 'potion'; }
+      }
+      if (pick < 0) break;
+      var id = stock[pick].id, price = stock[pick].item.price;
+      shopSelect(pick);
+      var gold0 = P.gold;
+      press('Enter', STEP);
+      var spent = gold0 - P.gold;
+      if (spent <= 0) break;
+      rec.actions++; rec.shopBuys++; rec.shopSpent += spent;
+      d.shopBuys++; d.shopSpent += spent;
+      if (kind === 'potion') { potions++; d.potionsBought++; }
+      else { equips++; d.equipBought++; }
+      /* 买了立刻穿：装备只有穿上才算战力（与 betterEquipIndex 同一口径） */
+      if (kind === 'equip') {
+        var eq = betterEquipIndex();
+        if (eq >= 0) { useIndex(eq); rec.equips++; rec.actions++; }
+      }
+    }
+    if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
+  }
+
+  /* B1 寻路：目标只有"下行梯"（F1–F4）或"本层 Boss"（F5）。
+   * ① 怪当墙走得到 → 直接走；② 走不到 → 找出"必须穿过的第一只怪"并踩上去（forced）；
+   * ③ 连无视怪都走不到（结构问题）→ 退回探图；④ 仍无路 → null。 */
+  /* "顺路宝箱"：绕行代价 ≤2 步才开（F5 直奔 Boss，不绕）。
+   * 只看金币/物品本身的可达路径，不穿怪；绕不过去的宝箱不算顺路。 */
+  function b1ChestDetour(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid(), d = rec.b1;
+    if (!grid) return null;
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    if (P.floor >= FLOORS) return null;
+    var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
+    var walkT = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    var noEnemy = function (x, y, t) {
+      return (walkT(t) || t === 2) && !Map.enemyAt(x, y);
+    };
+    var start = { x: P.x, y: P.y };
+    var toStair = function (x, y, t) { return t === 2; };
+    var ds = d39Bfs(grid, start, toStair, noEnemy);
+    if (!ds.ok) return null;
+    var h = grid.length, w = grid[0].length, best = null, bestExtra = 99, bestFirst = null;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var dc = Map.getDecor(x, y);
+        if (dc !== 'chest' && dc !== 'room_chest') continue;
+        var cell = { x: x, y: y };
+        var p1 = d39Bfs(grid, start, function (gx, gy) { return gx === cell.x && gy === cell.y; }, noEnemy);
+        if (!p1.ok) continue;
+        var p2 = d39Bfs(grid, cell, toStair, noEnemy);
+        if (!p2.ok) continue;
+        var extra = p1.steps + p2.steps - ds.steps;
+        if (extra <= 4 && extra < bestExtra) { bestExtra = extra; best = cell; bestFirst = p1.first; }
+      }
+    }
+    if (!best) return null;
+    d.lastStep = { tx: bestFirst.x, ty: bestFirst.y, intoEnemy: false, forced: false, boss: false, chest: true };
+    return d39Dir(P, bestFirst);
+  }
+
+  function b1Plan(rec) {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid(), d = rec.b1;
+    if (!grid) return null;
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    var upNoop = P.floor <= 1, downNoop = P.floor >= FLOORS;
+    var walkT = function (t) {
+      if (t === 0) return false;
+      if (t === 3) return upNoop;
+      if (t === 2) return downNoop;
+      return true;
+    };
+    var base = function (x, y, t) { return walkT(t) || t === 2; };
+    var noEnemy = function (x, y, t) { return base(x, y, t) && !Map.enemyAt(x, y); };
+    var start = { x: P.x, y: P.y };
+    var goal = d39Goal(P, Map);
+    if (!goal) return null;
+    /* F1–F4：先看有没有"绕行 ≤2 步"的顺路宝箱；有就先开，再下楼 */
+    if (!goal.boss) {
+      var ch = b1ChestDetour(rec);
+      if (ch) return ch;
+    }
+    /* F5：目标不是"穿过 Boss 格"，而是"走到 Boss 旁边再迈进去"——这样沿途杂兵默认是墙，
+     * 只有真正堵住唯一通路时才会被迫开战。 */
+    if (goal.boss) {
+      var bx = -1, by = -1, ens = Map.getEnemies();
+      for (var i = 0; i < ens.length; i++) if (ens[i].monsterId === goal.bossId) { bx = ens[i].x; by = ens[i].y; break; }
+      if (bx < 0) return null;
+      var dx = bx - P.x, dy = by - P.y;
+      if (Math.abs(dx) + Math.abs(dy) === 1) {
+        d.lastStep = { tx: bx, ty: by, intoEnemy: true, forced: false, boss: true, monsterId: goal.bossId };
+        for (var k = 0; k < 4; k++) if (DIRS[k][0] === dx && DIRS[k][1] === dy) return DIRS[k][2];
+      }
+      var adj = function (x, y) { return Math.abs(x - bx) + Math.abs(y - by) === 1; };
+      var r0 = d39Bfs(grid, start, adj, noEnemy);
+      if (r0.ok) {
+        d.lastStep = { tx: r0.first.x, ty: r0.first.y, intoEnemy: false, forced: false, boss: false };
+        return d39Dir(P, r0.first);
+      }
+      var r1 = d39Bfs(grid, start, adj, base);
+      if (r1.ok && r1.first) {
+        var e1 = Map.enemyAt(r1.first.x, r1.first.y);
+        d.lastStep = {
+          tx: r1.first.x, ty: r1.first.y, intoEnemy: !!e1,
+          forced: !!e1 && !d.negAvoid, boss: false, monsterId: e1 ? e1.monsterId : null
+        };
+        return d39Dir(P, r1.first);
+      }
+      d.lastStep = null;
+      return null;
+    }
+    var r = d39Bfs(grid, start, goal.fn, noEnemy);
+    if (r.ok) {
+      d.lastStep = { tx: r.first.x, ty: r.first.y, intoEnemy: false, forced: false, boss: false };
+      return d39Dir(P, r.first);
+    }
+    r = d39Bfs(grid, start, goal.fn, base);
+    if (r.ok && r.first) {
+      var e = Map.enemyAt(r.first.x, r.first.y);
+      d.lastStep = {
+        tx: r.first.x, ty: r.first.y, intoEnemy: !!e,
+        forced: !!e && !d.negAvoid, boss: false,
+        monsterId: e ? e.monsterId : null
+      };
+      return d39Dir(P, r.first);
+    }
+    /* 结构兜底：目标无视怪也不可达时，先探图（怪仍然当墙），避免原地卡死 */
+    if (!d.negAvoid) {
+      r = d39Bfs(grid, start, function (x, y) { return !Game.fov.isExplored(x, y); }, noEnemy);
+      if (r.ok) {
+        d.lastStep = { tx: r.first.x, ty: r.first.y, intoEnemy: false, forced: false, boss: false };
+        return d39Dir(P, r.first);
+      }
+    }
+    d.lastStep = null;
+    return null;
+  }
+
+  /* B1 战斗选择。顺序：先保命（嗑药）→ 巡逻怪能逃就逃 → 高性价比火球 → 普攻。 */
+  function b1NeedPotion(rec, P, st, kind) {
+    var m = d37Stats(st);
+    var md = dmgOf(m.atk, P.def);
+    /* Boss 阈值 45%：低于半血时下一发烈焰吐息（约 56–59）仍可能带走，
+     * 45% 是"再挨一发还活着"的下限；非 Boss 35%。 */
+    var th = (kind === 'boss') ? 0.45 : 0.35;
+    if (P.hp <= Math.floor(P.maxHp * th)) return true;
+    if (kind !== 'patrol' && P.hp <= md && healPotions().length > 0) return true;
+    return false;
+  }
+  function b1ShouldFlee(rec, P, st) {
+    var d = rec.b1;
+    if (d.battleKind === 'boss' || d.battleKind === 'blocked') return false;
+    if (d.fleeTriesThisBattle >= 1) return false;
+    var m = d37Stats(st);
+    var md = dmgOf(m.atk, P.def);
+    var my = d37BestHit(P, m.def);
+    var nDie = Math.ceil(P.hp / md);
+    var nKill = Math.ceil(m.hp / my);
+    return nKill > nDie + 1;
+  }
+  function b1UseFireball(P, st, kind) {
+    if (P.mp < 12) return false;
+    if (!Game.Skills || Game.Skills.getCooldown('fireball') > 0) return false;
+    var m = d37Stats(st);
+    var nd = dmgOf(P.atk, m.def);
+    var fd = Math.max(1, Math.round(P.atk * 1.8) - m.def);
+    if (fd - nd < 3) return false;
+    if (Math.ceil(m.hp / nd) <= 1) return false;
+    if (kind === 'boss') return true;
+    /* 非 Boss：只在火球能少打 ≥2 回合时用（挡路怪也会认真打），
+     * 否则普攻，把蓝尽量留给龙。这条规则在 D-44 里做过对照：
+     * 完全禁火球会让 F5 到达数从 25 掉到 17（死在路上），所以不采用。 */
+    return (Math.ceil(m.hp / nd) - Math.ceil(m.hp / fd)) >= 2;
+  }
+  function b1Choose(rec, st, P) {
+    var d = rec.b1, kind = d.battleKind || 'patrol';
+    if (b1NeedPotion(rec, P, st, kind) && healPotions().length > 0) return 'Digit7';
+    if (kind === 'patrol' && b1ShouldFlee(rec, P, st)) {
+      d.fleeAttempts++; d.fleeTriesThisBattle++;
+      return 'Digit3';
+    }
+    if (b1UseFireball(P, st, kind)) return 'Digit4';
+    return 'Digit1';
+  }
+
+  /* D-44 逐回合战斗日志（b1 与 probe 共用；不参与任何决策）。
+   * 详细回合只留 F5 与 Boss 战；其余只留汇总，控制 JSON 体积。 */
+  function d44New() { return { battles: [], current: null }; }
+  function d44Start(rec, e) {
+    var P = Game.Data.Player, B = Game.Systems.Battle, st = B.getState();
+    if (!st || !st.monster) return;
+    rec.d44.current = {
+      floor: P.floor, monsterId: e && e.monsterId, name: st.monster.name,
+      maxHp: st.monster.maxHp, kind: rec.b1 ? rec.b1.battleKind : null,
+      start: { hp: P.hp, maxHp: P.maxHp, mp: P.mp, level: P.level, gold: P.gold, potions: hpPotionCount() },
+      detail: P.floor === 5 || !!(Game.Data.MONSTERS[e.monsterId] && Game.Data.MONSTERS[e.monsterId].boss),
+      rounds: [], dealt: 0, taken: 0, potionUses: 0, nRounds: 0
+    };
+  }
+  function d44Round(rec, code, pre) {
+    var cur = rec.d44 && rec.d44.current;
+    if (!cur || !pre) return;
+    var P = Game.Data.Player, B = Game.Systems.Battle, st = B.getState();
+    var dealt = 0, taken = 0, item = null, evs = (st && st.events) || [];
+    /* pre.round 是行动前的回合号；playerAction 内部会把它 +1 再写事件，
+     * 所以这里必须按"行动后的回合号"过滤，否则会把上一回合的伤害重复记账。 */
+    var roundNow = (st && st.roundNo) ? st.roundNo : pre.round;
+    for (var i = 0; i < evs.length; i++) {
+      var ev = evs[i];
+      if (ev.turn !== roundNow) continue;
+      if (ev.kind === 'player-hit') dealt += ev.dmg;
+      else if (ev.kind === 'monster-hit') taken += ev.dmg;
+      else if (ev.kind === 'player-item') item = ev.itemId;
+    }
+    var act = code === 'Digit7' ? 'potion' : (code === 'Digit4' ? 'fireball'
+      : (code === 'Digit3' ? 'flee' : (code === 'Digit6' ? 'shield' : 'attack')));
+    cur.nRounds++;
+    cur.dealt += dealt;
+    cur.taken += taken;
+    if (code === 'Digit7') cur.potionUses++;
+    if (cur.detail) {
+      cur.rounds.push({
+        r: roundNow, act: act, dealt: dealt, taken: taken, item: item,
+        hp: P.hp, mp: P.mp, mhp: Math.max(0, (st && st.monster) ? st.monster.hp : 0)
+      });
+    }
+  }
+  function d44End(rec, e) {
+    var cur = rec.d44 && rec.d44.current;
+    if (!cur) return;
+    var P = Game.Data.Player;
+    cur.result = e && e.result;
+    cur.end = { hp: P.hp, maxHp: P.maxHp, mp: P.mp, level: P.level, gold: P.gold, potions: hpPotionCount() };
+    cur.drops = (e && e.drops) || [];
+    cur.goldGain = e && (typeof e.gold === 'number') ? e.gold : null;
+    if (!cur.detail) delete cur.rounds;
+    rec.d44.battles.push(cur);
+    rec.d44.current = null;
+  }
+
   /* ── 寻路：BFS（只读 grid + fov 记忆；格子 0=墙、1=地板、2=下行梯、3=上行梯） ── */
   function firstStep(prev, key) {
     var P = Game.Data.Player;
@@ -939,6 +1373,8 @@
     if (rec.m1) m1End(rec);
     /* D-43：血量账换层——先结上一层，再给新一层起账 */
     if (rec.d43) { d43End(rec); }
+    /* D-44：B1 每层进出快照（含进 F5 时的药量，C 组断言读这里） */
+    if (rec.b1) b1End(rec);
     rec.floorNow = P.floor;
     rec.floorActions = 0;
     /* D-37：刷级额度按层计，换层清零 */
@@ -949,6 +1385,8 @@
     if (rec.m1) m1Start(rec);
     /* D-43：新一层起账 */
     if (rec.d43) d43Start(rec);
+    /* D-44：B1 新一层起账 */
+    if (rec.b1) b1Start(rec);
   }
 
   /* ── 一局 ────────────────────────────────────────────────────── */
@@ -957,12 +1395,21 @@
     if (B.isInputLocked()) { frame(STEP); return; }
     var st = B.getState();
     if (!st || !st.monster) { frame(STEP); return; }
+    /* B1：怪已死（消散动画中）时不要再按攻击——否则会把同一回合的伤害重复记账，
+     * 也会把动作数浪费在尸体上。既有策略不进入这条分支，行为不变。 */
+    if (rec.b1 && (st.dying || st.monster.hp <= 0)) { frame(STEP); return; }
     var code = 'Digit1';
     var potionsBefore = healPotions().length;
     var useItem = false;
+    /* D-44：B1 的完整出招顺序（先保命 → 巡逻能逃就逃 → 高性价比火球 → 普攻）。
+     * 不传 opts.b1 时这一行不执行，既有四组优先级一行未动。 */
+    if (rec.b1) {
+      code = b1Choose(rec, st, P);
+      useItem = code === 'Digit7';
+    }
     /* D-19：低血且有回血药 → 战斗中按 7 用药（与探索补药同一 45% 阈值，未放宽）。
      * 真人行为：血量见底时先嗑药再继续打，而不是站着被补掉。 */
-    if (P.hp <= Math.floor(P.maxHp * 0.45) && potionsBefore > 0) {
+    else if (P.hp <= Math.floor(P.maxHp * 0.45) && potionsBefore > 0) {
       code = 'Digit7';
       useItem = true;
     }
@@ -990,7 +1437,7 @@
     else if (rec.m1 && d37DecideFireball(P, st)) {
       code = 'Digit4';
     }
-    var pre = rec.d37 ? {
+    var pre = (rec.d37 || rec.d44) ? {
       mp: P.mp, mhp: st.monster.hp, round: st.roundNo,
       normalWould: dmgOf(P.atk, d37Stats(st).def)
     } : null;
@@ -998,19 +1445,24 @@
     press(code, STEP);
     var n = 0;
     while (n < 30 && Game.Core.Main._scene === 'battle' && B.isInputLocked()) { frame(STEP); n++; }
+    if (rec.d44) d44Round(rec, code, pre);
     d42Sample(rec, st);
     if (useItem && healPotions().length < potionsBefore) rec.battlePotions++;
     if (rec.d37) d37AfterBattleAct(rec, code, pre, st);
   }
 
   function exploreAct(rec) {
-    var P = Game.Data.Player;
+    var P = Game.Data.Player, Map = Game.Systems.Map;
     bumpFloor(rec);
     rec.floorActions++;
     /* 面板残留保护：正常流程不会走到；若真卡住，按 Esc 收场并计数（不当作玩家动作） */
     if (Game.Modal.isOpen()) { rec.modalStuck++; press('Escape', MOVE_MS); return; }
-    /* ① 低血用药（<45%），有药就立刻喝 */
-    if (P.hp <= Math.floor(P.maxHp * 0.45)) {
+    /* ① 低血用药：B1 在 F1–F4 把阈值压到 30%（药留给最终 Boss），F5 仍是 45%；
+     *    其余策略保持原 45% 不变。 */
+    var potionTh = rec.b1
+      ? ((P.floor >= ((Game.Data.MAPS && Game.Data.MAPS.floors) || 5)) ? 0.45 : 0.35)
+      : 0.45;
+    if (P.hp <= Math.floor(P.maxHp * potionTh)) {
       var hp = healPotions();
       if (hp.length) {
         var hpB = P.hp;
@@ -1029,8 +1481,9 @@
       if (si >= 0) { useIndex(si); rec.m1.scrollsUsed++; rec.actions++; return; }
     }
     /* ③ D-18：每到新一层先看一眼商店（真人到新层也会先看货），本层只进一次 */
-    if (!rec.noShop && rec.shopVisitedFloor !== P.floor) {
-      if (rec.m1) m1ShopAct(rec); else shopAct(rec);
+    if (!rec.noShop && rec.shopVisitedFloor !== P.floor &&
+        (!rec.b1 || P.floor >= ((Game.Data.MAPS && Game.Data.MAPS.floors) || 5))) {
+      if (rec.b1) b1ShopAct(rec); else if (rec.m1) m1ShopAct(rec); else shopAct(rec);
       return;
     }
     /* ③b D-40 M1：把本层的怪清完之后再回商店买一次（刷满玩家的真实节奏：先赚钱再花钱） */
@@ -1060,9 +1513,17 @@
     if (rec.d39 && rec.d39.respite > 0) rec.d39.respite--;
     /* ⑤ 移动（D-39：潜行规划；其余情况沿用既有寻路） */
     var dir;
-    if (rec.m1) dir = m1Plan(rec);
+    if (rec.b1) dir = b1Plan(rec);
+    else if (rec.m1) dir = m1Plan(rec);
     else if (rec.d39) dir = rec.d39.avoid ? d39Plan(rec) : d39FallbackDir(rec);
     else dir = nextDir(rec);
+    /* D-44：B1 在 F1–F4 把商店留到"临下楼前"——先收完这一层的金币/宝箱，再花钱；
+     * 这样药和装备才买得起（真人也是快到下一层才结算补给）。每层仍只进一次。 */
+    if (rec.b1 && dir && P.floor < ((Game.Data.MAPS && Game.Data.MAPS.floors) || 5) &&
+        rec.shopVisitedFloor !== P.floor) {
+      var dd0 = DIR_DELTA[dir];
+      if (dd0 && Map.tileAt(P.x + dd0[0], P.y + dd0[1]) === 2) { b1ShopAct(rec); return; }
+    }
     if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
     var bx = P.x, by = P.y, traps0 = rec.traps, hp0m = P.hp;
     rec.actions++;
@@ -1266,6 +1727,9 @@
     if (opts.d42) rec.d42 = { boss: {} };
     /* D-43：血量账遥测（不传 opts.d43 时不安装钩子，行为与 D-42 完全一致） */
     if (opts.d43) rec.d43 = d43New();
+    /* D-44：B1 策略与逐回合战斗日志（不传 opts.b1 / opts.d44log 时均不启用） */
+    if (opts.b1) rec.b1 = b1New(opts.b1);
+    if (opts.b1 || opts.d44log) rec.d44 = d44New();
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;
@@ -1281,6 +1745,8 @@
     rec.floorNow = P.floor;
     rec.shieldOn = false;
     rec.startPos = P.x + ',' + P.y;
+    /* D-44：B1 开局起第一层快照（此时玩家满血满蓝） */
+    if (rec.b1) b1Start(rec);
     /* D-39：开局（玩家已满血满蓝）起第一层台账 */
     if (rec.d39) d39LedgerStart(rec);
     /* D-40：M1 开局起账 */
@@ -1333,6 +1799,8 @@
       m1Extrapolate(rec);
       rec.m1.final = d37Snap(P, P.floor);
     }
+    /* D-44：B1 收尾（留药检查、通关事件序列） */
+    if (rec.b1) b1Finalize(rec);
     /* D-43：收尾结账并卸钩子（下一局重新安装，避免跨局串账） */
     if (rec.d43) {
       d43Finalize(rec);
@@ -1472,6 +1940,42 @@
         cur.d39.fleeSuccess++;
         cur.d39.respite = 6;
       }
+    });
+    /* ── D-44：B1 遭遇分类（独立监听器；只在 rec.b1 存在时生效） ──
+     * 用 lastStep 里"规划那一刻"的落点判断，避免"计划空格、怪随后走进来"被误记成主动踩怪。 */
+    EB.on('battle:start', function (e) {
+      if (!cur || !cur.b1) return;
+      var d = cur.b1, P = Game.Data.Player;
+      var bid = d39BossId(P.floor);
+      var isBoss = !!(bid && e && e.monsterId === bid);
+      var ls = d.lastStep;
+      var stepped = !!(ls && ls.tx === P.x && ls.ty === P.y);
+      var into = !!(stepped && ls.intoEnemy);
+      d.battles++;
+      if (isBoss) {
+        d.boss++; d.battleKind = 'boss';
+      } else if (into) {
+        if (ls.forced) { d.forced++; d.byBlock++; d.battleKind = 'blocked'; }
+        else {
+          d.active++; d.battleKind = 'active';
+          d.activeByFloor[P.floor] = (d.activeByFloor[P.floor] || 0) + 1;
+        }
+      } else { d.patrol++; d.battleKind = 'patrol'; }
+      d.fleeTriesThisBattle = 0;
+      d.lastStep = null;
+    });
+    EB.on('battle:end', function (e) {
+      if (!cur || !cur.b1) return;
+      if (e && e.result === 'run') { cur.b1.fleeSuccess++; cur.b1.fleeTriesThisBattle = 0; }
+    });
+    /* ── D-44：逐回合战斗日志（b1 与 probe 共用；不改变任何决策/数值） ── */
+    EB.on('battle:start', function (e) {
+      if (!cur || !cur.d44) return;
+      d44Start(cur, e);
+    });
+    EB.on('battle:end', function (e) {
+      if (!cur || !cur.d44) return;
+      d44End(cur, e);
     });
   }
 

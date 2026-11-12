@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-44 通关可行性</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-44 · B1 通关冲刺 / G2·S1·M1 同种子对照 / 负例与探针（不参与 run-all，只产出 d44-*.json）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-44 跑局器（只测量）：
+ *   ?n=50                 种子 1001..1000+n（默认 50）
+ *   ?only=b1|g2|s1|m1     只跑一组（默认四组都跑）
+ *   ?mode=neg             B1 的两项负例：negAvoid（不绕怪）/ negReserve（不补药）
+ *   ?mode=probe           S1 seed 1014 单局 + 逐回合战斗日志（回答"48.8% 是药不够还是输出不够"）
+ * 四组策略同种子 1001–1050、maxActions 2500、同一起点；不传 b1/d44log 时既有策略逐帧不变。 */
+(function () {
+  'use strict';
+  var out = {
+    protocol: 'D-44', mode: 'all', strategy: {}, env: {}, summary: {},
+    runs: {}, agg: {}, b1: {}, neg: {}, probe: null, ok: false
+  };
+  function mean(a) {
+    if (!a.length) return 0;
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return Math.round((s / a.length) * 100) / 100;
+  }
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function addTo(o, k, v) { o[k] = (o[k] || 0) + v; }
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+
+  /* 与 D-42/D-43 同口径的到达/死层汇总（B 组逐字段可比） */
+  function aggBase(runs) {
+    var d = {
+      outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {},
+      floorReach: {}, floorKills: {}, floorLevel: {}, floorHp: {},
+      f5: { reached: 0, states: [] }, l5ByF3: 0,
+      killsTotal: 0, killsPerRun: 0, boss: {}
+    };
+    var perFloor = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, hitF5 = (r.floor === 5);
+      var ends = r.floors || [];
+      for (var f = 0; f < ends.length; f++) {
+        var z = ends[f], fl = z.floor;
+        reached[fl] = 1;
+        if (fl === 5) hitF5 = true;
+        if (!perFloor[fl]) perFloor[fl] = { level: [], hp: [], n: 0 };
+        perFloor[fl].n++;
+        perFloor[fl].level.push(z.level);
+        perFloor[fl].hp.push(z.hp);
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      if (hitF5) {
+        d.f5.reached++;
+        d.f5.states.push({
+          seed: r.seed, hp: r.hp, level: r.level,
+          potions: (r.b1 && r.b1.enterF5) ? r.b1.enterF5.potions : null, outcome: r.outcome
+        });
+      }
+      var lvF3 = 0;
+      for (var q = 0; q < ends.length; q++) if (ends[q].floor <= 3 && ends[q].level > lvF3) lvF3 = ends[q].level;
+      if (lvF3 >= 5) d.l5ByF3++;
+      if (r.d42 && r.d42.boss) {
+        for (var bid in r.d42.boss) {
+          if (!Object.prototype.hasOwnProperty.call(r.d42.boss, bid)) continue;
+          var b = r.d42.boss[bid];
+          var cur = d.boss[bid] || (d.boss[bid] = { encounters: 0, maxDealtPct: 0, bestSeed: null, killed: 0 });
+          cur.encounters++;
+          if (b.dealtPct > cur.maxDealtPct) { cur.maxDealtPct = b.dealtPct; cur.bestSeed = r.seed; }
+          if (b.killed) cur.killed++;
+        }
+      }
+    }
+    for (var k2 in perFloor) {
+      d.floorLevel[k2] = mean(perFloor[k2].level);
+      d.floorHp[k2] = mean(perFloor[k2].hp);
+    }
+    d.killsPerRun = Math.round((d.killsTotal / Math.max(1, runs.length)) * 100) / 100;
+    return d;
+  }
+
+  /* B1 专属汇总：主动/挡路/巡逻/ Boss 分类、进 F5 药量、每层进出状态、龙战 */
+  function aggB1(runs) {
+    var a = {
+      runs: runs.length, active: 0, forced: 0, patrol: 0, boss: 0, battles: 0,
+      activeByFloor: {}, forcedByFloor: {},
+      reserve: { need: 4, reachF5: 0, pass: 0, min: null, max: null, values: [], fails: [] },
+      shop: { visits: 0, buys: 0, spent: 0, potionsBought: 0, equipBought: 0, soldCount: 0, soldGold: 0 },
+      floors: { enter: {}, exit: {} },
+      dragon: { attempts: 0, runs: 0, kills: 0, bestDealt: 0, bestDealtPct: 0, bestSeed: null, best: null },
+      wins: [], winSequences: [],
+      potionUsesMax: 0, potionUsesAvg: 0
+    };
+    var use = [], ent = {}, ext = {};
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i], b = r.b1;
+      if (!b) continue;
+      a.battles += b.battles || 0;
+      a.active += b.active || 0;
+      a.forced += b.forced || 0;
+      a.patrol += b.patrol || 0;
+      a.boss += b.boss || 0;
+      for (var af in b.activeByFloor) if (Object.prototype.hasOwnProperty.call(b.activeByFloor, af)) {
+        a.activeByFloor[af] = (a.activeByFloor[af] || 0) + b.activeByFloor[af];
+      }
+      a.shop.visits += b.shopVisits || 0;
+      a.shop.buys += b.shopBuys || 0;
+      a.shop.spent += b.shopSpent || 0;
+      a.shop.potionsBought += b.potionsBought || 0;
+      a.shop.equipBought += b.equipBought || 0;
+      a.shop.soldCount += b.soldCount || 0;
+      a.shop.soldGold += b.soldGold || 0;
+      if (b.dragon) {
+        a.dragon.attempts += b.dragon.battles || 0;
+        a.dragon.runs += b.dragon.reached ? 1 : 0;
+        a.dragon.kills += b.dragon.killed || 0;
+        if (b.dragon.best && b.dragon.best.dealt > a.dragon.bestDealt) {
+          a.dragon.bestDealt = b.dragon.best.dealt;
+          a.dragon.bestDealtPct = Math.round((b.dragon.best.dealt / 260) * 1000) / 10;
+          a.dragon.bestSeed = r.seed;
+          a.dragon.best = b.dragon.best;
+        }
+      }
+      var uses = 0;
+      for (var e = 0; e < (b.floorExit || []).length; e++) {
+        var z = b.floorExit[e];
+        var pe = ext[z.floor] || (ext[z.floor] = { n: 0, hp: 0, hpPct: 0, mp: 0, level: 0, gold: 0, potions: 0, kills: 0, actions: 0 });
+        pe.n++; pe.hp += z.hp; pe.hpPct += z.maxHp ? (z.hp / z.maxHp) * 100 : 0;
+        pe.mp += z.mp; pe.level += z.level; pe.gold += z.gold;
+        pe.potions += z.potionsOut; pe.kills += z.kills; pe.actions += z.actions;
+      }
+      for (var n = 0; n < (b.floorEnter || []).length; n++) {
+        var y = b.floorEnter[n];
+        var q = ent[y.floor] || (ent[y.floor] = { n: 0, hp: 0, hpPct: 0, mp: 0, level: 0, gold: 0, potions: 0 });
+        q.n++; q.hp += y.hp; q.hpPct += y.maxHp ? (y.hp / y.maxHp) * 100 : 0;
+        q.mp += y.mp; q.level += y.level; q.gold += y.gold; q.potions += y.potions;
+      }
+      if (b.enterF5) {
+        a.reserve.reachF5++;
+        a.reserve.values.push({ seed: r.seed, potions: b.enterF5.potions, pass: b.enterF5.potions >= 4 });
+        if (b.enterF5.potions >= 4) a.reserve.pass++;
+        else a.reserve.fails.push({ seed: r.seed, potions: b.enterF5.potions });
+        if (a.reserve.min === null || b.enterF5.potions < a.reserve.min) a.reserve.min = b.enterF5.potions;
+        if (a.reserve.max === null || b.enterF5.potions > a.reserve.max) a.reserve.max = b.enterF5.potions;
+      }
+      if (r.outcome === 'win') {
+        a.wins.push(r.seed);
+        if (b.winSequence) a.winSequences.push({ seed: r.seed, seq: b.winSequence });
+      }
+      var pu = 0, allB = (r.d44 && r.d44.battles) || [];
+      for (var s = 0; s < allB.length; s++) pu += allB[s].potionUses || 0;
+      use.push(pu);
+      if (pu > a.potionUsesMax) a.potionUsesMax = pu;
+    }
+    a.potionUsesAvg = mean(use);
+    function rows(src) {
+      var o = {};
+      for (var k in src) {
+        var x = src[k];
+        o[k] = {
+          runs: x.n, avgHp: Math.round((x.hp / x.n) * 100) / 100,
+          avgHpPct: Math.round((x.hpPct / x.n) * 10) / 10,
+          avgMp: Math.round((x.mp / x.n) * 100) / 100,
+          avgLevel: Math.round((x.level / x.n) * 100) / 100,
+          avgGold: Math.round((x.gold / x.n) * 100) / 100,
+          avgPotions: Math.round((x.potions / x.n) * 100) / 100
+        };
+        if (x.kills !== undefined) {
+          o[k].avgKills = Math.round((x.kills / x.n) * 100) / 100;
+          o[k].avgActions = Math.round((x.actions / x.n) * 100) / 100;
+        }
+      }
+      return o;
+    }
+    a.floors.enter = rows(ent);
+    a.floors.exit = rows(ext);
+    return a;
+  }
+
+  /* 紧凑 run：四组共用字段（B 组逐项可比），B1 额外带每层快照与 F5 逐回合 */
+  function trimRun(r, strategy) {
+    var o = {
+      seed: r.seed, outcome: r.outcome, deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      hp: r.hp, level: r.level, gold: r.gold, equip: r.equip, kills: r.kills,
+      battles: r.battles, actions: r.actions, simSec: r.simSec,
+      shopVisits: r.shopVisits, shopBuys: r.shopBuys, shopSpent: r.shopSpent,
+      potions: r.potions, d42: r.d42 || null,
+      death: r.death || null, deathCause: r.deathCause || null
+    };
+    if (strategy === 'b1') {
+      o.maxHp = r.b1 ? (r.b1.enterF5 ? r.b1.enterF5.maxHp : (r.b1.final ? r.b1.final.maxHp : null)) : null;
+      o.b1 = r.b1;
+      o.battleSummaries = ((r.d44 && r.d44.battles) || []).map(function (b) {
+        return {
+          floor: b.floor, monsterId: b.monsterId, kind: b.kind, result: b.result,
+          nRounds: b.nRounds, dealt: b.dealt, taken: b.taken, potionUses: b.potionUses
+        };
+      });
+      o.f5Battles = ((r.d44 && r.d44.battles) || []).filter(function (b) {
+        return b.floor === 5 || b.monsterId === 'dragon';
+      });
+    }
+    return o;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init();
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    out.env.maxActions = 2500;
+    out.env.protocol = 'D-44';
+    var seeds = seedsOf(n);
+    out.env.seeds = seeds;
+    out.env.seedList = seeds;
+
+    var OLD = { maxActions: 2500, d42: true };
+    function optsFor(key) {
+      if (key === 'b1') return { maxActions: 2500, b1: { reserve: 4 }, d42: true };
+      if (key === 'g2') return { maxActions: 2500, d37: { fireball: true, flee: true }, d42: true };
+      if (key === 's1') return { maxActions: 2500, d39: { avoid: true }, d42: true };
+      return { maxActions: 2500, m1: { clear: true }, d42: true };
+    }
+
+    if (/mode=probe/.test(qs)) {
+      var pr = Game.Bot.run(1014, { maxActions: 2500, d39: { avoid: true }, d42: true, d44log: true });
+      var dragons = (pr.d44 && pr.d44.battles ? pr.d44.battles : []).filter(function (b) { return b.monsterId === 'dragon'; });
+      var f5 = (pr.d44 && pr.d44.battles ? pr.d44.battles : []).filter(function (b) { return b.floor === 5; });
+      out.mode = 'probe';
+      out.probe = {
+        seed: 1014, strategy: 's1', outcome: pr.outcome, deathFloor: pr.deathFloor, floor: pr.floor,
+        hp: pr.hp, maxHp: pr.b1 ? null : Game.Data.Player.maxHp, level: pr.level, gold: pr.gold,
+        d42: pr.d42 || null,
+        dragonBattles: dragons,
+        f5Battles: f5,
+        note: 'S1 seed 1014：D-43 里把巨龙打到 48.8% 的那一局，逐回合日志用于回答"药不够还是输出不够"'
+      };
+      out.ok = true;
+      document.title = 'PROBE_DONE dragonDealt=' + (pr.d42 && pr.d42.boss.dragon ? pr.d42.boss.dragon.dealtPct : '-');
+      window.__D44__ = out;
+      document.getElementById('report').textContent = JSON.stringify(out);
+      return;
+    }
+
+    if (/mode=neg/.test(qs)) {
+      var nn = Math.min(n, 20);
+      var negSeeds = seedsOf(nn);
+      var avoid = Game.Bot.batch(negSeeds, { maxActions: 2500, b1: { reserve: 4, negAvoid: true }, d42: true });
+      var reserve = Game.Bot.batch(negSeeds, { maxActions: 2500, b1: { reserve: 4, negReserve: true }, d42: true });
+      out.mode = 'neg';
+      out.neg = {
+        seeds: negSeeds,
+        avoid: { agg: aggBase(avoid.runs), b1: aggB1(avoid.runs), runs: avoid.runs.map(function (r) { return trimRun(r, 'b1'); }) },
+        reserve: { agg: aggBase(reserve.runs), b1: aggB1(reserve.runs), runs: reserve.runs.map(function (r) { return trimRun(r, 'b1'); }) }
+      };
+      out.ok = true;
+      document.title = 'NEG_DONE avoidActive=' + out.neg.avoid.b1.active +
+        ' reservePass=' + out.neg.reserve.b1.reserve.pass + '/' + out.neg.reserve.b1.reserve.reachF5;
+      window.__D44__ = out;
+      document.getElementById('report').textContent = JSON.stringify(out);
+      return;
+    }
+
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(seeds, optsFor(key));
+      out.runs[key] = res.runs.map(function (r) { return trimRun(r, key); });
+      out.summary[key] = res.summary;
+      out.agg[key] = aggBase(res.runs);
+      out.strategy[key] = optsFor(key);
+      if (key === 'b1') out.b1 = aggB1(res.runs);
+    }
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'BATCH_DONE n=' + n +
+      ' b1_f5=' + out.agg.b1.f5.reached +
+      ' b1_dragon=' + out.b1.dragon.attempts +
+      ' b1_kills=' + out.b1.dragon.kills +
+      ' b1_reserve=' + out.b1.reserve.pass + '/' + out.b1.reserve.reachF5 +
+      ' g2_f5=' + out.agg.g2.f5.reached +
+      ' s1_f5=' + out.agg.s1.f5.reached +
+      ' m1_f4=' + (out.agg.m1.floorReach['4'] || 0) +
+      ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D44__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

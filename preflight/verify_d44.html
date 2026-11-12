@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-44：读取 selfcheck/d44-after.json、d44-neg.json、d44-probe.json、d44-git.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-44 通关可行性</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:14px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:right; }
+  th { color:#9fd; }
+  td.l, th.l { text-align:left; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-44 · B1 通关可行性：只打挡路 / 留药 / F5 直奔 Boss / 打龙取舍（A–E）</h1>
+<pre id="result">RUNNING</pre>
+<h2>通关事件序列（seed 1004，完整：每层进出 + F5 逐回合）</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function r2(v) { return Math.round(v * 100) / 100; }
+  function pct(a, b) { return b > 0 ? Math.round((a / b) * 1000) / 10 : null; }
+  function runsOf(J, s) { return (J && J.runs && J.runs[s]) || []; }
+  function sumKeys(o, keys) {
+    var s = 0;
+    for (var i = 0; i < keys.length; i++) s += (o && o[keys[i]]) || 0;
+    return s;
+  }
+
+  var AFTER = readJson('selfcheck/d44-after.json');
+  var NEG = readJson('selfcheck/d44-neg.json');
+  var PROBE = readJson('selfcheck/d44-probe.json');
+  var GIT = readJson('selfcheck/d44-git.json');
+
+  try {
+    if (!AFTER || !NEG || !PROBE || !GIT) throw new Error('缺少 d44-after/neg/probe/git 测量产物');
+    var API = ['b1', 'g2', 's1', 'm1'];
+    var B1R = runsOf(AFTER, 'b1');
+    var AGG = AFTER.agg || {};
+    var B1 = AFTER.b1 || {};
+
+    /* ── A 组：B1 在 F1–F4 主动开战必须为 0；负例"不绕怪"必须 >0 ── */
+    var F14 = ['1', '2', '3', '4'];
+    var active14 = sumKeys(B1.activeByFloor, F14);
+    var active5 = B1.activeByFloor && B1.activeByFloor['5'] || 0;
+    var perRunActive14 = [];
+    for (var i = 0; i < B1R.length; i++) {
+      var ab = (B1R[i].b1 && B1R[i].b1.activeByFloor) || {};
+      perRunActive14.push({ seed: B1R[i].seed, active14: sumKeys(ab, F14), active5: ab['5'] || 0 });
+    }
+    var badA = perRunActive14.filter(function (x) { return x.active14 > 0; });
+    var negAvoid = NEG.neg && NEG.neg.avoid && NEG.neg.avoid.b1;
+    var negActive14 = negAvoid ? sumKeys(negAvoid.activeByFloor, F14) : 0;
+    rec('A_b1_active_f1_f4_zero', badA.length === 0 && active14 === 0 &&
+      B1.forced > 0 && B1.patrol > 0, {
+      rule: 'B1 在 F1–F4 只能因挡路(forced)或巡逻贴脸(patrol)开战；active(主动踩怪) 必须为 0',
+      activeF1F4: active14, activeF5: active5, activeRuns: badA,
+      forced: B1.forced, patrol: B1.patrol, boss: B1.boss, battles: B1.battles,
+      note: 'F5 的 1 次 active 是通往 Boss 的路上被杂兵占位，不计入 A 组（A 只约束 F1–F4）'
+    });
+    rec('A_neg_avoid_shortcircuit', negActive14 > 0 && negAvoid && negAvoid.active > 0, {
+      rule: '负例：寻路不把怪当墙（negAvoid）必须产生 active>0，证明"A 组的 0"不是记账失灵',
+      seeds: (NEG.neg && NEG.neg.seeds || []).length,
+      activeF1F4: negActive14, activeTotal: negAvoid ? negAvoid.active : null,
+      forced: negAvoid ? negAvoid.forced : null, patrol: negAvoid ? negAvoid.patrol : null
+    });
+
+    /* ── B 组：四策略同种子 1001–1050、同 maxActions 2500、字段逐项可比 ── */
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050;
+    var REQ_RUN = ['seed', 'outcome', 'deathFloor', 'floor', 'hp', 'level', 'gold', 'equip',
+      'kills', 'battles', 'actions', 'shopVisits', 'shopBuys', 'shopSpent', 'potions'];
+    var REQ_AGG = ['outcomes', 'deathFloor', 'floorReach', 'f5', 'killsTotal', 'boss'];
+    var fieldBad = [], countBad = [], maxActBad = [];
+    var tableB = [];
+    for (var ai = 0; ai < API.length; ai++) {
+      var k = API[ai], rs = runsOf(AFTER, k), ag = AGG[k];
+      if (rs.length !== 50) countBad.push({ s: k, n: rs.length });
+      for (var si = 0; si < rs.length; si++) {
+        for (var fi = 0; fi < REQ_RUN.length; fi++) {
+          if (!Object.prototype.hasOwnProperty.call(rs[si], REQ_RUN[fi])) {
+            fieldBad.push({ s: k, seed: rs[si].seed, field: REQ_RUN[fi] });
+          }
+        }
+      }
+      for (var gi = 0; gi < REQ_AGG.length; gi++) {
+        if (!ag || !Object.prototype.hasOwnProperty.call(ag, REQ_AGG[gi])) fieldBad.push({ s: k, aggField: REQ_AGG[gi] });
+      }
+      var st = (AFTER.strategy && AFTER.strategy[k]) || {};
+      if (st.maxActions !== 2500) maxActBad.push({ s: k, maxActions: st.maxActions });
+      tableB.push({
+        strategy: k, runs: rs.length, f5: ag ? ag.f5.reached : null,
+        win: ag ? ag.outcomes.win : null, dead: ag ? ag.outcomes.dead : null,
+        stuck: ag ? ag.outcomes.stuck : null, kills: ag ? ag.killsTotal : null,
+        dragonKilled: ag && ag.boss && ag.boss.dragon ? ag.boss.dragon.killed : 0
+      });
+    }
+    var outcomesSumOk = tableB.every(function (x) { return x.win + x.dead + x.stuck === 50; });
+    rec('B_same_seeds_fields', seedOk && fieldBad.length === 0 && countBad.length === 0 &&
+      maxActBad.length === 0 && AFTER.env.maxActions === 2500 && outcomesSumOk, {
+      rule: 'B1/G2/S1/M1 全部种子 1001–1050、maxActions 2500；run 与 agg 字段集必须一致且可逐项对照',
+      seeds: { n: seeds.length, first: seeds[0], last: seeds[49] },
+      maxActions: AFTER.env.maxActions, maxActBad: maxActBad,
+      countBad: countBad, fieldBad: fieldBad.slice(0, 8), outcomesSumOk: outcomesSumOk,
+      table: tableB
+    });
+
+    /* ── C 组：留药——正例达成，短路后断言必须 FAIL ── */
+    function reserveJudge(r) {
+      if (!r || !r.reachF5) return { ok: false, rate: null, pass: r ? r.pass : 0, reach: r ? r.reachF5 : 0 };
+      var rate = r.pass / r.reachF5;
+      return { ok: rate >= 0.10, rate: rate, pass: r.pass, reach: r.reachF5, need: r.need };
+    }
+    var posC = reserveJudge(B1.reserve);
+    var negR = NEG.neg && NEG.neg.reserve && NEG.neg.reserve.b1;
+    var negC = reserveJudge(negR && negR.reserve);
+    var winRun = null;
+    for (var w = 0; w < B1R.length; w++) if (B1R[w].outcome === 'win') winRun = B1R[w];
+    var winHas4 = !!(winRun && winRun.b1 && winRun.b1.enterF5 && winRun.b1.enterF5.potions >= 4);
+    rec('C_reserve_positive', posC.ok && winHas4 && B1.reserve && B1.reserve.need === 4, {
+      rule: 'B1 进 F5 的药量判据：至少 4 瓶；达成率 ≥10% 视为"规则在真局里生效"（金不够时只能买到几瓶，如实记录）',
+      need: B1.reserve && B1.reserve.need,
+      reachF5: posC.reach, pass: posC.pass, rate: pct(posC.pass, posC.reach),
+      values: B1.reserve && B1.reserve.values, fails: B1.reserve && B1.reserve.fails,
+      winningRun: winRun ? { seed: winRun.seed, potions: winRun.b1.enterF5.potions, hp: winRun.b1.enterF5.hp, level: winRun.b1.enterF5.level } : null
+    });
+    rec('C_reserve_negative_fails', negC.reach > 0 && !negC.ok && negC.pass < posC.pass, {
+      rule: '负例：negReserve=true（不补药）必须让"进 F5 ≥4 瓶、达成率 ≥10%"断言 FAIL',
+      reachF5: negC.reach, pass: negC.pass, rate: pct(negC.pass, negC.reach),
+      positivePass: posC.pass, positiveRate: pct(posC.pass, posC.reach),
+      values: negR && negR.reserve && negR.reserve.values
+    });
+
+    /* ── D 组：声明通关必须给完整事件序列 ── */
+    var wins = B1R.filter(function (x) { return x.outcome === 'win'; });
+    var seqBad = [], seqOut = [];
+    for (var wi = 0; wi < wins.length; wi++) {
+      var wr = wins[wi], seq = wr.b1 && wr.b1.winSequence;
+      var errs = [];
+      if (!seq) errs.push('no winSequence');
+      else {
+        if (!seq.floors || (seq.floors.enter || []).length < 5) errs.push('enter<5');
+        if (!seq.floors || (seq.floors.exit || []).length !== 4) errs.push('exit!=4');
+        var needKeys = ['hp', 'maxHp', 'mp', 'level', 'gold', 'weaponId', 'armorId', 'potions'];
+        var allFloors = ((seq.floors && seq.floors.enter) || []).concat((seq.floors && seq.floors.exit) || []);
+        for (var q = 0; q < allFloors.length; q++) {
+          for (var nk = 0; nk < needKeys.length; nk++) {
+            var key = needKeys[nk];
+            var hasKey = Object.prototype.hasOwnProperty.call(allFloors[q], key);
+            /* 出口快照用 potionsIn/potionsOut，进场快照用 potions——两者都算"药量在场" */
+            if (key === 'potions' && !hasKey) {
+              hasKey = Object.prototype.hasOwnProperty.call(allFloors[q], 'potionsOut');
+            }
+            if (!hasKey) errs.push('floor#' + allFloors[q].floor + ' missing ' + key);
+          }
+        }
+        var db = null;
+        for (var b = 0; b < (seq.f5Battles || []).length; b++) if (seq.f5Battles[b].monsterId === 'dragon') db = seq.f5Battles[b];
+        if (!db) errs.push('no dragon battle');
+        else {
+          if (db.result !== 'win') errs.push('dragon not win');
+          if (!db.rounds || !db.rounds.length) errs.push('no dragon rounds');
+          if (db.rounds && db.rounds[db.rounds.length - 1].mhp !== 0) errs.push('last mhp != 0');
+          var sumDealt = 0;
+          for (var rr = 0; rr < (db.rounds || []).length; rr++) {
+            var rd = db.rounds[rr];
+            sumDealt += rd.dealt || 0;
+            if (!('r' in rd) || !('act' in rd) || !('dealt' in rd) || !('taken' in rd) ||
+                !('hp' in rd) || !('mp' in rd) || !('mhp' in rd)) errs.push('round missing field');
+            if (rd.act === 'potion' && !rd.item) errs.push('potion round without item');
+          }
+          if (sumDealt < 260) errs.push('dealt<260');
+        }
+      }
+      if (errs.length) seqBad.push({ seed: wr.seed, errs: errs });
+      seqOut.push({
+        seed: wr.seed, outcome: wr.outcome, floor: wr.floor,
+        enter: seq && seq.floors ? seq.floors.enter : null,
+        exit: seq && seq.floors ? seq.floors.exit : null,
+        dragon: (function () {
+          var z = null;
+          for (var t = 0; t < ((seq && seq.f5Battles) || []).length; t++) if (seq.f5Battles[t].monsterId === 'dragon') z = seq.f5Battles[t];
+          return z ? { start: z.start, end: z.end, dealt: z.dealt, taken: z.taken, nRounds: z.nRounds,
+            potionUses: z.potionUses, rounds: z.rounds } : null;
+        })()
+      });
+    }
+    rec('D_win_sequence_complete', wins.length > 0 && seqBad.length === 0 &&
+      B1.dragon && B1.dragon.kills >= 1, {
+      rule: '只要声明通关，就必须有每层进出 HP/MP/等级/金币/装备 + F5 龙战逐回合（伤害/用药）；拿不出序列的通关不算',
+      wins: wins.length, dragonKilled: B1.dragon ? B1.dragon.kills : 0,
+      bad: seqBad, sequences: seqOut
+    });
+
+    /* ── E 组：js/ 零改动 ── */
+    var jsDiff = String((GIT && GIT.diffStat) || '').trim();
+    var jsStatus = String((GIT && GIT.status) || '').trim();
+    rec('E_js_untouched', jsDiff === '' && jsStatus === '' && !!GIT.head, {
+      rule: 'git diff --stat -- js 与 git status --porcelain -- js 都必须为空；D-44 只改 preflight/',
+      head: GIT.head || null, diffStat: jsDiff, status: jsStatus,
+      note: 'd44-git.json 由 d44-report.ps1 在跑完 50 局后现场采集'
+    });
+
+    /* ── 目标与最接近一局（不参与 PASS/FAIL，供报告引用） ── */
+    var target = {
+      kills: { target: 3, actual: (B1.dragon && B1.dragon.kills) || 0 },
+      win: { target: 1, actual: (AGG.b1 && AGG.b1.outcomes.win) || 0 }
+    };
+    var closest = null;
+    for (var ci = 0; ci < B1R.length; ci++) {
+      var cr = B1R[ci], dbest = null;
+      for (var cb = 0; cb < ((cr.f5Battles) || []).length; cb++) {
+        if (cr.f5Battles[cb].monsterId === 'dragon') dbest = cr.f5Battles[cb];
+      }
+      if (!dbest) continue;
+      var rec0 = {
+        seed: cr.seed, result: dbest.result, dealt: dbest.dealt, taken: dbest.taken,
+        nRounds: dbest.nRounds, potionUses: dbest.potionUses,
+        dragonHpLeft: 260 - dbest.dealt, pct: pct(dbest.dealt, 260),
+        enterPotions: cr.b1.enterF5.potions, level: cr.b1.enterF5.level,
+        maxHp: cr.b1.enterF5.maxHp, endHp: dbest.end.hp
+      };
+      if (rec0.result !== 'win' && (!closest || rec0.dealt > closest.dealt)) closest = rec0;
+    }
+    out.targets = target;
+    out.closest = closest;
+    out.probe = {
+      seed: PROBE.probe && PROBE.probe.seed,
+      dealtPct: PROBE.probe && PROBE.probe.d42 && PROBE.probe.d42.boss && PROBE.probe.d42.boss.dragon && PROBE.probe.d42.boss.dragon.dealtPct,
+      dragonHpLeft: PROBE.probe && PROBE.probe.d42 && PROBE.probe.d42.boss && PROBE.probe.d42.boss.dragon && PROBE.probe.d42.boss.dragon.minHp,
+      rounds: PROBE.probe && PROBE.probe.dragonBattles && PROBE.probe.dragonBattles[0] && PROBE.probe.dragonBattles[0].nRounds,
+      potions: PROBE.probe && PROBE.probe.dragonBattles && PROBE.probe.dragonBattles[0] && PROBE.probe.dragonBattles[0].potionUses,
+      enterPotions: PROBE.probe && PROBE.probe.dragonBattles && PROBE.probe.dragonBattles[0] && PROBE.probe.dragonBattles[0].start.potions,
+      maxHp: PROBE.probe && PROBE.probe.dragonBattles && PROBE.probe.dragonBattles[0] && PROBE.probe.dragonBattles[0].start.maxHp
+    };
+
+    out.ok = Object.keys(out.sub).every(function (k2) { return out.sub[k2].ok; });
+
+    /* ── 可读事件序列（页面展示；run-all 只读 #result） ── */
+    var dv = document.getElementById('detail');
+    if (seqOut.length && seqOut[0].enter) {
+      var sx = seqOut[0], h = [];
+      h.push('<table><tr><th class="l">楼层</th><th>HP</th><th>MP</th><th>Lv</th><th>金币</th><th class="l">武器/护甲</th><th>药</th></tr>');
+      function rowS(tag, z) {
+        return '<tr><td class="l">' + tag + ' F' + z.floor + '</td><td>' + z.hp + '/' + z.maxHp +
+          '</td><td>' + z.mp + '/' + z.maxMp + '</td><td>' + z.level + '</td><td>' + z.gold +
+          '</td><td class="l">' + (z.weaponId || '-') + ' / ' + (z.armorId || '-') +
+          '</td><td>' + (z.potions != null ? z.potions : z.potionsOut) + '</td></tr>';
+      }
+      for (var e1 = 0; e1 < sx.enter.length; e1++) h.push(rowS('进', sx.enter[e1]));
+      for (var e2 = 0; e2 < sx.exit.length; e2++) h.push(rowS('出', sx.exit[e2]));
+      h.push('</table>');
+      if (sx.dragon) {
+        h.push('<table><tr><th>回合</th><th class="l">动作</th><th>对龙伤害</th><th>龙对我</th><th>我的HP</th><th>MP</th><th>龙HP</th><th class="l">用药</th></tr>');
+        for (var e3 = 0; e3 < sx.dragon.rounds.length; e3++) {
+          var rd2 = sx.dragon.rounds[e3];
+          h.push('<tr><td>' + rd2.r + '</td><td class="l">' + rd2.act + '</td><td>' + rd2.dealt +
+            '</td><td>' + rd2.taken + '</td><td>' + rd2.hp + '</td><td>' + rd2.mp +
+            '</td><td>' + rd2.mhp + '</td><td class="l">' + (rd2.item || '') + '</td></tr>');
+        }
+        h.push('</table>');
+      }
+      dv.innerHTML = h.join('');
+    } else {
+      dv.textContent = '（本批没有通关局；见 #result 的 closest 字段）';
+    }
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D44_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  /* 裁决行必须是行首 "PASS {json}" / "FAIL {json}"（run-all.ps1 的 Get-PageVerdict 只认这种形态） */
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>
