@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-51：读取 selfcheck/d51-after.json（本卡跑局）与 d50-after.json（数值基线），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-51 暂停菜单与存档管理</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:12px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:left; }
+  th { color:#9fd; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-51 · 暂停真停 / 战斗时间轴挂起 / 返回主菜单保进度 / 单 rAF / 清档二次确认 / 旧档 / 数值零改动（A–G）</h1>
+<pre id="result">RUNNING</pre>
+<h2>暂停 3 秒计数器</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D51ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D51ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D51ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readText(rel).replace(/^\uFEFF/, '')); } catch (e) { return null; } }
+  var M = Game.Core.Main, R = Game.Core.Render, S = Game.Systems.Save, P = Game.Data.Player;
+  var B = Game.Systems.Battle, MAP = Game.Systems.Map;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+
+  var T = 10000; /* 合成帧时间戳（ms） */
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+  function frame(ms) {
+    T += (typeof ms === 'number') ? ms : 16.7;
+    try { M.loop(T); } catch (e) { window.__D51ERR.push('frame: ' + ((e && e.message) || e)); }
+  }
+  /* 菜单键盘：一次按键 = keydown → 手动驱动菜单逻辑 → keyup（不依赖 rAF） */
+  function press(code) {
+    kd(code);
+    try { M._updateMenu(1e9); } catch (e) { window.__D51ERR.push('press ' + code + ': ' + ((e && e.message) || e)); }
+    ku(code);
+  }
+  function menuSel(n) {
+    var st = M.getMenuState(), guard = 0;
+    while (st.sel < n && guard++ < 12) { press('ArrowDown'); st = M.getMenuState(); }
+    while (st.sel > n && guard++ < 12) { press('ArrowUp'); st = M.getMenuState(); }
+    return st.sel;
+  }
+  function settingsSel(n) {
+    var st = M.getMenuState(), guard = 0;
+    while (st.settingsSel < n && guard++ < 12) { press('ArrowDown'); st = M.getMenuState(); }
+    while (st.settingsSel > n && guard++ < 12) { press('ArrowUp'); st = M.getMenuState(); }
+    return st.settingsSel;
+  }
+  function stored() { try { return JSON.parse(localStorage.getItem(SET_KEY) || 'null'); } catch (e) { return null; } }
+  function walkableDir() {
+    var ds = [['ArrowRight', 1, 0], ['ArrowLeft', -1, 0], ['ArrowDown', 0, 1], ['ArrowUp', 0, -1]];
+    for (var i = 0; i < ds.length; i++) {
+      if (MAP.isWalkable(P.x + ds[i][1], P.y + ds[i][2])) return ds[i][0];
+    }
+    return null;
+  }
+
+  try {
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { /* 存储禁用时后续断言会如实失败 */ }
+
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    frame();
+
+    /* ── A：暂停期间确实停了（步数 / AI tick / 回合计时三类计数器） ── */
+    var dir = walkableDir();
+    var P0 = { x: P.x, y: P.y };
+    kd(dir); frame(); ku(dir); frame();
+    var c0 = M._counters();
+    kd('Escape'); frame(); ku('Escape');
+    var opened = M.isPaused();
+    var spec = M._pauseSpec();
+    var shape = spec.items.map(function (x) { return x.id; }).join(',') === 'resume,settings,menu,abandon';
+    /* 暂停期间仍按住方向键：若游戏还在跑，步数/AI tick 必然增长 */
+    kd(dir);
+    for (var a = 0; a < 180; a++) frame();
+    ku(dir);
+    var c1 = M._counters();
+    var frozen = opened && c1.steps === c0.steps && c1.aiTicks === c0.aiTicks &&
+      c1.battleTicks === c0.battleTicks && c1.turnClock === c0.turnClock;
+    /* 恢复：同一按键可继续走（没有丢输入） */
+    kd('Escape'); frame(); ku('Escape');
+    var resumed = !M.isPaused();
+    kd(dir); frame(); ku(dir); frame();
+    var c2 = M._counters();
+    var moved = c2.steps > c1.steps;
+    /* 负例：只画暂停遮罩、不真正暂停 → 同一判据必须判定"没停"（frozen=false） */
+    var n0 = M._counters();
+    kd(dir);
+    for (var nf = 0; nf < 180; nf++) { frame(); try { R.drawPause(M._pauseSpec()); } catch (e) { } }
+    ku(dir);
+    var n1 = M._counters();
+    var maskOnlyFrozen = n0.steps === n1.steps && n0.aiTicks === n1.aiTicks &&
+      n0.battleTicks === n1.battleTicks && n0.turnClock === n1.turnClock;
+    rec('A_pause_really_stops', dir !== null && frozen && resumed && moved && shape && maskOnlyFrozen === false, {
+      rule: '暂停 3 秒（180 帧）后步数 / AI tick / 战斗 tick / 回合计时四类计数全部不变；' +
+        '恢复后同一按键继续生效；负例"只盖遮罩不暂停"必须被同一判据判为没停',
+      dir: dir, opened: opened, items: spec.items.map(function (x) { return x.id; }),
+      before: c0, paused3s: c1, afterResume: c2,
+      frozen: frozen, resumed: resumed, moved: moved,
+      negativeMaskOnly: { frozen: maskOnlyFrozen, rejected: maskOnlyFrozen === false, counters: n1 }
+    });
+
+    /* ── B：战斗中暂停再恢复：不跳帧、不重复结算、不丢输入锁 ── */
+    M.switchScene('battle');
+    B.start('slime');
+    frame();
+    B.playerAction('attack');
+    var tl0 = B.getTimeline();
+    var bs = B.getState();
+    var bBase = {
+      mhp: bs.monster.hp, php: P.hp, round: bs.roundNo, turn: bs.turn,
+      startedAt: tl0.rec ? tl0.rec.startedAt : 0, locked: tl0.locked, pending: !!bs.pending
+    };
+    var evBase = (bs.events || []).length;
+    frame(); /* 玩家段已结算，怪物段仍在待播 */
+    kd('Escape'); frame(); ku('Escape');
+    var bPaused = M.isPaused();
+    var mid0 = B.getTimeline();
+    for (var b = 0; b < 180; b++) frame();
+    var mid1 = B.getTimeline();
+    var bFrozen = bPaused && B.getState().monster.hp === bBase.mhp && P.hp === bBase.php &&
+      B.getState().roundNo === bBase.round && mid0.rec.startedAt === mid1.rec.startedAt &&
+      mid0.locked === mid1.locked && (mid1.events || []).length === (mid0.events || []).length;
+    /* 恢复：第一帧时间轴从暂停处继续，怪物段不能提前结算 */
+    kd('Escape'); frame(); ku('Escape');
+    var first = {
+      mhp: B.getState().monster.hp, php: P.hp, round: B.getState().roundNo,
+      locked: B.isInputLocked(), startedAt: B.getTimeline().rec.startedAt
+    };
+    var noJump = first.mhp === bBase.mhp && first.php === bBase.php && first.round === bBase.round &&
+      first.startedAt === bBase.startedAt && first.locked === bBase.locked;
+    /* 走完剩余时间轴：怪物段恰好结算一次 */
+    for (var b2 = 0; b2 < 12; b2++) frame();
+    var afterSeg = { php: P.hp, mhp: B.getState().monster.hp, round: B.getState().roundNo };
+    var hits1 = B.getState().events.slice(evBase).filter(function (e) { return e.kind === 'monster-hit'; }).length;
+    for (var b3 = 0; b3 < 60; b3++) frame();
+    var hits2 = B.getState().events.slice(evBase).filter(function (e) { return e.kind === 'monster-hit'; }).length;
+    var once = hits1 === 1 && hits2 === 1 && afterSeg.php === P.hp &&
+      afterSeg.mhp === bBase.mhp && afterSeg.round === bBase.round;
+    B.abort();
+    M.switchScene('explore');
+    rec('B_battle_pause_resume', bFrozen && noJump && once, {
+      rule: '战斗回合中暂停 3 秒：怪物血量 / 玩家血量 / 回合号 / 时间轴起点 / 输入锁全部不变；' +
+        '恢复首帧时间轴从原处继续（不跳帧）；剩余时间走完后怪物段只结算一次（monster-hit=1）',
+      base: bBase, paused: bFrozen, resumeFirstFrame: first, noJump: noJump,
+      hitsAfterResume: hits1, hitsAfter1s: hits2, settledOnce: once
+    });
+
+    /* ── C：暂停 → 返回主菜单 → 继续游戏，局面逐项一致 ── */
+    M.switchScene('explore');
+    P.hp = 61; P.gold = 321; P.level = 3;
+    P.inventory = { potion_small: 2 };
+    if (Game.Systems.Inventory && Game.Systems.Inventory.recalcEquip) Game.Systems.Inventory.recalcEquip();
+    var cBefore = {
+      hp: P.hp, floor: MAP.getFloor(), gold: P.gold, level: P.level,
+      inv: JSON.stringify(P.inventory), x: P.x, y: P.y
+    };
+    var cOpen = M.openPause(T);
+    M._pauseReturnToMenu();
+    var cMenu = M._scene === 'menu' && !M.isPaused();
+    var cHas = S.has();
+    var cEnter = M.enterGame('continue');
+    var cAfter = {
+      hp: P.hp, floor: MAP.getFloor(), gold: P.gold, level: P.level,
+      inv: JSON.stringify(P.inventory), x: P.x, y: P.y
+    };
+    var cOk = cOpen === true && cMenu && cHas && cEnter === true && M._scene === 'explore' &&
+      cBefore.hp === cAfter.hp && cBefore.floor === cAfter.floor &&
+      cBefore.gold === cAfter.gold && cBefore.level === cAfter.level &&
+      cBefore.inv === cAfter.inv;
+    rec('C_menu_roundtrip_keeps_state', cOk, {
+      rule: '暂停 →「返回主菜单」先落盘 →「继续游戏」读档：HP / 层 / 背包 / 金币 / 等级逐项一致，且仍在同一条 rAF 链',
+      before: cBefore, after: cAfter, opened: cOpen, inMenu: cMenu, hasSave: cHas, entered: cEnter
+    });
+
+    /* ── E：清除存档二次确认（第一次只提示 / 第二次才删 / 坏档可清 / continue 置灰） ── */
+    function goClear() {
+      M.switchScene('menu');
+      var st = M.getMenuState(), guard = 0;
+      while (st.page !== 'root' && guard++ < 10) { press('Escape'); st = M.getMenuState(); }
+      menuSel(3); press('Enter');
+      if (M.getMenuState().page !== 'settings') return false;
+      settingsSel(4); press('Enter');
+      return M.getMenuState().page === 'confirmClear';
+    }
+    S.save();
+    var eHad = S.has();
+    var ePrompt = goClear();
+    var eAfterFirst = S.has();
+    press('Escape');
+    var eCancelPage = M.getMenuState().page;
+    var eAfterCancel = S.has();
+    var eAgain = goClear();
+    press('Enter'); /* 默认选中「确认删除」→ 第二次 Enter 才真删 */
+    var eAfterSecond = S.has();
+    press('Escape');
+    var eCont = M._menuSpec().items[1];
+    var eOk = eHad && ePrompt && eAfterFirst === true && eCancelPage === 'settings' && eAfterCancel === true &&
+      eAgain && eAfterSecond === false && eCont.enabled === false && eCont.note === '暂无存档' &&
+      (M.getMenuState().settingsSel === 4);
+    /* 损坏档也能清 */
+    try { localStorage.setItem(KEY, '{broken json'); } catch (e2) { }
+    var eCorruptHas = S.has();
+    var eCorruptPage = goClear();
+    press('Enter');
+    var eCorruptGone = localStorage.getItem(KEY) === null;
+    press('Escape');
+    rec('E_clear_save_confirm', eOk && eCorruptHas && eCorruptPage && eCorruptGone, {
+      rule: '设置页「清除存档」：第一次 Enter 只弹确认（档还在），Esc 取消不删；第二次 Enter 才删除；' +
+        '删后无档、主菜单「继续游戏」置灰；损坏档同样可删',
+      hadSave: eHad, firstPressStillThere: eAfterFirst, cancelPage: eCancelPage,
+      afterCancelStillThere: eAfterCancel, afterSecond: eAfterSecond,
+      continueItem: { enabled: eCont.enabled, note: eCont.note }, settingsSel: M.getMenuState().settingsSel,
+      corrupt: { detected: eCorruptHas, confirmPage: eCorruptPage, deleted: eCorruptGone }
+    });
+
+    /* ── G：旧档可读、存档键与设置键未变 ── */
+    try { localStorage.removeItem(KEY); } catch (e3) { }
+    var legacy = {
+      floor: 1,
+      player: {
+        hp: 55, maxHp: 100, atk: 13, def: 5, gold: 77, exp: 0, level: 1,
+        inventory: { potion_small: 1 }, equipment: { weapon: 'knife', armor: null }, quests: {}
+      }
+    };
+    try { localStorage.setItem(KEY, JSON.stringify(legacy)); } catch (e4) { }
+    var gErr = null, gLoaded = null;
+    try { gLoaded = S.load(); } catch (e5) { gErr = String((e5 && e5.message) || e5); }
+    M.setSetting('zoom', '1.25');
+    var gKeys = [];
+    try {
+      for (var gi = 0; gi < localStorage.length; gi++) {
+        var gk = localStorage.key(gi);
+        if (String(gk).indexOf('ai_dungeon_rpg_save') === 0) gKeys.push(gk);
+      }
+    } catch (e6) { }
+    var gOk = S.KEY === KEY && gErr === null && !!gLoaded && P.gold === 77 && P.hp === 55 &&
+      gKeys.length === 1 && gKeys[0] === KEY && stored() && stored().zoom === '1.25' &&
+      localStorage.getItem(SET_KEY) !== null;
+    M.setSetting('zoom', 'auto');
+    rec('G_old_save_and_keys', gOk, {
+      rule: '旧档（无 saveVersion / map / upg / adaptive）可读且不抛错；存档键仍为 ai_dungeon_rpg_save_v1，' +
+        '设置键仍为 aiDungeon_settings_v1，没有第二份存档键',
+      key: S.KEY, saveKeys: gKeys, err: gErr, gold: P.gold, hp: P.hp, settings: stored()
+    });
+
+    /* ── D：rAF 链在「菜单 ↔ 场景」往返多次后仍只有 1 条 ── */
+    try { localStorage.removeItem(KEY); } catch (e7) { }
+    M.switchScene('explore');
+    if (B.isActive()) B.abort();
+    var realRaf = window.requestAnimationFrame;
+    var q = [];
+    window.requestAnimationFrame = function (cb) { q.push(cb); return q.length; };
+    var start1 = M.start();
+    var chains1 = M._rafChains || 0;
+    for (var dr = 0; dr < 4; dr++) {
+      var cb = q.shift();
+      if (typeof cb === 'function') {
+        try { cb(T += 16.7); } catch (e8) { window.__D51ERR.push('raf: ' + ((e8 && e8.message) || e8)); }
+      }
+      /* 真实往返：暂停 → 返回主菜单 → 继续游戏（而不是只改 _scene 字符串） */
+      if (dr % 2 === 0) M._pauseReturnToMenu();
+      else M.enterGame('continue');
+    }
+    var pendingAfter = q.length;
+    var start2 = M.start();
+    var chains2 = M._rafChains || 0;
+    window.requestAnimationFrame = realRaf;
+    var dOk = start1 === true && start2 === false && chains1 === 1 && chains2 === 1 &&
+      pendingAfter === 1 && q.length === 1;
+    rec('D_single_raf_chain', dOk, {
+      rule: '首次 start() 建立 1 条链（_rafChains=1）；菜单/场景往返 4 次后待执行回调仍为 1；' +
+        '同一 rAF 实现下再次 start() 返回 false，链数不增',
+      firstStart: start1, secondStart: start2, chains1: chains1, chains2: chains2,
+      pendingAfterRoundtrips: pendingAfter, queuedAtEnd: q.length
+    });
+
+    /* ── F：B1 / G2 / S1 / M1 同种子复跑，与 D-50 逐局一致（B1 14/50） ── */
+    var AFTER = readJson('selfcheck/d51-after.json');
+    var BASE = readJson('selfcheck/d50-after.json');
+    var fBad = [], fCount = { b1: 0, g2: 0, s1: 0, m1: 0 };
+    var fEnv = null;
+    if (!AFTER || !BASE) {
+      fBad.push('缺少跑局产物 d51-after.json 或 d50-after.json');
+    } else {
+      fEnv = AFTER.env;
+      ['b1', 'g2', 's1', 'm1'].forEach(function (k) {
+        var ar = (AFTER.runs && AFTER.runs[k]) || [];
+        var br = (BASE.runs && BASE.runs[k]) || [];
+        var bm = {};
+        br.forEach(function (x) { bm[x.seed] = x; });
+        fCount[k] = ar.length;
+        if (ar.length !== 50) fBad.push(k + ': runs=' + ar.length);
+        for (var i = 0; i < ar.length; i++) {
+          var x = ar[i], y = bm[x.seed];
+          if (!y) { fBad.push(k + '/' + x.seed + ': 基线缺该种子'); continue; }
+          var fields = ['outcome', 'kills', 'gold', 'level'];
+          for (var fi = 0; fi < fields.length; fi++) {
+            if (x[fields[fi]] !== y[fields[fi]]) fBad.push(k + '/' + x.seed + '.' + fields[fi] + ': ' + x[fields[fi]] + '≠' + y[fields[fi]]);
+          }
+          if ((x.deathFloor || x.floor) !== (y.deathFloor || y.floor)) {
+            fBad.push(k + '/' + x.seed + '.deathFloor: ' + (x.deathFloor || x.floor) + '≠' + (y.deathFloor || y.floor));
+          }
+          if (x.battles !== y.battles) fBad.push(k + '/' + x.seed + '.battles: ' + x.battles + '≠' + y.battles);
+        }
+      });
+    }
+    var fSeedsOk = !!fEnv && fEnv.maxActions === 2500 && fEnv.seeds && fEnv.seeds.length === 50 &&
+      fEnv.seeds[0] === 1001 && fEnv.seeds[49] === 1050;
+    var fWins = AFTER && AFTER.agg && AFTER.agg.b1 ? AFTER.agg.b1.outcomes.win : -1;
+    var fAggOk = !!(AFTER && BASE &&
+      fWins === 14 && BASE.agg.b1.outcomes.win === 14 &&
+      AFTER.agg.g2.f5.reached === BASE.agg.g2.f5.reached &&
+      AFTER.agg.s1.f5.reached === BASE.agg.s1.f5.reached &&
+      AFTER.agg.m1.floorReach['4'] === BASE.agg.m1.floorReach['4']);
+    rec('F_four_strategies_match_d50', !!AFTER && !!BASE && fSeedsOk && fBad.length === 0 && fAggOk, {
+      rule: 'B1/G2/S1/M1 同种子 1001–1050、maxActions 2500、自适应开、form=d50；' +
+        '逐局 outcome / 死亡层 / 击杀 / 金币 / 等级 / 战斗场次与 D-50 完全一致；B1 14/50',
+      env: fEnv, runs: fCount, b1Wins: fWins,
+      agg: AFTER ? {
+        g2f5: AFTER.agg.g2.f5.reached, s1f5: AFTER.agg.s1.f5.reached, m1f4: AFTER.agg.m1.floorReach['4']
+      } : null,
+      baseAgg: BASE ? {
+        g2f5: BASE.agg.g2.f5.reached, s1f5: BASE.agg.s1.f5.reached, m1f4: BASE.agg.m1.floorReach['4']
+      } : null,
+      mismatches: fBad.slice(0, 12), mismatchCount: fBad.length
+    });
+
+    out.counters = { before: c0, paused3s: c1, afterResume: c2 };
+    out.errs = window.__D51ERR;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D51ERR.length === 0;
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String((e && (e.stack || e.message)) || e);
+    out.ok = false;
+  }
+
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result').textContent = txt;
+  var c = out.counters || {};
+  var h = '<table><tr><th>阶段</th><th>steps</th><th>aiTicks</th><th>battleTicks</th><th>turnClock</th></tr>';
+  h += '<tr><td>暂停前</td><td>' + (c.before ? c.before.steps : '-') + '</td><td>' + (c.before ? c.before.aiTicks : '-') +
+    '</td><td>' + (c.before ? c.before.battleTicks : '-') + '</td><td>' + (c.before ? c.before.turnClock : '-') + '</td></tr>';
+  h += '<tr><td>暂停 3 秒</td><td>' + (c.paused3s ? c.paused3s.steps : '-') + '</td><td>' + (c.paused3s ? c.paused3s.aiTicks : '-') +
+    '</td><td>' + (c.paused3s ? c.paused3s.battleTicks : '-') + '</td><td>' + (c.paused3s ? c.paused3s.turnClock : '-') + '</td></tr>';
+  h += '<tr><td>恢复后</td><td>' + (c.afterResume ? c.afterResume.steps : '-') + '</td><td>' + (c.afterResume ? c.afterResume.aiTicks : '-') +
+    '</td><td>' + (c.afterResume ? c.afterResume.battleTicks : '-') + '</td><td>' + (c.afterResume ? c.afterResume.turnClock : '-') + '</td></tr>';
+  h += '</table>';
+  document.getElementById('detail').innerHTML = h;
+})();
+</script>
+</body>
+</html>

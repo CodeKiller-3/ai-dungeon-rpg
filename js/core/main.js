@@ -97,7 +97,31 @@
   }
 
   /* D-48：菜单运行期状态（页面/选中项/说明滚动），不落盘 */
-  var menu = { page: 'root', sel: 0, settingsSel: 0, helpScroll: 0 };
+  var menu = { page: 'root', sel: 0, settingsSel: 0, helpScroll: 0, confirmSel: 1, confirm: null };
+
+  /* ---------- D-51：ESC 暂停面板 ----------
+   * 只做"把游戏停下来"这层界面：不碰任何战斗/怪物/掉落/价格/经验/救援数值。
+   * 真停的判据不是"盖了遮罩"，而是暂停期间 loop 在推进任何 update/tick/计时之前就 return：
+   *   - 玩家移动/AI tick 不执行（_updateExplore 不调用）
+   *   - 战斗时间轴不推进（Battle.tick 不调用）
+   *   - 反馈/粒子/插值/提示条生命周期不推进
+   * stoppedAt 记录最后一帧的 rAF 时间戳；恢复时把这段真实时长一次性补给 Battle 时钟偏移，
+   * 于是未到点的怪物段/输入锁/回合收尾保留原剩余量，既不跳帧也不重复结算。 */
+  var pause = {
+    active: false,
+    page: 'root',   /* root | settings | confirmAbandon | confirmClear */
+    sel: 0,
+    settingsSel: 0,
+    confirmSel: 1,  /* 二次确认默认停在「确认」，仍需再按一次 Enter（第一次 Enter 只弹出提示） */
+    stoppedAt: 0,
+    wasPaused: false
+  };
+  var PAUSE_ITEMS = [
+    { id: 'resume', label: '继续游戏' },
+    { id: 'settings', label: '设置' },
+    { id: 'menu', label: '返回主菜单' },
+    { id: 'abandon', label: '放弃本局' }
+  ];
 
   /* D-48：玩法说明正文——只写代码里确实存在的机制。
    * 每条都带 src（源码文件）与 need（必须字面出现的实现片段），验证页逐条对照；
@@ -387,6 +411,10 @@
     _fps: 0,
     _frames: 0,
     _lastT: 0,
+    /* D-51：暂停真停的计数器（只读埋点，不参与任何数值/顺序）。
+     * steps 只在玩家真的移动一格时 +1；aiTicks 只在 AI.tick 真正被调用时 +1；
+     * battleTicks 只在非暂停帧调用 Battle.tick 时 +1。验证页据此断言"暂停 3 秒后三类计数全部不变"。 */
+    _stats: { steps: 0, aiTicks: 0, battleTicks: 0 },
     _guideVisible: false,  /* M9-5：首次引导覆盖层是否显示 */
     _guidePending: false,  /* D-48：首屏菜单期间挂起，进场景后再显示 */
     HELP: HELP,            /* D-48：玩法说明正文（验证页逐条对照源码） */
@@ -409,6 +437,13 @@
       applySettings();
       if (Game.Core.Sprites) Game.Core.Sprites.load();
       this._lastT = performance.now();
+      this._stats = { steps: 0, aiTicks: 0, battleTicks: 0 }; /* D-51：计数器新局归零 */
+      /* D-51：暂停状态与战斗时间轴偏移一并复位（验证页会重复 init） */
+      pause.active = false; pause.page = 'root'; pause.sel = 0; pause.settingsSel = 0;
+      pause.confirmSel = 1; pause.stoppedAt = 0; pause.wasPaused = false;
+      if (Game.Systems.Battle && typeof Game.Systems.Battle._resetClock === 'function') {
+        Game.Systems.Battle._resetClock();
+      }
       runStart = performance.now(); /* M9-5：计时起点 */
       /* D-48：showMenu 时进入 menu 场景（不启动第二条循环，仍由 start() 唯一驱动）；
        * 其余情况保持原行为，直接进 explore。 */
@@ -531,6 +566,12 @@
     /* M9-5：重新开始（既有 reset 逻辑；通关 R 键与死亡结算按钮共用） */
     restart: function () {
       runStart = performance.now();
+      /* D-51：新局不继承暂停态与残留战斗（从菜单/结算页重开时清干净） */
+      pause.active = false; pause.page = 'root'; pause.sel = 0;
+      pause.settingsSel = 0; pause.confirmSel = 1; pause.wasPaused = false;
+      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.abort === 'function') {
+        Game.Systems.Battle.abort();
+      }
       /* 重置玩家为新档 */
       player.hp = 100; player.maxHp = 100;
       player.mp = 50; player.maxMp = 50; /* M8-1：新档 MP 满 */
@@ -593,6 +634,9 @@
     _settingsRows: function () {
       var rows = this._settingsSpec();
       rows.push({ id: 'adaptive', label: '自适应难度', value: settings.adaptive ? '开' : '关' });
+      /* D-51：清除存档是"动作行"而不是开关，由 Enter 触发二次确认 */
+      var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
+      rows.push({ id: 'clearSave', label: '清除存档', value: hasSave ? '删除' : '无存档', danger: true });
       return rows;
     },
 
@@ -647,6 +691,8 @@
         sel: menu.sel,
         settingsSel: menu.settingsSel,
         helpScroll: menu.helpScroll,
+        confirm: menu.confirm,
+        confirmSel: menu.confirmSel,
         items: [
           { id: 'new', label: '开始新游戏', enabled: true },
           { id: 'continue', label: '继续游戏', enabled: hasSave, note: hasSave ? '' : '暂无存档' },
@@ -660,7 +706,20 @@
     },
 
     getMenuState: function () {
-      return { page: menu.page, sel: menu.sel, settingsSel: menu.settingsSel, helpScroll: menu.helpScroll };
+      return { page: menu.page, sel: menu.sel, settingsSel: menu.settingsSel, helpScroll: menu.helpScroll, confirmSel: menu.confirmSel };
+    },
+
+    /* D-51：删除存档（菜单设置页 / 暂停设置页共用）。
+     * 只删 ai_dungeon_rpg_save_v1 并清空内存图鉴，不碰设置键；损坏档同样按 key 删除。 */
+    clearSave: function () {
+      var S = Game.Systems && Game.Systems.Save;
+      if (!S || typeof S.clear !== 'function') return false;
+      var had = (typeof S.has === 'function') ? S.has() : false;
+      S.clear();
+      if (Game.Systems.Bestiary && typeof Game.Systems.Bestiary.reset === 'function') {
+        Game.Systems.Bestiary.reset();
+      }
+      return had;
     },
 
     /* 进入场景：new = 清档重开；continue = 读档进场景。返回是否真的进入。 */
@@ -738,7 +797,30 @@
         return;
       }
 
-      if (esc) { delete k['Escape']; menu.page = 'root'; return; }
+      if (esc) {
+        delete k['Escape'];
+        /* D-51：清除存档确认页 → 返回设置页（取消，不删除） */
+        if (menu.page === 'confirmClear') { menu.page = 'settings'; menu.confirm = null; return; }
+        menu.page = 'root';
+        return;
+      }
+
+      /* D-51：清除存档二次确认——第一次 Enter 只弹提示，确认后才删 */
+      if (menu.page === 'confirmClear') {
+        if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; menu.confirmSel = 0; return; }
+        if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; menu.confirmSel = 1; return; }
+        if (enter) {
+          delete k['Enter']; delete k['NumpadEnter'];
+          if (menu.confirmSel === 1) {
+            var had = this.clearSave();
+            Game.Core.EventBus.emit('ui:notice', { msg: had ? '存档已清除（当前无存档）' : '当前没有存档可清除' });
+          }
+          menu.page = 'settings';
+          menu.confirm = null;
+          return;
+        }
+        return;
+      }
 
       if (menu.page === 'help') {
         if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.helpScroll = Math.max(0, menu.helpScroll - 1); return; }
@@ -747,12 +829,27 @@
       }
 
       if (menu.page === 'settings') {
+        var setRows = this._settingsRows();
         if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.settingsSel = Math.max(0, menu.settingsSel - 1); return; }
-        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(3, menu.settingsSel + 1); return; }
-        var ids = ['fx', 'muted', 'zoom', 'adaptive'];
-        if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; this.cycleSetting(ids[menu.settingsSel], -1); return; }
-        if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
-        if (enter) { delete k['Enter']; delete k['NumpadEnter']; this.cycleSetting(ids[menu.settingsSel], 1); return; }
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(setRows.length - 1, menu.settingsSel + 1); return; }
+        var ids = ['fx', 'muted', 'zoom', 'adaptive', 'clearSave'];
+        var curId = ids[menu.settingsSel];
+        /* D-51：清除存档 = 动作行，Enter（或右方向）弹出二次确认；无档时只提示 */
+        if (curId === 'clearSave') {
+          if (enter || k['ArrowRight'] || k['KeyD']) {
+            delete k['Enter']; delete k['NumpadEnter']; delete k['ArrowRight']; delete k['KeyD'];
+            var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
+            if (!hasSave) { Game.Core.EventBus.emit('ui:notice', { msg: '当前没有存档可清除' }); return; }
+            menu.confirm = 'clear';
+            menu.confirmSel = 1;
+            menu.page = 'confirmClear';
+            return;
+          }
+          return;
+        }
+        if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; this.cycleSetting(curId, -1); return; }
+        if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; this.cycleSetting(curId, 1); return; }
+        if (enter) { delete k['Enter']; delete k['NumpadEnter']; this.cycleSetting(curId, 1); return; }
         return;
       }
       /* about：Esc 已在上面的统一分支处理 */
@@ -764,6 +861,226 @@
     markGuided: markGuided,
     showGuide: openGuide,
     closeGuide: closeGuide,
+
+    /* ---------- D-51：暂停面板 ---------- */
+    /* 暂停面板渲染数据（与主菜单同源：设置行、选中态、二次确认文案） */
+    _pauseSpec: function () {
+      return {
+        page: pause.page,
+        sel: pause.sel,
+        settingsSel: pause.settingsSel,
+        confirmSel: pause.confirmSel,
+        items: PAUSE_ITEMS,
+        settings: this._settingsRows(),
+        hasSave: !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has())
+      };
+    },
+
+    getPauseState: function () {
+      return {
+        active: pause.active, page: pause.page, sel: pause.sel,
+        settingsSel: pause.settingsSel, confirmSel: pause.confirmSel, stoppedAt: pause.stoppedAt
+      };
+    },
+    isPaused: function () { return pause.active; },
+    /* D-51：只读计数器（验证页断言"真停"） */
+    _counters: function () {
+      var B = Game.Systems && Game.Systems.Battle;
+      return {
+        steps: this._stats.steps,
+        aiTicks: this._stats.aiTicks,
+        battleTicks: this._stats.battleTicks,
+        turnClock: (B && typeof B._now === 'function') ? B._now() : 0
+      };
+    },
+
+    /* 打开暂停：只允许在游戏内（探索/战斗），弹窗与首屏引导期间不抢 ESC。
+     * ts 传入当前帧时间戳；stoppedAt 据此记录"时间轴停在哪一毫秒"。 */
+    openPause: function (ts) {
+      if (pause.active) return false;
+      if (this._scene !== 'explore' && this._scene !== 'battle') return false;
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) return false;
+      if (this._guideVisible) return false;
+      /* 胜利消散动画期间不开放暂停：此时战斗结果已结算但 battle:end 尚未发出，
+       * 若在 700ms 内退出会把已赢下的奖励丢掉。等动画播完（场景自动切换）再允许。 */
+      var bs = (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.getState === 'function')
+        ? Game.Systems.Battle.getState() : null;
+      if (bs && bs.dying) return false;
+      pause.active = true;
+      pause.page = 'root';
+      pause.sel = 0;
+      pause.settingsSel = 0;
+      pause.confirmSel = 1;
+      pause.stoppedAt = (typeof ts === 'number' && isFinite(ts)) ? ts : this._lastFrame;
+      pause.wasPaused = false;
+      /* 清掉按住的移动/动作键：恢复后不会因为"暂停时一直按着方向键"而突然走一步 */
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      return true;
+    },
+
+    /* 关闭暂停（继续游戏）。真正的时钟补偿在下一帧由 _settlePauseClock 完成：
+     * 把 (当前帧时间戳 − stoppedAt) 一次性补给 Battle 的时间偏移，时间轴从原处继续。 */
+    closePause: function () {
+      if (!pause.active) return false;
+      pause.active = false;
+      pause.page = 'root';
+      pause.confirmSel = 1;
+      pause.wasPaused = true;
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      return true;
+    },
+
+    /* 恢复时只补一次偏移。补的量是"暂停期间流逝的真实时间"：
+     * 恢复后 now() 仍等于暂停前的时刻，pending/lockUntil/finalizeAt 的剩余量原样保留。 */
+    _settlePauseClock: function (ts) {
+      if (!pause.wasPaused) return 0;
+      var t = (typeof ts === 'number' && isFinite(ts)) ? ts : this._lastFrame;
+      var ms = t - pause.stoppedAt;
+      pause.wasPaused = false;
+      if (ms > 0) {
+        var B = Game.Systems && Game.Systems.Battle;
+        if (B && typeof B._shiftClock === 'function') B._shiftClock(ms);
+        /* 玩家移动/AI 的节流起点同步后移，恢复后不会立刻连走两步 */
+        lastStepAt += ms;
+        lastAiAt += ms;
+        runStart += ms; /* 暂停时长不计入本局用时 */
+      }
+      return ms;
+    },
+
+    /* 每帧：暂停中读暂停菜单；游戏内读 ESC 按下边沿打开暂停 */
+    _updatePauseInput: function (ts) {
+      var I = Game.Core.Input;
+      if (pause.active) { this._updatePauseMenu(); return; }
+      if (this._scene !== 'explore' && this._scene !== 'battle') return;
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) return;
+      if (this._guideVisible) return;
+      var esc = (I && typeof I.takeEdge === 'function') ? I.takeEdge('Escape') : false;
+      if (!esc) return;
+      if (I && I.getState) delete I.getState()['Escape'];
+      this.openPause(ts);
+    },
+
+    _updatePauseMenu: function () {
+      var k = Game.Core.Input.getState();
+      var I = Game.Core.Input;
+      var esc = (I && typeof I.takeEdge === 'function') ? I.takeEdge('Escape') : false;
+      var up = k['ArrowUp'] || k['KeyW'];
+      var down = k['ArrowDown'] || k['KeyS'];
+      var enter = k['Enter'] || k['NumpadEnter'];
+      var left = k['ArrowLeft'] || k['KeyA'];
+      var right = k['ArrowRight'] || k['KeyD'];
+
+      if (pause.page === 'confirmAbandon' || pause.page === 'confirmClear') {
+        if (esc) { delete k['Escape']; this._pauseBack(); return; }
+        if (left) { delete k['ArrowLeft']; delete k['KeyA']; pause.confirmSel = 0; return; }
+        if (right) { delete k['ArrowRight']; delete k['KeyD']; pause.confirmSel = 1; return; }
+        if (enter) {
+          delete k['Enter']; delete k['NumpadEnter'];
+          if (pause.confirmSel !== 1) { this._pauseBack(); return; }
+          if (pause.page === 'confirmAbandon') this._pauseAbandon();
+          else this._pauseClearSave();
+        }
+        return;
+      }
+
+      if (esc) { delete k['Escape']; this._pauseBack(); return; }
+
+      if (pause.page === 'settings') {
+        var rows = this._settingsRows();
+        if (up) { delete k['ArrowUp']; delete k['KeyW']; pause.settingsSel = Math.max(0, pause.settingsSel - 1); return; }
+        if (down) { delete k['ArrowDown']; delete k['KeyS']; pause.settingsSel = Math.min(rows.length - 1, pause.settingsSel + 1); return; }
+        var id = rows[pause.settingsSel] ? rows[pause.settingsSel].id : 'fx';
+        if (id === 'clearSave') {
+          if (enter || right) {
+            delete k['Enter']; delete k['NumpadEnter']; delete k['ArrowRight']; delete k['KeyD'];
+            if (!this._pauseSpec().hasSave) {
+              Game.Core.EventBus.emit('ui:notice', { msg: '当前没有存档可清除' });
+              return;
+            }
+            pause.page = 'confirmClear';
+            pause.confirmSel = 1;
+          }
+          return;
+        }
+        if (left) { delete k['ArrowLeft']; delete k['KeyA']; this.cycleSetting(id, -1); return; }
+        if (right) { delete k['ArrowRight']; delete k['KeyD']; this.cycleSetting(id, 1); return; }
+        if (enter) { delete k['Enter']; delete k['NumpadEnter']; this.cycleSetting(id, 1); return; }
+        return;
+      }
+
+      /* root */
+      if (up) { delete k['ArrowUp']; delete k['KeyW']; pause.sel = Math.max(0, pause.sel - 1); return; }
+      if (down) { delete k['ArrowDown']; delete k['KeyS']; pause.sel = Math.min(PAUSE_ITEMS.length - 1, pause.sel + 1); return; }
+      if (!enter) return;
+      delete k['Enter']; delete k['NumpadEnter'];
+      var action = PAUSE_ITEMS[pause.sel] ? PAUSE_ITEMS[pause.sel].id : 'resume';
+      if (action === 'resume') { this.closePause(); return; }
+      if (action === 'settings') { pause.page = 'settings'; pause.settingsSel = 0; return; }
+      if (action === 'menu') { this._pauseReturnToMenu(); return; }
+      if (action === 'abandon') { pause.page = 'confirmAbandon'; pause.confirmSel = 1; return; }
+    },
+
+    /* Esc / 取消：确认页回到上一级，设置页回根页，根页 = 继续游戏 */
+    _pauseBack: function () {
+      if (pause.page === 'confirmAbandon') { pause.page = 'root'; return; }
+      if (pause.page === 'confirmClear') { pause.page = 'settings'; return; }
+      if (pause.page === 'settings') { pause.page = 'root'; return; }
+      this.closePause();
+    },
+
+    /* 「返回主菜单」：先把当前局面落盘，再离开战斗回到首屏（继续游戏可回到该局面） */
+    _pauseReturnToMenu: function () {
+      if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
+      this._leaveToMenu();
+      Game.Core.EventBus.emit('ui:notice', { msg: '已返回主菜单（当前进度已保存）' });
+      return true;
+    },
+
+    /* 「放弃本局」：明确不写档——磁盘上仍是这局之前的存档；内存里的本局进度作废。
+     * 这样"放弃"与"返回主菜单"语义可区分：前者丢弃本次进度、后者保留。 */
+    _pauseAbandon: function () {
+      this._leaveToMenu();
+      Game.Core.EventBus.emit('ui:notice', { msg: '已放弃本局：本次进度未保存' });
+      return true;
+    },
+
+    /* 清档：从暂停设置页清除 → 删档后直接回主菜单（避免下一帧自动存档又把档写回来） */
+    _pauseClearSave: function () {
+      var had = this.clearSave();
+      this._leaveToMenu();
+      Game.Core.EventBus.emit('ui:notice', { msg: had ? '存档已清除（当前无存档）' : '当前没有存档可清除' });
+      return had;
+    },
+
+    /* 暂停 → 首屏共用的离开路径：静默终止本场战斗（不发 battle:end、不结算奖励），
+     * 清掉遇敌上下文与暂停态，回到 menu 根页。全程只复用同一条 rAF 链。 */
+    _leaveToMenu: function () {
+      pause.active = false;
+      pause.page = 'root';
+      pause.sel = 0;
+      pause.confirmSel = 1;
+      pause.wasPaused = false;
+      encounter = null;
+      var B = Game.Systems && Game.Systems.Battle;
+      if (B && typeof B.abort === 'function') B.abort();
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) Game.Modal.close();
+      menu.page = 'root';
+      menu.sel = 0;
+      menu.settingsSel = 0;
+      menu.helpScroll = 0;
+      menu.confirm = null;
+      menu.confirmSel = 1;
+      if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
+      this.switchScene('menu');
+    },
+
+    _drawPause: function () {
+      var R = Game.Core && Game.Core.Render;
+      if (R && typeof R.drawPause === 'function') {
+        try { R.drawPause(this._pauseSpec()); } catch (e) { /* 降级：绘制异常不影响暂停本身 */ }
+      }
+    },
 
     switchScene: function (name) {
       this._scene = name;
@@ -823,6 +1140,7 @@
        * D-12：AI 仍按固定 120ms 节奏 tick，不受玩家按键频率影响。 */
       if (tNow - lastAiAt >= MOVE_INTERVAL) {
         lastAiAt = tNow;
+        this._stats.aiTicks++; /* D-51：AI tick 计数（暂停期间不执行，验证页据此断言真停） */
         Game.Systems.AI.tick(player);
       }
       if (d.dx !== 0 || d.dy !== 0) {
@@ -838,6 +1156,7 @@
           var fromX = player.x, fromY = player.y;
           player.x = nx;
           player.y = ny;
+          this._stats.steps++; /* D-51：真的走了一格才 +1（暂停期间走不动） */
           /* D-47：NPC 任务进度——每一步都检查"是否走到下行梯旁"（不含楼梯格自身） */
           if (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.checkPosition === 'function') {
             Game.Systems.NpcQuest.checkPosition(nx, ny);
@@ -1022,6 +1341,17 @@
       /* S3-4：帧间 dt（ms），供反馈层推进生命周期；首帧 dt 记 0 */
       var dt = this._lastFrame ? (ts - this._lastFrame) : 0;
       this._lastFrame = ts;
+      /* ---------- D-51：暂停闸门 ----------
+       * 先处理暂停菜单/ESC，再决定是否推进游戏。暂停期间直接 return：
+       * 反馈/特效/提示条/插值/粒子/Battle.tick/场景更新一个都不调用，
+       * 画面只重绘暂停面板——这才是"真停"，不是盖遮罩。
+       * 恢复帧先补一次时钟偏移，使 now() 仍等于暂停前的时刻。 */
+      this._updatePauseInput(ts);
+      if (pause.active) {
+        this._drawPause();
+        return;
+      }
+      this._settlePauseClock(ts);
       if (Game.Feedback && typeof Game.Feedback.update === 'function') Game.Feedback.update(dt);
       /* D-16：战斗特效时钟（顿帧消耗 / 过期效果清理），放在反馈层之前推进 */
       if (Game.Fx && typeof Game.Fx.update === 'function') Game.Fx.update(dt);
@@ -1031,7 +1361,10 @@
       if (Game.Motion && typeof Game.Motion.update === 'function') Game.Motion.update(dt);
       if (Game.Particles && typeof Game.Particles.update === 'function') Game.Particles.update(dt);
       /* D-16：把帧时间戳交给战斗时间轴（与 rAF 同钟；验证页可合成定步长驱动） */
-      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.tick === 'function') Game.Systems.Battle.tick(ts);
+      if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.tick === 'function') {
+        this._stats.battleTicks++;
+        Game.Systems.Battle.tick(ts);
+      }
       syncHud(); /* S3-2：每帧同步 HUD（HP/金币/楼层随战斗结算、拾取、换层实时变化） */
       var scene = this._scene;
       if (scene === 'explore') {

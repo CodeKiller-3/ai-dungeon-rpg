@@ -1625,6 +1625,7 @@
 
       if (st.page === 'help') this._drawMenuHelp(st, W, H);
       else if (st.page === 'settings') this._drawMenuSettings(st, W, H);
+      else if (st.page === 'confirmClear') this._drawMenuConfirm(st, W, H);
       else if (st.page === 'about') this._drawMenuAbout(W, H);
       else this._drawMenuRoot(st, W, H);
     },
@@ -1750,6 +1751,173 @@
       ctx.font = '12px monospace';
       ctx.fillText('↑↓ 选择 · ←→ / Enter 切换 · Esc 返回主菜单', cx, H - 16);
     },
+
+    /* D-51：主菜单「清除存档」二次确认页（第一次 Enter 只到这里，不会删档） */
+    _drawMenuConfirm: function (st, W, H) {
+      var ctx = this._ctx;
+      var cx = W / 2;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 22px monospace';
+      ctx.fillText('清除存档', cx, 60);
+
+      var lines = [
+        '将删除本地存档 ai_dungeon_rpg_save_v1。',
+        '删除后首屏「继续游戏」置灰，无法恢复。',
+        '确定要清除吗？'
+      ];
+      ctx.fillStyle = '#cfcfcf';
+      ctx.font = '14px monospace';
+      var ly = Math.max(130, H * 0.3);
+      for (var i = 0; i < lines.length; i++) ctx.fillText(lines[i], cx, ly + i * 26);
+
+      var opts = ['取消', '确认删除'];
+      var pw = 180, gap = 24, total = opts.length * pw + (opts.length - 1) * gap;
+      var x0 = cx - total / 2, oy = ly + lines.length * 26 + 34;
+      for (var j = 0; j < opts.length; j++) {
+        var on = (j === (st.confirmSel === 1 ? 1 : 0));
+        var x = x0 + j * (pw + gap);
+        ctx.fillStyle = on ? 'rgba(255,207,110,0.16)' : 'rgba(255,255,255,0.03)';
+        ctx.fillRect(x, oy, pw, 40);
+        ctx.strokeStyle = on ? '#ffcf6e' : '#3a3a55';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 1, oy + 1, pw - 2, 38);
+        ctx.fillStyle = on ? '#ffcf6e' : '#cfcfcf';
+        ctx.font = (on ? 'bold ' : '') + '15px monospace';
+        ctx.fillText(opts[j], x + pw / 2, oy + 26);
+      }
+
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('←→ 选择 · Enter 确认 · Esc 取消', cx, H - 16);
+    },
+
+    /* D-51：ESC 暂停面板（与主菜单同一套深色网格 / 金色高亮 / 等宽字体）。
+     * 只画 UI，不推进任何状态；真停由 Main.loop 的暂停闸门保证。 */
+    drawPause: function (spec) {
+      var ctx = this._ctx;
+      if (!ctx) return;
+      this._applyDpr();
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var st = spec || {};
+      var cx = W / 2;
+
+      ctx.fillStyle = '#0b0c14';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(80,90,130,0.16)';
+      ctx.lineWidth = 1;
+      for (var gx = 0; gx < W; gx += 32) {
+        ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
+      }
+      for (var gy = 0; gy < H; gy += 32) {
+        ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
+      }
+      ctx.fillStyle = '#ffcf6e';
+      ctx.fillRect(W / 2 - 120, 22, 240, 2);
+      ctx.fillStyle = '#3a3a55';
+      ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold 28px monospace';
+      ctx.fillText('已暂停', cx, Math.max(84, H * 0.16));
+      ctx.fillStyle = '#9bbbf4';
+      ctx.font = '13px monospace';
+      ctx.fillText('输入 / 怪物 AI / 战斗时间轴已全部挂起', cx, Math.max(110, H * 0.16) + 26);
+
+      if (st.page === 'settings') {
+        var rows = st.settings || [];
+        var pw = Math.min(460, W - 60), rowH = 46;
+        var py = Math.max(150, H * 0.34 - rows.length * rowH / 2);
+        for (var i = 0; i < rows.length; i++) {
+          var y = py + i * rowH, on = (i === st.settingsSel);
+          if (on) {
+            ctx.fillStyle = 'rgba(255,207,110,0.14)';
+            ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
+            ctx.strokeStyle = '#ffcf6e';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, rowH - 10);
+          }
+          ctx.textAlign = 'left';
+          ctx.fillStyle = rows[i].danger ? (on ? '#ff9b6b' : '#c98a6b') : (on ? '#ffcf6e' : '#cfcfcf');
+          ctx.font = (on ? 'bold ' : '') + '16px monospace';
+          ctx.fillText(rows[i].label, cx - pw / 2 + 24, y + 26);
+          ctx.textAlign = 'right';
+          ctx.fillStyle = on ? '#ffcf6e' : '#9bbbf4';
+          ctx.font = '15px monospace';
+          ctx.fillText(rows[i].value, cx + pw / 2 - 24, y + 26);
+        }
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#7f8fa8';
+        ctx.font = '12px monospace';
+        ctx.fillText('↑↓ 选择 · ←→ / Enter 切换 · Esc 返回', cx, H - 16);
+        return;
+      }
+
+      if (st.page === 'confirmAbandon' || st.page === 'confirmClear') {
+        var abandon = (st.page === 'confirmAbandon');
+        ctx.fillStyle = '#ffcf6e';
+        ctx.font = 'bold 20px monospace';
+        ctx.fillText(abandon ? '放弃本局' : '清除存档', cx, Math.max(160, H * 0.3));
+        var lines = abandon ? [
+          '放弃后本次进度不会写入存档。',
+          '若已有存档，继续游戏将回到最近一次自动存档。',
+          '确定要放弃本局吗？'
+        ] : [
+          '将删除本地存档 ai_dungeon_rpg_save_v1。',
+          '删除后首屏「继续游戏」置灰，无法恢复。',
+          '确定要清除吗？'
+        ];
+        ctx.fillStyle = '#cfcfcf';
+        ctx.font = '14px monospace';
+        var ly = Math.max(200, H * 0.3) + 30;
+        for (var li = 0; li < lines.length; li++) ctx.fillText(lines[li], cx, ly + li * 24);
+
+        var opts = ['取消', '确认'];
+        var bw = 160, gap = 28, total = opts.length * bw + gap;
+        var x0 = cx - total / 2, oy = ly + lines.length * 24 + 26;
+        for (var j = 0; j < opts.length; j++) {
+          var onb = (j === (st.confirmSel === 1 ? 1 : 0));
+          var x = x0 + j * (bw + gap);
+          ctx.fillStyle = onb ? 'rgba(255,207,110,0.16)' : 'rgba(255,255,255,0.03)';
+          ctx.fillRect(x, oy, bw, 40);
+          ctx.strokeStyle = onb ? '#ffcf6e' : '#3a3a55';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(x + 1, oy + 1, bw - 2, 38);
+          ctx.fillStyle = onb ? '#ffcf6e' : '#cfcfcf';
+          ctx.font = (onb ? 'bold ' : '') + '15px monospace';
+          ctx.fillText(opts[j], x + bw / 2, oy + 26);
+        }
+        ctx.fillStyle = '#7f8fa8';
+        ctx.font = '12px monospace';
+        ctx.fillText('←→ 选择 · Enter 确认 · Esc 取消', cx, H - 16);
+        return;
+      }
+
+      var items = st.items || [];
+      var ipw = Math.min(430, W - 60), itemH = 46;
+      var listH = items.length * itemH;
+      var py2 = Math.max(170, H * 0.36 - listH / 2);
+      for (var k = 0; k < items.length; k++) {
+        var iy = py2 + k * itemH, oni = (k === st.sel);
+        if (oni) {
+          ctx.fillStyle = 'rgba(255,207,110,0.14)';
+          ctx.fillRect(cx - ipw / 2, iy, ipw, itemH - 8);
+          ctx.strokeStyle = '#ffcf6e';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(cx - ipw / 2 + 1, iy + 1, ipw - 2, itemH - 10);
+        }
+        ctx.textAlign = 'left';
+        ctx.fillStyle = oni ? '#ffcf6e' : '#cfcfcf';
+        ctx.font = (oni ? 'bold ' : '') + '17px monospace';
+        ctx.fillText((oni ? '▶ ' : '  ') + items[k].label, cx - ipw / 2 + 24, iy + 27);
+      }
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8fa8';
+      ctx.font = '12px monospace';
+      ctx.fillText('↑↓ 选择 · Enter 确认 · Esc 继续游戏', cx, H - 16);
+    },
+
 
     _drawMenuAbout: function (W, H) {
       var ctx = this._ctx;

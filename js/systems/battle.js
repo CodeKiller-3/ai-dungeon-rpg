@@ -36,15 +36,17 @@
   var TL = { seg1: 100, lock: 150, total: 180 };
   var clock = null;  /* D-16：可注入时钟（验证页用；默认 performance.now，与肉眼节奏一致） */
   var frameNow = null; /* D-16：主循环帧时间戳（rAF 同钟）；定步长驱动的验证页据此对齐时间轴 */
+  var timeOffset = 0; /* D-51：暂停累计时长。now() 统一扣除，等价于把整条时间轴挂起；
+                       * 恢复时只补一次偏移，未到点的怪物段/输入锁/回合计时保持原剩余量。 */
   var turnSeq = 0;
 
   function now() {
     if (typeof clock === 'function') {
       var v = clock();
-      if (typeof v === 'number' && isFinite(v)) return v;
+      if (typeof v === 'number' && isFinite(v)) return v - timeOffset;
     }
-    if (typeof frameNow === 'number') return frameNow;
-    return performance.now();
+    if (typeof frameNow === 'number') return frameNow - timeOffset;
+    return performance.now() - timeOffset;
   }
 
   /* D-16：伤害分级（游戏无暴击系统，仅按量级区分显示）
@@ -788,6 +790,25 @@
 
     /* D-16：注入时钟（验证页用；null 还原为 performance.now） */
     _setClock: function (fn) { clock = (typeof fn === 'function') ? fn : null; return clock; },
+    /* D-51：暂停恢复——把"暂停期间流逝的真实时长"一次性补进偏移量。
+     * 恢复后的第一帧 now() 仍等于暂停前的时刻，pending/lockUntil/finalizeAt 的剩余量分毫不动，
+     * 因此不会跳帧、不会把怪物段补结算两次，输入锁也照原样继续倒数。 */
+    _shiftClock: function (ms) {
+      if (typeof ms === 'number' && isFinite(ms) && ms > 0) timeOffset += ms;
+      return timeOffset;
+    },
+    _clockOffset: function () { return timeOffset; },
+    /* D-51：重新初始化/新页测试时清掉暂停偏移与帧钟（生产环境只在 init 调一次） */
+    _resetClock: function () { timeOffset = 0; frameNow = null; return timeOffset; },
+    /* D-51：离开战斗（暂停 → 返回主菜单 / 放弃本局）时静默终止本场战斗。
+     * 不发 battle:end，因此不结算胜负、不给奖励、不触发死亡；地图上的怪物保持原样。 */
+    abort: function () {
+      if (!state) return false;
+      state = null;
+      pendingWin = null;
+      return true;
+    },
+    isActive: function () { return !!state; },
     /* D-16：验证用——临时改时间轴参数（负例：seg1=0 即把两段合回同一帧，顺序断言必须 FAIL） */
     _setTimeline: function (o) {
       if (o && typeof o.seg1 === 'number') TL.seg1 = o.seg1;

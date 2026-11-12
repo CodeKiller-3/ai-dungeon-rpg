@@ -53,7 +53,7 @@
 | **Q** | **设置面板**（音量滑块拖拽/←→调节 · 静音开关 · 操作说明） |
 | **H** | **重看引导**（目标 / 去向 / 完整按键表 / 机制须知） |
 | ↑↓ + Enter | 列表中移动与确认 |
-| Esc | 返回 / 关闭面板 |
+| **Esc** | **游戏内：暂停**（继续 / 设置 / 返回主菜单 / 放弃本局）；面板内：返回 / 关闭 |
 | R | 通关画面 / 死亡结算：重新开始 |
 
 - 面板布局边界：左列表单列、最大宽 520 逻辑像素；逻辑宽 < 700 时面板按单列绘制（88% 视口、上限 520，1366×768 下左右余量 195px）。逻辑宽 ≥ 700 时背包面板右侧展开 200 逻辑像素的只读装备栏，面板总宽上限 520 + 12 + 200 = 732，左右余量随视口收缩但不小于 16px（960×540 实测 114px、1024 逻辑宽实测 146px）。面板正文字号不低于 11px。
@@ -61,7 +61,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 207 张、验证页 91 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 207 张、验证页 92 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -97,7 +97,7 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 91 个 headless 验证页（M1 至今）
+├── preflight/            # 92 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图（D-32 起：shots_resize/ 12 张响应式截图；D-35：d35-old/new.png 8× 对照、d35-map-*.png 1280×800 实机）
 ├── docs/                 # 答辩讲稿
