@@ -740,17 +740,34 @@
   }
   function b1Start(rec) {
     var P = Game.Data.Player, d = rec.b1;
+    /* D-45 反事实探针：进 F5 时把武器换成指定档位（仅测量用；不改 js/ 规则）。
+     * 与正常流程唯一的差别是"F5 起点武器"，用于回答"一把武器值多少"。 */
+    if (!d.enterF5 && rec.d45Probe && rec.d45Probe.weapon &&
+        (P.floor === 5 || rec.d45Probe.from1)) {
+      var wid = rec.d45Probe.weapon, oldW = P.equipment.weapon;
+      if (!P.inventory[wid]) Game.Systems.Inventory.add(wid, 1);
+      Game.Systems.Inventory.equip(wid);
+      /* 把原武器从背包移除：否则 bot 的换装/卖杂物两步会把探针武器换回或卖掉，
+       * 测量结果会被"多卖 30 金再买一瓶药"污染（第一次跑就踩到了）。 */
+      if (oldW && oldW !== wid) delete P.inventory[oldW];
+      d.probeWeapon = wid;
+      d.probeAtk = P.atk;
+    }
     var snap = d37Snap(P, P.floor);
     snap.potions = hpPotionCount();
     snap.kills = rec.kills;
     snap.actions = rec.actions;
     snap.battles = rec.battles;
+    snap.atk = P.atk;
+    snap.def = P.def;
     d.floorStart = snap;
     d.floorEnter.push(snap);
     if (P.floor === 5 && !d.enterF5) {
       d.enterF5 = {
         seed: rec.seed, potions: snap.potions, hp: snap.hp, maxHp: snap.maxHp,
-        level: snap.level, gold: snap.gold, equip: snap.equip, at: rec.actions
+        level: snap.level, gold: snap.gold, equip: snap.equip, at: rec.actions,
+        atk: snap.atk, def: snap.def, weaponId: snap.weaponId, armorId: snap.armorId,
+        probeWeapon: d.probeWeapon || null
       };
       d.reserveChecks.push({ seed: rec.seed, need: d.reserve, have: snap.potions, pass: snap.potions >= d.reserve });
     }
@@ -798,9 +815,54 @@
     }
   }
 
-  /* 卖垃圾：B1 不刷怪，金币几乎全来自宝箱；把开出来的、低于当前装备且不带 maxHp 的
-   * 武器/护甲与用不上的卷轴卖掉（卖价=半价，仍严格低于买价）。这是"真人会把没用的
-   * 东西换钱"的落地，不新增任何数值规则。 */
+  /* D-45：商店决策遥测（只读；不传 opts.d45 时 rec.d45 为 null，行为不变）。
+   * 每次进店记录：当时金币/药量/武器档位、货架逐项（类型/价格/是否升级/是否买得起/是否已拥有）、
+   * 成交明细、成交后金币，以及"为什么没买武器"的分类（noStock/goldShort/priority）。 */
+  function d45New() { return { shops: [], missed: [] }; }
+  function d45Snapshot(rec, P, it) {
+    var w0 = P.equipment.weapon, iw = w0 ? it[w0] : null;
+    var a0 = P.equipment.armor, ia = a0 ? it[a0] : null;
+    var s = {
+      floor: P.floor, gold: P.gold, potions: hpPotionCount(),
+      weaponId: w0 || null, weaponAtk: iw ? (iw.effect.atk || 0) : 0,
+      armorId: a0 || null, armorDef: ia ? (ia.effect.def || 0) : 0,
+      stock: [], bought: [], boughtWeapon: false, boughtArmor: false,
+      reason: null, goldAfter: null, potionsAfter: null
+    };
+    var st = Game.Systems.Shop.getStock();
+    for (var i = 0; i < st.length; i++) {
+      var d = it[st[i].id];
+      if (!d) continue;
+      s.stock.push({
+        id: d.id, name: d.name, type: d.type, price: d.price,
+        atk: d.effect ? (d.effect.atk || 0) : 0,
+        def: d.effect ? (d.effect.def || 0) : 0,
+        heal: d.effect ? (d.effect.hp || 0) : 0,
+        owned: ownedCount(d.id), affordable: d.price <= P.gold,
+        weaponUp: d.type === 'weapon' && d.effect && (d.effect.atk || 0) > s.weaponAtk,
+        armorUp: d.type === 'armor' && d.effect && (d.effect.def || 0) > s.armorDef
+      });
+    }
+    return s;
+  }
+  /* 武器决策分类（每次进店只回答"为什么没买武器"）：
+   *   bought   —— 买了武器（成交，不计入四类原因）
+   *   noStock  —— 货架上没有任何"比当前武器更强且未拥有"的武器
+   *   goldShort—— 有升级武器，但卖完杂物后一件也买不起
+   *   priority —— 有买得起的升级武器却没买（钱花在药水/护甲/上限已满）
+   * "根本没进店"不在这里：它是"到了这层但没开张"，由页面用 floorEnter 对账。 */
+  function d45Classify(s) {
+    if (!s) return null;
+    if (s.boughtWeapon) return 'bought';
+    var ups = [];
+    for (var i = 0; i < s.stock.length; i++) {
+      if (s.stock[i].weaponUp && !s.stock[i].owned) ups.push(s.stock[i]);
+    }
+    if (!ups.length) return 'noStock';
+    var aff = false;
+    for (var j = 0; j < ups.length; j++) if (ups[j].price <= s.gold) { aff = true; break; }
+    return aff ? 'priority' : 'goldShort';
+  }
   function b1JunkIndex() {
     var P = Game.Data.Player, it = items(), list = Game.Systems.Inventory.list();
     var wAtk = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
@@ -844,9 +906,17 @@
     var P = Game.Data.Player, it = items(), d = rec.b1;
     rec.shopVisitedFloor = P.floor;
     press('KeyE', MOVE_MS);
-    if (Game.Modal.current() !== 'shop') { rec.shopFail++; return; }
+    if (Game.Modal.current() !== 'shop') {
+      rec.shopFail++;
+      if (rec.d45) rec.d45.missed.push({ floor: P.floor, gold: P.gold });
+      return;
+    }
     rec.shopVisits++; d.shopVisits++; rec.actions++;
-    b1SellJunk(rec);
+    var goldIn = P.gold;
+    var soldGold = b1SellJunk(rec);
+    /* D-45：开张后（已完成出售、尚未购买）抓一次货架快照——这是 bot 真正看到的货架与购买力 */
+    var s45 = rec.d45 ? d45Snapshot(rec, P, it) : null;
+    if (s45) { s45.goldIn = goldIn; s45.soldGold = soldGold; }
     var potions = 0, equips = 0, guard = 0;
     var cap = d.negReserve ? 0 : (d.reserve + (P.floor >= 5 ? 1 : 0));
     var potionFirst = P.floor >= 4;
@@ -903,11 +973,27 @@
       else { equips++; d.equipBought++; }
       /* 买了立刻穿：装备只有穿上才算战力（与 betterEquipIndex 同一口径） */
       if (kind === 'equip') {
+        if (s45) {
+          var bp = it[id];
+          s45.bought.push({
+            id: id, type: bp.type, price: price,
+            atk: bp.effect ? (bp.effect.atk || 0) : 0,
+            def: bp.effect ? (bp.effect.def || 0) : 0
+          });
+          if (bp.type === 'weapon') s45.boughtWeapon = true;
+          else if (bp.type === 'armor') s45.boughtArmor = true;
+        }
         var eq = betterEquipIndex();
         if (eq >= 0) { useIndex(eq); rec.equips++; rec.actions++; }
       }
     }
     if (Game.Modal.isOpen()) press('Escape', MOVE_MS);
+    if (s45) {
+      s45.goldAfter = P.gold;
+      s45.potionsAfter = hpPotionCount();
+      s45.reason = d45Classify(s45);
+      rec.d45.shops.push(s45);
+    }
   }
 
   /* B1 寻路：目标只有"下行梯"（F1–F4）或"本层 Boss"（F5）。
@@ -1730,6 +1816,9 @@
     /* D-44：B1 策略与逐回合战斗日志（不传 opts.b1 / opts.d44log 时均不启用） */
     if (opts.b1) rec.b1 = b1New(opts.b1);
     if (opts.b1 || opts.d44log) rec.d44 = d44New();
+    /* D-45：补给侧决策遥测（只读）。d45Probe 仅用于反事实武器档位测量，不改游戏规则。 */
+    if (opts.d45) rec.d45 = d45New();
+    if (opts.d45 && opts.d45Probe) rec.d45Probe = opts.d45Probe;
     var wall0 = Date.now();
     var spy0 = { pa: spy.pa, keys: spy.keys, loops: spy.loops };
     cur = rec;

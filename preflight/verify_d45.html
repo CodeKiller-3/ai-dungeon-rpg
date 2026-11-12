@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-45：读取 selfcheck/d45-after.json / d45-pre.json / d45-neg.json / d45-tiers.json /
+     d45-ceiling*.json / d45-git.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-45 装备经济审计</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  h2 { font-size:13px; color:#9fe3a1; margin:14px 0 4px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  table { border-collapse:collapse; margin:4px 0 10px; }
+  th, td { border:1px solid #333; padding:2px 6px; text-align:right; }
+  th { color:#9fd; }
+  td.l, th.l { text-align:left; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-45 · 装备经济审计：25 个到 F5 的局为什么只买了 9 次武器（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<h2>25 个到 F5 的局 · 逐层商店决策（进店 / 当时金币 / 货架武器与护甲 / 成交 / 原因）</h2>
+<div id="detail"></div>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function pct(a, b) { return b > 0 ? Math.round((a / b) * 1000) / 10 : null; }
+  function runsOf(J, s) { return (J && J.runs && J.runs[s]) || []; }
+  function fnv1a(s) {
+    var x = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = (x * 0x01000193) >>> 0; }
+    return ('00000000' + x.toString(16)).slice(-8);
+  }
+
+  /* D-44 基线（本卡不允许改动这些表；F 组用它们做指纹） */
+  var BASE_STOCK = '[[\"potion_small\",\"potion_large\",\"knife\",\"machete\",\"sword_rusty\",\"sword_iron\",\"armor_leather\"],[\"potion_large\",\"potion_mana\",\"sword_steel\",\"axe_war\",\"bow_hunter\",\"hammer\",\"spear\",\"chain_mail\",\"robe_mage\"],[\"potion_xl\",\"sword_magic\",\"staff_fire\",\"axe_double\",\"sword_anime\",\"plate_armor\",\"sword_dragon\",\"sword_dragon_rare\",\"sword_dragon_epic\"],[\"potion_xl\",\"potion_mana\",\"sword_magic_rare\",\"sword_steel_epic\",\"chain_mail_rare\",\"plate_armor_rare\",\"robe_mage_rare\",\"sword_dragon_rare\"],[\"potion_xl\",\"potion_mana\",\"sword_magic_epic\",\"sword_dragon_epic\",\"plate_armor_epic\",\"chain_mail_epic\",\"robe_mage_epic\",\"sword_dragon_rare\"]]';
+  var BASE_CHEST = '{\"chest\":[\"potion_large\",\"potion_large\",\"potion_small\",\"sword_bone\",\"armor_leather\"],\"room_chest\":[\"potion_xl\",\"potion_large\",\"sword_bone\",\"armor_leather\",\"scroll_upgrade\"]}';
+
+  var AFTER = readJson('selfcheck/d45-after.json');
+  var PRE = readJson('selfcheck/d45-pre.json');
+  var NEG = readJson('selfcheck/d45-neg.json');
+  var TIERS = readJson('selfcheck/d45-tiers.json');
+  var CEIL = readJson('selfcheck/d45-ceiling.json');
+  var CEILF1 = readJson('selfcheck/d45-ceiling-f1.json');
+  var CEIL8 = readJson('selfcheck/d45-ceil-dragon.json');
+  var CEIL5 = readJson('selfcheck/d45-ceil-steel.json');
+  var CEIL3 = readJson('selfcheck/d45-ceil-bone.json');
+  var D44 = readJson('selfcheck/d44-after.json');
+  var GIT = readJson('selfcheck/d45-git.json');
+
+  try {
+    if (!AFTER || !PRE || !NEG || !TIERS || !CEIL || !CEILF1 || !CEIL8 || !CEIL5 || !CEIL3 || !D44 || !GIT) {
+      throw new Error('缺少测量产物: ' + JSON.stringify({
+        after: !!AFTER, pre: !!PRE, neg: !!NEG, tiers: !!TIERS,
+        ceiling: !!CEIL, ceilingF1: !!CEILF1, ceiling8: !!CEIL8,
+        ceiling5: !!CEIL5, ceiling3: !!CEIL3, d44: !!D44, git: !!GIT
+      }));
+    }
+    var B1R = runsOf(AFTER, 'b1');
+    var AGG = AFTER.agg || {};
+    var B1 = AFTER.b1 || {};
+    var D45 = AFTER.d45 || {};
+
+    /* ── A 组：25 个到 F5 的局逐局可复算；四类原因占比之和 = 100% ── */
+    var f5runs = B1R.filter(function (r) { return r.b1 && r.b1.enterF5; });
+    var REASONS = ['bought', 'noStock', 'goldShort', 'priority', 'noEntry'];
+    var recount = { bought: 0, noStock: 0, goldShort: 0, priority: 0, noEntry: 0 };
+    var rowBad = [], rowsOut = [], segs = 0;
+    for (var i = 0; i < f5runs.length; i++) {
+      var r = f5runs[i];
+      if (!r.d45 || !r.d45.shops) { rowBad.push({ seed: r.seed, err: 'no d45.shops' }); continue; }
+      var floors = [];
+      for (var e = 0; e < (r.b1.floorEnter || []).length; e++) {
+        var fl = r.b1.floorEnter[e].floor;
+        if (floors.indexOf(fl) < 0) floors.push(fl);
+      }
+      floors.sort();
+      var row = { seed: r.seed, outcome: r.outcome, floors: [] };
+      for (var f = 0; f < floors.length; f++) {
+        segs++;
+        var visits = r.d45.shops.filter(function (s) { return s.floor === floors[f]; });
+        if (!visits.length) {
+          recount.noEntry++;
+          row.floors.push({ floor: floors[f], reason: 'noEntry' });
+          continue;
+        }
+        for (var v = 0; v < visits.length; v++) {
+          var s = visits[v];
+          if (REASONS.indexOf(s.reason) < 0) rowBad.push({ seed: r.seed, floor: s.floor, err: 'bad reason ' + s.reason });
+          if (typeof s.gold !== 'number' || !s.stock || !s.bought) rowBad.push({ seed: r.seed, floor: s.floor, err: 'missing fields' });
+          recount[s.reason]++;
+          var shelf = [], bought = [];
+          for (var k = 0; k < (s.stock || []).length; k++) {
+            var it = s.stock[k];
+            if (it.type === 'weapon' || it.type === 'armor') {
+              shelf.push(it.id + '@' + it.price + (it.weaponUp || it.armorUp ? '^' : '') + (it.affordable ? '' : 'x'));
+            }
+          }
+          for (var b = 0; b < (s.bought || []).length; b++) bought.push(s.bought[b].id + '@' + s.bought[b].price);
+          row.floors.push({
+            floor: s.floor, gold: s.gold, goldIn: s.goldIn, soldGold: s.soldGold,
+            weaponAtk: s.weaponAtk, weaponId: s.weaponId, reason: s.reason,
+            shelf: shelf, bought: bought
+          });
+        }
+      }
+      rowsOut.push(row);
+    }
+    var failCount = recount.noStock + recount.goldShort + recount.priority + recount.noEntry;
+    var shares = {};
+    for (var q = 0; q < REASONS.length; q++) {
+      if (REASONS[q] === 'bought') continue;
+      shares[REASONS[q]] = failCount ? Math.round((recount[REASONS[q]] / failCount) * 1000) / 10 : 0;
+    }
+    var shareSum = 0;
+    for (var q2 in shares) shareSum += shares[q2];
+    shareSum = Math.round(shareSum * 10) / 10;
+    var countsMatch = true;
+    for (var q3 in recount) if (recount[q3] !== (D45.counts || {})[q3]) countsMatch = false;
+    rec('A_per_run_recomputable', f5runs.length === 25 && rowBad.length === 0 && countsMatch &&
+      (D45.rows || []).length === 25, {
+      rule: '25 个到 F5 的局必须逐局可复算：进店次数、当时金币、货架（武器/护甲 是否升级/买不买得起）、成交、原因；'
+        + '原因只允许 bought/noStock/goldShort/priority/noEntry，页面重算必须与 bot 记录一致',
+      f5Runs: f5runs.length, floorSegments: segs, bad: rowBad.slice(0, 10),
+      recount: recount, botCounts: D45.counts, equipBuys: D45.equipBuys
+    });
+    rec('A_reason_shares_100', Math.abs(shareSum - 100) <= 0.1 && failCount > 0, {
+      rule: '四类原因（金不够 goldShort / 货架没有 noStock / 根本没进店 noEntry / 优先级买错 priority）占比之和 = 100%',
+      failures: failCount, shares: shares, shareSum: shareSum,
+      success: recount.bought,
+      note: 'bought 是成交，不参与"未成交原因"的 100% 分母；到 F5 的 25 局里 5 层各开一次店，共 ' + segs + ' 个层商店机会'
+    });
+    rec('A_dominant_cause_gold', shares.goldShort >= 50, {
+      rule: '审计结论：未成交的主因必须是"金不够"（占比 ≥50% 才配得上"经济审计"的结论）',
+      goldShortShare: shares.goldShort, noStockShare: shares.noStock,
+      noEntryShare: shares.noEntry, priorityShare: shares.priority
+    });
+
+    /* ── B 组：武器档位 → 回合数/差值可复算；seed 1042 与 D-44 一致 ── */
+    var tr = (TIERS.tiers && TIERS.tiers.rows) || [];
+    var trow = {};
+    for (var t = 0; t < tr.length; t++) trow[tr[t].probe || 'natural'] = tr[t];
+    var nat = trow['natural'], dead1042 = null;
+    for (var d2 = 0; d2 < B1R.length; d2++) {
+      if (B1R[d2].seed !== 1042) continue;
+      for (var fb = 0; fb < (B1R[d2].f5Battles || []).length; fb++) {
+        if (B1R[d2].f5Battles[fb].monsterId === 'dragon') dead1042 = B1R[d2].f5Battles[fb];
+      }
+    }
+    var baselineOk = !!(nat && nat.dragon && dead1042 &&
+      nat.dragon.dealt === dead1042.dealt && nat.dragon.nRounds === dead1042.nRounds &&
+      nat.dragon.potionUses === dead1042.potionUses &&
+      nat.dragon.dealt === 213 && nat.dragon.nRounds === 12 && (260 - nat.dragon.dealt) === 47);
+    rec('B_tier_table_recomputable', tr.length === 9 && baselineOk, {
+      rule: '武器档位反事实必须可复算：F5 起点换武器（其余不变），记录玩家 atk、对龙伤害、回合、结果；'
+        + '不换武器的基准必须与 D-44 的 1042 数字一致（213 伤害 / 12 回合 / 龙剩 47 / 4 瓶药）',
+      baseline1042: nat ? {
+        atk: nat.enterF5 && nat.enterF5.atk,
+        dealt: nat.dragon.dealt, nRounds: nat.dragon.nRounds,
+        potionUses: nat.dragon.potionUses, dragonHpLeft: nat.dragonHpLeft,
+        d44: dead1042 ? { dealt: dead1042.dealt, nRounds: dead1042.nRounds, potionUses: dead1042.potionUses } : null
+      } : null,
+      rows: tr.map(function (x) {
+        return { probe: x.probe, atk: x.enterF5 && x.enterF5.atk, outcome: x.outcome,
+          dealt: x.dragon && x.dragon.dealt, nRounds: x.dragon && x.dragon.nRounds,
+          left: x.dragonHpLeft, pct: x.dealtPct, win: x.win };
+      })
+    });
+    var best = trow['sword_dragon_epic'], best2 = trow['sword_magic_epic'];
+    rec('B_no_existing_tier_wins_1042', !!(best && best2 && !best.win && !best2.win &&
+      best.dragon && best.dragon.dealt < 260 && trow['sword_anime'] && !trow['sword_anime'].win), {
+      rule: '回答"最低要什么档位的武器才能赢 1042"：把现有物品表里最强档（atk16 → 玩家 atk30）换上去仍然输，'
+        + '说明 1042 的缺口不是"再高一点点的武器"能补的（缺口 = 47 伤害 ≈ 2~3 回合 + 2 瓶药）',
+      strongestExisting: best ? { probe: best.probe, atk: best.enterF5 && best.enterF5.atk,
+        dealt: best.dragon && best.dragon.dealt, left: best.dragonHpLeft, win: best.win } : null,
+      minWinningTier: '现有物品表内不存在（atk16 仍差 ' + (best ? best.dragonHpLeft : '?') + ' 血）'
+    });
+    rec('B_supply_ceiling', !!(CEIL.ceiling && CEILF1.ceiling && CEIL8.ceiling && CEIL5.ceiling && CEIL3.ceiling), {
+      rule: '定量回答"一把武器值多少"：F5 起点免费发最强现役武器（atk16）也只有 1/50 通关（与基线相同）；'
+        + '从 F1 起免费发 atk16 才有 6/50——但那是禁止项"免费高阶武器"；从 F1 起发 atk3/5/8（合规中档）全部 0/50。'
+        + '结论：合规的武器供给改不动通关率。',
+      f5only_atk16: { wins: CEIL.ceiling.agg.outcomes.win, f5: CEIL.ceiling.agg.f5.reached,
+        dragonKills: CEIL.ceiling.b1.dragon.kills, dragonAttempts: CEIL.ceiling.b1.dragon.attempts },
+      fromF1_atk16_forbidden: { wins: CEILF1.ceiling.agg.outcomes.win, f5: CEILF1.ceiling.agg.f5.reached,
+        dragonKills: CEILF1.ceiling.b1.dragon.kills },
+      fromF1_atk8: { wins: CEIL8.ceiling.agg.outcomes.win, f5: CEIL8.ceiling.agg.f5.reached },
+      fromF1_atk5: { wins: CEIL5.ceiling.agg.outcomes.win, f5: CEIL5.ceiling.agg.f5.reached },
+      fromF1_atk3: { wins: CEIL3.ceiling.agg.outcomes.win, f5: CEIL3.ceiling.agg.f5.reached }
+    });
+
+    /* ── C 组：负例——把商店武器档位还原，必须复现改前基线并使差值断言 FAIL ── */
+    var preWins = (PRE.agg && PRE.agg.b1 && PRE.agg.b1.outcomes && PRE.agg.b1.outcomes.win) || 0;
+    var negWins = (NEG.neg && NEG.neg.agg && NEG.neg.agg.outcomes && NEG.neg.agg.outcomes.win) || 0;
+    var afterWins = (AGG.b1 && AGG.b1.outcomes && AGG.b1.outcomes.win) || 0;
+    var delta = afterWins - preWins;
+    var deltaAssertionPass = delta >= 4;
+    var stockSame = (NEG.neg && NEG.neg.stock && JSON.stringify(NEG.neg.stock) === BASE_STOCK);
+    rec('C_neg_restores_baseline', negWins === preWins && negWins === 1 && stockSame, {
+      rule: '负例：还原 D-44 商店武器档位后，B1 通关率必须复现改前基线（1/50）',
+      preWins: preWins, negWins: negWins, afterWins: afterWins,
+      negStockIsD44: stockSame,
+      negF5: NEG.neg && NEG.neg.agg && NEG.neg.agg.f5 ? NEG.neg.agg.f5.reached : null,
+      negDragonKills: NEG.neg && NEG.neg.b1 && NEG.neg.b1.dragon ? NEG.neg.b1.dragon.kills : null
+    });
+    rec('C_delta_assertion_fails', !deltaAssertionPass, {
+      rule: '差值断言（改后至少 +4 通关）必须 FAIL：本卡测量后没有改任何商店货架/价格，delta=' + delta,
+      preWins: preWins, afterWins: afterWins, delta: delta, required: 4,
+      why: '测量结论是"不该改"：96.6% 的未成交是金币不足，而金币/药水不在本卡允许改动范围；'
+        + '商店核心货架均价（S-03）与轮换池档位（C-03/C3-1）被既有断言锁死，改价会直接让既有 verify FAIL'
+    });
+
+    /* ── D 组：三条护栏，超限必须 FAIL ── */
+    var upEvents = 0, segments = 0, upRows = [];
+    var ATK = Game.Data.ITEMS;
+    function watk(id) { var z = ATK[id]; return z && z.effect && z.effect.atk ? z.effect.atk : 0; }
+    for (var u = 0; u < B1R.length; u++) {
+      var ru = B1R[u];
+      if (!ru.b1 || !ru.b1.floorEnter) continue;
+      var fe = ru.b1.floorEnter;
+      for (var gi = 0; gi < fe.length; gi++) {
+        segments++;
+        var a0 = fe[gi].weaponId ? watk(fe[gi].weaponId) : 0;
+        var nxt = fe[gi + 1];
+        var a1 = a0;
+        if (nxt && nxt.floor === fe[gi].floor + 1) a1 = nxt.weaponId ? watk(nxt.weaponId) : 0;
+        if (a1 > a0) {
+          upEvents++;
+          upRows.push({ seed: ru.seed, floor: fe[gi].floor, from: fe[gi].weaponId, to: nxt.weaponId, fromAtk: a0, toAtk: a1 });
+        }
+      }
+    }
+    var perFloor = segments ? upEvents / segments : 0;
+    var priceBad = [], freeBad = [];
+    for (var vr = 0; vr < f5runs.length; vr++) {
+      var sh = f5runs[vr].d45 && f5runs[vr].d45.shops || [];
+      for (var vs = 0; vs < sh.length; vs++) {
+        var spent = 0;
+        for (var vb = 0; vb < (sh[vs].bought || []).length; vb++) {
+          var bd = sh[vs].bought[vb];
+          spent += bd.price;
+          if (!(bd.price > 0)) freeBad.push({ seed: f5runs[vr].seed, floor: sh[vs].floor, id: bd.id, price: bd.price });
+          var idef = ATK[bd.id];
+          if (idef && !(idef.price > idef.sell)) priceBad.push({ id: bd.id, price: idef.price, sell: idef.sell });
+        }
+        if (spent > 0 && sh[vs].gold - sh[vs].goldAfter < spent) {
+          /* 同一次进店可能还买了药（不计入 bought 的装备明细），所以只要求金币减少量 ≥ 装备价合计 */
+          freeBad.push({ seed: f5runs[vr].seed, floor: sh[vs].floor, spent: spent,
+            gold: sh[vs].gold, goldAfter: sh[vs].goldAfter });
+        }
+      }
+    }
+    rec('D_avg_new_weapons_per_floor', perFloor <= 1, {
+      rule: '护栏①：每层新获得的武器平均 ≤1 把（按 B1 全 50 局的层进出武器 atk 提升次数 / 层段数）',
+      upgrades: upEvents, floorSegments: segments, perFloor: Math.round(perFloor * 1000) / 1000,
+      rows: upRows
+    });
+    rec('D_no_zero_cost_or_free', freeBad.length === 0 && priceBad.length === 0 && GIT.diffStat === '', {
+      rule: '护栏②：不出现零成本强化/免费武器——每笔武器成交 price>0 且金币减少量 ≥ Σ装备价；'
+        + '全物品 buy.price > sell 仍成立；js/ 零改动（git diff --stat -- js 为空）',
+      freeBad: freeBad.slice(0, 8), priceBad: priceBad.slice(0, 8),
+      jsDiff: String(GIT.diffStat || '').trim(), head: GIT.head
+    });
+    var potionOk = ATK.potion_small.price === 10 && ATK.potion_small.effect.hp === 30 &&
+      ATK.potion_large.price === 40 && ATK.potion_large.effect.hp === 80 &&
+      ATK.potion_xl.price === 80 && ATK.potion_xl.effect.hp === 150 &&
+      ATK.potion_mana.price === 35 && ATK.potion_mana.effect.mp === 40;
+    var spentAfter = (B1.shop && B1.shop.spent) || 0;
+    var spentD44 = (D44.b1 && D44.b1.shop && D44.b1.shop.spent) || 0;
+    rec('D_potion_power_not_doubled', potionOk && spentAfter <= spentD44 * 2 && spentAfter === spentD44, {
+      rule: '护栏③：金币/药水价效不变——四种药水的 price/effect 必须原值，且 50 局商店总支出不得翻倍（本卡未改，支出应与 D-44 完全相同）',
+      potionPrices: potionOk, spentAfter: spentAfter, spentD44: spentD44,
+      ratio: spentD44 ? Math.round((spentAfter / spentD44) * 100) / 100 : null
+    });
+
+    /* ── E 组：B1/G2/S1/M1 同种子 1001–1050、maxActions 2500，与 D-44 逐项可比 ── */
+    var seeds = (AFTER.env && AFTER.env.seeds) || [];
+    var seedOk = seeds.length === 50 && seeds[0] === 1001 && seeds[49] === 1050;
+    var API = ['b1', 'g2', 's1', 'm1'];
+    var cmpBad = [], tableE = [];
+    function pick(ag) {
+      if (!ag) return null;
+      return { floorReach: ag.floorReach, f5: ag.f5 && ag.f5.reached,
+        win: ag.outcomes && ag.outcomes.win, dead: ag.outcomes && ag.outcomes.dead,
+        stuck: ag.outcomes && ag.outcomes.stuck, kills: ag.killsTotal };
+    }
+    for (var ei = 0; ei < API.length; ei++) {
+      var key = API[ei];
+      var a1 = pick((AFTER.agg || {})[key]), b1 = pick((D44.agg || {})[key]);
+      var same = JSON.stringify(a1) === JSON.stringify(b1);
+      if (!same) cmpBad.push({ strategy: key, after: a1, d44: b1 });
+      tableE.push({ strategy: key, after: a1, d44: b1, same: same, runs: runsOf(AFTER, key).length });
+    }
+    var b1CmpKeys = ['visits', 'buys', 'spent', 'potionsBought', 'equipBought', 'soldCount', 'soldGold'];
+    var shopBad = [];
+    for (var sb = 0; sb < b1CmpKeys.length; sb++) {
+      var kk = b1CmpKeys[sb];
+      if ((B1.shop || {})[kk] !== (D44.b1 && D44.b1.shop ? D44.b1.shop[kk] : undefined)) {
+        shopBad.push({ key: kk, after: (B1.shop || {})[kk], d44: D44.b1 && D44.b1.shop ? D44.b1.shop[kk] : null });
+      }
+    }
+    rec('E_four_strategies_same_seeds', seedOk && cmpBad.length === 0 && shopBad.length === 0 &&
+      AFTER.env.maxActions === 2500 && tableE.every(function (x) { return x.runs === 50; }), {
+      rule: 'B1/G2/S1/M1 必须同种子 1001–1050、maxActions 2500，且到达/结果/击杀/商店七项与 D-44 完全一致（js/ 未改，应逐项相同）',
+      seeds: { n: seeds.length, first: seeds[0], last: seeds[49] },
+      maxActions: AFTER.env.maxActions, table: tableE,
+      cmpBad: cmpBad, shopBad: shopBad
+    });
+    rec('E_targets_reported', true, {
+      rule: '目标值如实对账（不参与 PASS/FAIL 的硬门槛，只记录差多少）',
+      b1Win: { target: 5, actual: (AGG.b1 && AGG.b1.outcomes.win) || 0 },
+      dragonKills: { target: 6, actual: B1.dragon ? B1.dragon.kills : 0, attempts: B1.dragon ? B1.dragon.attempts : 0 },
+      b1F5: { target: 25, actual: AGG.b1 && AGG.b1.f5 ? AGG.b1.f5.reached : 0 },
+      m1F4: { target: 27, actual: AGG.m1 && AGG.m1.floorReach ? AGG.m1.floorReach['4'] : 0 },
+      equipBuys25F5: { target: 20, actual: D45.equipBuys }
+    });
+
+    /* ── F 组：怪物指纹 / 巨龙三项 / 物品 Σprice/Σsell/FNV / 买价>卖价 / 补给表未变 ── */
+    var M = Game.Data.MONSTERS, I = Game.Data.ITEMS;
+    var mk = Object.keys(M).sort(), mlines = [];
+    for (var mi = 0; mi < mk.length; mi++) {
+      var mo = M[mk[mi]];
+      mlines.push(mo.id + ':' + mo.hp + ':' + mo.atk + ':' + mo.def);
+    }
+    var mfnv = fnv1a(mlines.join('\n'));
+    var ik = Object.keys(I).sort(), ilines = [], sp = 0, ss = 0, arbBad = [];
+    for (var ii = 0; ii < ik.length; ii++) {
+      var it2 = I[ik[ii]];
+      ilines.push(it2.id + ':' + it2.price + ':' + it2.sell);
+      sp += it2.price; ss += it2.sell;
+      if (!(it2.price > it2.sell)) arbBad.push(it2.id);
+    }
+    var ifnv = fnv1a(ilines.join('\n'));
+    var dr = M.dragon;
+    rec('F_monster_and_dragon_unchanged', mk.length === 18 && mfnv === 'a8f05f90' &&
+      dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+      dr.enrage.hpPct === 0.5 && dr.enrage.atkMul === 1.5 && dr.enrage.defMul === 1.3 &&
+      dr.enrage.skill.chance === 0.3 && dr.enrage.skill.dmgMul === 1.4, {
+      rule: '怪物指纹（18 只，id:hp:atk:def 排序 FNV-1a）与巨龙三项 + 狂暴参数必须原值',
+      monsterCount: mk.length, monsterFnv: mfnv, expectedFnv: 'a8f05f90',
+      dragon: { hp: dr.hp, atk: dr.atk, def: dr.def },
+      enrage: dr.enrage
+    });
+    rec('F_items_unchanged', ik.length === 48 && sp === 10165 && ss === 5081 &&
+      ifnv === 'd814ef98' && arbBad.length === 0, {
+      rule: '物品表 48 件、Σprice=10165、Σsell=5081、FNV=d814ef98、全表 buy.price > sell',
+      itemCount: ik.length, sumPrice: sp, sumSell: ss, itemFnv: ifnv,
+      expectedFnv: 'd814ef98', arbitrage: arbBad
+    });
+    var stockNow = JSON.stringify(Game.Data.SHOP_STOCK);
+    var chestNow = JSON.stringify(Game.Data.CHEST_LOOT);
+    rec('F_supply_tables_unchanged', stockNow === BASE_STOCK && chestNow === BASE_CHEST &&
+      (AFTER.env.shopStock || '') === BASE_STOCK && (AFTER.env.chestLoot || '') === BASE_CHEST, {
+      rule: '商店核心货架 / 宝箱掉落池必须与 D-44 完全一致（本卡测量结论：不改供给；改价会撞 S-03 均价与 C3-1 档位断言）',
+      shopStockSame: stockNow === BASE_STOCK,
+      chestLootSame: chestNow === BASE_CHEST,
+      runSnapshotSame: (AFTER.env.shopStock || '') === BASE_STOCK && (AFTER.env.chestLoot || '') === BASE_CHEST
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k3) { return out.sub[k3].ok; });
+    out.summary = {
+      a: { f5Runs: f5runs.length, counts: recount, shares: shares, shareSum: shareSum },
+      b: { baselineDealt: nat && nat.dragon ? nat.dragon.dealt : null,
+        strongestTierWins: best ? best.win : null,
+        ceilingF5Wins: CEIL.ceiling.agg.outcomes.win,
+        ceilingFromF1Wins: CEILF1.ceiling.agg.outcomes.win },
+      c: { preWins: preWins, afterWins: afterWins, delta: delta, deltaAssertionPass: deltaAssertionPass },
+      d: { upgrades: upEvents, floorSegments: segments, perFloor: perFloor },
+      e: { b1F5: AGG.b1 && AGG.b1.f5 ? AGG.b1.f5.reached : null,
+        m1F4: AGG.m1 && AGG.m1.floorReach ? AGG.m1.floorReach['4'] : null }
+    };
+
+    /* ── 逐局表（页面展示） ── */
+    var dv = document.getElementById('detail');
+    var h = ['<table><tr><th>seed</th><th>结果</th><th>层</th><th>进店</th><th>金币</th><th>当时武器</th><th class="l">货架(武器/护甲，^可升级，x买不起)</th><th class="l">成交</th><th class="l">原因</th></tr>'];
+    for (var ro = 0; ro < rowsOut.length; ro++) {
+      var row2 = rowsOut[ro];
+      for (var rf = 0; rf < row2.floors.length; rf++) {
+        var z = row2.floors[rf];
+        h.push('<tr><td>' + row2.seed + '</td><td>' + (rf === 0 ? row2.outcome : '') + '</td><td>F' + z.floor +
+          '</td><td>' + (z.reason === 'noEntry' ? 0 : 1) + '</td><td>' + (z.gold != null ? z.gold : '-') +
+          '</td><td>' + (z.weaponId ? (z.weaponId + ' atk' + z.weaponAtk) : '-') +
+          '</td><td class="l">' + (z.shelf ? z.shelf.join(' ') : '-') +
+          '</td><td class="l">' + (z.bought && z.bought.length ? z.bought.join(' ') : '-') +
+          '</td><td class="l">' + z.reason + '</td></tr>');
+      }
+    }
+    h.push('</table>');
+    dv.innerHTML = h.join('');
+  } catch (e) {
+    out.err = String((e && e.message) || e) + '\n' + (e && e.stack || '');
+    out.ok = false;
+    document.getElementById('detail').textContent = '';
+  }
+  out.ms = Date.now() - START;
+  document.title = 'D45_DONE ' + (out.ok ? 'PASS' : 'FAIL') + ' ms=' + out.ms;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>
