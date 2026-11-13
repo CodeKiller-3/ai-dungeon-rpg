@@ -60,6 +60,24 @@
   var M = Game.Core.Main;
   var P = Game.Data.Player;
 
+  /* D-61 修订：headless（--virtual-time-budget）不驱动 rAF，实测整页只跑 0–1 帧，
+   * 游戏底部 FPS 计数因此恒为 0，贴进幻灯片会被读成"卡死"。
+   * 这里只在截图页去掉底部提示里的 "FPS=… | " 一段；index.html 实机渲染不变，仍显示真实 FPS。
+   * 不改 js/，也不填任何假数字。 */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d61FpsPatched) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d61FpsPatched = true;
+  })();
+
   /* 本页在 preflight/ 下：把素材目录改到 ../assets/sprites/，
    * 否则 M.init 默认的 assets/sprites/ 会解析成 preflight/assets/sprites/，
    * 全部贴图加载失败、战斗里只剩色块（不是游戏本身的问题）。 */
@@ -165,6 +183,16 @@
       if (g && g.target) {
         var path = planPath(g.target.x, g.target.y);
         var upto = Math.max(0, path.length - 7);
+        /* 终点避开怪物（含相邻格）：直接落进怪物格会在下一帧被判成踩怪开战，
+         * 截出来就不是探索画面了。只调整停步位置，不改地图与怪物。 */
+        var enemies = (Map.getEnemies && Map.getEnemies()) || [];
+        function clearOfEnemies(px, py) {
+          for (var ei = 0; ei < enemies.length; ei++) {
+            if (Math.max(Math.abs(enemies[ei].x - px), Math.abs(enemies[ei].y - py)) <= 2) return false;
+          }
+          return true;
+        }
+        while (upto > 0 && !clearOfEnemies(path[upto - 1].x, path[upto - 1].y)) upto--;
         for (var si = 0; si < upto; si++) {
           P.x = path[si].x; P.y = path[si].y;
           Game.fov.update(P.x, P.y, fs, blocked);
