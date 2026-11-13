@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>D-36 Q-learning 复位与指标口径</title></head>
+<head><meta charset="UTF-8"><title>D-36 Q-learning 复位与指标口径</title>
+<!-- D-64 时点声明：D-64 扩图会改变地图与 Q 表；本页把 MAPS.sizes 钉回 21×15…37×23 以复现历史证据，断言未放宽。 --></head>
 <body>
 <div id="result">RUNNING</div>
 <canvas id="game" width="1280" height="720"></canvas>
@@ -102,6 +103,9 @@
     out.loaded = !!(window.Game && R && M && Game.Systems.Learner && T && B);
     if (!out.loaded) { finish(); return; }
     Game.Data.Player = Game.Data.Player || { quests: {}, level: 1, gold: 0 };
+    /* D-64 时点声明：D-36 的 Q 表/epsilon 证据按扩图前地图复算；D-64 扩图后地图会变。
+       为保证历史证据可复现，本页在生成地图前把 MAPS.sizes 钉回旧尺寸（areaRatio=1）；断言未放宽。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     withSeed(1, function () { M.generate(); });   /* 初始化 map.js 的 cfg */
     R.init(cv); R.resize(1);
     var sub = {}, ok = true;

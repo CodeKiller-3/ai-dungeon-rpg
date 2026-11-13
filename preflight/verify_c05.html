@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>C-05 随机策略对照基线</title></head>
+<head><meta charset="UTF-8"><title>C-05 随机策略对照基线</title>
+<!-- D-64 时点声明：D-64 扩图会改变地图与 Q 学习率；本页把 MAPS.sizes 钉回 21×15…37×23 以复现历史证据，断言未放宽。 --></head>
 <body>
 <div id="result">RUNNING</div>
 <canvas id="game" width="400" height="300"></canvas>
@@ -42,6 +43,10 @@
   var M = Game.Systems.Map, L = Game.Systems.Learner;
   out.loaded = !!(M && L && typeof M.setFloor === 'function' && typeof M.getGrid === 'function' &&
     typeof L.init === 'function' && typeof L.tick === 'function' && typeof L.getStats === 'function');
+  /* D-64 时点声明：C-05 的 Q 学习率是按扩图前 21×15…37×23 的地图测的；D-64 扩图后
+     README/讲稿里的实测值会失配。为保证 C-05 历史证据可复现，本页在生成地图前把
+     MAPS.sizes 钉回旧尺寸（areaRatio=1）；断言未放宽。 */
+  Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
 
   var MAX_STEPS = 60;      /* 与 learner.js 的 maxSteps 同值（C5-2 另做源码级核对） */
   var TRAIN_STEPS = 3000;  /* 与 verify_m7 / README 既有口径一致 */

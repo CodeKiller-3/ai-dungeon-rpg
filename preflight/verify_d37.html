@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 A/C 组复现 D-34 活体跑局，跑完立即恢复。 -->
+<!-- D-64 时点声明：本页 A/C 组要与 D-34 逐局一致。D-64 扩图会改变怪物/宝箱/陷阱密度，
+     故在 M.init 前把 MAPS.sizes 钉回扩图前尺寸 21×15…37×23（areaRatio=1，密度回到基准）；
+     断言未放宽。钉回只作用于本页的活体跑局。 -->
 <!-- D-37：本页读取 preflight/selfcheck/d37-g*.json 与 d34-bot-report.json（测量产物），故声明为元页面 -->
 <meta name="preflight-meta" content="1">
 <title>D-37 测量台校准：四组对照</title>
@@ -233,6 +236,8 @@
       habitSnap37[hk37] = Game.Data.MONSTERS[hk37].habit;
       Game.Data.MONSTERS[hk37].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
     }
+    /* D-64：钉回扩图前尺寸，保证 D-34 历史基线可复现（areaRatio=1，密度回到基准）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     M.init();
     M.closeGuide();
     Bot.install();

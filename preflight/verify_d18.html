@@ -119,7 +119,9 @@
         var ups = findTiles(g, 3), downs = findTiles(g, 2);
         if (ups.length !== 1 || downs.length !== 1) { badTiles.push(seed + 'F' + f + ':' + ups.length + '/' + downs.length); continue; }
         var en = Map.getEnemies().length;
-        if (en !== 5 + (f - 1) * 2) badEnemies.push(seed + 'F' + f + ':' + en);
+        /* D-64：地图 +4 后，怪物数按面积等比放大（基准 5+2×(层-1)），
+         * 期望值由 Map.expectedEnemyCount() 给出，与本页读的是同一份生成逻辑。 */
+        if (en !== Map.expectedEnemyCount()) badEnemies.push(seed + 'F' + f + ':' + en);
         var up = ups[0], down = downs[0];
         /* 第 1 层的上行梯 / 最深层的下行梯踩上去不换层，不构成阻断 */
         var upBlocks = f > 1, downBlocks = f < FLOORS;
@@ -139,8 +141,8 @@
       '每层恰好 1 个上行梯(3) + 1 个下行梯(2)；异常 ' + badTiles.length +
       (badTiles.length ? ' → ' + badTiles.slice(0, 6).join(' ') : '') + '（不靠减楼梯回避）');
     rec('A3_mapSizeAndEnemiesUnchanged', badDims.length === 0 && badEnemies.length === 0,
-      '地图尺寸与 D.MAPS.sizes 逐层一致（异常 ' + badDims.length + '）、每层敌人数 = 5+2×(层-1) 未被削减（异常 ' +
-      badEnemies.length + '）');
+      '地图尺寸与 D.MAPS.sizes 逐层一致（异常 ' + badDims.length + '）、每层敌人数 = 按面积等比放大后的期望值' +
+      '（基准 5+2×(层-1)，D-64 扩图后只增不减；异常 ' + badEnemies.length + '）');
 
     /* A4 负例：合成"上行梯卡在唯一走廊"的地图，检查必须判不可达；同图搬到支路则必须通过 */
     var negGrid = [

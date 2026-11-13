@@ -7,7 +7,7 @@
 <body>
 <canvas id="game"></canvas>
 <!-- S-04 验证页：陷阱 + 状态效果
-     断言口径：数据口径 → 五层放置规则（3~6 个 / F1 只地刺 / 避开出生点 3 格）→ 地刺伤害与上限
+     断言口径：数据口径 → 五层放置规则（基准 3~6 个，D-64 扩图后按面积等比放大 / F1 只地刺 / 避开出生点 3 格）→ 地刺伤害与上限
      → 触发后永久显现且不再伤人 → 毒气中毒三回合结算 → 状态致死通道 → HUD 状态字段
      → 状态不入档 → 陷阱绘制函数可调用。只加载逻辑模块，不启动主循环。 -->
 <script src="../js/core/eventBus.js"></script>
@@ -82,7 +82,8 @@
     sub.t2_data = t2;
     ok = ok && t2;
 
-    /* t3：五层放置规则——数量 3~6、全在地板格、F1 只有地刺、出生点 3 格内为空 */
+    /* t3：五层放置规则——数量按面积等比放大（基准 3~6）、全在地板格、
+     * F1 只有地刺、出生点 3 格内为空。期望区间由 Map.expectedTrapRange() 给出。 */
     var t3 = true, t3detail = [];
     M.generate(); /* Map 的 cfg 在首次 generate 时注入，之后才能 changeFloor */
     for (var f = 1; f <= 5; f++) {
@@ -103,7 +104,8 @@
           if (dx * dx + dy * dy <= 9) nearSpawn++;
         }
       }
-      if (count < 3 || count > 6 || badTile > 0 || nearSpawn > 0) t3 = false;
+      var rng = M.expectedTrapRange();
+      if (count < rng.min || count > rng.max || badTile > 0 || nearSpawn > 0) t3 = false;
       if (f === 1 && nonSpikeF1 > 0) t3 = false;
       if (f >= 2 && Object.keys(kinds).length < 1) t3 = false;
       t3detail.push({ f: f, count: count, kinds: kinds });

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="preflight-meta" content="1">
+<!-- D-64 时点声明：D-64 扩图会改变 gridHash/成功率；本页把 MAPS.sizes 钉回 21×15…37×23 以复现历史证据，断言未放宽。 -->
 <title>D-13 Q-learning 正确性、基线口径与文档一致性</title>
 <style>
   body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
@@ -89,6 +90,11 @@
   var SRC = readDoc('../js/systems/learner.js');
   var INSTR = T.instrument(SRC);
   function freshLearner() { return T.loadLearner(INSTR, 'd13v'); }
+
+  /* D-64 时点声明：D-13 的证据 JSON 按扩图前地图复算；D-64 扩图后 gridHash/成功率会变。
+     为保证历史证据逐值可比，本页在复算前把 MAPS.sizes 钉回 21×15…37×23（areaRatio=1）；
+     断言未放宽。 */
+  Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
 
   /* 与 d13_harness.html 完全同协议复算（供与证据 JSON 逐值比对） */
   function computeAll() {

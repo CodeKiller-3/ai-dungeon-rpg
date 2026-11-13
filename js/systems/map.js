@@ -24,6 +24,18 @@
   var floorCache = {};
   var lastMoves = [];   /* D-38：最近一次生成里被搬进出生点连通块的必经目标（只读遥测） */
 
+  /* D-64：扩图前的每层尺寸。密度参数（怪/宝箱/陷阱/装饰/巡逻）按
+   * 当前面积 / 基准面积 等比放大，避免"格子多了但内容没变多"的空旷大地图。
+   * 只放大数量，不改任何怪物/物品/伤害/掉落数值。 */
+  var BASE_SIZES = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+  function areaRatio(w, h) {
+    var b = BASE_SIZES[floorIndex % BASE_SIZES.length];
+    return (w * h) / (b[0] * b[1]);
+  }
+  function areaScale(n, w, h) {
+    return Math.max(n, Math.round(n * areaRatio(w, h)));
+  }
+
   function initGrid(w, h) {
     var g = [];
     for (var y = 0; y < h; y++) {
@@ -391,13 +403,14 @@
   function spawnEnemies() {
     enemies = [];
     var table = cfg.enemyTable[floorIndex % cfg.enemyTable.length];
-    var count = 5 + floorIndex * 2;
+    var w = grid[0].length;
+    var h = grid.length;
+    /* D-64：按面积等比放大，基准 5+2×(层-1)。 */
+    var count = areaScale(5 + floorIndex * 2, w, h);
     var placed = 0;
     var tries = 0;
     while (placed < count && tries < 500) {
       tries++;
-      var w = grid[0].length;
-      var h = grid.length;
       var x = 1 + Math.floor(Math.random() * (w - 2));
       var y = 1 + Math.floor(Math.random() * (h - 2));
       if (grid[y][x] === 1 && dist(x, y, spawn.x, spawn.y) > 6) {
@@ -516,11 +529,15 @@
      * 就近搬到怪物 2 格内——搬移是纯确定性操作，不消耗 Math.random，
      * 所以木桶/火把/藤蔓/陷阱/奖励点/NPC 的位置与 D-57 逐格一致。 */
     var f = floorIndex + 1;
-    placeDecor('chest', Math.max(1, 3 - f), w, h);
+    /* D-64：数量按面积等比放大；宝箱下限 2（扩图后不让密度被摊薄）。
+     * 宝箱的金币/道具池、绑怪比例、密室宝箱都不变，只改"放几个"。 */
+    var ratio = areaRatio(w, h);
+    var chestN = Math.max(ratio > 1.05 ? 2 : 1, Math.round(Math.max(1, 3 - f) * ratio));
+    placeDecor('chest', chestN, w, h);
     bindChestsToMonsters(w, h);
-    placeDecor('barrel', 3 + f, w, h);
-    placeDecor('torch', 2 + f * 2, w, h);
-    placeDecor('vine', 2 + f, w, h);
+    placeDecor('barrel', areaScale(3 + f, w, h), w, h);
+    placeDecor('torch', areaScale(2 + f * 2, w, h), w, h);
+    placeDecor('vine', areaScale(2 + f, w, h), w, h);
     furnishRooms(); /* S-05：密室内固定 1 个密室宝箱 + 2 个火把 */
     placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
     placeRewards(w, h); /* D-46：每层固定奖励点（金币/药），放在陷阱之后，互不侵占 */
@@ -696,7 +713,9 @@
    * 排除出生点 safeRadius 格内、敌人格、已放宝箱格；F1 只放地刺，F2 起按 gasRate 抽毒气 */
   function placeTraps(w, h) {
     var cfgT = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6, safeRadius: 3, gasRate: 0.45 };
-    var count = cfgT.min + Math.floor(Math.random() * (Math.max(cfgT.min, cfgT.max) - cfgT.min + 1));
+    /* D-64：先按原规则取 3~6，再按面积等比放大；陷阱伤害/触发逻辑不变。 */
+    var baseCount = cfgT.min + Math.floor(Math.random() * (Math.max(cfgT.min, cfgT.max) - cfgT.min + 1));
+    var count = areaScale(baseCount, w, h);
     var gasRate = (typeof cfgT.gasRate === 'number') ? cfgT.gasRate : 0.45;
     var only = (floorIndex === 0) ? (cfgT.firstFloorOnly || 'spike') : null;
     var placed = 0, tries = 0;
@@ -1095,7 +1114,8 @@
       placeStairs();
       spawnEnemies();
       lastMoves = ensureMandatoryTargets(); /* D-38：必经目标必须落在出生点连通块里 */
-      if (Game.Systems.AI) Game.Systems.AI.initPatrols(2);
+      /* D-64：巡逻怪同样按面积等比放大（基准 2 只）；AI 习性与视距不变。 */
+      if (Game.Systems.AI) Game.Systems.AI.initPatrols(areaScale(2, size[0], size[1]));
       spawn = { x: 1, y: 1 };
       genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
       floorCache[floorIndex] = {
@@ -1204,6 +1224,20 @@
 
     getFloor: function () { return floorIndex + 1; },
     getGrid: function () { return grid; },
+    /* D-64：当前层按面积等比放大后的期望怪物数（只读；与 spawnEnemies 同一口径，
+     * 供 verify_d18 断言"扩图后只增不减、且等于密度公式"。 */
+    expectedEnemyCount: function () {
+      cfg = Game.Data.MAPS;
+      var size = cfg.sizes[floorIndex % cfg.sizes.length];
+      return areaScale(5 + floorIndex * 2, size[0], size[1]);
+    },
+    /* D-64：当前层陷阱数量的期望区间（只读；与 placeTraps 同一口径）。 */
+    expectedTrapRange: function () {
+      cfg = Game.Data.MAPS;
+      var size = cfg.sizes[floorIndex % cfg.sizes.length];
+      var c = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6 };
+      return { min: areaScale(c.min, size[0], size[1]), max: areaScale(c.max, size[0], size[1]) };
+    },
     getSpawn: function () { return { x: spawn.x, y: spawn.y }; },
 
     /* 存档恢复/重新开始：直接切到指定楼层并生成。

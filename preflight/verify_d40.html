@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <!-- D-40：读取 preflight/selfcheck/d40-m1.json、d37-g0.json、d37-g2.json、d39-s1.json（测量产物） -->
+<!-- D-64 时点声明：D-40 的 B7 经验预算以"全图 45 只怪"为前提；D-64 扩图按面积放大怪物数后
+     该前提不再成立（会多出约 10 只怪）。为保证历史结论"L10 不可达"仍可复现，本页在 M.init 前
+     把 MAPS.sizes 钉回 21×15…37×23（areaRatio=1，怪物数回到 45）；断言未放宽。
+     扩图后的新经验预算见 docs/扩图实测-D-64.md。 -->
 <meta name="preflight-meta" content="1">
 <title>D-40 成长上限审计</title>
 <style>
@@ -80,6 +84,8 @@
   }
 
   try {
+    /* D-64：钉回扩图前尺寸，保证 B7 的"45 只怪"历史前提可复现（areaRatio=1）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     M.init();
     M.closeGuide();
     var P = D.Player;

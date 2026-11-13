@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-64 扩图 · 密度与性能实测</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-64 · 密度 / 性能探针（只读，不改数值）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-64', env: {}, density: {}, perf: {}, ok: false };
+  function avg(a) { if (!a.length) return 0; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return Math.round(s / a.length * 1000) / 1000; }
+  function p95(a) { if (!a.length) return 0; var b = a.slice().sort(function (x, y) { return x - y; }); return Math.round(b[Math.min(b.length - 1, Math.floor(b.length * 0.95))] * 1000) / 1000; }
+
+  function scan() {
+    var g = Game.Systems.Map.getGrid(), w = g[0].length, h = g.length;
+    var walk = 0, chest = 0, roomChest = 0, gold = 0, potion = 0, traps = 0, plazas = 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (g[y][x] === 0) continue;
+        walk++;
+        var d = Game.Systems.Map.getDecor(x, y);
+        if (d === 'chest') chest++;
+        else if (d === 'room_chest') roomChest++;
+        else if (d === 'gold_pile') gold++;
+        else if (d === 'potion_stash') potion++;
+        if (Game.Systems.Map.getTrap(x, y)) traps++;
+      }
+    }
+    for (y = 0; y < h - 1; y++) for (x = 0; x < w - 1; x++) {
+      if (g[y][x] !== 0 && g[y][x + 1] !== 0 && g[y + 1][x] !== 0 && g[y + 1][x + 1] !== 0) plazas++;
+    }
+    return {
+      w: w, h: h, cells: w * h, walk: walk,
+      enemies: Game.Systems.Map.getEnemies().length,
+      npcs: Game.Systems.Map.getNpcs().length,
+      chest: chest, roomChest: roomChest, goldPile: gold, potionStash: potion,
+      traps: traps, plazas: plazas
+    };
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    /* ?old=1：钉回扩图前尺寸，用于"扩图前"对照组（areaRatio=1，密度回到基准）。 */
+    if (/old=1/.test(location.search)) {
+      Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+    }
+    var sizes = Game.Data.MAPS.sizes;
+    out.env = { sizes: JSON.parse(JSON.stringify(sizes)), floors: Game.Data.MAPS.floors, radius: (Game.fov && Game.fov.RADIUS) || 5 };
+
+    /* ── 密度：每层 20 个种子取均值 ── */
+    var SEEDS = 20;
+    for (var f = 1; f <= 5; f++) {
+      var acc = { w: 0, h: 0, cells: 0, walk: 0, enemies: 0, npcs: 0, chest: 0, roomChest: 0,
+        goldPile: 0, potionStash: 0, traps: 0, plazas: 0, genMs: [] };
+      for (var s = 0; s < SEEDS; s++) {
+        Math.random = Game.Bot.mulberry32(1001 + s * 37 + f * 997);
+        var t0 = performance.now();
+        Game.Systems.Map.setFloor(f);
+        acc.genMs.push(performance.now() - t0);
+        var r = scan();
+        for (var k in r) if (typeof r[k] === 'number') acc[k] += r[k];
+      }
+      var one = { genMs: avg(acc.genMs) };
+      for (var k2 in acc) {
+        if (typeof acc[k2] === 'number' && k2 !== 'genMs') one[k2] = Math.round(acc[k2] / SEEDS * 100) / 100;
+      }
+      one.per100 = {
+        enemies: Math.round(one.enemies * 10000 / one.walk) / 100,
+        chest: Math.round(one.chest * 10000 / one.walk) / 100,
+        traps: Math.round(one.traps * 10000 / one.walk) / 100
+      };
+      out.density['F' + f] = one;
+    }
+
+    /* ── 连通性：50 种子 × 5 层，楼梯/NPC/Boss/宝箱必须从出生点可达 ── */
+    var conn = { seeds: 50, floors: 250, unreachable: 0, mandatoryUnreachable: 0, relocated: 0, examples: [],
+      looseUnreachable: 0, looseExamples: [] };
+    for (var cs = 1001; cs <= 1050; cs++) {
+      for (var cf = 1; cf <= 5; cf++) {
+        Math.random = Game.Bot.mulberry32(cs * 100 + cf);
+        Game.Systems.Map.setFloor(cf);
+        var g2 = Game.Systems.Map.getGrid(), sp2 = Game.Systems.Map.getSpawn();
+        var tg2 = Game.Systems.Map.getMandatoryTargets();
+        for (var yy = 0; yy < g2.length; yy++) for (var xx = 0; xx < g2[0].length; xx++) {
+          var dd = Game.Systems.Map.getDecor(xx, yy);
+          if (dd === 'chest' || dd === 'room_chest') tg2.push({ kind: 'chest', x: xx, y: yy });
+        }
+        var rr = Game.Systems.Map.checkTargetsReachable(g2, sp2, [2, 3], tg2);
+        /* 宽松口径：楼梯格也允许作为通路（生成期 reachable() 就是这条口径）。 */
+        var rrL = Game.Systems.Map.checkTargetsReachable(g2, sp2, [], tg2);
+        var mv2 = Game.Systems.Map.getLastMoves();
+        conn.relocated += mv2.length;
+        if (!rrL.ok) {
+          conn.looseUnreachable++;
+          if (conn.looseExamples.length < 5) {
+            conn.looseExamples.push({ seed: cs, floor: cf, unreachable: rrL.unreachable.slice(0, 4) });
+          }
+        }
+        if (!rr.ok) {
+          conn.unreachable++;
+          for (var ui = 0; ui < rr.unreachable.length; ui++) if (rr.unreachable[ui].kind !== 'chest') conn.mandatoryUnreachable++;
+          if (conn.examples.length < 5) {
+            conn.examples.push({ seed: cs, floor: cf, unreachable: rr.unreachable.slice(0, 4), moves: mv2.length });
+          }
+        }
+      }
+    }
+    out.connectivity = conn;
+
+    /* ── FOV：F5 出生点，300 次 ── */
+    Math.random = Game.Bot.mulberry32(20261113);
+    Game.Systems.Map.setFloor(5);
+    var sp = Game.Systems.Map.getSpawn();
+    var fovT = [];
+    for (var i = 0; i < 300; i++) {
+      var a = performance.now();
+      Game.fov.update(sp.x, sp.y, 5, function (x, y) {
+        var g = Game.Systems.Map.getGrid();
+        return !(y >= 0 && y < g.length && x >= 0 && x < g[0].length) || g[y][x] === 0;
+      });
+      fovT.push(performance.now() - a);
+    }
+    out.perf.fovMs = { avg: avg(fovT), p95: p95(fovT) };
+
+    /* ── 指引 BFS：F1 接取守夜人任务，300 次 ── */
+    Math.random = Game.Bot.mulberry32(20261114);
+    Game.Systems.Map.setFloor(1);
+    var p = Game.Data.Player;
+    var sp1 = Game.Systems.Map.getSpawn();
+    p.x = sp1.x; p.y = sp1.y; p.floor = 1;
+    p.npcQuests = { warden_f1: { accepted: true, progress: 0, delivered: false } };
+    var guideFn = (Game.Systems.Quest && typeof Game.Systems.Quest.guidance === 'function')
+      ? Game.Systems.Quest.guidance
+      : (Game.Systems.NpcQuest && Game.Systems.NpcQuest.guidance);
+    if (typeof guideFn !== 'function') throw new Error('guidance() not found');
+    var gT = [];
+    for (var j = 0; j < 300; j++) {
+      var b = performance.now();
+      guideFn.call(Game.Systems.Quest);
+      gT.push(performance.now() - b);
+    }
+    out.perf.guideMs = { avg: avg(gT), p95: p95(gT), sample: guideFn.call(Game.Systems.Quest) };
+
+    /* ── 存档快照：拦 localStorage 取字符串长度 ── */
+    var snapLen = 0;
+    var origSet = localStorage.setItem;
+    try {
+      localStorage.setItem = function (k, v) { if (k === Game.Systems.Save.KEY) snapLen = String(v).length; else origSet.call(localStorage, k, v); };
+      Game.Systems.Save.save();
+    } finally { localStorage.setItem = origSet; }
+    out.perf.saveBytes = snapLen;
+
+    /* ── 帧耗时：F5 静止 240 帧，缓存命中态 ── */
+    Math.random = Game.Bot.mulberry32(20261115);
+    Game.Systems.Map.setFloor(5);
+    var sp5 = Game.Systems.Map.getSpawn();
+    p.x = sp5.x; p.y = sp5.y; p.floor = 5;
+    M._scene = 'explore';
+    var R = Game.Core.Render;
+    var tMap = 0, tPl = 0, tHud = 0, tUpd = 0;
+    var oMap = R.drawMap, oPl = R.drawPlayer, oHud = R.drawHUD, oUpd = M._updateExplore;
+    R.drawMap = function () { var t = performance.now(); var r = oMap.apply(R, arguments); tMap += performance.now() - t; return r; };
+    R.drawPlayer = function () { var t = performance.now(); var r = oPl.apply(R, arguments); tPl += performance.now() - t; return r; };
+    R.drawHUD = function () { var t = performance.now(); var r = oHud.apply(R, arguments); tHud += performance.now() - t; return r; };
+    M._updateExplore = function (ts) { var t = performance.now(); var r = oUpd.call(M, ts); tUpd += performance.now() - t; return r; };
+    var rebuild0 = R._staticRebuilds || 0;
+    var frameT = [];
+    try {
+      for (var n = 0; n < 240; n++) {
+        var t2 = performance.now();
+        M.loop(10000 + n * 16.7);
+        frameT.push(performance.now() - t2);
+      }
+    } finally {
+      R.drawMap = oMap; R.drawPlayer = oPl; R.drawHUD = oHud; M._updateExplore = oUpd;
+    }
+    var cv = document.getElementById('game');
+    out.perf.frameMs = {
+      avg: avg(frameT), p95: p95(frameT),
+      updateAvg: Math.round(tUpd / 240 * 1000) / 1000,
+      drawMapAvg: Math.round(tMap / 240 * 1000) / 1000,
+      drawPlayerAvg: Math.round(tPl / 240 * 1000) / 1000,
+      drawHudAvg: Math.round(tHud / 240 * 1000) / 1000,
+      staticRebuilds: (R._staticRebuilds || 0) - rebuild0,
+      canvasBytes: cv.width * cv.height * 4,
+      canvasW: cv.width, canvasH: cv.height
+    };
+
+    out.ok = true;
+    document.title = 'D64_PROBE_DONE';
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'D64_PROBE_FAIL';
+  }
+  window.__D64P__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

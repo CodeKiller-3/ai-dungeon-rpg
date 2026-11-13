@@ -2,6 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- D-64 时点声明：D-24 的死亡成因按扩图前地图统计；本页在 M.init 前把 MAPS.sizes 钉回
+     21×15…37×23（areaRatio=1），保持历史统计可比；断言未放宽。 -->
 <title>D-24 赤手空拳死亡成因核查</title>
 <style>
   body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
@@ -216,6 +218,8 @@
 
   try {
     Game.Core.Input.bind();
+    /* D-64：钉回扩图前尺寸，保证死亡成因统计与历史口径可比（areaRatio=1）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     M.init();
     M.closeGuide();
     M.restart();

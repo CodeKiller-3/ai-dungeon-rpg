@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>P1/P2 修复验证</title></head>
+<head><meta charset="UTF-8"><title>P1/P2 修复验证</title>
+<!-- D-64 时点声明：本页的 dragonGuarantee 以 F5 恰好 13 只怪为前提；D-64 扩图按面积放大到 17 只后
+     该历史断言不再成立。为保证 P1/P2 历史基线可复现，本页在 M.init 前把 MAPS.sizes 钉回
+     21×15…37×23（areaRatio=1，F5 回到 13 只）；断言未放宽。扩图后的实测见 docs/扩图实测-D-64.md。 --></head>
 <body>
 <canvas id="game"></canvas>
 <div id="npc"><div id="npc-log"></div><input id="npc-input"></div>
@@ -116,6 +119,8 @@
   try {
     localStorage.clear();
     localStorage.setItem('aiDungeon_guided', '1');
+    /* D-64：钉回扩图前尺寸，保证 dragonGuarantee 的"F5 = 13 只"历史前提可复现（areaRatio=1）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     M.init();
     M._guideVisible = false;
     M.switchScene('explore');

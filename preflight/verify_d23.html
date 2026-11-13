@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 B 组两次 D-19 复现跑局，跑完立即恢复。 -->
 <!-- D-23：本页读取 preflight/selfcheck/d19-report.json（D-19 基线）与 d23-report.json（本轮产物），故声明为元页面 -->
+<!-- D-64 时点声明：D-64 扩图会改变 B 组 D-19 复现跑局的密度/结果；本页在 M.init 前把
+     MAPS.sizes 钉回 21×15…37×23（areaRatio=1），以保持与 D-19 基线可比；断言未放宽。 -->
 <meta name="preflight-meta" content="1">
 <title>D-23 死亡归因遥测</title>
 <style>
@@ -144,6 +146,8 @@
 
   try {
     Game.Core.Input.bind();
+    /* D-64：钉回扩图前尺寸，保证 B 组 D-19 复现跑局可比（areaRatio=1，密度回到基准）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     M.init();
     M.closeGuide();
 
