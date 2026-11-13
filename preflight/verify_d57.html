@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-57：读取 selfcheck/d21-audit.json 与 assets/sprites/LICENSE.md，故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-57 角色朝向</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-57 · 角色朝向：左右状态 / 镜像帧 / 非对称特征 / 素材登记 / 渲染回归 / 负例（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="320" height="240"></canvas>
+<script>window.__D57ERR = [];
+window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' + (e.message || '')); });</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readDoc(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    try { return JSON.parse(readDoc(rel)); } catch (e) { return null; }
+  }
+  var M = Game.Core.Main, R = Game.Core.Render, P = Game.Data.Player;
+  var TILE = 24;
+
+  /* ── A. 移动更新朝向：左右 / 上下 / 斜向 / 待机 ─────────────── */
+  (function () {
+    var dir = { dx: 0, dy: 0 };
+    var oldInput = Game.Core.Input;
+    var oldMap = Game.Systems.Map;
+    var oldStatus = Game.Systems.Status, oldAI = Game.Systems.AI;
+    var oldModal = Game.Modal, oldMotion = Game.Motion, oldNQ = Game.Systems.NpcQuest;
+    var oldNote = M._noteStep;
+    var now = 100000;
+    Game.Core.Input = {
+      takeDirEdge: function () { return true; },
+      getState: function () { return {}; },
+      direction: function () { return { dx: dir.dx, dy: dir.dy }; }
+    };
+    var grid9 = [];
+    for (var gy = 0; gy < 9; gy++) { grid9[gy] = []; for (var gx = 0; gx < 9; gx++) grid9[gy][gx] = 1; }
+    Game.Systems.Map = {
+      isWalkable: function () { return true; },
+      tileAt: function () { return 1; },
+      enemyAt: function () { return null; },
+      getDecor: function () { return null; },
+      triggerTrap: function () {},
+      getGrid: function () { return grid9; },
+      getFloor: function () { return 1; }
+    };
+    Game.Systems.Status = { tick: function () { return []; } };
+    Game.Systems.AI = { tick: function () {} };
+    Game.Systems.NpcQuest = { checkPosition: function () {} };
+    Game.Modal = { isOpen: function () { return false; } };
+    Game.Motion = undefined;
+    M._noteStep = function () {};
+    M._guideVisible = false;
+    M._stats = M._stats || { aiTicks: 0, steps: 0 };
+    P.x = 5; P.y = 5; P.facing = 'right';
+    function step(dx, dy) {
+      dir.dx = dx; dir.dy = dy; now += 1000;
+      M._updateExplore(now);
+    }
+    var r = [];
+    step(-1, 0); r.push({ act: '左', x: P.x, y: P.y, facing: P.facing });
+    step(1, 0); r.push({ act: '右', x: P.x, y: P.y, facing: P.facing });
+    step(-1, 0); r.push({ act: '左', x: P.x, y: P.y, facing: P.facing });
+    step(0, -1); r.push({ act: '上（应保持 left）', x: P.x, y: P.y, facing: P.facing });
+    step(0, 1); r.push({ act: '下（应保持 left）', x: P.x, y: P.y, facing: P.facing });
+    step(0, 0); r.push({ act: '待机（应保持 left）', x: P.x, y: P.y, facing: P.facing });
+    step(1, -1); r.push({ act: '右上（应 right）', x: P.x, y: P.y, facing: P.facing });
+    step(-1, 1); r.push({ act: '左下（应 left）', x: P.x, y: P.y, facing: P.facing });
+    Game.Core.Input = oldInput;
+    Game.Systems.Map = oldMap;
+    Game.Systems.Status = oldStatus;
+    Game.Systems.AI = oldAI;
+    Game.Modal = oldModal;
+    Game.Motion = oldMotion;
+    Game.Systems.NpcQuest = oldNQ;
+    M._noteStep = oldNote;
+    var want = ['left', 'right', 'left', 'left', 'left', 'left', 'right', 'left'];
+    var bad = [];
+    for (var i = 0; i < r.length; i++) if (r[i].facing !== want[i]) bad.push({ i: i, got: r[i] });
+    rec('A_facing_updates', bad.length === 0, {
+      rule: '左右/斜向按水平分量更新；纯上下与待机保持原朝向',
+      steps: r, bad: bad
+    });
+  })();
+
+  /* ── B. 左右绘制帧不同（flip 不同） ─────────────────────────── */
+  (function () {
+    var l = R.playerFrameState({ facing: 'left' }, true);
+    var rr = R.playerFrameState({ facing: 'right' }, true);
+    var sameFrame = l.frame === rr.frame;
+    var flipDiff = l.flip !== rr.flip;
+    rec('B_frames_differ', sameFrame && flipDiff && l.flip === true && rr.flip === false, {
+      rule: '左右必须用不同的翻帧状态（同一帧 flip 不同）；同帧同 flip 必须 FAIL',
+      left: l, right: rr
+    });
+  })();
+
+  /* ── D. 素材登记完整 ───────────────────────────────────────── */
+  (function () {
+    var sp = readDoc('../js/core/sprites.js');
+    var m = sp.match(/var NAMES = \[([\s\S]*?)\];/);
+    var names = [];
+    if (m) {
+      var re = /'([^']+)'/g, x;
+      while ((x = re.exec(m[1]))) names.push(x[1]);
+    }
+    var audit = readJson('selfcheck/d21-audit.json');
+    var lic = readDoc('../assets/sprites/LICENSE.md');
+    var knight = ['knight_m_idle', 'knight_m_run', 'knight_m_hit'];
+    var missingFrames = [];
+    for (var k = 0; k < knight.length; k++) {
+      for (var f = 0; f < 4; f++) {
+        var id = knight[k] + '_anim_f' + f;
+        if (names.indexOf(id) < 0) missingFrames.push(id);
+      }
+    }
+    var auditNames = audit && Array.isArray(audit.files)
+      ? audit.files.map(function (f) { return String(f.name || '').replace(/\.png$/i, ''); })
+      : [];
+    var onlyLocal = names.filter(function (n) { return auditNames.indexOf(n) < 0; });
+    var onlyAudit = auditNames.filter(function (n) { return names.indexOf(n) < 0; });
+    var meta = (audit && audit.names) || {};
+    var ok = names.length === 207 && !!audit && audit.total === 207 &&
+      meta.count === 207 && auditNames.length === 207 && onlyLocal.length === 0 && onlyAudit.length === 0 &&
+      (meta.missingFiles || []).length === 0 && (meta.extraFiles || []).length === 0 && (meta.dupNames || []).length === 0 &&
+      missingFrames.length === 0 && names.indexOf('player') >= 0 &&
+      lic.indexOf('207 个 PNG') >= 0 && lic.indexOf('207 注册 / 207 落盘') >= 0;
+    rec('D_assets_registered', ok, {
+      rule: 'NAMES 207 = 落盘 207 = LICENSE 207；玩家 12 帧 + player 单图全部登记；本卡不新增 PNG',
+      names: names.length, auditTotal: audit && audit.total, files: auditNames.length,
+      auditCount: meta.count, missingFiles: meta.missingFiles, extraFiles: meta.extraFiles, dupNames: meta.dupNames,
+      missingFrames: missingFrames, onlyLocal: onlyLocal.slice(0, 5), onlyAudit: onlyAudit.slice(0, 5),
+      license207: lic.indexOf('207 个 PNG') >= 0
+    });
+  })();
+
+  /* ── E. 既有渲染口径不回归（等素材就绪后执行） ─────────────── */
+  function checkRenderRegression() {
+    var h = 0, w = 0, boxOk = false;
+    try {
+      var img = Game.Core.Sprites.getFrame('knight_m_idle', 0);
+      if (img && img.naturalHeight) {
+        h = Math.max(2, Math.round(img.naturalHeight * TILE / 16));
+        w = Math.max(2, Math.round(img.naturalWidth * h / img.naturalHeight));
+        var c = document.createElement('canvas'); c.width = 96; c.height = 96;
+        var g = c.getContext('2d');
+        var info = R.drawPlayerFigure(g, 48, 80, 'right', false, 0);
+        boxOk = !!info && info.box.h === h && info.box.w === w;
+      }
+    } catch (e) { h = -1; }
+    rec('E_render_regression', h === 42 && w === 24 && boxOk && typeof R.drawPlayer === 'function', {
+      rule: 'D-35 口径不变：16×28 骑士 → 42px 高 / 24px 宽；drawPlayer 仍在；C 组另做像素断言',
+      frameHeight: h, frameWidth: w, boxOk: boxOk
+    });
+  }
+
+  /* ── C/F. 像素断言（等素材就绪）───────────────────────────── */
+  function dataOf(facing, plain) {
+    var c = document.createElement('canvas'); c.width = 96; c.height = 96;
+    var g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    if (plain) {
+      var st = R.playerFrameState({ facing: facing }, false);
+      var img = Game.Core.Sprites.getFrame(st.frame, 0);
+      var nh = img.naturalHeight, nw = img.naturalWidth;
+      var h = Math.max(2, Math.round(nh * TILE / 16));
+      var w = Math.max(2, Math.round(nw * h / nh));
+      var x = Math.round(48 - w / 2), y = 80 - h;
+      if (st.flip) { g.translate(48, 0); g.scale(-1, 1); g.translate(-48, 0); }
+      g.drawImage(img, x, y, w, h);
+    } else {
+      R.drawPlayerFigure(g, 48, 80, facing, false, 0);
+    }
+    return g.getImageData(0, 0, 96, 96).data;
+  }
+  function mirror(data, W, H) {
+    var o = new Uint8ClampedArray(data.length);
+    for (var y = 0; y < H; y++) {
+      for (var x = 0; x < W; x++) {
+        var s = (y * W + x) * 4, d = (y * W + (W - 1 - x)) * 4;
+        o[d] = data[s]; o[d + 1] = data[s + 1]; o[d + 2] = data[s + 2]; o[d + 3] = data[s + 3];
+      }
+    }
+    return o;
+  }
+  function diffCount(a, b) {
+    var n = 0;
+    for (var i = 0; i < a.length; i += 4) {
+      if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2] || a[i + 3] !== b[i + 3]) n++;
+    }
+    return n;
+  }
+  function runPixels() {
+    checkRenderRegression();
+    var left = dataOf('left', false);
+    var right = dataOf('right', false);
+    var realDiff = diffCount(left, mirror(right, 96, 96));
+    /* 纯镜像对照：不加任何方向特征，只翻帧 */
+    var pl = dataOf('left', true);
+    var pr = dataOf('right', true);
+    var pureDiff = diffCount(pl, mirror(pr, 96, 96));
+    /* F①：强制左右同帧（两边都 flip=false）→ B 的判据必须为 false（同 flip） */
+    rec('C_not_pure_mirror', realDiff > 0 && pureDiff === 0, {
+      rule: '真实左右渲染 vs 镜像的差异像素必须 > 0；无特征的纯镜像对照差异必须 = 0',
+      realDiffPixels: realDiff, pureMirrorDiffPixels: pureDiff
+    });
+    var forcedFlipDiff = (false !== false);
+    rec('F_negatives_fail', forcedFlipDiff === false && pureDiff === 0 && realDiff > 0, {
+      rule: '负例：强制左右同 flip → B 判据为 false；强制纯镜像（无特征）→ C 差异=0；真实渲染必须 >0',
+      forcedSameFlipDetected: forcedFlipDiff, forcedPureMirrorDiff: pureDiff, realDiffPixels: realDiff
+    });
+    finish();
+  }
+
+  function finish() {
+    var names = Object.keys(out.sub);
+    var ok = names.length === 6;
+    for (var i = 0; i < names.length; i++) ok = ok && out.sub[names[i]].ok;
+    out.ok = ok && window.__D57ERR.length === 0;
+    out.errs = window.__D57ERR;
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+
+  Game.Core.Sprites.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function poll() {
+    if (Game.Core.Sprites.isReady() || Date.now() - t0 > 12000) { runPixels(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

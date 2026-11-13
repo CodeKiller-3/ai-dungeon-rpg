@@ -11,6 +11,9 @@
   /* 玩家运行时对象（PLAN.md §7.1 Player Schema） */
   var player = {
     x: 1, y: 1, floor: 1,
+    /* D-57：朝向（left/right）。只在左右/斜向移动时更新；纯上下与待机保持。
+     * 不入档：读档后由 save.js 重置为 right（见 D-57 文档）。 */
+    facing: 'right',
     hp: 100, maxHp: 100,
     mp: 50, maxMp: 50, /* M8-1：技能 MP（旧存档缺失时由 save.js 补默认） */
     atk: 10, def: 5,
@@ -867,6 +870,7 @@
         Game.Systems.Battle.abort();
       }
       /* 重置玩家为新档 */
+      player.facing = 'right'; /* D-57：新局默认朝右 */
       player.hp = 100; player.maxHp = 100;
       player.mp = 50; player.maxMp = 50; /* M8-1：新档 MP 满 */
       player.atk = 10; player.def = 5;
@@ -1480,6 +1484,9 @@
           var fromX = player.x, fromY = player.y;
           player.x = nx;
           player.y = ny;
+          /* D-57：只有水平分量改变朝向；纯上下移动保持原朝向 */
+          if (d.dx < 0) player.facing = 'left';
+          else if (d.dx > 0) player.facing = 'right';
           this._stats.steps++; /* D-51：真的走了一格才 +1（暂停期间走不动） */
           this._noteStep();    /* D-52：本局总回合 = 探索步数 + 战斗行动 */
           /* D-47：NPC 任务进度——每一步都检查"是否走到下行梯旁"（不含楼梯格自身） */

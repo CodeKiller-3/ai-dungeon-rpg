@@ -155,6 +155,8 @@
         p.x = landing.x;
         p.y = landing.y;
         p.floor = M.getFloor();
+        /* D-57：朝向不入档；读档统一回到默认朝右（避免带着上一局的朝向进新局） */
+        p.facing = 'right';
         Game.Systems.Save.lastLanding = landing;
         /* D-52：恢复本局统计与结局记录。旧档没有 run 字段 → unknown（结局页隐藏未知项）；
          * 没有 ending → null（不影响任何既有字段） */

@@ -292,7 +292,53 @@
     ];
   }
 
+  /* ── D-57：角色朝向 ────────────────────────────────────────────
+   * 审计结论：玩家只有正面帧（knight_m_* 16×28），没有侧面帧。
+   * 方案 = 正面帧水平镜像 + 两处方向性特征（不是真侧身，报告已注明）：
+   *   ① 朝向侧鞋底前冲尘屑：3×2 金条，右朝向在盒右外 1px、左朝向在盒左外 4px；
+   *   ② 固定世界左侧的受光高光：2×2，始终在盒左 +2px——不随朝向翻转，
+   *      因此左右画面不是彼此的纯镜像（C 组按像素采样验证这一点）。
+   * 纯查询函数，验证页 B/F 组直接调用。 */
+  function playerFrameState(player, moving) {
+    var facing = (player && player.facing === 'left') ? 'left' : 'right';
+    return {
+      frame: moving ? 'knight_m_run' : 'knight_m_idle',
+      facing: facing,
+      flip: facing === 'left'
+    };
+  }
+
+  function drawPlayerFigure(ctx, cx, bottom, facing, moving, animT) {
+    var st = playerFrameState({ facing: facing }, moving);
+    var img = null;
+    if (Game.Core.Sprites && typeof Game.Core.Sprites.getFrame === 'function') {
+      img = Game.Core.Sprites.getFrame(st.frame, typeof animT === 'number' ? animT : 0);
+    }
+    if (!img) return null;
+    var b = unitBox(img, cx, bottom);
+    if (!b) return null;
+    ctx.save();
+    if (st.flip) {
+      ctx.translate(cx, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-cx, 0);
+    }
+    ctx.drawImage(img, b.x, b.y, b.w, b.h);
+    ctx.restore();
+    /* ① 朝向侧前冲尘屑 */
+    ctx.fillStyle = 'rgba(255,207,110,0.85)';
+    if (st.flip) ctx.fillRect(b.x - 4, b.y + b.h - 4, 3, 2);
+    else ctx.fillRect(b.x + b.w + 1, b.y + b.h - 4, 3, 2);
+    /* ② 固定世界左侧受光高光（打破纯镜像） */
+    ctx.fillStyle = 'rgba(255,246,214,0.45)';
+    ctx.fillRect(b.x + 2, b.y + Math.round(b.h * 0.30), 2, 2);
+    return { box: b, frame: st.frame, facing: st.facing, flip: st.flip };
+  }
+
   Game.Core.Render = {
+    /* D-57：朝向帧状态与玩家图形绘制（验证页 B/C/F 组复用） */
+    playerFrameState: playerFrameState,
+    drawPlayerFigure: drawPlayerFigure,
     _canvas: null,
     _ctx: null,
     KEYMAP: KEYMAP,           /* D-20：按键表（引导页与验证页共用） */
@@ -983,7 +1029,9 @@
       var px = rx * TILE - cam.x;
       var py = ry * TILE - cam.y;
       /* P1-3：骑士三态帧动画（16×28 按高度适配 TILE 格，底部贴格底、水平居中）；
-       * 帧缺失回退 kni 单图（player.png），再缺失回退像素小人色块 */
+       * 帧缺失回退 kni 单图（player.png），再缺失回退像素小人色块。
+       * D-57：按 player.facing 镜像（左朝向水平翻帧），并叠加方向性特征。 */
+      var facing = (player && player.facing === 'left') ? 'left' : 'right';
       var kimg = null;
       if (this._hasSprites() && typeof Game.Core.Sprites.getFrame === 'function') {
         kimg = Game.Core.Sprites.getFrame(moving ? 'knight_m_run' : 'knight_m_idle',
@@ -995,7 +1043,8 @@
         var pcx = px + TILE / 2;
         var pbt = py + TILE - 1;
         groundShadow(ctx, pcx, pbt, TILE);
-        drawSpriteByUnit(ctx, kimg, pcx, pbt);
+        drawPlayerFigure(ctx, pcx, pbt, facing, moving,
+          animIndex(moving ? 'knight_m_run' : 'knight_m_idle', 4));
         if (Game.Systems && Game.Systems.Map && typeof Game.Systems.Map.getGrid === 'function') {
           this._drawFrontDecor(ctx, Game.Systems.Map.getGrid(), Math.round(rx), ry);
         }
