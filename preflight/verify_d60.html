@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-60：读取上一轮 regression-result.json 与 d22-selftest.json，属元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-60 更名为《地牢回响》</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-60 · 全仓旧名扫描 / index 标题与菜单渲染 / 存档键与旧档 / 负例 / 回归（A–E）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  window.__D60ERR = [];
+  window.addEventListener('error', function (e) {
+    window.__D60ERR.push(String(e.message || e));
+    var el = document.getElementById('result');
+    if (el) el.textContent = 'ERR ' + (e.message || e) + ' @' + (e.lineno || '?');
+  });
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      if (x.status >= 400) return null;
+      return x.responseText;
+    } catch (e) { return null; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel);
+    if (t === null) return null;
+    try { return JSON.parse(t.replace(/^\uFEFF/, '')); } catch (e) { return null; }
+  }
+
+  /* 旧名不在源码里写死，避免扫描器扫到自己：
+   * 运行时才拼出带空格 / 不带空格两种历史写法。 */
+  var OLD_SP = 'AI 勇' + '者闯地牢';
+  var OLD_NS = 'AI勇' + '者闯地牢';
+  var NEW = '地牢回响';
+  var DECL = '> 本卡成卡时项目名为《' + OLD_SP + '》，D-60 起更名为《' + NEW + '》。';
+
+  /* ── A：全仓扫描 ─────────────────────────────────────────────
+   * 允许区只有两类：
+   *   ① docs/tasks/ 下、首行正好是 DECL 的历史任务卡（正文按约定不改）；
+   *   ② CHANGELOG.md 中排在 D-60 条目之后的历史条目。
+   * 其余任何命中都进 violations。 */
+  function scanText(rel, text) {
+    var lines = String(text || '').split(/\r?\n/);
+    var isTask = rel.indexOf('docs/tasks/') === 0 && lines[0] === DECL;
+    var d60Line = -1;
+    if (rel === 'CHANGELOG.md') {
+      for (var k = 0; k < lines.length; k++) {
+        if (lines[k].indexOf('更名（D-60）') >= 0) { d60Line = k; break; }
+      }
+    }
+    var hits = [], allowed = [], bad = [];
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf(OLD_SP) < 0 && lines[i].indexOf(OLD_NS) < 0) continue;
+      var h = { file: rel, line: i + 1, text: lines[i].replace(/^\s+|\s+$/g, '').slice(0, 120) };
+      if (isTask) { h.why = 'task-card-declaration'; allowed.push(h); }
+      else if (rel === 'CHANGELOG.md' && d60Line >= 0 && i > d60Line) { h.why = 'changelog-history'; allowed.push(h); }
+      else { h.why = 'violation'; bad.push(h); }
+      hits.push(h);
+    }
+    return { hits: hits, allowed: allowed, bad: bad };
+  }
+
+  var hits = [], allowed = [], bad = [], missing = [], done = 0, finished = false;
+  function collect(rel, text) {
+    if (text === null) { missing.push(rel); return; }
+    var r = scanText(rel, text);
+    for (var a = 0; a < r.allowed.length; a++) allowed.push(r.allowed[a]);
+    for (var b = 0; b < r.bad.length; b++) bad.push(r.bad[b]);
+    for (var h = 0; h < r.hits.length; h++) hits.push(r.hits[h]);
+    done++;
+  }
+
+  /* 全仓语料：preflight/selfcheck/d60-corpus.ps1 在提交前把每个文本文件
+   * 以「@@D60FILE@@ 路径」分段写成一份 3.6MB 语料。一次同步读取即可扫完，
+   * 避免 300+ 次 file:// XHR 被 3500ms 虚拟预算截断。 */
+  var scanT0 = Date.now();
+  var corpus = readDoc('selfcheck/d60-corpus.txt');
+  var corpusFiles = 0;
+  if (corpus === null) {
+    missing.push('preflight/selfcheck/d60-corpus.txt');
+  } else {
+    var blocks = corpus.split(/^@@D60FILE@@ /m);
+    for (var bi = 1; bi < blocks.length; bi++) {
+      var nl = blocks[bi].indexOf('\n');
+      if (nl < 0) continue;
+      var rel = blocks[bi].slice(0, nl).replace(/\r$/, '');
+      collect(rel, blocks[bi].slice(nl + 1));
+      corpusFiles++;
+    }
+  }
+
+  /* 实时复核：13 个高危文件不依赖语料，改坏了当场能被抓住 */
+  var LIVE = [
+    'index.html', 'README.md', 'CHANGELOG.md',
+    'js/core/render.js', 'js/data/dialogue.js', 'css/style.css',
+    'docs/演示脚本.md', 'docs/运行说明.md', 'docs/答辩讲稿.md', 'docs/参考资料.md',
+    'docs/process/诊断报告.md', 'preflight/_render_old.js',
+    'docs/tasks/D-48-首屏与玩法说明.md'
+  ];
+  var liveBad = 0;
+  for (var li = 0; li < LIVE.length; li++) {
+    var before = bad.length;
+    collect(LIVE[li], readDoc('../' + LIVE[li]));
+    if (bad.length > before) liveBad += bad.length - before;
+  }
+  var scanMs = Date.now() - scanT0;
+  finish();
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    rec('A_old_name_only_in_history', bad.length === 0 && missing.length === 0 &&
+      allowed.length >= 2 && corpusFiles >= 300 && liveBad === 0, {
+      corpusFiles: corpusFiles,
+      liveFiles: LIVE.length,
+      liveViolations: liveBad,
+      scannedFiles: corpusFiles + LIVE.length,
+      corpusBytes: corpus ? corpus.length : 0,
+      scanMs: scanMs,
+      manifest: 'preflight/selfcheck/d60-corpus.ps1 生成 d60-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件',
+      hits: hits.slice(0, 12),
+      allowed: allowed.slice(0, 8),
+      violations: bad.slice(0, 20),
+      missing: missing.slice(0, 10),
+      rule: '旧名只允许出现在历史任务卡首行时点声明（正文随卡保留）与 CHANGELOG 的 D-60 之前条目；其余位置一律 FAIL'
+    });
+
+    /* ── B：index 标题 + 菜单/引导/关于的实际绘制文本 ─────────── */
+    var idx = readDoc('../index.html') || '';
+    var tm = /<title>([\s\S]*?)<\/title>/i.exec(idx);
+    var title = tm ? tm[1].replace(/^\s+|\s+$/g, '') : '';
+    var R = Game.Core.Render, M = Game.Core.Main;
+    var texts = [];
+    var stub = {
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', globalAlpha: 1,
+      fillRect: function () {}, strokeRect: function () {}, beginPath: function () {},
+      moveTo: function () {}, lineTo: function () {}, stroke: function () {},
+      setTransform: function () {}, fillText: function (t) { texts.push(String(t)); },
+      measureText: function (t) { return { width: String(t).length * 7 }; }
+    };
+    var oldCtx = R._ctx;
+    R._ctx = stub; R.cssW = 1024; R.cssH = 640; R.dpr = 1; R.scale = 1;
+    try {
+      R.drawGuide();
+      R._drawMenuRoot(M._menuSpec(), 1024, 640);
+      R._drawMenuAbout(1024, 640);
+    } catch (e) {
+      texts.push('__ERR__' + (e && e.message));
+    } finally { R._ctx = oldCtx; }
+    var oldHits = [];
+    for (var ti = 0; ti < texts.length; ti++) {
+      if (texts[ti].indexOf(OLD_SP) >= 0 || texts[ti].indexOf(OLD_NS) >= 0) oldHits.push(texts[ti]);
+    }
+    var menuTitle = texts.filter(function (s) { return s === NEW; });
+    var aboutLine = texts.filter(function (s) { return s.indexOf(NEW + ' · 像素地牢 Roguelike') >= 0; });
+    rec('B_title_and_menu', title === NEW && oldHits.length === 0 && menuTitle.length >= 2 && aboutLine.length === 1, {
+      indexTitle: title,
+      canvasTitleCount: menuTitle.length,
+      aboutLine: aboutLine[0] || '',
+      oldNameRendered: oldHits,
+      errors: window.__D60ERR.slice(0, 5),
+      sample: texts.slice(0, 6)
+    });
+
+    /* ── C：存档键 / 设置键 / 读取 D-59 时期旧档 ───────────────── */
+    var S = Game.Systems.Save, Map = Game.Systems.Map, P = Game.Data.Player;
+    var mainSrc = readDoc('../js/core/main.js') || '';
+    var sm = /SETTINGS_KEY\s*=\s*'([^']+)'/.exec(mainSrc);
+    var settingsKey = sm ? sm[1] : '';
+    Map.generate();
+    Map.setFloor(1);
+    var legacy = {
+      saveVersion: 2,
+      savedAt: '2026-11-13T12:00:00',
+      floor: 1,
+      player: {
+        hp: 77, maxHp: 100, mp: 20, maxMp: 50, atk: 11, def: 5,
+        gold: 42, exp: 12, level: 2,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null },
+        quests: {}, upg: {}, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: {}, map: null
+    };
+    var loadOk = false, loadErr = '', landed = null;
+    try {
+      localStorage.setItem(S.KEY, JSON.stringify(legacy));
+      var got = S.load();
+      loadOk = !!got && P.hp === 77 && P.gold === 42 && P.level === 2;
+      landed = S.lastLanding || null;
+    } catch (e) { loadErr = String(e && e.message || e); }
+    rec('C_keys_and_legacy_save', S.KEY === 'ai_dungeon_rpg_save_v1' &&
+      settingsKey === 'aiDungeon_settings_v1' && loadOk && !loadErr, {
+      saveKey: S.KEY,
+      settingsKey: settingsKey,
+      legacyLoadOk: loadOk,
+      error: loadErr,
+      landing: landed,
+      note: '旧档对象没有任何标题字段；更名只影响显示，不改读档路径'
+    });
+
+    /* ── D：负例——普通文档留一处旧名必须 FAIL ────────────────── */
+    var neg = scanText('docs/__negative_fixture__.md', '# 普通文档\n\n《' + OLD_SP + '》\n');
+    var negNs = scanText('docs/__negative_fixture_2__.md', '正文 ' + OLD_NS + ' 出现在句中\n');
+    var taskOk = scanText('docs/tasks/__fixture__.md', DECL + '\n\n# 旧卡\n\n标题：' + OLD_SP + '\n');
+    var logBad = scanText('CHANGELOG.md', '# 变更\n\n- 更名（D-60）：新名' + NEW + '\n- 历史（D-1）：《' + OLD_SP + '》\n');
+    var logAbove = scanText('CHANGELOG.md', '# 变更\n\n- 旧条目（D-1）：《' + OLD_SP + '》\n- 更名（D-60）：新名' + NEW + '\n');
+    rec('D_negative_fixture', neg.bad.length === 1 && negNs.bad.length === 1 &&
+      taskOk.bad.length === 0 && taskOk.allowed.length === 2 &&
+      logBad.bad.length === 0 && logBad.allowed.length === 1 &&
+      logAbove.bad.length === 1, {
+      ordinaryDocViolations: neg.bad.length,
+      ordinaryDocNoSpaceViolations: negNs.bad.length,
+      declaredTaskCardAllowed: taskOk.allowed.length,
+      changelogHistoryAllowed: logBad.allowed.length,
+      changelogAboveD60Violations: logAbove.bad.length,
+      note: '同一条扫描函数同时喂真实文件与合成文本；负例必须被抓到'
+    });
+
+    /* ── E：全量回归 100/100 + GUARD ──────────────────────────── */
+    var rr = readJson('selfcheck/regression-result.json');
+    var st = readJson('selfcheck/d22-selftest.json');
+    var sum = rr && rr.summary ? rr.summary : {};
+    var guard = rr && rr.guard ? rr.guard : {};
+    var badRows = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page !== 'verify_d60'; }) : [];
+    var selfBad = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page === 'verify_d60'; }) : [];
+    var caseA = st && st.cases ? st.cases.filter(function (c) { return c.id === 'A_normal'; })[0] : null;
+    var selftestOk = !!(st && st.allAsExpected === true && st.baselineCount === 100 &&
+      caseA && String(caseA.line || '').indexOf('GUARD=OK expected=100 actual=100') >= 0);
+    rec('E_regression_100', sum.total === 100 && sum.none === 0 && sum.mixed === 0 &&
+      badRows.length === 0 && (sum.fail === 0 || (sum.fail === 1 && selfBad.length === 1)) &&
+      guard.ok === true && guard.expected === 100 && guard.actual === 100 && selftestOk, {
+      summary: sum,
+      selfBad: selfBad.length,
+      passExcludingSelf: 100 - badRows.length - selfBad.length,
+      guard: { ok: guard.ok, expected: guard.expected, actual: guard.actual, missing: guard.missing, extra: guard.extra },
+      badRows: badRows.slice(0, 10),
+      selftest: { allAsExpected: st ? st.allAsExpected : null, baselineCount: st ? st.baselineCount : null, line: caseA ? caseA.line : null },
+      note: '元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 100/100 为准'
+    });
+
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+})();
+</script>
+</body>
+</html>

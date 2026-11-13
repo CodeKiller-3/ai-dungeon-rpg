@@ -9,7 +9,7 @@
 ## D-35 贴图逻辑对照（8 张）
 
 - `d35-old.png` / `d35-new.png`：改前 / 改后对照。左侧为玩家所在 5×5 格放大 **8 倍**（格线为辅助线），右侧为 1280×800 实机画面。
-  改前用 `_render_old.js`（HEAD 版 `js/core/render.js` 原样快照）绘制，改后用工作区版本，同场景、同相机、同素材。
+  改前用 `_render_old.js`（D-35 时的 `js/core/render.js` 快照）绘制，改后用工作区版本，同场景、同相机、同素材。D-60 更名时只把快照里的作品名同步换成《地牢回响》，其余保持当时实现。
 - `d35-map-old.png` / `d35-map-new.png`：从上面两张里裁出的 1280×800 实机画面（1:1，未缩放）。
 - 复现：`preflight/_shot_d35.html?v=old|new`（Edge headless `--screenshot`，见 `docs/tasks/D-35-贴图逻辑修复.md`）。
 
