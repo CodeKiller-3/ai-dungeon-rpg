@@ -76,14 +76,15 @@
    * D-40 实测旧曲线（全程 60）下 L5 要 600 经验、M1 全清必死 F2；本卡只改阈值，
    * 每级增量（+1/+1/+10/+0）与伤害公式都不动。
    * 两个基数挂在导出对象上，仅为 D-41 的负例能还原旧曲线（early=60）做同种子对照，正常游戏不改它。 */
-  var EXP_EARLY_DEFAULT = 15;
-  var EXP_LATE_DEFAULT = 60;
+  /* D-65：经验基数的默认值来自 Game.Data.GROWTH.expBase（唯一来源）；
+   * Battle.expEarlyBase / expCurveBase 仍可覆盖，只给 D-41 的负例还原旧曲线用。 */
   function expBase(level) {
     var B = Game.Systems.Battle;
-    var early = (B && typeof B.expEarlyBase === 'number') ? B.expEarlyBase : EXP_EARLY_DEFAULT;
-    var late = (B && typeof B.expCurveBase === 'number') ? B.expCurveBase : EXP_LATE_DEFAULT;
-    var base = (level < 5) ? early : late;
-    return base > 0 ? base : EXP_EARLY_DEFAULT;
+    var G = Game.Data.GROWTH;
+    var early = (B && typeof B.expEarlyBase === 'number') ? B.expEarlyBase : G.expBase.early;
+    var late = (B && typeof B.expCurveBase === 'number') ? B.expCurveBase : G.expBase.late;
+    var base = (level < G.expBase.split) ? early : late;
+    return base > 0 ? base : G.expBase.early;
   }
   function expToNext(level) {
     var lv = (typeof level === 'number' && level >= 1) ? level : 1;
@@ -110,9 +111,11 @@
       if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
         Game.Systems.Inventory.recalcEquip();
       } else {
-        p.atk = 10 + (p.level - 1);
-        p.def = 5 + (p.level - 1);
-        p.maxHp = 100 + (p.level - 1) * 10;
+        /* D-65：兜底也读同一张成长表，不再硬编码基础值 */
+        var g = Game.Data.GROWTH.statsAt(p.level);
+        p.atk = g.atk;
+        p.def = g.def;
+        p.maxHp = g.maxHp;
       }
       p.hp = p.maxHp;   /* 升级回满 HP */
       p.mp = p.maxMp;   /* 升级回满 MP */
@@ -731,8 +734,9 @@
      * D-41：expEarlyBase（L1–L4）/ expCurveBase（L5+）是本卡改动的唯一数值入口，
      * 默认 15 / 60；验证页可把 early 赋 60 复现旧曲线（全程 60） */
     expToNext: expToNext,
-    expEarlyBase: EXP_EARLY_DEFAULT,
-    expCurveBase: EXP_LATE_DEFAULT,
+    /* D-65：默认值仍从成长表取，保持"一个常量来源"；负例仍可覆盖这两个字段 */
+    expEarlyBase: Game.Data.GROWTH.expBase.early,
+    expCurveBase: Game.Data.GROWTH.expBase.late,
     /* D-43：血量账钩子（验证/测量页注入；传 null 关闭）。手动用药与陷阱的记账点
      * 分别在 inventory.js / map.js，统一调用这里，保证"一处口径" */
     _setHpLog: function (fn) { hpLog = (typeof fn === 'function') ? fn : null; return !!hpLog; },

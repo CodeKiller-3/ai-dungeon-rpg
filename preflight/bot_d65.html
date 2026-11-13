@@ -1,0 +1,153 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-65 新曲线 · 同种子复跑</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-64 · +4 扩图 · B1 / G2 / S1 / M1 同种子 1001–1050</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-65', env: {}, agg: {}, runs: {}, ok: false };
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+  function maxFloorOf(r) {
+    var m = r.floor || 1;
+    var a = (r.b1 && r.b1.floorEnter) ? r.b1.floorEnter : (r.floors || []);
+    for (var i = 0; i < a.length; i++) if (a[i].floor > m) m = a[i].floor;
+    return m;
+  }
+  function trim(r) {
+    return {
+      seed: r.seed, outcome: r.outcome,
+      deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      maxFloor: maxFloorOf(r),
+      steps: r.steps || 0, actions: r.actions || 0, battleTurns: r.battleTurns || 0,
+      level: r.level || 1, maxLevel: r.maxLevelSeen || 1,
+      kills: r.kills || 0, hp: r.hp, gold: r.gold, potions: r.potions,
+      npc: !!(r.npc && r.npc.done),
+      rescue: (r.adaptive && r.adaptive.triggers) || 0,
+      d46: r.d46 || null
+    };
+  }
+  function aggOf(list) {
+    var d = { wins: 0, dead: 0, stuck: 0, deathFloor: {}, floorReach: {}, cap2500: 0,
+      avgSteps: 0, avgActions: 0, avgLevel: 0, avgKills: 0, maxSteps: 0 };
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (r.outcome === 'win') d.wins++;
+      else if (r.outcome === 'dead') d.dead++;
+      else d.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      for (var f = 1; f <= 5; f++) if (r.maxFloor >= f) d.floorReach[f] = (d.floorReach[f] || 0) + 1;
+      if (r.actions >= (out.env.maxActions || 2500)) d.cap2500++;
+      d.avgSteps += r.steps; d.avgActions += r.actions;
+      d.avgLevel += r.level; d.avgKills += r.kills;
+      if (r.steps > d.maxSteps) d.maxSteps = r.steps;
+    }
+    var n = list.length || 1;
+    d.avgSteps = Math.round(d.avgSteps / n * 10) / 10;
+    d.avgActions = Math.round(d.avgActions / n * 10) / 10;
+    d.avgLevel = Math.round(d.avgLevel / n * 100) / 100;
+    d.avgKills = Math.round(d.avgKills / n * 100) / 100;
+    return d;
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var adaptOn = !/adapt=0/.test(qs);
+    var form = (/form=(\w+)/.exec(qs) || [])[1] || 'd50';
+    if (Game.Systems.Adaptive.setForm) Game.Systems.Adaptive.setForm(form);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    /* ma= 只用于测量"全清真实成本"，默认仍是 2500；不改变 bot 的默认上限。 */
+    var ma = (/ma=(\d+)/.exec(qs) || [])[1];
+    var maxActions = ma ? Math.max(1, +ma) : 2500;
+    out.env = {
+      maxActions: maxActions, seeds: seedsOf(n), adaptive: adaptOn, form: form,
+      sizes: JSON.parse(JSON.stringify(Game.Data.MAPS.sizes)),
+      floors: Game.Data.MAPS.floors
+    };
+    function optsFor(key) {
+      var base = { maxActions: maxActions, adaptive: adaptOn, d44log: false };
+      if (key === 'b1') { base.b1 = { reserve: 4 }; base.d42 = true; base.d45 = true; base.d46 = true; }
+      else if (key === 'g2') { base.d37 = { fireball: true, flee: true }; base.d42 = true; }
+      else if (key === 's1') { base.d39 = { avoid: true }; base.d42 = true; }
+      else { base.m1 = { clear: true }; base.d42 = true; }
+      return base;
+    }
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(out.env.seeds, optsFor(key));
+      out.runs[key] = res.runs.map(trim);
+      out.agg[key] = aggOf(out.runs[key]);
+    }
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'D65_BATCH_DONE n=' + n + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'D65_BATCH_FAIL';
+  }
+  window.__D65__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>
+

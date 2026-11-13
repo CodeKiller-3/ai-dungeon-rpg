@@ -99,10 +99,12 @@
         if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
           Game.Systems.Inventory.recalcEquip();
         } else {
+          /* D-65：兜底也读同一张成长表，不再硬编码基础值 */
           var lv = (typeof p.level === 'number' && p.level >= 1) ? p.level : 1;
-          p.atk = 10 + (lv - 1);
-          p.def = 5 + (lv - 1);
-          p.maxHp = 100 + (lv - 1) * 10;
+          var g = Game.Data.GROWTH.statsAt(lv);
+          p.atk = g.atk;
+          p.def = g.def;
+          p.maxHp = g.maxHp;
           if (p.hp > p.maxHp) p.hp = p.maxHp;
         }
         Game.Systems.Quest.init();

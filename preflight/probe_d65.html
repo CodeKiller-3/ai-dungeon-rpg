@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-65 升级曲线 · 测量台</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-65 · B1 归因 / M1 出层面板</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-65', env: {}, b1: {}, m1: null, theory: null, ok: false };
+  var OLD_SIZES = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+  var qs = location.search || '';
+  var MODE = (/mode=(\w+)/.exec(qs) || [])[1] || 'all';
+  var N = (/n=(\d+)/.exec(qs) || [])[1];
+  var n = N ? Math.max(1, Math.min(100, +N)) : 50;
+  function seedsOf(k) { var a = []; for (var i = 1001; i < 1001 + k; i++) a.push(i); return a; }
+
+  /* ── 被动遥测（只读，不参与决策） ───────────────────────────── */
+  var tally = null, lastFloor = 1;
+  function bump(o, k) { o[k] = (o[k] || 0) + 1; }
+  Game.Core.EventBus.on('decor:taken', function (e) {
+    if (!tally || !e) return;
+    var f = Game.Data.Player.floor;
+    tally.decorAll[e.kind] = (tally.decorAll[e.kind] || 0) + 1;
+    tally.decorFloor[f] = tally.decorFloor[f] || {};
+    bump(tally.decorFloor[f], e.kind);
+  });
+  var origAdd = Game.Systems.Inventory.add;
+  Game.Systems.Inventory.add = function (id, cnt) {
+    if (tally) {
+      var d = Game.Data.ITEMS && Game.Data.ITEMS[id];
+      var k = Math.max(1, cnt | 0);
+      if (d && d.type === 'consumable' && d.effect && d.effect.hp > 0) tally.potionGain += k;
+      tally.itemGain[id] = (tally.itemGain[id] || 0) + k;
+    }
+    return origAdd.apply(Game.Systems.Inventory, arguments);
+  };
+
+  function hpPct(hp, maxHp) { return maxHp > 0 ? Math.round(hp / maxHp * 1000) / 10 : 0; }
+  function avg(a) { if (!a.length) return 0; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return Math.round(s / a.length * 10) / 10; }
+
+  /* ── B1：归因采集 ───────────────────────────────────────────── */
+  function runB1(seeds) {
+    var rows = [];
+    for (var i = 0; i < seeds.length; i++) {
+      tally = { decorAll: {}, decorFloor: {}, potionGain: 0, itemGain: {} };
+      var rec = Game.Bot.run(seeds[i], {
+        maxActions: 2500, adaptive: true, d44log: false,
+        b1: { reserve: 4 }, d42: true, d45: true, d46: true
+      });
+      var b = rec.b1 || {};
+      var ent = b.floorEnter || [], ex = b.floorExit || [];
+      var floors = [];
+      for (var f = 1; f <= 5; f++) {
+        var ein = null, eout = null;
+        for (var a = 0; a < ent.length; a++) if (ent[a].floor === f) ein = ent[a];
+        for (var c = 0; c < ex.length; c++) if (ex[c].floor === f) eout = ex[c];
+        if (!ein && !eout) continue;
+        floors.push({
+          floor: f,
+          lvIn: ein ? ein.level : null, lvOut: eout ? eout.level : null,
+          atkIn: ein ? ein.atk : null, atkOut: eout ? eout.atk : null,
+          defIn: ein ? ein.def : null, defOut: eout ? eout.def : null,
+          hpOut: eout ? eout.hp : null, maxHpOut: eout ? eout.maxHp : null,
+          hpPctOut: eout ? hpPct(eout.hp, eout.maxHp) : null,
+          potIn: eout ? eout.potionsIn : null, potOut: eout ? eout.potionsOut : null,
+          kills: eout ? eout.kills : null, battles: eout ? eout.battles : null,
+          acts: eout ? eout.actions : null,
+          chest: (tally.decorFloor[f] || {}).chest || 0,
+          roomChest: (tally.decorFloor[f] || {}).room_chest || 0,
+          goldPile: (tally.decorFloor[f] || {}).gold_pile || 0,
+          potionStash: (tally.decorFloor[f] || {}).potion_stash || 0
+        });
+      }
+      var fin = b.final || {};
+      rows.push({
+        seed: seeds[i], outcome: rec.outcome, deathFloor: rec.deathFloor || rec.floor,
+        maxFloor: (function () { var m = 1; for (var q = 0; q < floors.length; q++) if (floors[q].floor > m) m = floors[q].floor; return m; })(),
+        steps: rec.steps || 0, actions: rec.actions || 0, kills: rec.kills || 0,
+        level: rec.level || 1, maxLevel: rec.maxLevelSeen || 1,
+        potions: rec.potions || 0, potionUses: rec.potionUses || 0,
+        gold: rec.gold || 0, shopBuys: rec.shopBuys || 0, potionsBought: rec.b1 ? (rec.b1.potionsBought || 0) : 0,
+        enterF5: b.enterF5 || null,
+        final: { level: fin.level, atk: fin.atk, def: fin.def, hp: fin.hp, maxHp: fin.maxHp, gold: fin.gold },
+        decor: tally.decorAll, potionGain: tally.potionGain, itemGain: tally.itemGain,
+        income: rec.d46 ? rec.d46.income : null,
+        floors: floors
+      });
+    }
+    return rows;
+  }
+  function aggB1(rows) {
+    var d = { wins: 0, cap2500: 0, deathFloor: {}, floorReach: {}, f5: null, perFloor: {},
+      avgSteps: 0, avgActions: 0, avgLevel: 0, avgKills: 0, avgPotionGain: 0, decor: {}, income: {} };
+    var f5 = [], f5pot = [], f5lv = [], f5atk = [], f5def = [], f5hp = [], f5max = [], f5gold = [];
+    var dec = {}, inc = { chest: 0, drop: 0, reward: 0, quest: 0 };
+    var pf = {};
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.outcome === 'win') d.wins++;
+      else d.deathFloor[r.deathFloor] = (d.deathFloor[r.deathFloor] || 0) + 1;
+      for (var f = 1; f <= 5; f++) if (r.maxFloor >= f) d.floorReach[f] = (d.floorReach[f] || 0) + 1;
+      if (r.actions >= 2500) d.cap2500++;
+      d.avgSteps += r.steps; d.avgActions += r.actions; d.avgLevel += r.level; d.avgKills += r.kills;
+      d.avgPotionGain += r.potionGain;
+      for (var k in r.decor) if (Object.prototype.hasOwnProperty.call(r.decor, k)) dec[k] = (dec[k] || 0) + r.decor[k];
+      if (r.income) for (var k2 in inc) if (Object.prototype.hasOwnProperty.call(inc, k2)) inc[k2] += (r.income[k2] || 0);
+      if (r.enterF5) {
+        f5.push(r.seed); f5pot.push(r.enterF5.potions); f5lv.push(r.enterF5.level);
+        f5atk.push(r.enterF5.atk); f5def.push(r.enterF5.def);
+        f5hp.push(hpPct(r.enterF5.hp, r.enterF5.maxHp)); f5max.push(r.enterF5.maxHp); f5gold.push(r.enterF5.gold);
+      }
+      for (var q = 0; q < r.floors.length; q++) {
+        var fl = r.floors[q], o = pf[fl.floor] = pf[fl.floor] || { n: 0, kills: 0, battles: 0, potIn: 0, potOut: 0, hpPct: 0, lv: 0, atk: 0, def: 0, chest: 0, room: 0, potGain: 0 };
+        o.n++;
+        if (fl.kills != null) o.kills += fl.kills;
+        if (fl.battles != null) o.battles += fl.battles;
+        if (fl.potIn != null) o.potIn += fl.potIn;
+        if (fl.potOut != null) o.potOut += fl.potOut;
+        if (fl.hpPctOut != null) o.hpPct += fl.hpPctOut;
+        if (fl.lvOut != null) o.lv += fl.lvOut;
+        if (fl.atkOut != null) o.atk += fl.atkOut;
+        if (fl.defOut != null) o.def += fl.defOut;
+        o.chest += fl.chest; o.room += fl.roomChest;
+      }
+    }
+    var m = rows.length || 1;
+    d.avgSteps = Math.round(d.avgSteps / m * 10) / 10;
+    d.avgActions = Math.round(d.avgActions / m * 10) / 10;
+    d.avgLevel = Math.round(d.avgLevel / m * 100) / 100;
+    d.avgKills = Math.round(d.avgKills / m * 100) / 100;
+    d.avgPotionGain = Math.round(d.avgPotionGain / m * 100) / 100;
+    d.decor = dec;
+    d.income = {};
+    for (var k3 in inc) if (Object.prototype.hasOwnProperty.call(inc, k3)) d.income[k3] = Math.round(inc[k3] / m * 10) / 10;
+    d.f5 = {
+      reached: f5.length,
+      avgPotions: avg(f5pot), avgLevel: avg(f5lv), avgAtk: avg(f5atk), avgDef: avg(f5def),
+      avgHpPct: avg(f5hp), avgMaxHp: avg(f5max), avgGold: avg(f5gold)
+    };
+    for (var f2 in pf) {
+      var o2 = pf[f2], nn = o2.n || 1;
+      d.perFloor[f2] = {
+        n: o2.n, avgKills: Math.round(o2.kills / nn * 100) / 100,
+        avgBattles: Math.round(o2.battles / nn * 100) / 100,
+        avgPotIn: Math.round(o2.potIn / nn * 100) / 100,
+        avgPotOut: Math.round(o2.potOut / nn * 100) / 100,
+        avgHpPctOut: Math.round(o2.hpPct / nn * 10) / 10,
+        avgLvOut: Math.round(o2.lv / nn * 100) / 100,
+        avgAtkOut: Math.round(o2.atk / nn * 100) / 100,
+        avgDefOut: Math.round(o2.def / nn * 100) / 100,
+        avgChest: Math.round(o2.chest / nn * 100) / 100,
+        avgRoom: Math.round(o2.room / nn * 100) / 100
+      };
+    }
+    return d;
+  }
+
+  /* ── M1：出层面板 ───────────────────────────────────────────── */
+  function runM1(seeds, maxActions) {
+    var rows = [];
+    for (var i = 0; i < seeds.length; i++) {
+      tally = { decorAll: {}, decorFloor: {}, potionGain: 0, itemGain: {} };
+      var rec = Game.Bot.run(seeds[i], { maxActions: maxActions, adaptive: true, d44log: false, m1: { clear: true }, d42: true });
+      var fl = (rec.m1 && rec.m1.floors) || [];
+      rows.push({
+        seed: seeds[i], outcome: rec.outcome, deathFloor: rec.deathFloor || rec.floor,
+        actions: rec.actions || 0, kills: rec.kills || 0, level: rec.level || 1,
+        maxLevel: rec.maxLevelSeen || 1, gold: rec.gold || 0,
+        floors: fl.map(function (x) {
+          return {
+            floor: x.floor, level: x.level, atk: x.atk, def: x.def, maxHp: x.maxHp,
+            hp: x.hp, hpPct: hpPct(x.hp, x.maxHp), expGain: x.expGain,
+            kills: x.kills, battles: x.battles, actions: x.actions,
+            weaponId: x.weaponId, armorId: x.armorId,
+            weaponPlus: x.weaponPlus, armorPlus: x.armorPlus,
+            potions: x.potions
+          };
+        }),
+        final: rec.m1 ? rec.m1.final : null
+      });
+    }
+    return rows;
+  }
+  function aggM1(rows) {
+    var d = { wins: 0, floorReach: {}, deathFloor: {}, cap: 0, perFloor: {},
+      avgLevel: 0, avgActions: 0, maxLevel: 1, finalLevels: {} };
+    var pf = {};
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.outcome === 'win') d.wins++;
+      else d.deathFloor[r.deathFloor] = (d.deathFloor[r.deathFloor] || 0) + 1;
+      var mf = 1;
+      for (var f = 1; f <= 5; f++) if (r.floors.some(function (x) { return x.floor === f; })) mf = Math.max(mf, f);
+      for (var f2 = 1; f2 <= 5; f2++) if (mf >= f2) d.floorReach[f2] = (d.floorReach[f2] || 0) + 1;
+      if (r.actions >= 6000) d.cap++;
+      d.avgLevel += r.level; d.avgActions += r.actions; d.maxLevel = Math.max(d.maxLevel, r.maxLevel);
+      d.finalLevels[r.level] = (d.finalLevels[r.level] || 0) + 1;
+      for (var q = 0; q < r.floors.length; q++) {
+        var x = r.floors[q], o = pf[x.floor] = pf[x.floor] || { n: 0, atk: 0, def: 0, maxHp: 0, hpPct: 0, level: 0, expGain: 0, kills: 0, actions: 0, wp: 0, ap: 0 };
+        o.n++; o.atk += x.atk; o.def += x.def; o.maxHp += x.maxHp; o.hpPct += x.hpPct;
+        o.level += x.level; o.expGain += x.expGain; o.kills += x.kills; o.actions += x.actions;
+        o.wp += x.weaponPlus; o.ap += x.armorPlus;
+      }
+    }
+    var m = rows.length || 1;
+    d.avgLevel = Math.round(d.avgLevel / m * 100) / 100;
+    d.avgActions = Math.round(d.avgActions / m * 10) / 10;
+    for (var f3 in pf) {
+      var o2 = pf[f3], nn = o2.n || 1;
+      d.perFloor[f3] = {
+        n: o2.n,
+        avgLevel: Math.round(o2.level / nn * 100) / 100,
+        avgAtk: Math.round(o2.atk / nn * 10) / 10,
+        avgDef: Math.round(o2.def / nn * 10) / 10,
+        avgMaxHp: Math.round(o2.maxHp / nn * 10) / 10,
+        avgHpPct: Math.round(o2.hpPct / nn * 10) / 10,
+        avgExpGain: Math.round(o2.expGain / nn * 10) / 10,
+        avgKills: Math.round(o2.kills / nn * 100) / 100,
+        avgActions: Math.round(o2.actions / nn * 10) / 10
+      };
+    }
+    return d;
+  }
+
+  /* ── 理论：经验池 / 等级阈值 ─────────────────────────────────── */
+  function theory() {
+    var MAPS = Game.Data.MAPS, MON = Game.Data.MONSTERS;
+    var pool = [];
+    for (var f = 0; f < MAPS.floors; f++) {
+      var w = MAPS.sizes[f][0], h = MAPS.sizes[f][1];
+      var base = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]][f];
+      var ratio = (w * h) / (base[0] * base[1]);
+      var count = Math.max(5 + f * 2, Math.round((5 + f * 2) * ratio));
+      var ev = 0, tab = MAPS.enemyTable[f];
+      for (var i = 0; i < tab.length; i++) ev += tab[i].rate * (MON[tab[i].id].exp || 0);
+      var boss = 0;
+      for (var b = 0; b < MAPS.bosses.length; b++) if (MAPS.bosses[b].floor === f + 1) boss = MON[MAPS.bosses[b].id].exp || 0;
+      pool.push({ floor: f + 1, enemies: count, expPerKill: Math.round(ev * 100) / 100, bossExp: boss,
+        pool: Math.round((ev * count + boss) * 10) / 10 });
+    }
+    var B = Game.Systems.Battle;
+    var cum = [], s = 0;
+    for (var lv = 1; lv <= 20; lv++) {
+      cum.push({ level: lv, need: B.expToNext(lv), cum: s });
+      s += B.expToNext(lv);
+    }
+    return { pool: pool, totalPool: Math.round(pool.reduce(function (a, x) { return a + x.pool; }, 0) * 10) / 10, levels: cum };
+  }
+
+  try {
+    var MAPS = Game.Data.MAPS;
+    var M = Game.Core.Main;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    out.env = {
+      maxActionsB1: 2500, maxActionsM1: 6000, seeds: seedsOf(n),
+      sizesNow: JSON.parse(JSON.stringify(MAPS.sizes))
+    };
+    out.theory = theory();
+    var seeds = seedsOf(n);
+
+    if (MODE === 'all' || MODE === 'b1') {
+      MAPS.sizes = [[25, 19], [29, 21], [33, 23], [37, 25], [41, 27]];
+      var cur = runB1(seeds);
+      out.b1.cur = { agg: aggB1(cur), runs: cur };
+      MAPS.sizes = OLD_SIZES.slice();
+      var old = runB1(seeds);
+      out.b1.old = { agg: aggB1(old), runs: old };
+      MAPS.sizes = [[25, 19], [29, 21], [33, 23], [37, 25], [41, 27]];
+    }
+    if (MODE === 'all' || MODE === 'm1') {
+      MAPS.sizes = [[25, 19], [29, 21], [33, 23], [37, 25], [41, 27]];
+      var m1rows = runM1(seeds, 6000);
+      out.m1 = { agg: aggM1(m1rows), runs: m1rows };
+    }
+    out.ok = true;
+    document.title = 'D65_PROBE_DONE';
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'D65_PROBE_FAIL';
+  }
+  window.__D65__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

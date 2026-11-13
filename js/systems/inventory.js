@@ -114,9 +114,11 @@
       var p = Game.Data.Player;
       if (!p.upg) p.upg = {};
       var lv = (typeof p.level === 'number' && p.level >= 1) ? p.level : 1;
-      var baseAtk = 10 + (lv - 1);
-      var baseDef = 5 + (lv - 1);
-      var baseMaxHp = 100 + (lv - 1) * 10;
+      /* D-65：基础属性只读 Game.Data.GROWTH（配置表是唯一来源） */
+      var base = Game.Data.GROWTH.statsAt(lv);
+      var baseAtk = base.atk;
+      var baseDef = base.def;
+      var baseMaxHp = base.maxHp;
       var w = p.equipment.weapon ? Game.Data.ITEMS[p.equipment.weapon] : null;
       var a = p.equipment.armor ? Game.Data.ITEMS[p.equipment.armor] : null;
       var wN = w ? Math.min(Math.max(p.upg[w.id] || 0, 0), 5) : 0;

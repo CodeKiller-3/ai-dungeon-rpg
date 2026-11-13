@@ -23,6 +23,7 @@
 - 图鉴：怪物 / 物品自动登记，未遭遇显示 ???。<!-- 锚点: js/systems/bestiary.js#Game.Systems.Bestiary -->
 - 本地排行榜：通关时间 / 金币 / 等级，最近 10 条。<!-- 锚点: js/systems/leaderboard.js#aiDungeon_leaderboard -->
 - 起手匕首：新档与重开都发一把 `knife`（+1 攻击），旧档不补发。<!-- 锚点: js/core/main.js#START_WEAPON -->
+- 升级曲线（D-65）：升级增益与经验基数的唯一来源是 `Game.Data.GROWTH`（`js/data/config.js`）；L2–L6 每级 +1 atk/+1 def/+10 maxHp，L7–L8 每级 +2 atk/+1 def，L9+ 每级 +3 atk/+3 def；经验基数保持 L1–L4=15、L5+=60。M1 全清口径下五层出层面板全部达到 D-63 目标，F4 出口血量 47.4%（差 50% 目标 2.6pp）。<!-- 锚点: js/data/config.js#Game.Data.GROWTH -->
 - 本地存档 `ai_dungeon_rpg_save_v1`：自动存档、读档按等级重算属性。<!-- 锚点: js/systems/save.js#ai_dungeon_rpg_save_v1 -->
 - 大模型 NPC 对话：配置 Key 走 DeepSeek，无 Key / 断网降级为离线规则问答。<!-- 锚点: js/systems/npc.js#Game.Systems.NPC -->
 - 首个实体 NPC 与任务闭环（D-47）：`js/data/npcs.js` 定义"守夜人·洛恩"（F1），`map.js` 沿"出生点→下行梯"主路 72% 处确定性取点（不消耗 `Math.random`，地图/敌人/宝箱/奖励点逐格不变；不压楼梯/出生点/怪物/巡逻/宝箱/陷阱，且必在出生点连通块内）。**按 T 只与相邻格（含斜向）的实体 NPC 交互**，距离 >1 只给一行"附近没有人"的非阻塞提示、不弹模态；任务"探路"四态（unaccepted / active / ready / done）互斥可查，走到下行梯旁达成、回头复命交付，**固定 60 金币、一次交付不重复**；`reward.exclusiveItem` 仅作"任务专属装备"数据留口（本卡恒为 null、不发放）。旧档无 `npcQuests` / `map.floors[*].npcs` 时补默认并原地补生成 NPC。同种子 1001–1050 / maxActions 2500：B1 **7/50 与 D-46 逐局完全一致**（G2 19、S1 25、M1 到 F4 29 不变）；NPC 支路 50 局接取 50、交付 50、交互失败 0，通关 7/50（换的是哪 7 局，见任务卡）。`verify_d47` A–H 守门，`page-baseline` 87→88。<!-- 锚点: js/systems/map.js#placeNpc -->

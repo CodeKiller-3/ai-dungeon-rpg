@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d65</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<!-- D-65 验证页：把"升级增益 + 经验基数"收敛成一张表之后，检查
+     A) 表本身（基础值、档位累加、经验基数分段、档位边界）；
+     B) 三个消费方（inventory.recalcEquip / battle.checkLevelUp / save 兜底）都真的在读这张表；
+     C) 源码里不再有旧的硬编码基础值（含负例，证明扫描器不是空断言）；
+     D) D-63 目标面板可达性：L10 + 无强化史诗武器/护甲 = 41 / 34 / 210（目标 41 / 32 / 190）。
+     只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, Inv = Game.Systems.Inventory,
+      P = Game.Data.Player, G = Game.Data.GROWTH, LG = Game.Data.GROWTH_LEGACY,
+      IT = Game.Data.ITEMS;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function eq(a, b) { return a === b; }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  /* 独立实现一遍"按档位累加"，用来对照表里的 statsAt（不是抄它的写法） */
+  function expectAt(cfg, lv) {
+    var s = { atk: cfg.base.atk, def: cfg.base.def, maxHp: cfg.base.maxHp };
+    for (var i = 2; i <= lv; i++) {
+      for (var t = 0; t < cfg.tiers.length; t++) {
+        var g = cfg.tiers[t];
+        if (i >= g.from && i <= g.to) { s.atk += g.atk; s.def += g.def; s.maxHp += g.maxHp; break; }
+      }
+    }
+    return s;
+  }
+  function fmt(s) { return s.atk + '/' + s.def + '/' + s.maxHp; }
+  /* 旧硬编码扫描：命中即为"还在自己算基础值" */
+  var LEGACY_RE = /(10\s*\+\s*\(\s*(?:lv|p\.level|level)\s*-\s*1\s*\))|(100\s*\+\s*\(\s*(?:lv|p\.level|level)\s*-\s*1\s*\)\s*\*\s*10)/;
+
+  try {
+    Game.Core.Input.bind();
+    M.init();
+    M.closeGuide();
+
+    /* ══ A) 表本身 ═══════════════════════════════════════════════ */
+    var b1 = G.statsAt(1);
+    rec('A1_baseStatsAtL1', eq(b1.atk, 10) && eq(b1.def, 5) && eq(b1.maxHp, 100) && eq(b1.maxMp, 50),
+      'statsAt(1) = ' + fmt(b1) + '/' + b1.maxMp + '（期望 10/5/100/50）');
+
+    var lv, bad = [];
+    for (lv = 1; lv <= 12; lv++) {
+      var got = G.statsAt(lv), exp = expectAt(G, lv);
+      if (got.atk !== exp.atk || got.def !== exp.def || got.maxHp !== exp.maxHp) {
+        bad.push('L' + lv + ' got=' + fmt(got) + ' want=' + fmt(exp));
+      }
+    }
+    rec('A2_tiersAccumulateL1to12', bad.length === 0,
+      bad.length ? bad.join('; ') : 'L1–L12 与独立累加器完全一致；L6=' + fmt(G.statsAt(6)) +
+        ' L7=' + fmt(G.statsAt(7)) + ' L8=' + fmt(G.statsAt(8)) +
+        ' L9=' + fmt(G.statsAt(9)) + ' L10=' + fmt(G.statsAt(10)));
+
+    /* 档位边界：L6→7 攻击 +2，L8→9 攻击 +3 / 防御 +3，生命恒 +10 */
+    var s6 = G.statsAt(6), s7 = G.statsAt(7), s8 = G.statsAt(8), s9 = G.statsAt(9), s10 = G.statsAt(10);
+    var jumpOk = (s7.atk - s6.atk === 2) && (s7.def - s6.def === 1) &&
+      (s9.atk - s8.atk === 3) && (s9.def - s8.def === 3) &&
+      (s7.maxHp - s6.maxHp === 10) && (s10.maxHp - s9.maxHp === 10);
+    rec('A3_tierBoundaries', jumpOk,
+      'L6→7 atk+' + (s7.atk - s6.atk) + ' def+' + (s7.def - s6.def) +
+      '；L8→9 atk+' + (s9.atk - s8.atk) + ' def+' + (s9.def - s8.def) +
+      '；L6→7/L9→10 maxHp+' + (s7.maxHp - s6.maxHp) + '/' + (s10.maxHp - s9.maxHp));
+
+    var expSeq = [], expOk = true;
+    for (lv = 1; lv <= 10; lv++) {
+      var need = B.expToNext(lv);
+      expSeq.push(need);
+      var want = (lv < 5 ? 15 : 60) * lv;
+      if (need !== want) expOk = false;
+    }
+    rec('A4_expBaseUnchanged', expOk,
+      'L1–L10 需要经验 = [' + expSeq.join(',') + ']（D-41 分段：L1–4 基数 15、L5+ 基数 60，未改）');
+
+    var l8old = LG.statsAt(8);
+    rec('A5_legacyCurveDiffers', l8old.atk === 17 && l8old.def === 12 && l8old.maxHp === 170 &&
+      l8old.atk !== s8.atk,
+      'LEGACY.statsAt(8) = ' + fmt(l8old) + '（旧公式 10+7/5+7/100+70）vs 新表 ' + fmt(s8) +
+      '（证明 A2 的对照不是两套相同实现互测）');
+
+    /* ══ B) 三个消费方都读表 ═════════════════════════════════════ */
+    P.level = 10;
+    P.exp = 0;
+    P.equipment = { weapon: null, armor: null };
+    P.inventory = {};
+    Inv.recalcEquip();
+    rec('B1_recalcEquipUsesTable', P.atk === 25 && P.def === 18 && P.maxHp === 190,
+      'L10 空装备 recalcEquip → ' + P.atk + '/' + P.def + '/' + P.maxHp + '（期望 25/18/190）');
+
+    P.level = 6;
+    P.exp = B.expToNext(6);
+    P.maxHp = 150;
+    P.hp = 150;
+    var ups = B.checkLevelUp();
+    rec('B2_checkLevelUpUsesTable', P.level === 7 && P.atk === 17 && P.def === 11 && P.maxHp === 160 && ups >= 1,
+      'L6 满经验升级 → L' + P.level + ' ' + P.atk + '/' + P.def + '/' + P.maxHp +
+      '（期望 L7 17/11/160，升级次数 ' + ups + '）');
+
+    var srcInv = readDoc('../js/systems/inventory.js'),
+        srcBat = readDoc('../js/systems/battle.js'),
+        srcSav = readDoc('../js/systems/save.js');
+    var scanOk = srcInv.indexOf('GROWTH.statsAt') >= 0 && srcBat.indexOf('GROWTH.statsAt') >= 0 &&
+      srcSav.indexOf('GROWTH.statsAt') >= 0 &&
+      !LEGACY_RE.test(srcInv) && !LEGACY_RE.test(srcBat) && !LEGACY_RE.test(srcSav);
+    rec('B3_noHardcodedBaseLeft', scanOk,
+      '三个消费方均含 GROWTH.statsAt，旧式硬编码 0 处（inventory/battle/save；' +
+      '源码长度 ' + srcInv.length + '/' + srcBat.length + '/' + srcSav.length + '）');
+
+    /* 负例：把旧公式塞进一段字符串，扫描器必须命中，否则 B3 是空断言 */
+    var neg = 'var baseAtk = 10 + (lv - 1); var baseMaxHp = 100 + (lv - 1) * 10;';
+    rec('B4_scannerNotVacuous', LEGACY_RE.test(neg) === true,
+      '负例字符串被同一正则命中：' + LEGACY_RE.test(neg));
+
+    /* ══ C) D-63 目标面板可达性（L10 + 无强化史诗双件） ═════════ */
+    var atkItem = IT.sword_dragon_epic.effect.atk || 0;
+    var defItem = IT.plate_armor_epic.effect.def || 0;
+    var hpItem = (IT.sword_dragon_epic.effect.maxHp || 0) + (IT.plate_armor_epic.effect.maxHp || 0);
+    var panel = { atk: s10.atk + atkItem, def: s10.def + defItem, maxHp: s10.maxHp + hpItem };
+    rec('C1_f5TargetReachableAtL10', panel.atk >= 41 && panel.def >= 32 && panel.maxHp >= 190,
+      'L10 基础 ' + fmt(s10) + ' + 稀有龙牙剑(atk' + atkItem + ')/稀有板甲(def' + defItem +
+      ',hp' + hpItem + ') = ' + fmt(panel) + '（目标 41/32/190）');
+
+    /* ══ D) 经验总量与等级上限的口径 ═════════════════════════════ */
+    var cum = 0, cumAt = {};
+    for (lv = 1; lv <= 12; lv++) { cumAt[lv] = cum; cum += B.expToNext(lv); }
+    cumAt[13] = cum;
+    rec('D1_levelThresholds', cumAt[11] === 2850 && cumAt[12] === 3510 && cumAt[13] === 4230,
+      '累计经验：到 L10=' + cumAt[10] + '、L11=' + cumAt[11] + '、L12=' + cumAt[12] +
+      '、L13=' + cumAt[13] + '（D-64 实测全图经验约 3193 → 上限 L11，见 docs/升级曲线-D-65.md）');
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+  }
+
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  var pre = document.createElement('pre');
+  pre.id = 'result';
+  pre.textContent = text;
+  document.body.appendChild(pre);
+  document.title = 'D65_DONE';
+})();
+</script>
+</body>
+</html>

@@ -61,6 +61,10 @@
 (function () {
   'use strict';
   var out = { ok: false, sub: {} };
+  /* D-65 时点声明：D-41 的同种子矩阵与"每级 +1/+1/+10"的面板口径绑定；D-65 新曲线
+   * L7+ 为 +2/+1、L9+ 为 +3/+3。本页在跑局前把 GROWTH 钉回 GROWTH_LEGACY 复现历史矩阵；
+   * 断言未放宽（经验基数本身就是本页的受测项，不受 D-65 影响）。 */
+  Game.Data.GROWTH = Game.Data.GROWTH_LEGACY;
   var B = Game.Systems.Battle, Inv = Game.Systems.Inventory;
   var START = Date.now();
   function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
