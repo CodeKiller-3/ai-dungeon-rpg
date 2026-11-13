@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-61 shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-61 对外截图复现页：?view=menu-save|guide|explore|battle|death|ending
+     - menu-nosave 与 1920×1080 首屏直接用 index.html（无档 / 有档两种真实首屏）
+     - 本页加载与主游戏完全相同的脚本与顺序，只负责把状态推进到要拍的那一帧，
+       之后停掉 rAF 让画布保持该帧；所有像素仍由游戏真实渲染循环绘制，不合成、不改字。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = String(location.search || '');
+  var view = (q.match(/view=(menu-save|guide|explore|battle|death|ending)/) || [])[1] || 'explore';
+  var M = Game.Core.Main;
+  var P = Game.Data.Player;
+
+  /* 本页在 preflight/ 下：把素材目录改到 ../assets/sprites/，
+   * 否则 M.init 默认的 assets/sprites/ 会解析成 preflight/assets/sprites/，
+   * 全部贴图加载失败、战斗里只剩色块（不是游戏本身的问题）。 */
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  /* 按"帧"停，而不是按"时间"停：headless 的虚拟时间会先把 setTimeout 跑完，
+   * 若在定时器里直接改写 rAF，第一帧还没画就停了（实测整张黑）。
+   * 这里保留原 rAF，只让它再注册 n 帧，之后不再续链，画布保留最后一帧。 */
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if ((Game.Core.Sprites && Game.Core.Sprites.isReady()) || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame;
+    var left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+
+  try {
+    if (view === 'menu-save') {
+      /* 有档首屏：写一份 v2 旧档（不点继续，只让菜单把它判为可继续），
+       * 再用真实菜单渲染；随后把选中项移到「继续游戏」。 */
+      localStorage.setItem('aiDungeon_guided', '1');
+      localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify({
+        saveVersion: 2, savedAt: '2026-11-13T12:00:00', floor: 3,
+        player: {
+          hp: 82, maxHp: 100, mp: 30, maxMp: 50, atk: 13, def: 6,
+          gold: 168, exp: 24, level: 3,
+          inventory: { potion_small: 3 }, equipment: { weapon: 'sword_rusty', armor: null },
+          quests: {}, upg: {}, npcQuests: {},
+          adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+        },
+        bestiary: {}, map: null
+      }));
+      M.init({ menu: true });
+      M.start();
+      setTimeout(function () {
+        var k = Game.Core.Input.getState();
+        k['ArrowDown'] = true;
+      }, 400);
+      return;
+    }
+
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init({ menu: false });
+
+    if (view === 'guide') {
+      M._guideVisible = true;
+      M.start();
+      return;
+    }
+
+    if (view === 'explore') {
+      /* 接取第 1 层「探路」任务，并把进度推到"可交付"：
+       * 只有 READY 状态指引条才指向 NPC 本人（ACTIVE 时会退回"下行梯 N 步"）。
+       * 进度是真实存档字段，指引距离/方向由真实 BFS 计算，只摆状态不改渲染。 */
+      Game.Systems.NpcQuest.accept('warden_f1');
+      var qst = P.npcQuests && P.npcQuests['warden_f1'];
+      if (qst) qst.progress = 99;
+
+      /* 开局第一帧只点亮半径 5 格，画面几乎全黑、不适合对外。
+       * 这里按游戏自己的"可走+BFS"规则算出到守夜人的真实路径，
+       * 让玩家沿路径前进到距目标 7 格处，并用 fov.update 逐格累积记忆——
+       * 等价于真的走了这一段（同一条地图、同一个 FOV 函数），不是贴图或改字。 */
+      var Map = Game.Systems.Map;
+      function walkable(x, y) { return Map.tileAt(x, y) !== 0; }
+      function planPath(tx, ty) {
+        var dirs = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+        var start = { x: P.x, y: P.y };
+        var seen = {}, prev = {}, q = [start], qi = 0;
+        seen[start.x + ',' + start.y] = 1;
+        while (qi < q.length) {
+          var c = q[qi++];
+          if (c.x === tx && c.y === ty) {
+            var path = [], cur = c;
+            while (!(cur.x === start.x && cur.y === start.y)) {
+              path.push(cur);
+              cur = prev[cur.x + ',' + cur.y];
+            }
+            return path.reverse();
+          }
+          for (var i = 0; i < dirs.length; i++) {
+            var nx = c.x + dirs[i][0], ny = c.y + dirs[i][1];
+            var key = nx + ',' + ny;
+            if (seen[key] || !walkable(nx, ny)) continue;
+            seen[key] = 1;
+            prev[key] = { x: c.x, y: c.y };
+            q.push({ x: nx, y: ny });
+          }
+        }
+        return [];
+      }
+      var g = Game.Systems.NpcQuest.guidance();
+      var fs = Game.fov.RADIUS || 5;
+      var blocked = function (x, y) { return Map.tileAt(x, y) === 0; };
+      Game.fov.update(P.x, P.y, fs, blocked);
+      if (g && g.target) {
+        var path = planPath(g.target.x, g.target.y);
+        var upto = Math.max(0, path.length - 7);
+        for (var si = 0; si < upto; si++) {
+          P.x = path[si].x; P.y = path[si].y;
+          Game.fov.update(P.x, P.y, fs, blocked);
+        }
+      }
+      if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+        Game.Core.Render.invalidateStatic();
+      }
+
+      if (M._scene !== 'explore') M.switchScene('explore');
+      M.start();
+      return;
+    }
+
+    if (view === 'battle') {
+      P.floor = 2;
+      P.hp = 86; P.maxHp = 100; P.gold = 57; P.level = 2;
+      Game.Systems.Battle.start('skeleton');
+      M.switchScene('battle');
+      M.start();
+      /* 等贴图就绪再打，避免截到色块兜底帧；真打一刀后让画面再画 3 帧停链，
+       * 停在命中后 150–200ms 的中间态，打击帧和血条都还在。 */
+      waitSprites(function () {
+        setTimeout(function () {
+          Game.Systems.Battle.playerAction('attack');
+          setTimeout(function () { stopAfterFrames(3); }, 150);
+        }, 300);
+      });
+      return;
+    }
+
+    if (view === 'death') {
+      P.floor = 3;
+      P.hp = 0; P.maxHp = 100; P.gold = 93; P.level = 3;
+      /* 结算弹窗里的"回合/击杀/药"读 runStats，"用时"读真实计时器。
+       * 回填本局统计 + 让页面真实跑满 180 秒虚拟时间，弹窗显示的 03:00 / 88 回合
+       * 都是这套统计与计时器算出来的，不是画上去的。 */
+      M._restoreRunStats({ known: true, floorReached: 3, kills: 2, maxLevel: 3, turns: 88, potions: 2 });
+      M.start();
+      setTimeout(function () {
+        M.openGameOver({
+          source: 'battle', monsterId: 'skeleton', monsterName: '骷髅士兵',
+          floor: 3, maxHp: 100, hp: 0, potionsLeft: 0,
+          playerAtk: 12, monsterDef: 4, monsterHpLeft: 26
+        });
+      }, 180000);
+      return;
+    }
+
+    /* ending：与 D-56 相同的真实统计回填 + 真实 _commitVictory */
+    P.gold = 471; P.level = 5; P.exp = 0;
+    Game.Systems.Map.setFloor(5);
+    P.floor = 5;
+    var sp5 = Game.Systems.Map.getSpawn();
+    P.x = sp5.x; P.y = sp5.y;
+    P.adaptive = P.adaptive || {};
+    P.adaptive.triggers = 1;
+    M._restoreRunStats({ known: true, floorReached: 5, kills: 6, maxLevel: 5, turns: 302, potions: 7 });
+    M.start();
+    /* 结局的「总耗时」取 performance.now()-runStart，headless 虚拟时间下 1.2s 会写成 00:01。
+     * 让这一页真实跑满 300s 虚拟时间再结算，截图里的 05:00 是计时器算出来的，不是画上去的。 */
+    setTimeout(function () { M._commitVictory(); }, 300000);
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>
