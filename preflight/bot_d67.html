@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-67 难度收口 · 同种子复跑</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-67 · B1 遭遇成本归因 + 四策略同种子 1001–1050 + Boss 实测回合</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-67', env: {}, agg: {}, runs: {}, boss: {}, enc: {}, exitHp: {}, ok: false };
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+  function maxFloorOf(r) {
+    var m = r.floor || 1;
+    var a = (r.b1 && r.b1.floorEnter) ? r.b1.floorEnter : (r.floors || []);
+    for (var i = 0; i < a.length; i++) if (a[i].floor > m) m = a[i].floor;
+    return m;
+  }
+  function med(a) {
+    if (!a || !a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.floor((s.length - 1) * 0.5)];
+  }
+  function trim(r) {
+    var rec = {
+      seed: r.seed, outcome: r.outcome,
+      deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      maxFloor: maxFloorOf(r),
+      steps: r.steps || 0, actions: r.actions || 0, battleTurns: r.battleTurns || 0,
+      level: r.level || 1, maxLevel: r.maxLevelSeen || 1,
+      kills: r.kills || 0, hp: r.hp, gold: r.gold, potions: r.potions,
+      npc: !!(r.npc && r.npc.done),
+      rescue: (r.adaptive && r.adaptive.triggers) || 0
+    };
+    /* D-67：B1 每层进/出快照（atk/def/hp/hpPct），用于出层血量与入口 atk */
+    if (r.b1) {
+      rec.exit = (r.b1.floorExit || []).map(function (x) {
+        return { floor: x.floor, atk: x.atk, def: x.def, hp: x.hp, maxHp: x.maxHp,
+          hpPct: x.maxHp ? Math.round(x.hp / x.maxHp * 1000) / 10 : null,
+          actions: x.actions, kills: x.kills, potions: x.potionsOut, level: x.level };
+      });
+      rec.enter = (r.b1.floorEnter || []).map(function (x) {
+        return { floor: x.floor, atk: x.atk, def: x.def, hp: x.hp, maxHp: x.maxHp, potions: x.potions };
+      });
+      rec.dragon = r.b1.dragon || null;
+    }
+    /* D-67：M1 每层出层快照（atk/def/hp/hpPct）——与 D-66 静态回合口径同源 */
+    if (r.m1) {
+      rec.m1floors = (r.m1.floors || []).map(function (x) {
+        return { floor: x.floor, atk: x.atk, def: x.def, hp: x.hp, maxHp: x.maxHp,
+          hpPct: x.maxHp ? Math.round(x.hp / x.maxHp * 1000) / 10 : null,
+          actions: x.actions, kills: x.kills, potions: x.potions, level: x.level };
+      });
+    }
+    /* D-67：全部战斗（紧凑）——每场 floor/monsterId/rounds/result/dealt/taken */
+    rec.battles = ((r.d44 && r.d44.battles) || []).map(function (b) {
+      return { floor: b.floor, id: b.monsterId, n: b.nRounds, res: b.result,
+        dealt: b.dealt, taken: b.taken, mhp: b.maxHp, pot: b.potionUses,
+        endHpPct: (b.end && b.end.maxHp) ? Math.round(b.end.hp / b.end.maxHp * 1000) / 10 : null };
+    });
+    return rec;
+  }
+  function aggOf(list) {
+    var d = { wins: 0, dead: 0, stuck: 0, deathFloor: {}, floorReach: {}, capN: 0,
+      avgSteps: 0, avgActions: 0, avgLevel: 0, avgKills: 0, maxSteps: 0 };
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (r.outcome === 'win') d.wins++;
+      else if (r.outcome === 'dead') d.dead++;
+      else d.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      for (var f = 1; f <= 5; f++) if (r.maxFloor >= f) d.floorReach[f] = (d.floorReach[f] || 0) + 1;
+      if (r.actions >= (out.env.maxActions || 2500)) d.capN++;
+      d.avgSteps += r.steps; d.avgActions += r.actions;
+      d.avgLevel += r.level; d.avgKills += r.kills;
+      if (r.steps > d.maxSteps) d.maxSteps = r.steps;
+    }
+    var n = list.length || 1;
+    d.avgSteps = Math.round(d.avgSteps / n * 10) / 10;
+    d.avgActions = Math.round(d.avgActions / n * 10) / 10;
+    d.avgLevel = Math.round(d.avgLevel / n * 100) / 100;
+    d.avgKills = Math.round(d.avgKills / n * 100) / 100;
+    return d;
+  }
+
+  try {
+    var M = Game.Core.Main, MON = Game.Data.MONSTERS, MP = Game.Data.MAPS;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var adaptOn = !/adapt=0/.test(qs);
+    var form = (/form=(\w+)/.exec(qs) || [])[1] || 'd50';
+    if (Game.Systems.Adaptive.setForm) Game.Systems.Adaptive.setForm(form);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    var ma = (/ma=(\d+)/.exec(qs) || [])[1];
+    var maxActions = ma ? Math.max(1, +ma) : 2500;
+    var sightSnap = {};
+    for (var sid in MON) if (MON[sid] && MON[sid].habit) sightSnap[sid] = MON[sid].habit.sight;
+    out.env = {
+      maxActions: maxActions, seeds: seedsOf(n), adaptive: adaptOn, form: form,
+      sizes: JSON.parse(JSON.stringify(MP.sizes)), floors: MP.floors,
+      density: JSON.parse(JSON.stringify(MP.density || null)),
+      enemyPerFloor: (function () {
+        var a = [];
+        for (var f = 1; f <= 5; f++) {
+          var sz = MP.sizes[f - 1];
+          var b = sz[0] * sz[1], base = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]][f - 1];
+          var r = b / (base[0] * base[1]);
+          var k = (MP.density && typeof MP.density.enemyArea === 'number') ? MP.density.enemyArea : 1;
+          var kp = (MP.density && typeof MP.density.patrolArea === 'number') ? MP.density.patrolArea : 1;
+          var raw = 5 + (f - 1) * 2, sc = Math.max(raw, Math.round(raw * r));
+          a.push({ f: f, base: raw, area: sc, now: Math.max(raw, Math.round(raw + (sc - raw) * k)),
+            patrol: Math.max(2, Math.round(2 + (Math.round(2 * r) - 2) * kp)) });
+        }
+        return a;
+      })(),
+      bossDef: { ogre_boss: MON.ogre_boss.def, zombie_king: MON.zombie_king.def, dragon: MON.dragon.def },
+      sight: sightSnap
+    };
+    function optsFor(key) {
+      var base = { maxActions: maxActions, adaptive: adaptOn, d44log: true };
+      if (key === 'b1') { base.b1 = { reserve: 4 }; base.d42 = true; base.d45 = true; base.d46 = true; }
+      else if (key === 'g2') { base.d37 = { fireball: true, flee: true }; base.d42 = true; }
+      else if (key === 's1') { base.d39 = { avoid: true }; base.d42 = true; }
+      else { base.m1 = { clear: true }; base.d42 = true; }
+      return base;
+    }
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(out.env.seeds, optsFor(key));
+      out.runs[key] = res.runs.map(trim);
+      out.agg[key] = aggOf(out.runs[key]);
+    }
+    /* Boss 实测回合（来自 d44 逐场战斗日志，全部策略汇总）+ 每层遭遇成本 */
+    var BOSS = { ogre_boss: 1, zombie_king: 1, dragon: 1 };
+    var bossAcc = {};
+    for (var bid in BOSS) bossAcc[bid] = { n: 0, wins: 0, rounds: [], lossShort: [] };
+    var encAcc = {};
+    for (var pk = 0; pk < plan.length; pk++) {
+      var kk = plan[pk];
+      if (!encAcc[kk]) encAcc[kk] = { runs: 0, byFloor: {}, byId: {}, total: 0 };
+      var e = encAcc[kk];
+      for (var ri = 0; ri < out.runs[kk].length; ri++) {
+        e.runs++;
+        var rr = out.runs[kk][ri];
+        for (var bi2 = 0; bi2 < (rr.battles || []).length; bi2++) {
+          var bb = rr.battles[bi2];
+          e.total++;
+          var fb = e.byFloor[bb.floor] || (e.byFloor[bb.floor] = { n: 0, ids: {} });
+          fb.n++; fb.ids[bb.id] = (fb.ids[bb.id] || 0) + 1;
+          e.byId[bb.id] = (e.byId[bb.id] || 0) + 1;
+          if (BOSS[bb.id]) {
+            var ac = bossAcc[bb.id];
+            ac.n++;
+            if (bb.res === 'win') ac.wins++;
+            if (bb.n > 0) ac.rounds.push(bb.n);
+            /* 失败局：还差多少回合（按本场实际每回合输出外推） */
+            if (bb.res !== 'win' && bb.dealt > 0 && bb.n > 0 && bb.mhp > bb.dealt) {
+              ac.lossShort.push(Math.ceil((bb.mhp - bb.dealt) / (bb.dealt / bb.n)));
+            }
+          }
+        }
+      }
+    }
+    for (var b3 in bossAcc) {
+      var a3 = bossAcc[b3];
+      out.boss[b3] = { def: MON[b3].def, hp: MON[b3].hp, battles: a3.n, wins: a3.wins,
+        roundsMed: med(a3.rounds), roundsMin: a3.rounds.length ? Math.min.apply(null, a3.rounds) : null,
+        roundsMax: a3.rounds.length ? Math.max.apply(null, a3.rounds) : null,
+        lossShortMed: med(a3.lossShort), rounds: a3.rounds.slice(0, 60) };
+    }
+    for (var k4 in encAcc) {
+      var ee = encAcc[k4], byFloor = {};
+      for (var f4 = 1; f4 <= 5; f4++) {
+        var x4 = ee.byFloor[f4] || { n: 0, ids: {} };
+        byFloor['F' + f4] = { avg: Math.round(x4.n / (ee.runs || 1) * 100) / 100, byId: x4.ids };
+      }
+      out.enc[k4] = { runs: ee.runs, totalAvg: Math.round(ee.total / (ee.runs || 1) * 100) / 100, byFloor: byFloor, byId: ee.byId };
+    }
+    /* B1 出层血量（逐层中位/均值） */
+    if (out.runs.b1) {
+      for (var f5 = 1; f5 <= 5; f5++) {
+        var pcts = [], acts = [];
+        for (var r5 = 0; r5 < out.runs.b1.length; r5++) {
+          var ex = out.runs.b1[r5].exit || [];
+          for (var q5 = 0; q5 < ex.length; q5++) {
+            if (ex[q5].floor === f5 && ex[q5].hpPct != null) { pcts.push(ex[q5].hpPct); acts.push(ex[q5].actions); }
+          }
+        }
+        var sum = 0; for (var z5 = 0; z5 < pcts.length; z5++) sum += pcts[z5];
+        out.exitHp['F' + f5] = { n: pcts.length, med: med(pcts),
+          mean: pcts.length ? Math.round(sum / pcts.length * 10) / 10 : null };
+      }
+    }
+    /* D-67：静态击杀回合（与 D-66 probe 同一口径）——用 M1-4500 每层入口 atk 复算，
+     * 不是估算：atk 分布来自本批实跑，hp/def 来自当前 monsters.js。 */
+    if (out.runs.m1 && out.runs.m1.length) {
+      function killRounds(hp, atk, def, en) {
+        var cur = hp, nr = 0, er = false, ed = en ? Math.round(def * en.defMul) : def;
+        while (cur > 0 && nr < 200) {
+          nr++;
+          var d = Math.max(1, Math.round(atk * atk / (atk + (er ? ed : def))));
+          cur -= d;
+          if (en && !er && cur > 0 && cur <= hp * en.hpPct) er = true;
+        }
+        return nr;
+      }
+      function entryOf(f) {
+        var arr = [];
+        for (var i = 0; i < out.runs.m1.length; i++) {
+          var fl = out.runs.m1[i].m1floors || [];
+          if (f === 1) { arr.push({ atk: 11, def: 5, hp: 100 }); continue; }
+          for (var k = 0; k < fl.length; k++) if (fl[k].floor === f - 1) { arr.push(fl[k]); break; }
+        }
+        return arr;
+      }
+      var rnd = { metric: 'M1-4500 每层入口 atk × 当前 hp/def（与 D-66 probe 同算法）', floors: {}, bosses: [] };
+      var bossOf = {};
+      for (var bq = 0; bq < MP.bosses.length; bq++) bossOf[MP.bosses[bq].floor] = MP.bosses[bq].id;
+      for (var fq = 1; fq <= 5; fq++) {
+        var ent = entryOf(fq), atkList = ent.map(function (x) { return x.atk; });
+        var atkMed = med(atkList);
+        var frow = { entryN: ent.length, atkMed: atkMed, enemies: [] };
+        var tabq = MP.enemyTable[fq - 1];
+        for (var tq = 0; tq < tabq.length; tq++) {
+          var mq = MON[tabq[tq].id], rs = [];
+          for (var eq = 0; eq < ent.length; eq++) rs.push(killRounds(mq.hp, ent[eq].atk, mq.def, mq.enrage));
+          frow.enemies.push({ id: mq.id, hp: mq.hp, def: mq.def, roundsMed: med(rs) });
+        }
+        rnd.floors['F' + fq] = frow;
+        var bqid = bossOf[fq];
+        if (bqid) {
+          var bm = MON[bqid], brs = [], bsur = [];
+          for (var eq2 = 0; eq2 < ent.length; eq2++) {
+            brs.push(killRounds(bm.hp, ent[eq2].atk, bm.def, bm.enrage));
+            var bd = Math.max(1, Math.round(bm.atk * bm.atk / (bm.atk + ent[eq2].def)));
+            bsur.push(Math.ceil(ent[eq2].hp / bd));
+          }
+          var km = med(brs), sm = med(bsur);
+          rnd.bosses.push({ floor: fq, id: bqid, hp: bm.hp, def: bm.def, atk: bm.atk,
+            atkMed: atkMed, roundsMed: km, surviveMed: sm,
+            ratioMed: sm ? Math.round(km / sm * 1000) / 1000 : null });
+        }
+      }
+      out.rounds = rnd;
+    }
+    /* D-67：M1 出层血量（与 D-66 的 75.1%/50% 门槛同口径） */
+    if (out.runs.m1) {
+      out.exitHpM1 = {};
+      for (var f6 = 1; f6 <= 5; f6++) {
+        var ps = [];
+        for (var r6 = 0; r6 < out.runs.m1.length; r6++) {
+          var mf = out.runs.m1[r6].m1floors || [];
+          for (var q6 = 0; q6 < mf.length; q6++) if (mf[q6].floor === f6 && mf[q6].hpPct != null) { ps.push(mf[q6].hpPct); break; }
+        }
+        var s6 = 0; for (var z6 = 0; z6 < ps.length; z6++) s6 += ps[z6];
+        out.exitHpM1['F' + f6] = { n: ps.length, med: med(ps),
+          mean: ps.length ? Math.round(s6 / ps.length * 10) / 10 : null };
+      }
+    }
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'D67_BATCH_DONE n=' + n + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'D67_BATCH_FAIL';
+  }
+  window.__D67__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

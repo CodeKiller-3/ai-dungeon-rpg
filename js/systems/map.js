@@ -35,6 +35,24 @@
   function areaScale(n, w, h) {
     return Math.max(n, Math.round(n * areaRatio(w, h)));
   }
+  /* D-67：遭遇成本——只把"扩图带来的增量"乘以系数，基准数量恒不变。
+   * 系数从 MAPS.density 读取，缺省 1（等价于 D-64/D-66 行为）。 */
+  function densityOf(key) {
+    var d = (Game.Data.MAPS && Game.Data.MAPS.density) || {};
+    var v = d[key];
+    /* D-67：允许按层给系数（数组）或全局一个数；缺省 1。 */
+    if (Object.prototype.toString.call(v) === '[object Array]') {
+      var x = v[floorIndex % v.length];
+      return (typeof x === 'number' && isFinite(x) && x >= 0) ? x : 1;
+    }
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : 1;
+  }
+  function areaExtra(n, w, h, k) {
+    var scaled = areaScale(n, w, h);
+    return Math.max(n, Math.round(n + (scaled - n) * k));
+  }
+  function enemyCount(w, h) { return areaExtra(5 + floorIndex * 2, w, h, densityOf('enemyArea')); }
+  function patrolCount(w, h) { return areaExtra(2, w, h, densityOf('patrolArea')); }
 
   function initGrid(w, h) {
     var g = [];
@@ -405,8 +423,8 @@
     var table = cfg.enemyTable[floorIndex % cfg.enemyTable.length];
     var w = grid[0].length;
     var h = grid.length;
-    /* D-64：按面积等比放大，基准 5+2×(层-1)。 */
-    var count = areaScale(5 + floorIndex * 2, w, h);
+    /* D-64：按面积等比放大，基准 5+2×(层-1)。D-67：系数只管增量，见 areaExtra。 */
+    var count = enemyCount(w, h);
     var placed = 0;
     var tries = 0;
     while (placed < count && tries < 500) {
@@ -1114,8 +1132,9 @@
       placeStairs();
       spawnEnemies();
       lastMoves = ensureMandatoryTargets(); /* D-38：必经目标必须落在出生点连通块里 */
-      /* D-64：巡逻怪同样按面积等比放大（基准 2 只）；AI 习性与视距不变。 */
-      if (Game.Systems.AI) Game.Systems.AI.initPatrols(areaScale(2, size[0], size[1]));
+      /* D-64：巡逻怪同样按面积等比放大（基准 2 只）；AI 习性与视距不变。
+       * D-67：巡逻数量走 patrolArea 系数（只管增量，基准 2 只恒定）。 */
+      if (Game.Systems.AI) Game.Systems.AI.initPatrols(patrolCount(size[0], size[1]));
       spawn = { x: 1, y: 1 };
       genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
       floorCache[floorIndex] = {
@@ -1225,11 +1244,12 @@
     getFloor: function () { return floorIndex + 1; },
     getGrid: function () { return grid; },
     /* D-64：当前层按面积等比放大后的期望怪物数（只读；与 spawnEnemies 同一口径，
-     * 供 verify_d18 断言"扩图后只增不减、且等于密度公式"。 */
+     * 供 verify_d18 断言"扩图后只增不减、且等于密度公式"。
+     * D-67：同一口径包含 MAPS.density.enemyArea（只放大增量）。 */
     expectedEnemyCount: function () {
       cfg = Game.Data.MAPS;
       var size = cfg.sizes[floorIndex % cfg.sizes.length];
-      return areaScale(5 + floorIndex * 2, size[0], size[1]);
+      return enemyCount(size[0], size[1]);
     },
     /* D-64：当前层陷阱数量的期望区间（只读；与 placeTraps 同一口径）。 */
     expectedTrapRange: function () {

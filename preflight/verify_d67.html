@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-67 难度收口 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-67 · B1 回到 45%±3 / 巨龙最肉 / 单变量守卫</h1>
+<pre id="result">RUNNING</pre>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = Game.Data, M = D.MONSTERS, MP = D.MAPS;
+  var out = { protocol: 'D-67', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+
+  /* D-67 定案快照：18 只怪的 hp/atk/def（本卡只允许 dragon.def 变），D-66 末值的逐项抄录 */
+  var SNAP = {
+    slime: [40, 6, 2], bat: [30, 9, 1], skeleton: [70, 12, 5], goblin: [45, 7, 3],
+    tiny_zombie: [50, 8, 2], orc_warrior: [85, 14, 6], orc_shaman: [75, 16, 4],
+    wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
+    big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
+    pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+  };
+  var SIGHT = { bat: 8, dragon: 8, angel: 8, orc_warrior: 7, wogol: 7, ogre: 7, ogre_boss: 7, zombie_king: 7 };
+  /* d42 的固定 build（未改动，用于活值判据复算） */
+  var PLAYER = {
+    2: { atk: 20.125, def: 13, hp: 130 },
+    4: { atk: 36.85, def: 20, hp: 170 },
+    5: { atk: 44.1, def: 26, hp: 190 }
+  };
+  function dmgOf(a, d) { return Math.max(1, Math.round(a * a / (a + d))); }
+
+  try {
+    /* ── A1：本卡只动两处（巨龙 def、巡逻系数） ─────────────── */
+    var bad = [];
+    for (var id in SNAP) {
+      if (!Object.prototype.hasOwnProperty.call(SNAP, id)) continue;
+      var s = SNAP[id];
+      if (M[id].hp !== s[0] || M[id].atk !== s[1] || M[id].def !== s[2]) {
+        bad.push(id + '=' + M[id].hp + '/' + M[id].atk + '/' + M[id].def + '≠' + s.join('/'));
+      }
+    }
+    var sightBad = [];
+    for (var sid in SIGHT) {
+      if (!M[sid] || !M[sid].habit || M[sid].habit.sight !== SIGHT[sid]) {
+        sightBad.push(sid + '=' + (M[sid] && M[sid].habit ? M[sid].habit.sight : 'null'));
+      }
+    }
+    var en = M.dragon.enrage;
+    var enOk = en && en.hpPct === 0.5 && en.atkMul === 1.5 && en.defMul === 1.3 &&
+      en.skill && en.skill.chance === 0.3 && en.skill.dmgMul === 1.4;
+    var bp = MP.bosses;
+    var posOk = bp.length === 3 && bp[0].floor === 2 && bp[0].id === 'ogre_boss' &&
+      bp[1].floor === 4 && bp[1].id === 'zombie_king' && bp[2].floor === 5 && bp[2].id === 'dragon';
+    var den = MP.density || {};
+    var denOk = den.enemyArea === 1 && Object.prototype.toString.call(den.patrolArea) === '[object Array]' &&
+      den.patrolArea.join(',') === '1.5,1.5,1,1,1';
+    rec('A1_onlyDragonDefAndPatrol', bad.length === 0 && sightBad.length === 0 && enOk && posOk && denOk, {
+      rule: '18 只怪的 hp/atk/def 里只有 dragon.def 允许变（8→15）；视距、enrage、Boss 位置、地图尺寸一律不动；密度只允许 patrolArea',
+      bad: bad, sightBad: sightBad, enrageOk: enOk, bossPositions: bp, density: den,
+      dragon: { hp: M.dragon.hp, atk: M.dragon.atk, def: M.dragon.def }
+    });
+
+    /* ── A2：D-66 的普通怪 ≤4 回合验收仍成立（M1-4500 入口 atk） ── */
+    var m145 = readJson('selfcheck/d67-pf12-m14500.json');
+    var m16k = readJson('selfcheck/d67-pf12-m16k.json');
+    var b1Final = readJson('selfcheck/d67-2500-final.json');
+    var g2Final = readJson('selfcheck/d67-g2-4500-final.json');
+    var b1Base = readJson('selfcheck/d67-base-b1.json');
+    var b1Den0 = readJson('selfcheck/d67-step1-density0-b1.json');
+    var b1Den2 = readJson('selfcheck/d67-step1-density2-b1.json');
+    var b1Sight = readJson('selfcheck/d67-step2-sightlow-b1.json');
+    var b1Patrol = readJson('selfcheck/d67-patrol-D8-b1.json');
+    var b1NoBoost = readJson('selfcheck/d67-k1p1-D15-b1.json');
+    var filesOk = !!(m145 && m16k && b1Final && g2Final && b1Base && b1Den0 && b1Den2 && b1Sight && b1Patrol && b1NoBoost);
+    if (!filesOk) throw new Error('D-67 缺测量 JSON（先跑 d67-report.ps1 生成 selfcheck/d67-*.json）');
+
+    var badN = [], nRows = [];
+    ['F3', 'F4', 'F5'].forEach(function (fk) {
+      var row = m145.rounds.floors[fk];
+      row.enemies.forEach(function (e) {
+        nRows.push(fk + ' ' + e.id + '=' + e.roundsMed);
+        if (e.roundsMed > 4) badN.push(fk + ':' + e.id + '=' + e.roundsMed);
+      });
+    });
+    rec('A2_normalRoundsLe4', badN.length === 0, {
+      rule: 'F3–F5 普通怪中位击杀回合 ≤4（D-66 验收，沿用同一算法与同一入口 atk 口径）',
+      rounds: nRows
+    });
+
+    /* ── A3：巨龙是实测最肉的门（静态中位回合严格最高） ─────────── */
+    var bs = m145.rounds.bosses;
+    var byId = {};
+    for (var i = 0; i < bs.length; i++) byId[bs[i].id] = bs[i];
+    var otherMax = Math.max(byId.ogre_boss.roundsMed, byId.zombie_king.roundsMed);
+    var dragonTop = byId.dragon.roundsMed > otherMax;
+    rec('A3_dragonToughestMeasured', dragonTop && bs.length === 3, {
+      rule: '三只 Boss 的实测中位击杀回合里，巨龙严格最高（不是并列）',
+      order: bs.map(function (x) { return x.id + '=' + x.roundsMed + '回合(def' + x.def + ')'; }),
+      othersMax: otherMax, dragon: byId.dragon.roundsMed, strictlyHighest: dragonTop
+    });
+
+    /* ── A4：d42 判据（活值）：比值 ≤0.75、击杀 ≥6、巨龙比值最高 ── */
+    var gate = [], badG = [], ratio = {};
+    for (var k2 = 0; k2 < bs.length; k2++) {
+      var b = byId[bs[k2].id], p = PLAYER[b.floor];
+      var pd = dmgOf(p.atk, b.def), bd = dmgOf(b.atk, p.def);
+      var kill = Math.ceil(b.hp / pd), sur = Math.ceil(p.hp / bd);
+      var ra = Math.round(kill / sur * 1000) / 1000;
+      ratio[b.id] = ra;
+      gate.push(b.id + ' kill=' + kill + ' sur=' + sur + ' ratio=' + ra);
+      if (!(ra <= 0.75)) badG.push(b.id + ':ratio=' + ra);
+      if (!(kill >= 6)) badG.push(b.id + ':kill=' + kill);
+    }
+    var rTop = ratio.dragon > Math.max(ratio.ogre_boss, ratio.zombie_king);
+    rec('A4_d42GateLive', badG.length === 0 && rTop, {
+      rule: 'd42 原判据不放宽：三只 Boss 比值 ≤0.75、击杀 ≥6；巨龙比值最高',
+      rows: gate, ratioHighest: rTop, bad: badG
+    });
+
+    /* ── B1：B1-2500 通关率 45%±3（21–24 / 50） ─────────────── */
+    var w = b1Final.agg.b1.wins;
+    rec('B1_b1WinRateInBand', w >= 21 && w <= 24, {
+      rule: 'B1-2500 同种子 1001–1050 通关 21–24 局（42%–48%）',
+      wins: w, rate: Math.round(w / 50 * 100) + '%', target: '45%±3'
+    });
+
+    /* ── B2：逐步归因表（单变量，先加后叠） ───────────────────── */
+    var steps = [
+      { name: '基线（D-66 末）', w: b1Base.agg.b1.wins, cfg: 'def8 / 密度1 / 巡逻3' },
+      { name: '只调静态密度=0', w: b1Den0.agg.b1.wins, cfg: 'def8 / 巡逻3' },
+      { name: '只调静态密度=2', w: b1Den2.agg.b1.wins, cfg: 'def8 / 巡逻3' },
+      { name: '只调追击视距 8→6、7→5', w: b1Sight.agg.b1.wins, cfg: 'def8 / 密度1 / 巡逻3' },
+      { name: '只调巡逻 F1/F2 3→4', w: b1Patrol.agg.b1.wins, cfg: 'def8 / 密度1' },
+      { name: '叠加巨龙 def 15（最终）', w: b1Final.agg.b1.wins, cfg: '巡逻4/4 / 密度1' }
+    ];
+    var table = steps.map(function (s) { return s.name + '=' + s.w + '/50(' + Math.round(s.w / 50 * 100) + '%)'; });
+    rec('B2_stepwiseAttribution', steps[0].w === 29 && steps[5].w === w && b1NoBoost.agg.b1.wins < 21, {
+      rule: '单变量逐步测：每一步只改一项，结果必须与保存的跑局一致；去掉巡逻加成的反事实必须落在区间外',
+      steps: table,
+      patrolGainPp: Math.round((steps[4].w - steps[0].w) / 50 * 100),
+      dragonDefPp: Math.round((steps[5].w - steps[4].w) / 50 * 100),
+      noPatrolCounterfactual: b1NoBoost.agg.b1.wins + '/50(' + Math.round(b1NoBoost.agg.b1.wins / 50 * 100) + '%)'
+    });
+
+    /* ── B3：全清 6000 步仍是 100%（本卡不许压） ────────────────── */
+    rec('B3_m1_6000_still100', m16k.agg.m1.wins === 50, {
+      rule: 'M1-6000 全清 50/50 通关（D-66 的结论，本卡不许压）',
+      wins: m16k.agg.m1.wins, stuck: m16k.agg.m1.stuck
+    });
+
+    /* ── B4：巨龙仍可被 B1 击杀，且失败局能算出还差几回合 ───────── */
+    var drag = b1Final.boss.dragon;
+    rec('B4_dragonStillKillable', drag && drag.wins >= 10 && drag.roundsMed != null && drag.lossShortMed != null, {
+      rule: 'B1 在 2500 步下仍能赢若干局；失败局给出"还差几回合"',
+      dragonBattles: drag.battles, wins: drag.wins, roundsMed: drag.roundsMed,
+      lossShortMed: drag.lossShortMed
+    });
+
+    /* ── C：四策略 / 双轨（2500 对照 + 4500 验收） ─────────────── */
+    var a25 = b1Final.agg, a45 = { m1: m145.agg.m1, g2: g2Final.agg.g2 };
+    rec('C_fourStrategiesTwoTracks', a25.b1.wins === w && a25.s1.wins >= 0 && a45.m1.wins >= 0 && a45.g2.wins >= 0, {
+      rule: 'M1/G2 双轨：2500 只做历史对照，4500 才是成长验收；bot 默认上限仍是 2500',
+      at2500: { b1: a25.b1.wins, s1: a25.s1.wins, g2: a25.g2.wins, m1: a25.m1.wins },
+      at4500: { m1: a45.m1.wins, g2: a45.g2.wins },
+      note: 'M1/G2 的 2500 值只作历史对照，不与 4500 混比'
+    });
+
+    /* ── D：历史页不受巡逻系数影响（尺寸钉回扩图前 → 计数=基准） ── */
+    var sizesSave = MP.sizes.slice();
+    var base1 = null;
+    try {
+      MP.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+      base1 = Game.Systems.Map.expectedEnemyCount();
+    } finally { MP.sizes = sizesSave; }
+    var live1 = Game.Systems.Map.expectedEnemyCount();
+    rec('D_historyDensityInvariant', base1 === 5 && live1 === 8, {
+      rule: 'areaRatio=1（历史页把 sizes 钉回扩图前）时，每层敌人数等于基准 5+2×(层-1)，不受 D-67 系数影响；当前扩图后仍为 D-66 的 8 只',
+      floor1WithOldSizes: base1, expectedOld: 5, floor1Live: live1, expectedLive: 8
+    });
+
+    /* ── E：出层血量仍 ≥50%（D-66 分层门槛） ───────────────────── */
+    var ex = m145.exitHpM1, badE = [], eRows = [];
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      if (!ex[f]) return;
+      eRows.push(f + '=' + ex[f].med + '%');
+      if (!(ex[f].med >= 50)) badE.push(f + '=' + ex[f].med);
+    });
+    rec('E_exitHpGe50', badE.length === 0 && m145.exitHpM1.F4 && m145.exitHpM1.F4.med >= 50, {
+      rule: 'M1-4500 每层出层血量中位 ≥50%（重点 F4）',
+      exitHp: eRows, bad: badE
+    });
+
+    document.title = 'D67_DONE';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    document.title = 'D67_FAIL';
+  }
+  window.__D67_VERIFY__ = out;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

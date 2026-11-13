@@ -16,12 +16,17 @@
      A) atk/def/exp/gold/掉落/习性 一个都没动（对 D-65 末的快照逐字段比对）；
      B) F3–F5 普通怪在实测入口 atk 下的中位击杀回合 ≤4；Boss ≤10，且 d42 的
         「Boss 比值 ≤0.75 / 击杀 ≥6 / 巨龙比值最高」三条判据仍成立；
-     C) hp 全表与 docs/怪物血量-D-66.md 一致（新值写死在页面里，数据被误改会红）。 -->
+     C) hp 全表与 docs/怪物血量-D-66.md 一致（新值写死在页面里，数据被误改会红）。
+     D-67 时点声明：巨龙 def 已由 D-67 从 8 调到 15。本页是 D-66 的历史验收，
+     先把 def 钉回 8 再复算（否则 A2 的 def 快照会被误判为"越权改动"）；
+     D-67 的活值验收见 preflight/verify_d67.html。 -->
 <script src="../js/core/eventBus.js"></script>
 <script src="../js/data/maps.js"></script>
 <script src="../js/data/monsters.js"></script>
 <script src="../js/data/items.js"></script>
 <script src="../js/data/config.js"></script>
+<script src="lib/monster_hp_legacy.js"></script>
+<script>pinMonsterDefLegacy();</script>
 <script>
 (function () {
   'use strict';

@@ -294,13 +294,14 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var ifnv = fnv1a(ilines.join('\n'));
     var dr = MS.dragon;
     /* D-66：hp 重排后 18 只怪指纹更新为 a9e8ebca（D-65 末为 a8f05f90）；巨龙三项与狂暴不变。
-       本页守的是"当前定档数值 = 文档 + 源码"，数值变更时指纹必须同步，不允许静默漂移。 */
-    rec('F_numbers_unchanged', mk.length === 18 && mfnv === 'a9e8ebca' &&
-      dr.hp === 260 && dr.atk === 32 && dr.def === 8 &&
+       D-67：巨龙 def 8→15，指纹同步为 48426cb8（本页守"当前定档数值 = 文档 + 源码"，
+       数值变更时指纹必须同步，不允许静默漂移）。 */
+    rec('F_numbers_unchanged', mk.length === 18 && mfnv === '48426cb8' &&
+      dr.hp === 260 && dr.atk === 32 && dr.def === 15 &&
       dr.enrage.hpPct === 0.5 && dr.enrage.atkMul === 1.5 && dr.enrage.defMul === 1.3 &&
       dr.enrage.skill.chance === 0.3 && dr.enrage.skill.dmgMul === 1.4 &&
       ik.length === 48 && sp === 10165 && ss === 5081 && ifnv === 'd814ef98' && arb.length === 0, {
-      rule: '18 只怪物指纹 a9e8ebca（D-66 hp 重排后）、巨龙 260/32/8 与狂暴 0.5/1.5/1.3/0.3/1.4、' +
+      rule: '18 只怪物指纹 48426cb8（D-67 巨龙 def 调整后）、巨龙 260/32/15 与狂暴 0.5/1.5/1.3/0.3/1.4、' +
         '物品 48 件 Σprice=10165 Σsell=5081 FNV=d814ef98、全表买价>卖价',
       monsterFnv: mfnv, dragon: { hp: dr.hp, atk: dr.atk, def: dr.def },
       items: { n: ik.length, sumPrice: sp, sumSell: ss, fnv: ifnv }, arbitrage: arb

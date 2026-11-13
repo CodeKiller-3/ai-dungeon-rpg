@@ -24,6 +24,16 @@
 - 本地排行榜：通关时间 / 金币 / 等级，最近 10 条。<!-- 锚点: js/systems/leaderboard.js#aiDungeon_leaderboard -->
 - 起手匕首：新档与重开都发一把 `knife`（+1 攻击），旧档不补发。<!-- 锚点: js/core/main.js#START_WEAPON -->
 - 升级曲线（D-65）：升级增益与经验基数的唯一来源是 `Game.Data.GROWTH`（`js/data/config.js`）；L2–L6 每级 +1 atk/+1 def/+10 maxHp，L7–L8 每级 +2 atk/+1 def，L9+ 每级 +3 atk/+3 def；经验基数保持 L1–L4=15、L5+=60。M1 全清口径下五层出层面板全部达到 D-63 目标，F4 出口血量 47.4%（差 50% 目标 2.6pp）。<!-- 锚点: js/data/config.js#Game.Data.GROWTH -->
+- 难度收口（D-67）：B1-2500 由 **29/50（58%）压回 23/50（46%）**，落在 45%±3。<!-- 锚点: js/systems/map.js#enemyCount -->
+  ① `MAPS.density` 遭遇成本系数（只放大 D-64 扩图增量，历史页把尺寸钉回后恒等于基准），定案
+  `enemyArea=1`、`patrolArea=[1.5,1.5,1,1,1]`（F1/F2 巡逻怪 3→4）；② 巨龙 `def 8→15`（hp/atk/enrage/位置未动）。
+  逐步归因：静态密度 **0pp**（两个方向都试过：密度 0 让普通怪回合涨到 5、密度 2 让 M1-6000 掉到 4%）、
+  视距 **0pp**（8→6/7→5 使 B1 +6pp，方向相反）、巡逻 **+10pp**、巨龙 def **−22pp**。
+  巨龙实测中位 **10 回合**，严格高于独眼酋长 9、僵尸王 9；`verify_d42` 判据未放宽（ratio 0.364/0.571/0.727，kill 8）。
+  D-66 验收保持：F3–F5 普通怪 3–4 回合、Boss ≤10、F4 出层血量 76.8%；M1-6000 仍 50/50。
+  四策略双轨：B1 **23**、S1 1、G2-4500 **36**、M1-4500 **14**（bot 默认上限仍 2500）。
+  历史页用 `preflight/lib/monster_hp_legacy.js#pinMonsterDefLegacy` 把巨龙 def 钉回 8 后重跑，断言未改；
+  新增 `preflight/verify_d67.html`，页数 102→103。<!-- 锚点: js/systems/map.js#enemyCount -->
 - 怪物血量重排（D-66）：按 D-63 爽感验收只调 `hp`（9 只：兽人沃古尔 95→70、食人魔 130→68、大僵尸 240→88、死灵法师 135→100、南瓜怪 120→98、面具兽人 150→98、天使 180→135、独眼酋长 120→100、僵尸王 280→210；巨龙 260 不动），atk/def/伤害公式/经验/金币/掉落/成长/地图/商店全部未动。实测：F3–F5 普通怪中位击杀回合全部 3–4（目标 ≤4）；Boss 10/9/9 回合（目标 ≤10）；出层血量 F3 68.4%→75.7%、F4 **47.4%→75.1%**（≥50%）、F5 51.7%→71.5%。`verify_d42` 判据未放宽：独眼酋长 ratio 0.364、僵尸王 0.571、巨龙 **0.727**（最高），kill 均 8 ≥6。四策略双轨：B1-2500 **29/50**、S1-2500 0、G2-2500 0、M1-2500 0；M1-4500 **9/50**、G2-4500 **30/50**；M1-6000 参考 50/50。B1 由 42% 升到 58%，超出 D-63 的 32–40% 区间，如实记录。历史页用 `preflight/lib/monster_hp_legacy.js` 钉回旧 hp 后重跑，断言未改。<!-- 锚点: js/data/monsters.js#big_zombie -->
 - 本地存档 `ai_dungeon_rpg_save_v1`：自动存档、读档按等级重算属性。<!-- 锚点: js/systems/save.js#ai_dungeon_rpg_save_v1 -->
 - 大模型 NPC 对话：配置 Key 走 DeepSeek，无 Key / 断网降级为离线规则问答。<!-- 锚点: js/systems/npc.js#Game.Systems.NPC -->
