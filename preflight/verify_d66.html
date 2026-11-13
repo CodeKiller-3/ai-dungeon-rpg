@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d66</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<pre id="result">RUNNING</pre>
+<!-- D-66 验证页：只调 hp 之后，守住三件事——
+     A) atk/def/exp/gold/掉落/习性 一个都没动（对 D-65 末的快照逐字段比对）；
+     B) F3–F5 普通怪在实测入口 atk 下的中位击杀回合 ≤4；Boss ≤10，且 d42 的
+        「Boss 比值 ≤0.75 / 击杀 ≥6 / 巨龙比值最高」三条判据仍成立；
+     C) hp 全表与 docs/怪物血量-D-66.md 一致（新值写死在页面里，数据被误改会红）。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Data.MONSTERS, MAPS = Game.Data.MAPS;
+
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function dmg(atk, def) { return Math.max(1, Math.round(atk * atk / (atk + def))); }
+  function kill(hp, atk, def, en) {
+    var cur = hp, n = 0, er = false, ed = en ? Math.round(def * en.defMul) : def;
+    while (cur > 0 && n < 200) {
+      n++;
+      cur -= dmg(atk, er ? ed : def);
+      if (en && !er && cur > 0 && cur <= hp * en.hpPct) er = true;
+    }
+    return n;
+  }
+  function med(a) { var s = a.slice().sort(function (x, y) { return x - y; }); return s[Math.floor((s.length - 1) * 0.5)]; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest(); x.open('GET', new URL(rel, location.href).href, false); x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+
+  /* D-66 定表：old → now */
+  var HP = {
+    slime: [40, 40], bat: [30, 30], skeleton: [70, 70], dragon: [260, 260],
+    goblin: [45, 45], tiny_zombie: [50, 50], orc_warrior: [85, 85], orc_shaman: [75, 75],
+    wogol: [95, 70], ogre: [130, 68], imp: [60, 60],
+    big_zombie: [240, 88], necromancer: [135, 100], masked_orc: [150, 98],
+    pumpkin_dude: [120, 98], angel: [180, 135],
+    ogre_boss: [120, 100], zombie_king: [280, 210]
+  };
+  /* D-65 末的非 hp 字段快照（只列会变的那几个，用来证明"单变量"） */
+  var SNAP = {
+    ogre: { atk: 20, def: 9, exp: 45 }, wogol: { atk: 17, def: 7, exp: 38 },
+    big_zombie: { atk: 26, def: 10, exp: 55 }, necromancer: { atk: 24, def: 6, exp: 42 },
+    pumpkin_dude: { atk: 22, def: 7, exp: 40 }, masked_orc: { atk: 23, def: 8, exp: 41 },
+    angel: { atk: 28, def: 5, exp: 45 }, ogre_boss: { atk: 12, def: 8, exp: 130 },
+    zombie_king: { atk: 24, def: 12, exp: 200 }, dragon: { atk: 32, def: 8, exp: 60 }
+  };
+  /* 实测入口 atk（D-66 的 50 局 M1-4500，来源 d66-rounds-after.json）；写死是为了页面自证 */
+  var ENTRY_ATK = { 1: 11, 2: 16, 3: 23, 4: 33, 5: 39 };
+
+  try {
+    /* A1：hp 全表逐项一致 */
+    var badHp = [];
+    for (var id in HP) {
+      if (!Object.prototype.hasOwnProperty.call(HP, id)) continue;
+      if (M[id].hp !== HP[id][1]) badHp.push(id + '=' + M[id].hp + '≠' + HP[id][1]);
+    }
+    rec('A1_hpTableExact', badHp.length === 0,
+      badHp.length ? badHp.join('; ') : '18 只怪 hp 与新表一致（改 9 只：' +
+        Object.keys(HP).filter(function (k) { return HP[k][0] !== HP[k][1]; }).join(',') + '）');
+
+    /* A2：atk/def/exp 未被改动（单变量） */
+    var badField = [];
+    for (var k in SNAP) {
+      if (!Object.prototype.hasOwnProperty.call(SNAP, k)) continue;
+      var s = SNAP[k], m = M[k];
+      if (m.atk !== s.atk || m.def !== s.def || m.exp !== s.exp) {
+        badField.push(k + ': atk ' + m.atk + '/' + s.atk + ' def ' + m.def + '/' + s.def + ' exp ' + m.exp + '/' + s.exp);
+      }
+    }
+    rec('A2_singleVariable', badField.length === 0,
+      badField.length ? badField.join('; ') : 'atk/def/exp 与 D-65 末快照逐项相等；掉落/金币/习性未触碰（本页不读这三项，git diff 可证）');
+
+    /* B1：F3–F5 普通怪中位击杀 ≤4 */
+    var badR = [], rows = [];
+    for (var f = 3; f <= 5; f++) {
+      var tab = MAPS.enemyTable[f - 1];
+      for (var i = 0; i < tab.length; i++) {
+        var mid = tab[i].id, mm = M[mid], r = kill(mm.hp, ENTRY_ATK[f], mm.def, mm.enrage);
+        rows.push('F' + f + ' ' + mid + '(' + mm.hp + 'hp,def' + mm.def + ')= ' + r + '回合');
+        if (r > 4) badR.push('F' + f + ':' + mid + '=' + r);
+      }
+    }
+    rec('B1_normalRoundsLe4', badR.length === 0, badR.length ? badR.join('; ') : rows.join('；'));
+
+    /* B2：Boss 击杀 ≤10（含狂暴 def 抬升） */
+    var bosses = MAPS.bosses, badB = [], brows = [];
+    for (var b = 0; b < bosses.length; b++) {
+      var bd = M[bosses[b].id], br = kill(bd.hp, ENTRY_ATK[bosses[b].floor], bd.def, bd.enrage);
+      brows.push('F' + bosses[b].floor + ' ' + bd.name + '= ' + br + '回合');
+      if (br > 10) badB.push(bd.id + '=' + br);
+    }
+    rec('B2_bossRoundsLe10', badB.length === 0, badB.length ? badB.join('; ') : brows.join('；'));
+
+    /* B3：d42 判据（固定 build）——比值 ≤0.75、击杀 ≥6、巨龙比值最高 */
+    var BUILD = { 2: { atk: 20.125, def: 13, hp: 130 }, 4: { atk: 36.85, def: 20, hp: 170 }, 5: { atk: 44.1, def: 26, hp: 190 } };
+    var gate = [], badG = [], ratios = {};
+    for (var q = 0; q < bosses.length; q++) {
+      var bf = bosses[q].floor, bm = M[bosses[q].id], bp = BUILD[bf];
+      var pd = Math.max(1, Math.round(bp.atk * bp.atk / (bp.atk + bm.def)));
+      var bdm = Math.max(1, Math.round(bm.atk * bm.atk / (bm.atk + bp.def)));
+      var kk = Math.ceil(bm.hp / pd), ss = Math.ceil(bp.hp / bdm), ra = Math.round((kk / ss) * 1000) / 1000;
+      ratios[bm.id] = ra;
+      gate.push(bm.id + ' kill=' + kk + ' sur=' + ss + ' ratio=' + ra);
+      if (kk < 6) badG.push(bm.id + ':kill=' + kk);
+      if (ra > 0.75) badG.push(bm.id + ':ratio=' + ra);
+    }
+    var dragonTop = ratios.dragon > Math.max(ratios.ogre_boss, ratios.zombie_king);
+    rec('B3_d42GateKept', badG.length === 0 && dragonTop,
+      (badG.length ? badG.join('; ') + ' | ' : '') + gate.join('；') + '；巨龙比值最高=' + dragonTop);
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+  }
+
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = 'D66_DONE';
+})();
+</script>
+</body>
+</html>

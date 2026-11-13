@@ -21,6 +21,10 @@
 <script src="../js/core/eventBus.js"></script>
 <script src="../js/data/maps.js"></script>
 <script src="../js/data/monsters.js"></script>
+<!-- D-66 时点声明：D-66 起 live 怪物 hp 已按爽感验收重排；本页是历史卡，运行前用
+     preflight/lib/monster_hp_legacy.js 把 hp 钉回 D-65 末快照，断言与基线数字一字未改。 -->
+<script src="lib/monster_hp_legacy.js"></script>
+<script>pinMonsterHpLegacy();</script>
 <script src="../js/data/items.js"></script>
 <script src="../js/data/config.js"></script>
 <script>

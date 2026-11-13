@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-66 回合/血量测量台</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-66 · 普通怪/Boss 击杀回合 + 出层血量</h1>
+<pre id="report">RUNNING</pre>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/config.js"></script>
+<script>
+(function () {
+  'use strict';
+  /* D-66 测量台：只读。输入是一份 M1 跑局 JSON（含每层出层面板），
+   * 用每局"进入本层时的 atk"复算该层每种怪的击杀回合，输出中位数。
+   * 回合算法与 js/systems/battle.js 完全一致：
+   *   dmg = max(1, round(atk²/(atk+def)))，逐回合扣血；Boss 血量 ≤50% 后 def 取 round(def×defMul)。
+   * 这不是估算：atk 分布来自 50 局实跑，血量/防御来自 js/data/monsters.js 当前值。 */
+  var qs = location.search || '';
+  var src = (/src=([^&]+)/.exec(qs) || [])[1] || 'd65-probe-after.json';
+  var tag = (/tag=([^&]+)/.exec(qs) || [])[1] || '';
+
+  /* 调参前（D-65 末）的 hp，仅用于"旧 hp → 新 hp"对照展示 */
+  var OLD_HP = {
+    slime: 40, bat: 30, skeleton: 70, dragon: 260, goblin: 45, tiny_zombie: 50,
+    orc_warrior: 85, orc_shaman: 75, wogol: 95, ogre: 130, imp: 60,
+    big_zombie: 240, necromancer: 135, masked_orc: 150, pumpkin_dude: 120, angel: 180,
+    ogre_boss: 120, zombie_king: 280
+  };
+
+  function med(a) {
+    if (!a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.floor((s.length - 1) * 0.5)];
+  }
+  function p90(a) {
+    if (!a.length) return null;
+    var s = a.slice().sort(function (x, y) { return x - y; });
+    return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))];
+  }
+  function mean(a) { if (!a.length) return null; var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return Math.round(s / a.length * 10) / 10; }
+  function ceil1(x) { return Math.round(x * 10) / 10; }
+
+  /* 与 Battle 一致的回合模拟；enrage 只影响 def */
+  function killRounds(hp, atk, def, en) {
+    var cur = hp, n = 0, enraged = false, guard = 200;
+    var ed = en ? Math.round(def * en.defMul) : def;
+    while (cur > 0 && n < guard) {
+      n++;
+      var d = Math.round(atk * atk / (atk + (enraged ? ed : def)));
+      if (d < 1) d = 1;
+      cur -= d;
+      if (en && !enraged && cur > 0 && cur <= hp * en.hpPct) enraged = true;
+    }
+    return n;
+  }
+
+  function loadJson(rel) {
+    var x = new XMLHttpRequest();
+    x.open('GET', new URL(rel, location.href).href, false);
+    x.send(null);
+    return JSON.parse(x.responseText);
+  }
+
+  var out = { protocol: 'D-66', src: src, tag: tag, ok: false, floors: {}, bosses: [], exitHp: {}, hpTable: {} };
+  try {
+    var data = loadJson('selfcheck/' + src);
+    var runs = (data.m1 && data.m1.runs) || data.runs || [];
+    if (runs.length && runs[0].m1) runs = runs[0].m1;
+    var MAPS = Game.Data.MAPS, MON = Game.Data.MONSTERS;
+
+    /* 每层进入时的 atk / hp / def 分布：第 f 层的入口 = 第 f-1 层的出口 */
+    function entryOf(f) {
+      var arr = [];
+      for (var i = 0; i < runs.length; i++) {
+        var fl = runs[i].floors || [];
+        if (f === 1) { arr.push({ atk: 11, def: 5, hp: 100, maxHp: 100 }); continue; }
+        for (var k = 0; k < fl.length; k++) {
+          if (fl[k].floor === f - 1) { arr.push({ atk: fl[k].atk, def: fl[k].def, hp: fl[k].hp, maxHp: fl[k].maxHp }); break; }
+        }
+      }
+      return arr;
+    }
+    function bossDef(f) {
+      for (var i = 0; i < MAPS.bosses.length; i++) if (MAPS.bosses[i].floor === f) return MAPS.bosses[i].id;
+      return null;
+    }
+    function roundStats(hp, def, en, entries) {
+      var rs = [], dmgMed = null, atkMed = med(entries.map(function (e) { return e.atk; }));
+      if (atkMed != null) {
+        var d = Math.round(atkMed * atkMed / (atkMed + def));
+        dmgMed = d < 1 ? 1 : d;
+      }
+      for (var i = 0; i < entries.length; i++) rs.push(killRounds(hp, entries[i].atk, def, en));
+      return { n: rs.length, atkMed: atkMed, dmgAtMed: dmgMed, roundsMed: med(rs), roundsP90: p90(rs), roundsMin: rs.length ? Math.min.apply(null, rs) : null, roundsMax: rs.length ? Math.max.apply(null, rs) : null };
+    }
+
+    for (var f = 1; f <= 5; f++) {
+      var entries = entryOf(f);
+      var row = { entryN: entries.length, entryAtkMed: med(entries.map(function (e) { return e.atk; })), enemies: [] };
+      var tab = MAPS.enemyTable[f - 1];
+      for (var t = 0; t < tab.length; t++) {
+        var id = tab[t].id, m = MON[id];
+        var st = roundStats(m.hp, m.def, m.enrage, entries);
+        row.enemies.push({ id: id, name: m.name, def: m.def, hp: m.hp, hpOld: OLD_HP[id], rate: tab[t].rate, hpOld: OLD_HP[id], hpNow: m.hp, roundsMed: st.roundsMed, roundsP90: st.roundsP90, dmg: st.dmgAtMed, atkMed: st.atkMed });
+        out.hpTable[id] = { old: OLD_HP[id], now: m.hp };
+      }
+      var bid = bossDef(f);
+      if (bid) {
+        var b = MON[bid];
+        var bs = roundStats(b.hp, b.def, b.enrage, entries);
+        /* 存活回合：玩家 hp / Boss 每回合伤害（不含技能；狂暴后 atk 取 round(atk×atkMul)） */
+        var sur = [];
+        for (var e2 = 0; e2 < entries.length; e2++) {
+          var ent = entries[e2];
+          var bd = Math.round(b.atk * b.atk / (b.atk + ent.def));
+          if (bd < 1) bd = 1;
+          sur.push(Math.ceil(ent.hp / bd));
+        }
+        out.bosses.push({ floor: f, id: bid, name: b.name, hp: b.hp, hpOld: OLD_HP[bid], def: b.def, atk: b.atk,
+          roundsMed: bs.roundsMed, roundsP90: bs.roundsP90, dmg: bs.dmgAtMed, atkMed: bs.atkMed,
+          surviveMed: med(sur), ratioMed: ceil1(bs.roundsMed / med(sur)) });
+        out.hpTable[bid] = { old: OLD_HP[bid], now: b.hp };
+      }
+      /* 出层血量：同一层出口的 hpPct 均值/中位 */
+      var pcts = [];
+      for (var r2 = 0; r2 < runs.length; r2++) {
+        var fs = runs[r2].floors || [];
+        for (var q = 0; q < fs.length; q++) {
+          if (fs[q].floor === f) { pcts.push(fs[q].hpPct); break; }
+        }
+      }
+      out.exitHp['F' + f] = { n: pcts.length, mean: mean(pcts), med: med(pcts) };
+      out.floors['F' + f] = row;
+    }
+    out.ok = true;
+    document.title = 'D66_PROBE_DONE';
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + e.stack)) || e);
+    document.title = 'D66_PROBE_FAIL';
+  }
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

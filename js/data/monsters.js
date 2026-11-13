@@ -1,5 +1,14 @@
 /* js/data/monsters.js — 怪物数据（PLAN.md §7.1 MONSTERS Schema）
- * 来源：自写 */
+ * 来源：自写
+ *
+ * D-66：只调 hp（atk/def/exp/gold/掉落/习性全部未动），让 F3–F5 普通怪中位击杀回合 ≤4、
+ * Boss ≤10 回合、F4 出层血量 ≥50%。依据是 50 局 M1 实测的每层入口 atk 与逐怪回合数，
+ * 详见 docs/怪物血量-D-66.md 的「旧 hp → 新 hp」全表。改动仅 9 处：
+ *   F3  ogre 130→68、wogol 95→70
+ *   F4  big_zombie 240→88、necromancer 135→100、pumpkin_dude 120→98、masked_orc 150→98
+ *   F5  angel 180→135（big_zombie/necromancer/masked_orc 的 F5 回合由同一份新 hp 决定）
+ *   Boss ogre_boss 120→100、zombie_king 280→210（dragon 260 不动，保持最难门）
+ * 未列出的怪物 hp 不变。 */
 (function () {
   'use strict';
   var Game = window.Game = window.Game || {};
@@ -45,6 +54,8 @@
     },
     dragon: {
       id: 'dragon', name: '地牢巨龙',
+      /* D-66：hp 260 不动。实测入口 atk 39 下中位 8 回合（静态复算 9，均 ≤10），
+       * 且 d42 断层比值 0.727 为三只 Boss 最高，保持最终门身份。 */
       /* D-34：最终 Boss 数值解冻（仅本只）。旧值 hp150/atk18 弱于第 5 层普通怪
        * （天使 hp180/atk28、大僵尸 hp240/atk26），打到最后一层反而更轻松。
        * 新值 hp260/atk32/def8：hp 与 atk 双项严格大于第 5 层全部普通怪；
@@ -119,7 +130,7 @@
     },
     wogol: {
       id: 'wogol', name: '兽人沃古尔',
-      hp: 95, atk: 17, def: 7,
+      hp: 70, atk: 17, def: 7, /* D-66：95→70。F3 入口 atk 23、每击 18 → 中位 5 回合，压到 4 */
       exp: 38, gold: [16, 30],
       drops: [{
         itemId: 'sword_bone', rate: 0.15,
@@ -134,7 +145,7 @@
     },
     ogre: {
       id: 'ogre', name: '食人魔',
-      hp: 130, atk: 20, def: 9,
+      hp: 68, atk: 20, def: 9, /* D-66：130→68。F3 入口 atk 23、每击 17 → 中位 8 回合，压到 4 */
       exp: 45, gold: [22, 40],
       drops: [{
         itemId: 'sword_dragon', rate: 0.2,
@@ -160,7 +171,7 @@
      * 说明：按卡面 atk 全部保留，仅上调 hp 与 F5 权重（卡面原值按 hp/10 公式只能到 F4 34.75 / F5 40.275）。 */
     big_zombie: {
       id: 'big_zombie', name: '大僵尸',
-      hp: 240, atk: 26, def: 10,
+      hp: 88, atk: 26, def: 10, /* D-66：240→88。F4 入口实测 atk 31、每击 23 → 中位 10 回合，压到 4 */
       exp: 55, gold: [26, 48],
       drops: [{ itemId: 'potion_xl', rate: 0.45 }],
       color: '#8f9b6e',
@@ -168,7 +179,7 @@
     },
     necromancer: {
       id: 'necromancer', name: '死灵法师',
-      hp: 135, atk: 24, def: 6,
+      hp: 100, atk: 24, def: 6, /* D-66：135→100。F4 入口实测 atk 31、每击 26 → 中位 5 回合，压到 4 */
       exp: 42, gold: [20, 36],
       drops: [{ itemId: 'potion_mana', rate: 0.35 }, { itemId: 'potion_xl', rate: 0.25 }],
       color: '#7b5aa6',
@@ -176,7 +187,7 @@
     },
     masked_orc: {
       id: 'masked_orc', name: '面具兽人',
-      hp: 150, atk: 23, def: 8,
+      hp: 98, atk: 23, def: 8, /* D-66：150→98。F4 入口实测 atk 31、每击 25 → 中位 6 回合，压到 4 */
       exp: 41, gold: [18, 34],
       drops: [{
         itemId: 'sword_bone', rate: 0.18,
@@ -191,7 +202,7 @@
     },
     pumpkin_dude: {
       id: 'pumpkin_dude', name: '南瓜怪',
-      hp: 120, atk: 22, def: 7,
+      hp: 98, atk: 22, def: 7, /* D-66：120→98。F4 入口实测 atk 31、每击 25 → 中位 5 回合，压到 4 */
       exp: 40, gold: [17, 32],
       drops: [{ itemId: 'potion_xl', rate: 0.3 }],
       color: '#e88a2a',
@@ -199,7 +210,7 @@
     },
     angel: {
       id: 'angel', name: '天使',
-      hp: 180, atk: 28, def: 5,
+      hp: 135, atk: 28, def: 5, /* D-66：180→135。F5 入口 atk 39、每击 35 → 中位 6 回合，压到 4 */
       exp: 45, gold: [22, 40],
       drops: [{ itemId: 'potion_mana', rate: 0.3 }, { itemId: 'potion_xl', rate: 0.25 }],
       color: '#cfe6ff',
@@ -217,7 +228,7 @@
        * 二阶段（atk×1.4≈17、战吼重击×1.5）仍在，击杀 9 回合 ≥6，不算杂兵。
        * 取舍：atk 12 低于兽人战士 14 / 萨满 16，是"击杀≥6 且比值≤0.75"下的唯一出路，
        * 由 hp/def 最高与二阶段补回身位（详见 docs/tasks/D-42 第 3、8 节）。 */
-      hp: 120, atk: 12, def: 8,
+      hp: 100, atk: 12, def: 8, /* D-66：120→100。F2 入口实测 atk 15–16、每击 10–11 → 中位 12 回合，压到 10 */
       exp: 130, gold: [60, 110],
       drops: [
         {
@@ -247,7 +258,7 @@
        * 玩家每回合 28 点 → 10 回合击杀；僵尸王每回合 13 点 → 可扛 14 回合，比值 0.71。
        * def 未动；hp 280 / atk 24 / def 12 仍高于 F4 普通怪（big_zombie 240/26/10 的
        * 综合强度 50，僵尸王 52），且击杀 10 回合 ≥6，不算杂兵。 */
-      hp: 280, atk: 24, def: 12,
+      hp: 210, atk: 24, def: 12, /* D-66：280→210。F4 入口实测 atk 31、每击 22 → 中位 12 回合，压到 10；d42 判据击杀 8 ≥6、比值 0.57 */
       exp: 200, gold: [90, 160],
       drops: [
         { itemId: 'plate_armor', rate: 0.4 },

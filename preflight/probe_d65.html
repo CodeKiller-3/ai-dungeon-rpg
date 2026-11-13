@@ -66,6 +66,8 @@
   var MODE = (/mode=(\w+)/.exec(qs) || [])[1] || 'all';
   var N = (/n=(\d+)/.exec(qs) || [])[1];
   var n = N ? Math.max(1, Math.min(100, +N)) : 50;
+  var MA = +((/ma=(\d+)/.exec(qs) || [])[1] || 6000);
+  var OLD_GROWTH = /legacy=1/.test(qs);
   function seedsOf(k) { var a = []; for (var i = 1001; i < 1001 + k; i++) a.push(i); return a; }
 
   /* ── 被动遥测（只读，不参与决策） ───────────────────────────── */
@@ -324,7 +326,7 @@
     }
     if (MODE === 'all' || MODE === 'm1') {
       MAPS.sizes = [[25, 19], [29, 21], [33, 23], [37, 25], [41, 27]];
-      var m1rows = runM1(seeds, 6000);
+      var m1rows = runM1(seeds, MA);
       out.m1 = { agg: aggM1(m1rows), runs: m1rows };
     }
     out.ok = true;

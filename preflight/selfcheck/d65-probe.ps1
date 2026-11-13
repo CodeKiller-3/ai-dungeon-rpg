@@ -5,13 +5,14 @@ param(
   [string]$Out = 'd65-probe.json',
   [string]$Mode = 'all',
   [int]$Runs = 50,
+  [int]$Ma = 6000,
   [int]$Budget = 240000,
   [string]$Edge = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $page = Join-Path $root 'preflight\probe_d65.html'
-$uri = ([System.Uri]$page).AbsoluteUri + ('?mode=' + $Mode + '&n=' + $Runs)
+$uri = ([System.Uri]$page).AbsoluteUri + ('?mode=' + $Mode + '&n=' + $Runs + '&ma=' + $Ma)
 $tag = [guid]::NewGuid().ToString('N').Substring(0, 6)
 $tmp = Join-Path $env:TEMP ('d65probe_' + $tag + '.html')
 $ud = Join-Path $env:TEMP ('d65probeud_' + $tag)
