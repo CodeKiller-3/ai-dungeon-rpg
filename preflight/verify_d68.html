@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-68 层内爽感曲线 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-68 · 逐层进层/层中/出层三时点 · 三候选实测 · 零落地守卫</h1>
+<pre id="result">RUNNING</pre>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = Game.Data, M = D.MONSTERS, MP = D.MAPS;
+  var out = { protocol: 'D-68', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+
+  /* D-67 定案快照：18 只怪 hp/atk/def。D-68 一张数值都不许动，所以逐项比对。 */
+  var SNAP = {
+    slime: [40, 6, 2], bat: [30, 9, 1], skeleton: [70, 12, 5], goblin: [45, 7, 3],
+    tiny_zombie: [50, 8, 2], orc_warrior: [85, 14, 6], orc_shaman: [75, 16, 4],
+    wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
+    big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
+    pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+  };
+  var SIGHT = { bat: 8, dragon: 8, angel: 8, orc_warrior: 7, wogol: 7, ogre: 7, ogre_boss: 7, zombie_king: 7 };
+  /* D-68 三时点基线（M1-4500，种子 1001–1050；staticMed = 该场入口 atk × 当前 hp/def 的静态复算） */
+  var CURVE = {
+    F1: { in: 5, mid: 3, out: 3, gap: 40 },
+    F2: { in: 5, mid: 4, out: 4, gap: 20 },
+    F3: { in: 4, mid: 3, out: 3, gap: 25 },
+    F4: { in: 4, mid: 3, out: 3, gap: 25 },
+    F5: { in: 3, mid: 3, out: 3, gap: 0 }
+  };
+  /* 同一批跑局的层内 atk（连续量，M1-6000 加厚样本） */
+  var ATK = { F1: [11, 18], F2: [19, 22], F3: [29, 33], F4: [33, 39], F5: [40, 40] };
+
+  try {
+    /* ── A1：本卡零数值改动（18 只怪 54 项逐项相等） ───────────── */
+    var bad = [];
+    for (var id in SNAP) {
+      if (!Object.prototype.hasOwnProperty.call(SNAP, id)) continue;
+      var s = SNAP[id];
+      if (!M[id] || M[id].hp !== s[0] || M[id].atk !== s[1] || M[id].def !== s[2]) {
+        bad.push(id + '=' + (M[id] ? (M[id].hp + '/' + M[id].atk + '/' + M[id].def) : 'null') + '≠' + s.join('/'));
+      }
+    }
+    var sightBad = [];
+    for (var sid in SIGHT) {
+      if (!M[sid] || !M[sid].habit || M[sid].habit.sight !== SIGHT[sid]) {
+        sightBad.push(sid + '=' + (M[sid] && M[sid].habit ? M[sid].habit.sight : 'null'));
+      }
+    }
+    var en = M.dragon.enrage;
+    var enOk = en && en.hpPct === 0.5 && en.atkMul === 1.5 && en.defMul === 1.3 &&
+      en.skill && en.skill.chance === 0.3 && en.skill.dmgMul === 1.4;
+    rec('A1_monstersUntouched', bad.length === 0 && sightBad.length === 0 && enOk, {
+      rule: '18 只怪的 hp/atk/def、8 条视距、巨龙 enrage 与 D-67 逐项相等（本卡不许动数值）',
+      bad: bad, sightBad: sightBad, enrageOk: enOk,
+      dragon: { hp: M.dragon.hp, atk: M.dragon.atk, def: M.dragon.def }
+    });
+
+    /* ── A2：地图 / 密度 / Boss 位置 / 装饰 / 经济零改动 ───────── */
+    var sizesOk = MP.sizes.length === 5 && MP.sizes.join('|') === '25,19|29,21|33,23|37,25|41,27';
+    var den = MP.density || {};
+    var denOk = den.enemyArea === 1 && Object.prototype.toString.call(den.patrolArea) === '[object Array]' &&
+      den.patrolArea.join(',') === '1.5,1.5,1,1,1';
+    var bp = MP.bosses || [];
+    var posOk = bp.length === 3 && bp[0].floor === 2 && bp[0].id === 'ogre_boss' &&
+      bp[1].floor === 4 && bp[1].id === 'zombie_king' && bp[2].floor === 5 && bp[2].id === 'dragon';
+    var decorKeys = Object.keys(D.DECOR || {}).sort().join(',');
+    var decorOk = decorKeys === 'barrel,chest,gold_pile,potion_stash,room_chest,torch,vine';
+    var rw = D.REWARD || {}, rwOk = rw.maxPerFloor === 2 && rw.minSpawnDist === 5 && rw.minStairDist === 3 &&
+      rw.floors.length === 5 && rw.floors[0].amount === 30 && rw.floors[1].amount === 45 &&
+      rw.floors[2].amount === 80 && rw.floors[3].amount === 80 && rw.floors[4].kind === 'potion';
+    var lootOk = D.CHEST_LOOT && D.CHEST_LOOT.chest.length === 5 && D.CHEST_LOOT.room_chest.length === 5;
+    rec('A2_mapAndEconomyUntouched', sizesOk && denOk && posOk && decorOk && rwOk && lootOk, {
+      rule: '地图尺寸/密度/Boss 位置/装饰 id 集合/固定奖励点/宝箱池 与 D-67 完全相同（没有强化台、没有新 decor）',
+      sizes: MP.sizes, density: den, bossPositions: bp.map(function (x) { return x.floor + ':' + x.id; }),
+      decorKeys: decorKeys, reward: { maxPerFloor: rw.maxPerFloor, amounts: rw.floors.map(function (x) { return x.amount || x.kind; }) }
+    });
+
+    /* ── A3：三时点表（M1-4500）与保存的跑局逐层相等 ───────────── */
+    var fin = readJson('selfcheck/d68-final-m14500.json');
+    var big = readJson('selfcheck/d68-base-m16000.json');
+    if (!fin || !big) throw new Error('D-68 缺测量 JSON（先跑 d68-report.ps1）');
+    var rows = [], badC = [];
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      var r = fin.curve.m1[f], k = CURVE[f];
+      rows.push(f + ' in=' + r.entry.staticMed + ' mid=' + r.mid.staticMed + ' out=' + r.exit.staticMed +
+        ' gap=' + r.gapPct + '% (n ' + r.entry.n + '/' + r.mid.n + '/' + r.exit.n + ')');
+      if (r.entry.staticMed !== k.in || r.mid.staticMed !== k.mid || r.exit.staticMed !== k.out ||
+          r.gapPct !== k.gap) badC.push(f);
+    });
+    rec('A3_threePointCurve', badC.length === 0, {
+      rule: 'M1-4500 三时点中位击杀回合：进层 p≤10%、层中 40–60%、出层 p≥90%（p=本层探索动作进度）；与建档值逐层相等',
+      rows: rows, bad: badC,
+      note: '出层桶的样本很薄（n=3–9，且至少 1 局用了"本层最后一战"兜底），这是"清完怪才走楼梯"造成的结构性稀疏'
+    });
+
+    /* ── A4：层内 atk 连续量（F5 加厚样本 M1-6000） ───────────── */
+    var aRows = [], badA = [];
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      var r = big.curve.m1[f], want = ATK[f];
+      aRows.push(f + ' atk ' + r.entry.atkMed + '→' + r.exit.atkMed +
+        '（出层样本 n=' + r.exit.n + '）');
+      if (r.entry.atkMed !== want[0] || r.exit.atkMed !== want[1]) badA.push(f);
+    });
+    rec('A4_inFloorAtkGrowth', badA.length === 0 && big.curve.m1.F5.entry.n >= 10, {
+      rule: '层内 atk 连续量（M1-6000，50 局全清）：F1–F4 +3~+7，F5 0（进层就用满级 atk 40）',
+      rows: aRows, bad: badA
+    });
+
+    /* ── A5：判据裁决（三个口径都如实记录） ───────────────────── */
+    var strictPass = [], minus1 = [], le3 = [];
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      var r = fin.curve.m1[f];
+      if (r.exit.staticMed <= r.entry.staticMed * 0.7 && r.exit.staticMed <= 3) strictPass.push(f);
+      if (r.entry.staticMed - r.exit.staticMed >= 1) minus1.push(f);
+      if (r.exit.staticMed <= 3) le3.push(f);
+    });
+    rec('A5_criterionVerdict', strictPass.join(',') === 'F1' && minus1.join(',') === 'F1,F2,F3,F4' &&
+      le3.join(',') === 'F1,F3,F4,F5', {
+      rule: '三个口径并列：①卡面建议「出层 ≤ 进层×0.7 且 ≤3」；②「层内少 1 回合」；③「出层 ≤3 回合」',
+      strictPass: strictPass, minus1Round: minus1, exitLe3: le3,
+      why: 'F5 进层已经是 3 回合（玩家到 F5 已 10 级、atk 40），而怪物 hp 冻结，' +
+        '把 3 压到 2 需要层内 +40% 以上 atk —— 现有成长曲线在一层内只给 +0~18%' +
+        '（F1 +64% 是唯一的例外，因为 F1 只有 4 场仗就换层）'
+    });
+
+    /* ── A6/A7/A8：三候选实测（各只保留一份，全都跑过 50 局） ──── */
+    var c1b = readJson('selfcheck/d68-c1-b1-2500.json');
+    var c1m = readJson('selfcheck/d68-c1-m14500.json');
+    var c1inv = readJson('selfcheck/d68-c1-m14500-inv.json');
+    var c2b = readJson('selfcheck/d68-c2-b1-2500.json');
+    var c2m = readJson('selfcheck/d68-c2-m14500.json');
+    var c3b = readJson('selfcheck/d68-c3-b1-2500.json');
+    var c3b075 = readJson('selfcheck/d68-c3b-b1-2500.json');
+    var c3bm = readJson('selfcheck/d68-c3b-m14500.json');
+    if (!c1b || !c1m || !c1inv || !c2b || !c2m || !c3b || !c3b075 || !c3bm) throw new Error('D-68 缺候选测量 JSON');
+    var same = true;
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      var a = c1m.curve.m1[f], b = fin.curve.m1[f];
+      if (a.entry.staticMed !== b.entry.staticMed || a.exit.staticMed !== b.exit.staticMed) same = false;
+    });
+    rec('A6_cand1_noEffect', c1b.agg.b1.wins === 23 && c1m.agg.m1.wins === 14 && same, {
+      rule: '候选1（Boss 必掉固定装备）：B1 与 M1-4500 一分不动，三时点曲线逐层一致 —— 固定件到手时已不如身上装备',
+      b1: c1b.agg.b1.wins, m1_4500: c1m.agg.m1.wins, curveSame: same,
+      evidence: '同 12 局收尾装备：sword_anime / sword_dragon_epic / sword_dragon_rare / sword_magic_rare 等，' +
+        '固定件 sword_steel(5) / plate_armor(8) / sword_dragon(8) 全部更弱',
+      note: 'F1/F3 根本没有 Boss，方案本身做不到"每层"'
+    });
+    rec('A7_cand2_breaksGate', c2b.agg.b1.wins === 33 && c2b.agg.b1.wins > 27, {
+      rule: '候选2（每层首杀给半级经验）：B1 从 46% 抬到 66%，越过 55% 硬上限；M1-4500 通关从 14 掉到 7',
+      b1: c2b.agg.b1.wins, b1Pct: Math.round(c2b.agg.b1.wins / 50 * 100) + '%',
+      m1_4500: c2m.agg.m1.wins, cap: c2m.agg.m1.capN,
+      verdict: '淘汰：破硬约束'
+    });
+    rec('A8_cand3_breaksGate', c3b.agg.b1.wins === 28 && c3b075.agg.b1.wins === 29 && c3bm.agg.m1.wins === 6, {
+      rule: '候选3（每层一个强化台）：两个落点都试了 —— 0.5 处 B1 28/50，0.75 处 29/50，均越过 55%；M1-4500 掉到 6/50',
+      b1_at_050: c3b.agg.b1.wins, b1_at_075: c3b075.agg.b1.wins,
+      m1_4500_at_075: c3bm.agg.m1.wins,
+      curve_at_075: ['F1 4→3', 'F2 5→4', 'F3 3→3', 'F4 4→3', 'F5 3→3'],
+      verdict: '淘汰：破硬约束（55%），且层内差反而收窄（F1 由 40% 降到 25%）—— ' +
+        '探索顺序≠路径顺序，强化台第一次被踩到的时点不可控，实测等价于"早给"'
+    });
+
+    /* ── B：最终态（零落地）四个数 ────────────────────────────── */
+    var b1w = readJson('selfcheck/d68-final-b1-2500.json');
+    var ex = fin.exitHpM1, exRows = [], exBad = [];
+    ['F1', 'F2', 'F3', 'F4', 'F5'].forEach(function (f) {
+      exRows.push(f + '=' + ex[f].med + '%');
+      if (!(ex[f].med >= 50)) exBad.push(f);
+    });
+    rec('B_finalStateUnchanged', b1w.agg.b1.wins === 23 && fin.agg.m1.wins === 14 &&
+      exBad.length === 0 && ex.F4.med === 77.9, {
+      rule: '本卡未落地任何方案后，四个数必须回到 D-67 末值：B1-2500 23/50（46%，≤55%）、M1-4500 14/50、出层血量 5 层 ≥50%',
+      b1: b1w.agg.b1.wins, m1_4500: fin.agg.m1.wins, exitHp: exRows
+    });
+
+    /* ── C：确定性 —— 改动前后两套同种子矩阵必须逐局逐项相同 ─────
+     * 说明：本卡最终没有落地任何奖励（见 A6–A8），所以"零随机数消耗"退化成
+     * "同一份代码 + 同一批种子，两次跑局逐局相等"。这里用 D-68 开工前
+     * （base）与回滚后（final）的两份 50 局矩阵做逐局比对。 */
+    var baseB1 = readJson('selfcheck/d68-base-b1-2500.json');
+    var finB1 = readJson('selfcheck/d68-final-b1-2500.json');
+    var baseM1 = readJson('selfcheck/d68-base-m14500.json');
+    if (!baseB1 || !finB1 || !baseM1) throw new Error('D-68 缺 base/final 对照 JSON');
+    function sigOf(r) {
+      return [r.seed, r.outcome, r.actions, r.kills, r.level, r.gold, r.steps, r.hp].join('|');
+    }
+    function diffOf(a, b) {
+      var bad = [];
+      for (var i = 0; i < a.length; i++) {
+        if (sigOf(a[i]) !== sigOf(b[i])) bad.push('seed=' + a[i].seed);
+      }
+      return bad;
+    }
+    var d1 = diffOf(baseB1.runs.b1, finB1.runs.b1);
+    var d2 = diffOf(baseM1.runs.m1, fin.runs.m1);
+    rec('C_deterministic', d1.length === 0 && d2.length === 0 && baseB1.runs.b1.length === 50, {
+      rule: '同种子 1001–1050 的两套矩阵（开工前 base / 回滚后 final）逐局比对结局/动作/击杀/等级/金币/步数/血量，必须 50/50 全等',
+      b1Mismatch: d1.length, m1Mismatch: d2.length,
+      sample: sigOf(finB1.runs.b1[0])
+    });
+
+    /* ── D：敌人期望数不变（地图生成指纹的可观测代理） ──────────── */
+    var live = Game.Systems.Map.expectedEnemyCount();
+    rec('D_mapFingerprintProxy', live === 8, {
+      rule: '每层敌人期望数仍是 D-66/D-67 的 8 只；本卡没有改 map.js 的生成逻辑，也没有新增 decor 落点',
+      floor1: live, expected: 8
+    });
+
+    document.title = 'D68_DONE';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    document.title = 'D68_FAIL';
+  }
+  window.__D68_VERIFY__ = out;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

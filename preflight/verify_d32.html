@@ -342,10 +342,10 @@
      *   D-46：86→87，新增 verify_d46；D-47：87→88，新增 verify_d47；D-48：88→89，新增 verify_d48；
      *   D-49：89→90，新增 verify_d49；D-50：90→91，新增 verify_d50；D-51：91→92，新增 verify_d51；
      *   D-52：92→93，新增 verify_d52；D-53：93→94，新增 verify_d53；D-54：94→95，新增 verify_d54；D-55：95→96，新增 verify_d55；D-57：96→97，新增 verify_d57；D-58：97→98，新增 verify_d58；D-59：98→99，新增 verify_d59；D-60：99→100，新增 verify_d60）。
-     * D-65：100→101，新增 verify_d65；D-66：101→102，新增 verify_d66；D-67：102→103，新增 verify_d67）。
+     * D-65：100→101，新增 verify_d65；D-66：101→102，新增 verify_d66；D-67：102→103，新增 verify_d67；D-68：103→104，新增 verify_d68）。
      * 这是基线变更，不是放宽断言：仍要求 count 与清单长度一致、且包含本页与新页。 */
     var a9 = !!BASE && Array.isArray(BASE.pages) && BASE.count === BASE.pages.length &&
-      BASE.pages.indexOf('verify_d32') >= 0 && BASE.pages.indexOf('verify_d66') >= 0;
+      BASE.pages.indexOf('verify_d32') >= 0 && BASE.pages.indexOf('verify_d68') >= 0;
     rec('A9_pageBaselineAligned', a9,
       'count=' + (BASE ? BASE.count : 'n/a') + '；pages.length=' +
       (BASE && BASE.pages ? BASE.pages.length : 'n/a') +

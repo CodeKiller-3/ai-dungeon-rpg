@@ -1284,9 +1284,13 @@
     rec.d44.current = {
       floor: P.floor, monsterId: e && e.monsterId, name: st.monster.name,
       maxHp: st.monster.maxHp, kind: rec.b1 ? rec.b1.battleKind : null,
+      /* D-68：给每场战斗补"发生在这一层的第几个探索动作"的时间戳（纯观测，
+       * 不参与任何决策、不消耗随机数）。floorAt/该层 rec.floors[].actions 即层内进度，
+       * 用于把一层切成"进层 / 层中 / 出层"三桶。 */
+      at: rec.actions, floorAt: rec.floorActions, atk: P.atk, def: P.def,
       start: { hp: P.hp, maxHp: P.maxHp, mp: P.mp, level: P.level, gold: P.gold, potions: hpPotionCount() },
       detail: P.floor === 5 || !!(Game.Data.MONSTERS[e.monsterId] && Game.Data.MONSTERS[e.monsterId].boss),
-      rounds: [], dealt: 0, taken: 0, potionUses: 0, nRounds: 0
+      rounds: [], dealt: 0, taken: 0, potionUses: 0, nRounds: 0, rRounds: 0, lastTurn: 0
     };
   }
   function d44Round(rec, code, pre) {
@@ -1307,6 +1311,11 @@
     var act = code === 'Digit7' ? 'potion' : (code === 'Digit4' ? 'fireball'
       : (code === 'Digit3' ? 'flee' : (code === 'Digit6' ? 'shield' : 'attack')));
     cur.nRounds++;
+    /* D-68：真回合 rRounds = 引擎 roundNo 前进的次数。nRounds 是"按键次数"，
+     * 会把怪物已死、消散动画期间的补按也算进去（M1/G2 没有 B1 的尸体保护），
+     * 实测 F1 一场 5 回合的仗会记成 45。rRounds 只数 roundNo 真的变大，
+     * 语义不变、nRounds 原样保留（verify_d45/d50 的既有断言依赖它）。 */
+    if (!cur.lastTurn || roundNow > cur.lastTurn) { cur.lastTurn = roundNow; cur.rRounds++; }
     cur.dealt += dealt;
     cur.taken += taken;
     if (code === 'Digit7') cur.potionUses++;
@@ -2031,6 +2040,12 @@
     rec.level = P.level;
     rec.hp = P.hp;
     rec.equip = equipScore();
+    /* D-68：收尾装备/强化快照（只读；用于判断"固定掉落/强化点"是否真的被穿上） */
+    rec.equipment = {
+      weapon: (P.equipment && P.equipment.weapon) || null,
+      armor: (P.equipment && P.equipment.armor) || null,
+      upg: JSON.parse(JSON.stringify(P.upg || {}))
+    };
     /* 结局层：只在"还没记过这一层"时补记（换层当帧结束则已经记过上一层） */
     if (rec.floorNow === P.floor) pushFloor(rec, true);
     if (rec.d37) {
