@@ -160,6 +160,19 @@
       '；上行梯在支路时双向可达=' + posPass + '（证明断言不是空转）');
 
     /* ══ B) A* 坐标转置 ═══════════════════════════════════════ */
+    /* D-58：习性里"守卫不追"会让部分种子完全不调用 A*，负例 B2 就失去触发通道。
+     * 本组测的是 A* 坐标映射，不是习性，故把习性钉回改前（全部 patrol/6 格），
+     * 跑完 B 组立刻恢复；断言仍是"转置写回必须抛错"。 */
+    var legacySee18 = Game.Systems.AI.canSee;
+    Game.Systems.AI.canSee = function () { return true; };
+    var cpRate18 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
+    if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
+    var habitSnap18 = {};
+    for (var hk18 in Game.Data.MONSTERS) {
+      if (!Game.Data.MONSTERS[hk18] || !Game.Data.MONSTERS[hk18].habit) continue;
+      habitSnap18[hk18] = Game.Data.MONSTERS[hk18].habit;
+      Game.Data.MONSTERS[hk18].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
+    }
     Bot.install();
     var spy0 = Bot.spy();
     var crashes0 = spy0.crashes;
@@ -231,6 +244,11 @@
     rec('B2_negativeTransposeFails', nCrashes > 0,
       '把坐标转置写回去后 5 局（种子 1501..1505）抛错 ' + nCrashes +
       ' 帧（>0 才说明 B1 能抓到这类回归）');
+    for (var hr18 in habitSnap18) {
+      if (Object.prototype.hasOwnProperty.call(habitSnap18, hr18)) Game.Data.MONSTERS[hr18].habit = habitSnap18[hr18];
+    }
+    Game.Systems.AI.canSee = legacySee18;
+    if (Game.Data.CHEST_PLACEMENT && cpRate18 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate18;
 
     /* ══ C) bot 商店行为 ═══════════════════════════════════════ */
     var keyE = 0;

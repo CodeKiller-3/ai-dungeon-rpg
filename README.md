@@ -36,7 +36,7 @@
 - 🔊 **程序化音效 + 三场景 BGM**：Web Audio 合成（零外部音频文件）· 探索低沉/战斗快节奏/通关明亮三场景旋律自动切换 · K 键一键静音 · Q 键打开音量设置面板（音量滑块实时生效，localStorage 持久化，默认 0.7）· howler.js 音频引擎
 - 🖥️ **性能与收尾**：DPR 高清适配（canvas 按 devicePixelRatio 缩放，上限 2，setTransform 统一缩放不改坐标语义）· 窄窗口 <520px 紧凑版（HUD/底部提示不截断）· 100 帧渲染审计平均 <20ms · 首次引导覆盖层（无存档时自动显示目标/去向/按键，Enter 或点按钮确认）· 游戏中随时按 H 重看引导 · 粒子/移动插值无累积泄漏
 - 🧠 **AI 演示（Q-learning 寻宝鼠）** —— 实时训练演示：成功率随地图与训练轮次波动，实测口径见下方 AI 亮点说明表
-- 🤖 **AI 亮点**：怪物 A\* 寻路追击 · 巡逻→追击→贴脸触发战斗的行为状态机 · 大模型 NPC 自由对话（含离线兜底）· Q-learning 在线学习
+- 🤖 **AI 亮点**：怪物 A\* 寻路追击 · 按种类分守卫 / 巡逻 / 追击三档习性与 3–8 格视距（隔墙看不见，守卫不追）· 贴脸触发战斗的行为状态机 · 大模型 NPC 自由对话（含离线兜底）· Q-learning 在线学习
 
 ## 操作说明
 
@@ -61,7 +61,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 207 张、验证页 97 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 207 张、验证页 98 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -97,7 +97,7 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 97 个 headless 验证页（M1 至今）
+├── preflight/            # 98 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图（D-32 起：shots_resize/ 12 张响应式截图；D-35：d35-old/new.png 8× 对照、d35-map-*.png 1280×800 实机）
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明

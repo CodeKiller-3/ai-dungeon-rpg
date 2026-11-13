@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-58：读取 selfcheck/d58-before.json 与 d58-after.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>D-58 怪物习性与宝箱位置</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-58 · 习性表 / 隔墙不可见 / 三档视距 / 宝箱邻近率 / 不追型 / 四策略前后对照 / 负例 / D-55·D-39 不回归（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D58ERR = [];
+window.addEventListener('error', function (e) { window.__D58ERR.push('error: ' + (e.message || '')); });
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  var M = Game.Core.Main, Map = Game.Systems.Map, AI = Game.Systems.AI;
+  var NQ = Game.Systems.NpcQuest, P = Game.Data.Player;
+  var MON = Game.Data.MONSTERS || {};
+  var ORAND = Math.random;
+  var NPC_ID = 'warden_f1';
+
+  function gen(seed) {
+    Math.random = mulberry32(seed);
+    try {
+      Map.generate();          /* 首次调用前 cfg 为 null：先完成初始化 */
+      Map.setFloor(1);
+      P.floor = 1;
+      var sp = Map.getSpawn();
+      P.x = sp.x; P.y = sp.y;
+      NQ.reset();
+      M._scene = 'explore';
+    } finally { Math.random = ORAND; }
+    var ns = Map.getNpcs() || [];
+    for (var i = 0; i < ns.length; i++) if (ns[i].id === NPC_ID) return ns[i];
+    return null;
+  }
+
+  /* ── A. 习性表：数据 / AI 读取 / 文档三方逐条一致 ───────────── */
+  (function () {
+    function docRows() {
+      var md = readDoc('../docs/平衡定档.md');
+      var a = md.indexOf('## 附录A 怪物习性');
+      if (a < 0) return null;
+      var b = md.indexOf('\n## ', a + 1);
+      var sec = md.slice(a, b < 0 ? md.length : b);
+      var lines = sec.split(/\r?\n/), rows = [];
+      for (var i = 0; i < lines.length; i++) {
+        if (!/^\|/.test(lines[i])) continue;
+        var c = lines[i].split('|');
+        if (c.length < 5) continue;
+        var name = c[1].replace(/[*`]/g, '').trim();
+        var kc = c[2];
+        var km = /(guard|patrol|chase)/.exec(kc);
+        var sight = Number(c[3].trim());
+        if (!km || !isFinite(sight)) continue;
+        rows.push({ name: name, kind: km[1], sight: sight });
+      }
+      return rows;
+    }
+    var rows = docRows();
+    var ids = Object.keys(MON);
+    var byName = {};
+    for (var i = 0; i < ids.length; i++) byName[MON[ids[i]].name] = ids[i];
+    var mism = [], seenIds = {};
+    if (rows) {
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r], id = byName[row.name];
+        if (!id) { mism.push({ name: row.name, why: '数据表里没有这只怪' }); continue; }
+        seenIds[id] = 1;
+        var h = MON[id].habit;
+        if (!h || h.kind !== row.kind || h.sight !== row.sight) {
+          mism.push({ name: row.name, doc: { kind: row.kind, sight: row.sight }, data: h || null });
+        }
+      }
+      for (var k = 0; k < ids.length; k++) if (!seenIds[ids[k]]) mism.push({ id: ids[k], why: '文档漏写' });
+    }
+    /* AI 读取的表必须与数据表逐项一致（防止代码里另存一份"第二真相"） */
+    var api = AI.habits ? AI.habits() : {};
+    var apiBad = [];
+    for (var a = 0; a < ids.length; a++) {
+      var hid = ids[a], hb = MON[hid].habit, ab = api[hid];
+      if (!hb || !ab || hb.kind !== ab.kind || hb.sight !== ab.sight) apiBad.push(hid);
+    }
+    var tier = { short: 0, mid: 0, long: 0, guard: 0 };
+    for (var t = 0; t < ids.length; t++) {
+      var ht = MON[ids[t]].habit;
+      if (!ht) continue;
+      if (ht.sight >= 3 && ht.sight <= 4) tier.short++;
+      else if (ht.sight >= 5 && ht.sight <= 6) tier.mid++;
+      else if (ht.sight >= 7 && ht.sight <= 8) tier.long++;
+      if (ht.kind === 'guard') tier.guard++;
+    }
+    rec('A_habit_table_matches', !!rows && mism.length === 0 && apiBad.length === 0 &&
+      rows.length === ids.length && tier.short > 0 && tier.mid > 0 && tier.long > 0 && tier.guard > 0,
+      {
+        rule: '《平衡定档》附录A 的每行（名称→习性/半径）必须与 MONSTERS[id].habit 相同，AI.habits() 也必须同源；三档视距与不追型至少各一',
+        species: ids.length, docRows: rows ? rows.length : 0, tiers: tier,
+        mismatches: mism, apiBad: apiBad
+      });
+  })();
+
+  /* ── 通用桩：把 Map.getGrid 换成自造网格（只给 AI.tick 用） ─── */
+  function makeGrid(w, h, wallFn) {
+    var g = [];
+    for (var y = 0; y < h; y++) {
+      g[y] = [];
+      for (var x = 0; x < w; x++) g[y][x] = (x === 0 || y === 0 || x === w - 1 || y === h - 1) ? 0 : 1;
+    }
+    if (wallFn) for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) if (wallFn(xx, yy)) g[yy][xx] = 0;
+    return g;
+  }
+  function withGrid(g, fn) {
+    var orig = Map.getGrid;
+    Map.getGrid = function () { return g; };
+    try { return fn(); } finally { Map.getGrid = orig; }
+  }
+  function patrolAt(x, y, id) {
+    return { x: x, y: y, monsterId: id, state: 'idle', path: [], frame: 1 };
+  }
+
+  /* ── B. 隔墙不可见（双向断言） ───────────────────────────────── */
+  (function () {
+    var g = makeGrid(7, 5, function (x, y) { return x === 2 && y === 1; });
+    var got = { blocked: null, open: null, blockedPos: null };
+    withGrid(g, function () {
+      var orig = AI.getPatrols();
+      try {
+        AI.setPatrols([patrolAt(1, 1, 'bat')]);   /* 蝙蝠：追击型、8 格 */
+        AI.tick({ x: 3, y: 1 });                  /* 中间隔一堵墙 */
+        var e1 = AI.getPatrols()[0];
+        got.blocked = e1.state;
+        got.blockedPos = e1.x + ',' + e1.y;
+        g[1][2] = 1;                              /* 拆墙：同样两格距离 */
+        AI.tick({ x: 3, y: 1 });
+        got.open = AI.getPatrols()[0].state;
+      } finally { AI.setPatrols(orig); }
+    });
+    rec('B_wall_blocks_sight', got.blocked === 'idle' && got.open === 'chase' &&
+      got.blockedPos === '1,1',
+      {
+        rule: '同一条两格直线：中间有墙 → 不得进入追击；拆墙后同帧必须进入追击（双向）',
+        blockedState: got.blocked, blockedPos: got.blockedPos, openState: got.open
+      });
+  })();
+
+  /* ── C. 三档视距真实生效：半径内被发现、半径外 1 格不被发现 ── */
+  (function () {
+    var g = makeGrid(40, 21);
+    var bad = [], rows = [];
+    withGrid(g, function () {
+      var orig = AI.getPatrols();
+      try {
+        var ids = Object.keys(MON);
+        for (var i = 0; i < ids.length; i++) {
+          var id = ids[i], h = MON[id].habit;
+          if (!h) { bad.push({ id: id, why: 'no habit' }); continue; }
+          var want = (h.kind === 'guard') ? 'alert' : 'chase';
+          AI.setPatrols([patrolAt(10, 10, id)]);
+          AI.tick({ x: 10 + h.sight, y: 10 });
+          var inside = AI.getPatrols()[0].state;
+          AI.setPatrols([patrolAt(10, 10, id)]);
+          AI.tick({ x: 10 + h.sight + 1, y: 10 });
+          var outside = AI.getPatrols()[0].state;
+          rows.push({ id: id, kind: h.kind, sight: h.sight, inside: inside, outside: outside });
+          if (inside !== want || outside !== 'idle') bad.push(rows[rows.length - 1]);
+        }
+      } finally { AI.setPatrols(orig); }
+    });
+    var tierOk = { short: 0, mid: 0, long: 0 };
+    for (var r = 0; r < rows.length; r++) {
+      if (rows[r].sight <= 4) tierOk.short++;
+      else if (rows[r].sight <= 6) tierOk.mid++;
+      else tierOk.long++;
+    }
+    rec('C_sight_radius_boundary', bad.length === 0 && rows.length === Object.keys(MON).length &&
+      tierOk.short > 0 && tierOk.mid > 0 && tierOk.long > 0,
+      {
+        rule: '每只怪：玩家在 sight 格处必须被发现（守卫=alert / 其余=chase），sight+1 格处必须 idle；三档都要有样本',
+        species: rows.length, tiers: tierOk, bad: bad.slice(0, 6)
+      });
+  })();
+
+  /* ── D+E. 50 种子 × 5 层：宝箱邻近率/合法性/连通性 + 不追型逐局断言 ── */
+  (function () {
+    var seeds = [];
+    for (var s = 1001; s <= 1050; s++) seeds.push(s);
+    var chestTotal = 0, bound = 0, free = 0, mustFight = 0, blockedChest = 0, isolatedCells = 0;
+    var overlap = [], unreachable = [], perFloor = {};
+    for (var f = 1; f <= 5; f++) perFloor[f] = { total: 0, bound: 0 };
+    var guardSeen = 0, guardBad = [], chaserSeen = 0, chaserBad = [], genFail = [];
+    var radius = (Game.Data.CHEST_PLACEMENT && Game.Data.CHEST_PLACEMENT.bindRadius) || 2;
+
+    function walkAll(grid, sx, sy) {
+      var w = grid[0].length, h = grid.length, seen = {}, q = [[sx, sy]], qi = 0;
+      var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      seen[sx + ',' + sy] = 1;
+      var cnt = (grid[sy][sx] !== 0) ? 1 : 0;   /* 出生点本身可能是墙，不能计数 */
+      while (qi < q.length) {
+        var c = q[qi++];
+        for (var d = 0; d < 4; d++) {
+          var nx = c[0] + dirs[d][0], ny = c[1] + dirs[d][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (grid[ny][nx] === 0) continue;
+          var k = nx + ',' + ny;
+          if (seen[k]) continue;
+          seen[k] = 1; cnt++; q.push([nx, ny]);
+        }
+      }
+      return { seen: seen, count: cnt };
+    }
+    function walkAvoid(grid, sx, sy, blockMonsters, enemies, patrols) {
+      var w = grid[0].length, h = grid.length, seen = {}, q = [[sx, sy]], qi = 0;
+      var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      var blocked = {};
+      if (blockMonsters) {
+        var i;
+        for (i = 0; i < enemies.length; i++) blocked[enemies[i].x + ',' + enemies[i].y] = 1;
+        for (i = 0; i < patrols.length; i++) blocked[patrols[i].x + ',' + patrols[i].y] = 1;
+      }
+      seen[sx + ',' + sy] = 1;
+      while (qi < q.length) {
+        var c = q[qi++];
+        for (var d = 0; d < 4; d++) {
+          var nx = c[0] + dirs[d][0], ny = c[1] + dirs[d][1];
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          if (grid[ny][nx] === 0) continue;
+          var k = nx + ',' + ny;
+          if (seen[k]) continue;
+          if (blocked[k]) continue;
+          seen[k] = 1; q.push([nx, ny]);
+        }
+      }
+      return seen;
+    }
+    function visibleCell(grid, e, sight) {
+      for (var r = 2; r <= sight; r++) {
+        for (var dx = -r; dx <= r; dx++) {
+          var ay = r - Math.abs(dx);
+          var dys = ay === 0 ? [0] : [-ay, ay];
+          for (var k = 0; k < dys.length; k++) {
+            var x = e.x + dx, y = e.y + dys[k];
+            if (!grid[y] || grid[y][x] === undefined || grid[y][x] === 0) continue;
+            if (AI.canSee(e.x, e.y, x, y, grid)) return { x: x, y: y };
+          }
+        }
+      }
+      return null;
+    }
+
+    for (var si = 0; si < seeds.length; si++) {
+      var seed = seeds[si], npc = null;
+      try {
+        npc = gen(seed);
+        for (var f = 1; f <= 5; f++) {
+          /* 每层用 seed×10+f 单独播种：50 个种子 × 5 层都可复现（不受上一次生成的随机流影响） */
+          Math.random = mulberry32(seed * 10 + f);
+          try { Map.setFloor(f); } finally { Math.random = ORAND; }
+          P.floor = f;
+          var grid = Map.getGrid(), sp = Map.getSpawn();
+          var ens = Map.getEnemies() || [], pats = AI.getPatrols() || [];
+          var mons = [];
+          var ei, pi;
+          for (ei = 0; ei < ens.length; ei++) mons.push(ens[ei]);
+          for (pi = 0; pi < pats.length; pi++) mons.push(pats[pi]);
+          /* 全图连通性（只看 tile，不看实体；宝箱不改变 tile） */
+          var all = walkAll(grid, sp.x, sp.y);
+          var totalFloor = 0, sx2, sy2;
+          for (sx2 = 0; sx2 < grid.length; sx2++) for (sy2 = 0; sy2 < grid[sx2].length; sy2++) if (grid[sx2][sy2] !== 0) totalFloor++;
+          /* 只允许"既有的孤立单格空腔"（openRooms 随机开洞的副产物）——但那个格子里
+           * 不能承载任何内容（宝箱/楼梯/陷阱/NPC/怪/奖励点），否则就是真断连。 */
+          if (all.count !== totalFloor) {
+            for (sx2 = 0; sx2 < grid.length; sx2++) {
+              for (sy2 = 0; sy2 < grid[sx2].length; sy2++) {
+                if (grid[sx2][sy2] === 0) continue;
+                if (all.seen[sy2 + ',' + sx2]) continue;
+                isolatedCells++;
+                /* 只允许"无害装饰"（木桶/火把/藤蔓）待在孤立单格里；
+                 * 可拾取宝箱、楼梯、NPC 一律不允许断连。 */
+                var dec = Map.getDecor(sy2, sx2);
+                var pickable = (dec === 'chest' || dec === 'room_chest' || dec === 'gold_pile' || dec === 'potion_stash');
+                var hasContent = grid[sx2][sy2] !== 1 || pickable ||
+                  (Map.npcAt && Map.npcAt(sy2, sx2));
+                if (hasContent) genFail.push({ seed: seed, floor: f, x: sy2, y: sx2, tile: grid[sx2][sy2], decor: dec, why: '断连格承载可交互内容' });
+              }
+            }
+          }
+          /* seenAvoid：把怪物格当墙（"不处理这只怪就到不了"）；
+           * seenAll：怪物格也可踩（判断箱子是否真的被彻底堵死） */
+          var seenAvoid = walkAvoid(grid, sp.x, sp.y, true, ens, pats);
+          var seenAll = walkAvoid(grid, sp.x, sp.y, false, ens, pats);
+          for (var y = 1; y < grid.length - 1; y++) {
+            for (var x = 1; x < grid[0].length - 1; x++) {
+              if (Map.getDecor(x, y) !== 'chest') continue;
+              chestTotal++;
+              perFloor[f].total++;
+              var nearest = 999;
+              for (var mi = 0; mi < mons.length; mi++) {
+                var md = Math.abs(mons[mi].x - x) + Math.abs(mons[mi].y - y);
+                if (md < nearest) nearest = md;
+              }
+              if (nearest <= radius) { bound++; perFloor[f].bound++; } else free++;
+              if (grid[y][x] !== 1) overlap.push({ seed: seed, floor: f, x: x, y: y, why: '不是地板' });
+              if (Map.getTrap(x, y)) overlap.push({ seed: seed, floor: f, x: x, y: y, why: '陷阱' });
+              if (Map.npcAt && Map.npcAt(x, y)) overlap.push({ seed: seed, floor: f, x: x, y: y, why: 'NPC' });
+              if (Map.enemyAt(x, y)) overlap.push({ seed: seed, floor: f, x: x, y: y, why: '怪物' });
+              if (x === sp.x && y === sp.y) overlap.push({ seed: seed, floor: f, x: x, y: y, why: '出生点' });
+              var k = x + ',' + y;
+              var okFree = !!seenAvoid[k], okBlock = !!seenAll[k];
+              if (!okBlock) { blockedChest++; unreachable.push({ seed: seed, floor: f, x: x, y: y, why: '含怪物也不可达' }); }
+              else if (!okFree) mustFight++;
+              else if (!okBlock) unreachable.push({ seed: seed, floor: f, x: x, y: y });
+            }
+          }
+          /* E：每只巡逻怪按其习性做一次"看得见"的近距离测试 */
+          var orig = pats.slice();
+          try {
+            for (pi = 0; pi < orig.length; pi++) {
+              var e = orig[pi], hb = AI.habitOf(e.monsterId);
+              var cell = visibleCell(grid, e, hb.sight);
+              if (!cell) continue;
+              AI.setPatrols([patrolAt(e.x, e.y, e.monsterId)]);
+              AI.tick({ x: cell.x, y: cell.y });
+              var st = AI.getPatrols()[0];
+              if (hb.kind === 'guard') {
+                guardSeen++;
+                if (st.state === 'chase' || st.x !== e.x || st.y !== e.y) {
+                  guardBad.push({ seed: seed, floor: f, id: e.monsterId, state: st.state, moved: (st.x !== e.x || st.y !== e.y) });
+                }
+              } else {
+                chaserSeen++;
+                if (st.state !== 'chase') chaserBad.push({ seed: seed, floor: f, id: e.monsterId, state: st.state });
+              }
+            }
+          } finally { AI.setPatrols(orig); }
+        }
+      } catch (err) { genFail.push({ seed: seed, why: 'exception: ' + (err && err.message) }); }
+    }
+
+    var rate = chestTotal ? Math.round(bound / chestTotal * 1000) / 1000 : 0;
+    var floorRates = {};
+    for (var pf = 1; pf <= 5; pf++) {
+      floorRates[pf] = perFloor[pf].total ? Math.round(perFloor[pf].bound / perFloor[pf].total * 1000) / 1000 : 0;
+    }
+    rec('D_chest_binding', chestTotal >= 250 && rate >= 0.5 && rate <= 0.8 && overlap.length === 0 &&
+      blockedChest === 0 && genFail.length === 0,
+      {
+        rule: '普通宝箱绑怪率（优先放在怪的另一侧、距怪曼哈顿≤' + radius + '）设计 0.65，实测须在 0.50–0.80；50 种子×5 层全连通、无重叠、无"被怪堵死"',
+        chestTotal: chestTotal, bound: bound, free: free, rate: rate,
+        mustFight: mustFight, blockedChest: blockedChest, isolatedCells: isolatedCells, perFloor: floorRates,
+        overlap: overlap.slice(0, 5), genFail: genFail.slice(0, 5), unreachable: unreachable.slice(0, 5)
+      });
+    rec('E_guard_never_chases', guardSeen > 0 && guardBad.length === 0 && chaserSeen > 0 && chaserBad.length === 0,
+      {
+        rule: '50 种子×5 层逐只巡逻怪：guard 怪在视距内只能 alert 且坐标不变；patrol/chase 怪同一测试必须 chase',
+        guardPatrolsTested: guardSeen, guardViolations: guardBad.slice(0, 5),
+        chasersTested: chaserSeen, chaserViolations: chaserBad.slice(0, 5)
+      });
+  })();
+
+  /* ── F. 四策略同种子 1001–1050：改动前后通关率与贴脸遭遇数 ─── */
+  (function () {
+    var B = readJson('selfcheck/d58-before.json');
+    var A = readJson('selfcheck/d58-after.json');
+    function sum(runs, key, field) {
+      var s = 0;
+      for (var i = 0; i < runs.length; i++) {
+        var o = runs[i][key];
+        if (o && typeof o[field] === 'number') s += o[field];
+      }
+      return s;
+    }
+    if (!B || !A || !B.runs || !A.runs) {
+      rec('F_before_after', false, { rule: '读取 d58-before.json / d58-after.json', bad: ['缺少跑局产物'] });
+      return;
+    }
+    var strat = ['b1', 'g2', 's1', 'm1'], lensOk = true, wins = {}, bad = [];
+    for (var i = 0; i < strat.length; i++) {
+      var k = strat[i];
+      if (!B.runs[k] || !A.runs[k] || B.runs[k].length !== 50 || A.runs[k].length !== 50) {
+        lensOk = false; bad.push(k + ' 不是 50 局');
+        continue;
+      }
+      wins[k] = {
+        before: B.summary[k].win, after: A.summary[k].win
+      };
+    }
+    var b1 = {
+      battles: { before: sum(B.runs.b1, 'b1enc', 'battles'), after: sum(A.runs.b1, 'b1enc', 'battles') },
+      active: { before: sum(B.runs.b1, 'b1enc', 'active'), after: sum(A.runs.b1, 'b1enc', 'active') },
+      forced: { before: sum(B.runs.b1, 'b1enc', 'forced'), after: sum(A.runs.b1, 'b1enc', 'forced') },
+      patrol: { before: sum(B.runs.b1, 'b1enc', 'patrol'), after: sum(A.runs.b1, 'b1enc', 'patrol') }
+    };
+    var s1 = {
+      battles: { before: sum(B.runs.s1, 's1enc', 'battles'), after: sum(A.runs.s1, 's1enc', 'battles') },
+      active: { before: sum(B.runs.s1, 's1enc', 'active'), after: sum(A.runs.s1, 's1enc', 'active') },
+      forced: { before: sum(B.runs.s1, 's1enc', 'forced'), after: sum(A.runs.s1, 's1enc', 'forced') },
+      byPatrol: { before: sum(B.runs.s1, 's1enc', 'byPatrol'), after: sum(A.runs.s1, 's1enc', 'byPatrol') }
+    };
+    /* 贴脸遭遇数：B1 的 patrol + S1 的 byPatrol（非主动踩怪、非挡路怪） */
+    var face = {
+      b1: b1.patrol, s1: s1.byPatrol,
+      totalBefore: b1.patrol.before + s1.byPatrol.before,
+      totalAfter: b1.patrol.after + s1.byPatrol.after
+    };
+    var perFloor = {
+      b1: { reach: { before: B.agg.b1.floorReach, after: A.agg.b1.floorReach },
+        death: { before: B.agg.b1.deathFloor, after: A.agg.b1.deathFloor } },
+      s1: { reach: { before: B.agg.s1.floorReach, after: A.agg.s1.floorReach },
+        death: { before: B.agg.s1.deathFloor, after: A.agg.s1.deathFloor } }
+    };
+    var encOk = true;
+    for (var r = 0; r < 50; r++) {
+      if (!A.runs.b1[r].b1enc) { encOk = false; bad.push('b1 run ' + r + ' 无 b1enc'); break; }
+      if (!A.runs.s1[r].s1enc) { encOk = false; bad.push('s1 run ' + r + ' 无 s1enc'); break; }
+    }
+    /* D-39 的真实判据是"怪物格当障碍：主动踩怪只允许出现在绕不过去的兜底"，
+     * 即 active + forced = battles。D-58 后有 2 局触发兜底（0→2），不是新增主动刷怪通道。 */
+    var invOk = true;
+    for (var rr = 0; rr < 50; rr++) {
+      var es = A.runs.s1[rr] && A.runs.s1[rr].s1enc;
+      if (es && es.active + es.forced !== es.battles) { invOk = false; bad.push('s1 run ' + rr + ' active+forced≠battles'); }
+    }
+    rec('F_before_after', lensOk && encOk && invOk && bad.length === 0 && b1.active.before === 0 &&
+      s1.active.before === 0 && B.summary.b1.win === 14,
+      {
+        rule: '四策略各 50 局；B1 改动前必须仍是 14/50（锚点）；S1 每局 active+forced=battles（D-39 "怪物格当障碍 + 绕不过才撞"）；贴脸遭遇数与逐层数据必须齐全',
+        wins: wins, b1Encounters: b1, s1Encounters: s1, faceToFace: face,
+        perFloor: perFloor, bad: bad
+      });
+  })();
+
+  /* ── G. 负例：全图视距 / 全员不追，都必须被现有断言抓住 ───── */
+  (function () {
+    var g = makeGrid(40, 21), radiusHit = null, allGuardNoChase = null, chaseCapable = 0;
+    var savedBat = MON.bat && MON.bat.habit ? MON.bat.habit.sight : null;
+    var savedKinds = {};
+    withGrid(g, function () {
+      var orig = AI.getPatrols();
+      try {
+        /* 负例1：把蝙蝠视距改成"全图"，C 组的 sight+1 边界必被突破 */
+        if (MON.bat && MON.bat.habit && savedBat !== null) {
+          MON.bat.habit.sight = 99;
+          AI.setPatrols([patrolAt(10, 10, 'bat')]);
+          AI.tick({ x: 10 + (savedBat + 1), y: 10 });
+          radiusHit = AI.getPatrols()[0].state;
+          MON.bat.habit.sight = savedBat;
+        }
+        /* 负例2：所有怪改成不追 → 8 格外本应 chase 的蝙蝠只会 alert，且"能追的种类"归零 */
+        var ids = Object.keys(MON);
+        for (var i = 0; i < ids.length; i++) {
+          savedKinds[ids[i]] = MON[ids[i]].habit ? MON[ids[i]].habit.kind : null;
+          if (MON[ids[i]].habit) MON[ids[i]].habit.kind = 'guard';
+        }
+        AI.setPatrols([patrolAt(10, 10, 'bat')]);
+        AI.tick({ x: 18, y: 10 });
+        allGuardNoChase = AI.getPatrols()[0].state;
+        for (var j = 0; j < ids.length; j++) {
+          if (MON[ids[j]].habit && MON[ids[j]].habit.kind !== 'guard') chaseCapable++;
+        }
+      } finally {
+        AI.setPatrols(orig);
+        for (var k in savedKinds) if (Object.prototype.hasOwnProperty.call(savedKinds, k) && MON[k] && MON[k].habit) {
+          MON[k].habit.kind = savedKinds[k];
+        }
+        if (MON.bat && MON.bat.habit && savedBat !== null) MON.bat.habit.sight = savedBat;
+      }
+    });
+    rec('G_negatives_fail', radiusHit === 'chase' && allGuardNoChase === 'alert' && chaseCapable === 0,
+      {
+        rule: '负例1：蝙蝠视距改成 99 后，原本"半径外 1 格"必须变成被发现（C 组会 FAIL）；负例2：全员不追后本应追击的怪只剩 alert 且可追种类=0（E/G 会 FAIL）',
+        radiusOutOfRangeState: radiusHit, allGuardState: allGuardNoChase, chaseCapableKinds: chaseCapable
+      });
+  })();
+
+  /* ── H. D-55 指引 / D-39 潜行判据不回归 ───────────────────── */
+  (function () {
+    var reached = 0, bad = [];
+    for (var seed = 1001; seed <= 1005; seed++) {
+      var npc = gen(seed);
+      if (!npc) { bad.push({ seed: seed, why: 'no npc' }); continue; }
+      NQ.accept(NPC_ID);
+      var steps = 0, ok = true;
+      while (steps < 800) {
+        var gd = NQ.guidance();
+        if (!gd) { ok = false; bad.push({ seed: seed, why: 'guidance null' }); break; }
+        var cheb = Math.max(Math.abs(P.x - npc.x), Math.abs(P.y - npc.y));
+        if (cheb <= 1) break;
+        if (!gd.dir) { ok = false; bad.push({ seed: seed, why: 'dir null' }); break; }
+        var nx = P.x + gd.dir.dx, ny = P.y + gd.dir.dy;
+        var t = Map.tileAt(nx, ny);
+        var total = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+        var teleporting = (t === 2 && P.floor < total) || (t === 3 && P.floor > 1);
+        if (t === 0 || teleporting) { ok = false; bad.push({ seed: seed, why: 'illegal step' }); break; }
+        P.x = nx; P.y = ny;
+        NQ.checkPosition(nx, ny);
+        steps++;
+      }
+      if (ok && steps < 800) reached++;
+    }
+    var A = readJson('selfcheck/d58-after.json');
+    var stealthOk = !!(A && A.runs && A.runs.s1 && A.runs.s1.length === 50);
+    var activeBad = [];
+    if (stealthOk) {
+      for (var i = 0; i < A.runs.s1.length; i++) {
+        var e = A.runs.s1[i].s1enc;
+        /* D-39 判据不变：怪物格仍是障碍，绕不过去才允许"撞上去"（active），
+         * 因此 active + forced 必须等于总战斗数；不要求 active 恒为 0。 */
+        if (!e || e.active + e.forced !== e.battles) activeBad.push({ i: i, e: e });
+      }
+      stealthOk = activeBad.length === 0;
+    }
+    rec('H_d55_d39_no_regression', reached === 5 && bad.length === 0 && stealthOk,
+      {
+        rule: '5 个种子只按 D-55 指引走必须到达 NPC 相邻格；D-58 之后的 S1 50 局每局 active+forced=battles（D-39 判据：怪物格当障碍，绕不过才撞）',
+        reached: reached + '/5', bad: bad.slice(0, 5),
+        s1ActiveViolations: activeBad.slice(0, 3)
+      });
+  })();
+
+  var ok = true;
+  var names = Object.keys(out.sub);
+  for (var i = 0; i < names.length; i++) ok = ok && out.sub[names[i]].ok;
+  out.ok = ok && window.__D58ERR.length === 0;
+  out.errs = window.__D58ERR;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+})();
+</script>
+</body>
+</html>

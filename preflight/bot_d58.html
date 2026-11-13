@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-58 怪物习性与宝箱位置 · 同种子复跑</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-58 · B1 / G2 / S1 / M1 同种子 1001–1050（习性/宝箱改动前后对照）</h1>
+<pre id="report">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-58', mode: 'main', env: {}, summary: {}, runs: {}, agg: {}, ok: false };
+  function seedsOf(n) { var a = []; for (var i = 1001; i < 1001 + n; i++) a.push(i); return a; }
+  function aggBase(runs) {
+    var d = { outcomes: { win: 0, dead: 0, stuck: 0 }, deathFloor: {}, floorReach: {}, killsTotal: 0,
+      rescue: { runs: 0, triggers: 0, gear: 0, potion: 0, gold: 0, spent: 0, maxTriggers: 0, maxSpent: 0 } };
+    for (var i = 0; i < runs.length; i++) {
+      var r = runs[i];
+      if (r.outcome === 'win') d.outcomes.win++;
+      else if (r.outcome === 'dead') d.outcomes.dead++;
+      else d.outcomes.stuck++;
+      if (r.outcome !== 'win') d.deathFloor[r.deathFloor || r.floor] = (d.deathFloor[r.deathFloor || r.floor] || 0) + 1;
+      d.killsTotal += r.kills || 0;
+      var reached = {}, hitF5 = (r.floor === 5);
+      var ends = r.b1 ? (r.b1.floorExit || []) : (r.floors || []);
+      for (var f = 0; f < ends.length; f++) {
+        reached[ends[f].floor] = 1;
+        if (ends[f].floor === 5) hitF5 = true;
+      }
+      if (r.b1) {
+        for (var en = 0; en < (r.b1.floorEnter || []).length; en++) {
+          reached[r.b1.floorEnter[en].floor] = 1;
+          if (r.b1.floorEnter[en].floor === 5) hitF5 = true;
+        }
+      }
+      for (var k in reached) d.floorReach[k] = (d.floorReach[k] || 0) + 1;
+      d.f5 = d.f5 || { reached: 0 };
+      if (hitF5) d.f5.reached++;
+      var ad = r.adaptive || null;
+      if (ad) {
+        d.rescue.triggers += ad.triggers || 0;
+        d.rescue.spent += ad.spent || 0;
+        if ((ad.triggers || 0) > 0) d.rescue.runs++;
+        if ((ad.triggers || 0) > d.rescue.maxTriggers) d.rescue.maxTriggers = ad.triggers;
+        if ((ad.spent || 0) > d.rescue.maxSpent) d.rescue.maxSpent = ad.spent;
+        for (var li = 0; li < (ad.log || []).length; li++) {
+          var g = ad.log[li].grant || '';
+          if (g === 'sword_rescue') d.rescue.gear++;
+          else if (g.indexOf('potion') === 0) d.rescue.potion++;
+          else if (g.indexOf('gold') === 0) d.rescue.gold++;
+        }
+      }
+    }
+    return d;
+  }
+
+  /* D-50 A 组：F5 死亡逐局拆解。
+   * 全部量都从 d44 的逐回合实测日志里取（dealt/taken/mhp/potions），不推演。
+   * 恒等式：
+   *   bossMax = dealt + bossLeft                                   （输出账）
+   *   hpPool  = start.hp + Σ 药水治疗（本场 potionUses 的实测回血量）  （生存账）
+   *   taken ≥ hpPool                                               （死亡成立）
+   *   T_need  = ceil(bossLeft / avgDealt)                           （差几回合）
+   *   addTaken= T_need × avgTaken                                   （这 T_need 回合还要挨多少）
+   *   gap     = addTaken - (0 + 0)  → 折算成还需多少治疗/多少瓶      （差药）
+   */
+  function splitF5(rec) {
+    var all = (rec.d44 && rec.d44.battles) || [];
+    var f5 = all.filter(function (b) { return b.floor === 5; });
+    var losses = f5.filter(function (b) { return b.result !== 'win'; });
+    if (!losses.length) return null;
+    var b = losses[losses.length - 1];
+    if (!b.rounds || !b.rounds.length) return null;
+    var last = b.rounds[b.rounds.length - 1];
+    var nR = b.nRounds || b.rounds.length;
+    var startHp = (b.start && b.start.hp) || 0;
+    var heal = 0;
+    for (var i = 0; i < b.rounds.length; i++) {
+      var it = b.rounds[i].item;
+      if (it === 'potion_large') heal += 80;
+      else if (it === 'potion_small') heal += 30;
+    }
+    var dealt = b.dealt, taken = b.taken;
+    var bossLeft = Math.max(0, last.mhp);
+    var avgDealt = nR ? dealt / nR : 0;
+    var avgTaken = nR ? taken / nR : 0;
+    var tNeed = avgDealt > 0 ? Math.ceil(bossLeft / avgDealt) : -1;
+    var addTaken = tNeed > 0 ? Math.round(tNeed * avgTaken) : 0;
+    return {
+      seed: rec.seed, monsterId: b.monsterId, name: b.name, boss: (b.maxHp >= 150),
+      bossMax: b.maxHp, dealt: dealt, bossLeft: bossLeft, nRounds: nR,
+      taken: taken, startHp: startHp, heal: heal, potionUses: b.potionUses,
+      hpPool: startHp + heal, avgDealt: Math.round(avgDealt * 10) / 10,
+      avgTaken: Math.round(avgTaken * 10) / 10, tNeed: tNeed, addTaken: addTaken,
+      potionsLeft: (b.end && b.end.potions) || 0,
+      startMp: (b.start && b.start.mp) || 0, endMp: (b.end && b.end.mp) || 0
+    };
+  }
+
+  function trimRun(r) {
+    var split = splitF5(r);
+    var maxFloor = r.floor || 1;
+    for (var lf = 0; lf < (r.floors || []).length; lf++) {
+      if (r.floors[lf].floor > maxFloor) maxFloor = r.floors[lf].floor;
+    }
+    var ledger = {
+      floorReached: maxFloor,
+      kills: r.kills || 0,
+      maxLevel: r.maxLevelSeen || 1,
+      turns: (r.steps || 0) + (r.battleTurns || 0),
+      potions: r.potionUses || 0,
+      rescues: (r.adaptive && r.adaptive.triggers) || 0
+    };
+    var fights = ((r.d44 && r.d44.battles) || []).filter(function (b) { return b.floor === 5; })
+      .map(function (b) {
+        return { monsterId: b.monsterId, name: b.name, maxHp: b.maxHp, result: b.result,
+          nRounds: b.nRounds, dealt: b.dealt, taken: b.taken, potionUses: b.potionUses,
+          start: b.start, end: b.end,
+          rounds: (b.rounds || []).map(function (x) { return [x.r, x.act, x.dealt, x.taken, x.item, x.hp, x.mhp]; }) };
+      });
+    return {
+      seed: r.seed, outcome: r.outcome, deathFloor: r.deathFloor || r.floor, floor: r.floor,
+      hp: r.hp, level: r.level, gold: r.gold, equip: r.equip, kills: r.kills,
+      battles: r.battles, actions: r.actions, simSec: r.simSec,
+      death: r.death || null,
+      run: r.run || null, ledger: ledger,
+      steps: r.steps, battleActs: r.battleActs, battleTurns: r.battleTurns, maxLevelSeen: r.maxLevelSeen, potionUses: r.potionUses,
+      shopVisits: r.shopVisits, shopBuys: r.shopBuys, shopSpent: r.shopSpent,
+      potions: r.potions, npc: r.npc || null, d46: r.d46 || null, adaptive: r.adaptive || null,
+      enterF5: (r.b1 && r.b1.enterF5) ? { potions: r.b1.enterF5.potions, hp: r.b1.enterF5.hp, gold: r.b1.enterF5.gold } : null,
+      f5split: split, f5fights: fights,
+      /* D-58：遭遇类型拆分（"贴脸遭遇数"= 非主动、非挡路的巡逻接触）。
+       * 只读既有遥测，不改 bot 决策。 */
+      b1enc: r.b1 ? {
+        battles: r.b1.battles, active: r.b1.active, forced: r.b1.forced,
+        patrol: r.b1.patrol, boss: r.b1.boss, byBlock: r.b1.byBlock
+      } : null,
+      s1enc: r.d39 ? {
+        battles: r.d39.battles, active: r.d39.active, forced: r.d39.forced,
+        byPatrol: r.d39.byPatrol, byBlock: r.d39.byBlock, byBoss: r.d39.byBoss,
+        fleeAttempts: r.d39.fleeAttempts, fleeSuccess: r.d39.fleeSuccess
+      } : null
+    };
+  }
+
+  try {
+    var M = Game.Core.Main;
+    M.init({ menu: true, skipMenu: true });
+    M.closeGuide();
+    var qs = location.search || '';
+    var mn = /n=(\d+)/.exec(qs), mo = /only=(b1|g2|s1|m1)/.exec(qs);
+    var adaptOn = !/adapt=0/.test(qs);
+    var form = (/form=(\w+)/.exec(qs) || [])[1] || 'd50';
+    if (Game.Systems.Adaptive.setForm) Game.Systems.Adaptive.setForm(form);
+    var n = mn ? Math.max(1, Math.min(200, +mn[1])) : 50;
+    out.env = { maxActions: 2500, seeds: seedsOf(n), adaptive: adaptOn, form: form, bootScene: M._scene };
+    function optsFor(key) {
+      var base = { maxActions: 2500, adaptive: adaptOn, d44log: true };
+      if (key === 'b1') { base.b1 = { reserve: 4 }; base.d42 = true; base.d45 = true; base.d46 = true; }
+      else if (key === 'g2') { base.d37 = { fireball: true, flee: true }; base.d42 = true; }
+      else if (key === 's1') { base.d39 = { avoid: true }; base.d42 = true; }
+      else { base.m1 = { clear: true }; base.d42 = true; }
+      return base;
+    }
+    var plan = mo ? [mo[1]] : ['b1', 'g2', 's1', 'm1'];
+    var t0 = Date.now();
+    for (var p = 0; p < plan.length; p++) {
+      var key = plan[p], res = Game.Bot.batch(out.env.seeds, optsFor(key));
+      out.runs[key] = res.runs.map(trimRun);
+      out.summary[key] = res.summary;
+      out.agg[key] = aggBase(res.runs);
+    }
+    out.wallMs = Date.now() - t0;
+    out.ok = true;
+    document.title = 'BATCH_DONE n=' + n + ' adapt=' + adaptOn + ' form=' + form +
+      ' b1_win=' + out.agg.b1.outcomes.win + ' rescue_runs=' + out.agg.b1.rescue.runs +
+      ' gear=' + out.agg.b1.rescue.gear + ' wallMs=' + out.wallMs;
+  } catch (e) {
+    out.err = String((e && (e.message + '\n' + (e.orig || e.stack))) || e);
+    document.title = 'BATCH_FAIL';
+  }
+  window.__D51__ = out;
+  document.getElementById('report').textContent = JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

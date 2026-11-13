@@ -210,6 +210,18 @@
      * 故把奖励点钉回改前（REWARD.floors 置空）再跑，跑完恢复；奖励点本身由 verify_d46 负责。 */
     var d46RwSnap23 = Game.Data.REWARD;
     Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
+    /* D-58：习性/宝箱会改变死因与路线；本组只验"同种子可复现且死因与 D-19 一致"，
+     * 把 AI 视线、习性与宝箱搬移临时钉回改前，跑完恢复（与上面 REWARD 钉回同模式）。 */
+    var seeSnap23 = Game.Systems.AI.canSee;
+    Game.Systems.AI.canSee = function () { return true; };
+    var habitSnap23 = {};
+    for (var hk23 in Game.Data.MONSTERS) {
+      if (!Game.Data.MONSTERS[hk23] || !Game.Data.MONSTERS[hk23].habit) continue;
+      habitSnap23[hk23] = Game.Data.MONSTERS[hk23].habit;
+      Game.Data.MONSTERS[hk23].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
+    }
+    var cpRate23 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
+    if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
     var res = Bot.batch(seeds, { maxActions: 2500 });
     var mine = (res && res.runs) || [];
     var refMiss = [], outMis = [], actMis = [], flrMis = [], cauMis = [], lines = [];
@@ -234,6 +246,11 @@
     var res2 = Bot.batch(seeds, { maxActions: 2500 });
     Game.Data.REWARD = d46RwSnap23;
     var mine2 = (res2 && res2.runs) || [];
+    for (var hk23b in habitSnap23) {
+      if (Object.prototype.hasOwnProperty.call(habitSnap23, hk23b)) Game.Data.MONSTERS[hk23b].habit = habitSnap23[hk23b];
+    }
+    Game.Systems.AI.canSee = seeSnap23;
+    if (Game.Data.CHEST_PLACEMENT && cpRate23 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate23;
     var diff2 = [];
     for (var n2 = 0; n2 < mine.length && n2 < mine2.length; n2++) {
       var x1 = mine[n2], x2 = mine2[n2];

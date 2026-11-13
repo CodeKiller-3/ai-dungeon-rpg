@@ -94,6 +94,15 @@
     minStairDist: 3      /* 与下行梯 / Boss 至少隔 3 步（不许贴楼梯白拿） */
   };
 
+  /* D-58：宝箱布置参数（只改"放在哪"，不改宝箱数量、金币/道具池与任何数值）。
+   *   boundRate  普通宝箱落在怪物附近的概率（设计值 65%，实际比例由 50 种子实测回报）
+   *   bindRadius "附近"的定义：与怪物的曼哈顿距离 ≤ 2 格（不含怪物本格）
+   * 密室宝箱（room_chest）不属于普通宝箱，固定留在密室里，不计入绑怪比例。 */
+  Game.Data.CHEST_PLACEMENT = {
+    boundRate: 0.65,
+    bindRadius: 2
+  };
+
   /* D-43：宝箱道具池（数据化）——takeDecor 从这里抽取，验证页可整体换回改前池做负例。
    * 改前（D-42）：chest = [potion_small, sword_bone, armor_leather]；
    *               room_chest = [potion_small, sword_bone, armor_leather, scroll_upgrade]。

@@ -5,20 +5,27 @@
   var Game = window.Game = window.Game || {};
   Game.Data = Game.Data || {};
 
+  /* D-58：每只怪的「习性 / 感知半径」写进数据（只加描述字段，hp/atk/def/掉落/经验/金币一字未动）。
+   *   kind: guard 守卫原地（不追，只贴脸开战） / patrol 巡逻（中视距，发现后追） / chase 主动追击（长视距）
+   *   sight: 感知半径（格，曼哈顿距离；隔墙不可见，见 js/systems/ai.js）
+   *   label: 图鉴/文档展示用中文名，不参与任何数值计算
+   * 三档视距：短 3–4（守卫类）/ 中 5–6（巡逻类）/ 长 7–8（追击类）。 */
   Game.Data.MONSTERS = {
     slime: {
       id: 'slime', name: '史莱姆',
       hp: 40, atk: 6, def: 2,
       exp: 10, gold: [3, 8],
       drops: [{ itemId: 'potion_small', rate: 0.3 }],
-      color: '#52c41a'
+      color: '#52c41a',
+      habit: { kind: 'guard', sight: 3, label: '守卫' }
     },
     bat: {
       id: 'bat', name: '暗影蝙蝠',
       hp: 30, atk: 9, def: 1,
       exp: 12, gold: [4, 10],
       drops: [{ itemId: 'potion_large', rate: 0.2 }],
-      color: '#9eacea'
+      color: '#9eacea',
+      habit: { kind: 'chase', sight: 8, label: '追击' }
     },
     skeleton: {
       id: 'skeleton', name: '骷髅士兵',
@@ -33,7 +40,8 @@
           { itemId: 'sword_bone_epic', w: 10 }
         ]
       }, { itemId: 'potion_xl', rate: 0.22 }],
-      color: '#e1b98f'
+      color: '#e1b98f',
+      habit: { kind: 'guard', sight: 4, label: '守卫' }
     },
     dragon: {
       id: 'dragon', name: '地牢巨龙',
@@ -58,6 +66,7 @@
         { itemId: 'potion_large', rate: 0.5 }
       ],
       color: '#ea6668',
+      habit: { kind: 'chase', sight: 8, label: '追击' },
       /* M8-2：Boss 二阶段——血量 ≤50% 狂暴，攻防提升 + 30% 概率释放烈焰吐息；
        * 全部可复算公式，不硬编码最终数值 */
       enrage: {
@@ -74,14 +83,16 @@
       hp: 45, atk: 7, def: 3,
       exp: 14, gold: [4, 10],
       drops: [{ itemId: 'potion_large', rate: 0.25 }],
-      color: '#7ac143'
+      color: '#7ac143',
+      habit: { kind: 'patrol', sight: 5, label: '巡逻' }
     },
     tiny_zombie: {
       id: 'tiny_zombie', name: '小僵尸',
       hp: 50, atk: 8, def: 2,
       exp: 16, gold: [5, 12],
       drops: [{ itemId: 'potion_large', rate: 0.2 }],
-      color: '#8fa88f'
+      color: '#8fa88f',
+      habit: { kind: 'guard', sight: 3, label: '守卫' }
     },
     orc_warrior: {
       id: 'orc_warrior', name: '兽人战士',
@@ -95,14 +106,16 @@
           { itemId: 'sword_bone_epic', w: 10 }
         ]
       }, { itemId: 'potion_xl', rate: 0.2 }],
-      color: '#c98a4b'
+      color: '#c98a4b',
+      habit: { kind: 'chase', sight: 7, label: '追击' }
     },
     orc_shaman: {
       id: 'orc_shaman', name: '兽人萨满',
       hp: 75, atk: 16, def: 4,
       exp: 32, gold: [14, 26],
       drops: [{ itemId: 'potion_xl', rate: 0.22 }],
-      color: '#9b6bd6'
+      color: '#9b6bd6',
+      habit: { kind: 'patrol', sight: 6, label: '巡逻' }
     },
     wogol: {
       id: 'wogol', name: '兽人沃古尔',
@@ -116,7 +129,8 @@
           { itemId: 'sword_bone_epic', w: 10 }
         ]
       }, { itemId: 'potion_xl', rate: 0.28 }],
-      color: '#b07a3a'
+      color: '#b07a3a',
+      habit: { kind: 'chase', sight: 7, label: '追击' }
     },
     ogre: {
       id: 'ogre', name: '食人魔',
@@ -130,7 +144,8 @@
           { itemId: 'sword_dragon_epic', w: 10 }
         ]
       }, { itemId: 'potion_xl', rate: 0.28 }],
-      color: '#a0522d'
+      color: '#a0522d',
+      habit: { kind: 'chase', sight: 7, label: '追击' }
     },
     /* P2-3：imp 由 bat 的视觉帧组转为独立怪物（F3 登场）；数值按 F3 期望介于 F2/F4 配平 */
     imp: {
@@ -138,7 +153,8 @@
       hp: 60, atk: 12, def: 4,
       exp: 24, gold: [8, 16],
       drops: [{ itemId: 'potion_xl', rate: 0.36 }],
-      color: '#ff8c42'
+      color: '#ff8c42',
+      habit: { kind: 'patrol', sight: 5, label: '巡逻' }
     },
     /* P2-3b：F4/F5 数值上调（F1~F3 不动）——目标 F4 期望 35~38、F5 44~48。
      * 说明：按卡面 atk 全部保留，仅上调 hp 与 F5 权重（卡面原值按 hp/10 公式只能到 F4 34.75 / F5 40.275）。 */
@@ -147,14 +163,16 @@
       hp: 240, atk: 26, def: 10,
       exp: 55, gold: [26, 48],
       drops: [{ itemId: 'potion_xl', rate: 0.45 }],
-      color: '#8f9b6e'
+      color: '#8f9b6e',
+      habit: { kind: 'guard', sight: 4, label: '守卫' }
     },
     necromancer: {
       id: 'necromancer', name: '死灵法师',
       hp: 135, atk: 24, def: 6,
       exp: 42, gold: [20, 36],
       drops: [{ itemId: 'potion_mana', rate: 0.35 }, { itemId: 'potion_xl', rate: 0.25 }],
-      color: '#7b5aa6'
+      color: '#7b5aa6',
+      habit: { kind: 'patrol', sight: 6, label: '巡逻' }
     },
     masked_orc: {
       id: 'masked_orc', name: '面具兽人',
@@ -168,21 +186,24 @@
           { itemId: 'sword_bone_epic', w: 10 }
         ]
       }, { itemId: 'potion_xl', rate: 0.3 }],
-      color: '#b3743f'
+      color: '#b3743f',
+      habit: { kind: 'patrol', sight: 6, label: '巡逻' }
     },
     pumpkin_dude: {
       id: 'pumpkin_dude', name: '南瓜怪',
       hp: 120, atk: 22, def: 7,
       exp: 40, gold: [17, 32],
       drops: [{ itemId: 'potion_xl', rate: 0.3 }],
-      color: '#e88a2a'
+      color: '#e88a2a',
+      habit: { kind: 'guard', sight: 4, label: '守卫' }
     },
     angel: {
       id: 'angel', name: '天使',
       hp: 180, atk: 28, def: 5,
       exp: 45, gold: [22, 40],
       drops: [{ itemId: 'potion_mana', rate: 0.3 }, { itemId: 'potion_xl', rate: 0.25 }],
-      color: '#cfe6ff'
+      color: '#cfe6ff',
+      habit: { kind: 'chase', sight: 8, label: '追击' }
     },
     /* P2-4：层 Boss 2 种（enrage 结构复用 battle.js 既有通用实现，不改战斗逻辑；
      * 掉落 id 均为 items.js 已有物品：sword_steel 三档 / chain_mail / plate_armor / potion_xl） */
@@ -210,6 +231,7 @@
         { itemId: 'chain_mail', rate: 0.3 }
       ],
       color: '#c08a3e',
+      habit: { kind: 'chase', sight: 7, label: '追击' },
       enrage: {
         hpPct: 0.5,
         atkMul: 1.4,
@@ -232,6 +254,7 @@
         { itemId: 'potion_xl', rate: 0.5 }
       ],
       color: '#6fae6f',
+      habit: { kind: 'chase', sight: 7, label: '追击' },
       enrage: {
         hpPct: 0.5,
         atkMul: 1.35,

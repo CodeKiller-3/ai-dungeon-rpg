@@ -1198,7 +1198,12 @@
         if (page === 1) {
           var mc = (b && typeof b.getMonsterCount === 'function') ? b.getMonsterCount(entry.id) : 0;
           if (mc > 0) {
-            return entry.def.name + '   HP:' + entry.def.hp + ' ATK:' + entry.def.atk + ' DEF:' + entry.def.def + '   击杀x' + mc;
+            /* D-58：图鉴补一行习性说明（守卫 / 巡逻 / 追击 + 感知半径），
+             * 只读 MONSTERS[id].habit，未击杀仍只显示 ???（不提前泄露） */
+            var hb = entry.def.habit;
+            var hx = hb ? ('   习性:' + (hb.label || hb.kind) + '(' + hb.sight + '格)') : '';
+            return entry.def.name + '   HP:' + entry.def.hp + ' ATK:' + entry.def.atk + ' DEF:' + entry.def.def +
+              '   击杀x' + mc + hx;
           }
           return entry.def.name + '   ???';
         }

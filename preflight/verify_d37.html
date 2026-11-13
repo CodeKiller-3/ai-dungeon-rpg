@@ -213,6 +213,20 @@
      * 奖励点本身的行为由 verify_d46 负责。这是补给钉回的延续，不是放宽断言。 */
     var d46RwSnap = Game.Data.REWARD;
     Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
+    /* D-58：怪物习性（分档视距 / 守卫不追）会改变 bot 的遭遇序列。
+     * 本组只验"测量台能逐局复现 D-34"，故把习性同样钉回改前（全部 patrol + 6 格），
+     * 与上面 D-34 怪物数值、D-43 掉落、D-46 奖励点的钉回是同一模式；跑完立刻恢复。
+     * 断言本身没有放宽：仍然是"现跑必须与 D-34 逐局完全相同"。 */
+    var legacySee37 = Game.Systems.AI.canSee;
+    Game.Systems.AI.canSee = function () { return true; };
+    var cpRate37 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
+    if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
+    var habitSnap37 = {};
+    for (var hk37 in Game.Data.MONSTERS) {
+      if (!Game.Data.MONSTERS[hk37] || !Game.Data.MONSTERS[hk37].habit) continue;
+      habitSnap37[hk37] = Game.Data.MONSTERS[hk37].habit;
+      Game.Data.MONSTERS[hk37].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
+    }
     M.init();
     M.closeGuide();
     Bot.install();
@@ -264,6 +278,12 @@
     /* 活体：重跑 G2 的 seed 1023（证据里最早发生逃跑的一局），逃跑日志必须逐项一致 */
     var ev1023 = G2.runs.filter(function (r) { return r.seed === 1023; })[0];
     var live1023 = live(1023, CFG.G2);
+    /* 活体段结束：恢复 D-58 的习性与宝箱摆放（pin 从 A 组一直持续到这里） */
+    for (var hr37 in habitSnap37) {
+      if (Object.prototype.hasOwnProperty.call(habitSnap37, hr37)) Game.Data.MONSTERS[hr37].habit = habitSnap37[hr37];
+    }
+    Game.Systems.AI.canSee = legacySee37;
+    if (Game.Data.CHEST_PLACEMENT && cpRate37 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate37;
     Game.Systems.Battle.expEarlyBase = curveNow;
     MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;
     MON37.zombie_king.hp = bossNow.zombie_king.hp; MON37.zombie_king.atk = bossNow.zombie_king.atk; MON37.zombie_king.def = bossNow.zombie_king.def;

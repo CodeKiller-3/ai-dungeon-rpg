@@ -509,9 +509,13 @@
         }
       }
     }
-    /* 装饰物：按层数调整数量（越深火把越多、宝箱越少） */
+    /* 装饰物：按层数调整数量（越深火把越多、宝箱越少）。
+     * D-58：宝箱仍按原顺序/原次数生成（随机流一格不差），生成后再把其中约 65%
+     * 就近搬到怪物 2 格内——搬移是纯确定性操作，不消耗 Math.random，
+     * 所以木桶/火把/藤蔓/陷阱/奖励点/NPC 的位置与 D-57 逐格一致。 */
     var f = floorIndex + 1;
     placeDecor('chest', Math.max(1, 3 - f), w, h);
+    bindChestsToMonsters(w, h);
     placeDecor('barrel', 3 + f, w, h);
     placeDecor('torch', 2 + f * 2, w, h);
     placeDecor('vine', 2 + f, w, h);
@@ -717,6 +721,166 @@
     }
   }
 
+  /* ── D-58：宝箱布置 ────────────────────────────────────────────
+   * 目标：让"开箱"和"处理那只怪"发生关系，而不是把箱子撒在没人去的角落。
+   * 硬约束（都在 chestCellOk 里逐条检查）：
+   *   · 只放地板、且在出生点连通块内 —— 永远可达，不会把箱子放进死块；
+   *   · 不压出生点 / 楼梯 / 密室与门 / 已有装饰 / 陷阱 / 怪物格；
+   *   · 奖励点（D-46）、NPC（D-47）都在本函数之后生成，且它们都显式跳过 decor，
+   *     所以不会出现"宝箱和金币堆/NPC/陷阱叠在一格"。
+   * 数量与掉率完全不变：仍是 chest 的既有金币/道具池，绑怪只改位置。 */
+  var chestPlan = {};
+  function binderMonsters() {
+    var out = [], i;
+    /* 优先绑"会追人的怪"（巡逻/追击），这样玩家靠近箱子时真的会被发现；
+     * 守卫类排在后面，作为没有追人怪时的候选。 */
+    function kindOf(id) {
+      var m = (Game.Data.MONSTERS || {})[id];
+      var h = m && m.habit;
+      return h && h.kind ? h.kind : 'patrol';
+    }
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? Game.Systems.AI.getPatrols() : [];
+    for (i = 0; i < ps.length; i++) {
+      if (kindOf(ps[i].monsterId) !== 'guard') out.push({ x: ps[i].x, y: ps[i].y });
+    }
+    for (i = 0; i < enemies.length; i++) {
+      if (kindOf(enemies[i].monsterId) !== 'guard') out.push({ x: enemies[i].x, y: enemies[i].y });
+    }
+    for (i = 0; i < ps.length; i++) {
+      if (kindOf(ps[i].monsterId) === 'guard') out.push({ x: ps[i].x, y: ps[i].y });
+    }
+    for (i = 0; i < enemies.length; i++) {
+      if (kindOf(enemies[i].monsterId) === 'guard') out.push({ x: enemies[i].x, y: enemies[i].y });
+    }
+    return out;
+  }
+
+  function chestCellOk(x, y, seen) {
+    if (!grid[y] || grid[y][x] === undefined) return false;
+    if (grid[y][x] !== 1) return false;                       /* 地板（不含楼梯） */
+    if (!seen[y][x]) return false;                            /* 出生点连通块内 */
+    if (x === spawn.x && y === spawn.y) return false;
+    if (inRoom(x, y) || inRoomDoor(x, y)) return false;       /* 密室陈设由 furnishRooms 独占 */
+    if (decor[y][x]) return false;
+    if (traps[y] && traps[y][x]) return false;
+    if (enemyAtCell(x, y)) return false;
+    return true;
+  }
+
+  /* 把怪物格当墙的连通块：用于判断"这个空地在怪的另一侧、不处理怪就过不去"。 */
+  function componentAvoidMonsters(w, h) {
+    var seen = [], x, y;
+    for (y = 0; y < h; y++) { seen[y] = []; for (x = 0; x < w; x++) seen[y][x] = false; }
+    var block = Object.create(null), i;
+    for (i = 0; i < enemies.length; i++) block[enemies[i].x + ',' + enemies[i].y] = 1;
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? Game.Systems.AI.getPatrols() : [];
+    for (i = 0; i < ps.length; i++) block[ps[i].x + ',' + ps[i].y] = 1;
+    var q = [[spawn.x, spawn.y]], qi = 0;
+    seen[spawn.y][spawn.x] = true;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var c = q[qi++];
+      for (var d = 0; d < 4; d++) {
+        var nx = c[0] + dirs[d][0], ny = c[1] + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (grid[ny][nx] === 0 || seen[ny][nx]) continue;
+        if (block[nx + ',' + ny]) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return seen;
+  }
+
+  function chestNearMonster(mons, rad, seen, seenAvoid) {
+    var cands = [], hard = [], used = Object.create(null), i;
+    for (i = 0; i < mons.length; i++) {
+      var m = mons[i];
+      for (var d = 1; d <= rad; d++) {
+        for (var dx = -d; dx <= d; dx++) {
+          var ay = d - Math.abs(dx);
+          var dys = ay === 0 ? [0] : [-ay, ay];
+          for (var k = 0; k < dys.length; k++) {
+            var x = m.x + dx, y = m.y + dys[k];
+            var key = x + ',' + y;
+            if (used[key]) continue;
+            if (!chestCellOk(x, y, seen)) continue;
+            used[key] = 1;
+            var cell = { x: x, y: y };
+            cands.push(cell);
+            /* "怪的另一侧"优先：不处理那只怪就走不到，开箱成本真的落在怪身上 */
+            if (seenAvoid && seenAvoid[y] && !seenAvoid[y][x]) hard.push(cell);
+          }
+        }
+      }
+    }
+    var pool = hard.length ? hard : cands;
+    if (!pool.length) return null;
+    /* 确定性挑选（不用 Math.random）：同一张图同一层，选到的目标格恒定 */
+    var pick = (mons.length * 31 + pool.length * 7 + floorIndex * 13) % pool.length;
+    return pool[pick];
+  }
+
+  function firstFreeSeenCell(w, h, seen) {
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        if (chestCellOk(x, y, seen)) return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+
+  /* 把已生成的普通宝箱搬到怪物附近。判定"绑怪"用坐标哈希（不消耗随机数）：
+   * hash < boundRate×100 才搬，因此比例稳定在 65% 左右，且同图可复现。
+   * 搬移目标必须在地板、出生点连通块内、不压楼梯/密室/已有装饰/陷阱/怪物。 */
+  function bindChestsToMonsters(w, h) {
+    var cp = Game.Data.CHEST_PLACEMENT || { boundRate: 0.65, bindRadius: 2 };
+    var rate = (typeof cp.boundRate === 'number') ? cp.boundRate : 0.65;
+    var rad = (typeof cp.bindRadius === 'number') ? cp.bindRadius : 2;
+    var list = [], x, y;
+    for (y = 1; y < h - 1; y++) {
+      for (x = 1; x < w - 1; x++) {
+        if (decor[y][x] === 'chest') list.push({ x: x, y: y });
+      }
+    }
+    var total = list.length, bound = 0, free = 0;
+    if (rate <= 0 || !total) {
+      chestPlan[floorIndex] = { floor: floorIndex + 1, total: total, bound: 0, free: total, radius: rad };
+      return;
+    }
+    var mons = binderMonsters();
+    var seen = spawnComponent();
+    var seenAvoid = componentAvoidMonsters(w, h);
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      var hash = Math.abs(c.x * 31 + c.y * 17 + floorIndex * 7) % 100;
+      var cell = null, boundMove = false;
+      if (mons.length && hash < Math.round(rate * 100)) {
+        cell = chestNearMonster(mons, rad, seen, seenAvoid);
+        boundMove = !!cell;
+      }
+      if (!cell && !seen[c.y][c.x]) {
+        /* 极少数宝箱会被 openRooms 的孤立单格吞掉：不搬去怪旁边，但必须搬回连通块，
+         * 否则"开不到的箱子"会变成新缺口。 */
+        cell = firstFreeSeenCell(w, h, seen);
+        boundMove = false;
+      }
+      if (cell) {
+        decor[c.y][c.x] = null;
+        decor[cell.y][cell.x] = 'chest';
+        if (boundMove) bound++;
+        else free++;
+      } else {
+        free++;
+      }
+    }
+    chestPlan[floorIndex] = {
+      floor: floorIndex + 1, total: total, bound: bound, free: free, radius: rad
+    };
+  }
+
   function placeDecor(id, count, w, h) {
     var placed = 0, tries = 0;
     while (placed < count && tries < 400) {
@@ -736,6 +900,7 @@
       decor[y][x] = id;
       placed++;
     }
+    return placed; /* 返回实际放了几格（调用方可据此计数） */
   }
 
   /* P2-5：floor 任务推进——每次 map:floorChanged 后调用（含缓存恢复分支）；
@@ -1150,6 +1315,9 @@
 
     /* S-05：取本层密室（可能为 0 间） */
     getRooms: function () { return rooms; },
+
+    /* D-58：最近一次宝箱布置的统计（只读遥测，不参与玩法） */
+    getChestPlan: function () { return chestPlan; },
 
     /* D-15：导出本局地图状态（写进存档）。结构直接复用 floorCache 的快照：
      * { floorIndex, floors: { "<层索引>": {grid,enemies,details,decor,traps,rooms,spawn,patrols} } }

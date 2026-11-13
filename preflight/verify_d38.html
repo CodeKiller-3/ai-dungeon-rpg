@@ -196,7 +196,25 @@
       chest: ['potion_small', 'sword_bone', 'armor_leather'],
       room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade']
     };
+    /* D-58：习性分档与宝箱就近摆放都会改变本局的遭遇/路线；本组只验死因分类逻辑，
+     * 活体段把两者钉回改前（习性全部 patrol/6、宝箱不搬移），跑完恢复。
+     * 这与上面经验曲线、掉落、补给钉回是同一模式，断言仍是"seed 1025 必须判为状态效果"。 */
+    var legacySee38 = Game.Systems.AI.canSee;
+    Game.Systems.AI.canSee = function () { return true; };
+    var habitSnap38 = {};
+    for (var hk38 in Game.Data.MONSTERS) {
+      if (!Game.Data.MONSTERS[hk38] || !Game.Data.MONSTERS[hk38].habit) continue;
+      habitSnap38[hk38] = Game.Data.MONSTERS[hk38].habit;
+      Game.Data.MONSTERS[hk38].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
+    }
+    var cpRate38 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
+    if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
     var liveC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    if (Game.Data.CHEST_PLACEMENT && cpRate38 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate38;
+    for (var hk38b in habitSnap38) {
+      if (Object.prototype.hasOwnProperty.call(habitSnap38, hk38b)) Game.Data.MONSTERS[hk38b].habit = habitSnap38[hk38b];
+    }
+    Game.Systems.AI.canSee = legacySee38;
     for (var r38 in snap38.drops) Game.Data.MONSTERS[r38].drops = snap38.drops[r38];
     Game.Data.CHEST_LOOT = snap38.chest;
     Game.Systems.Battle.expEarlyBase = curveNow38;

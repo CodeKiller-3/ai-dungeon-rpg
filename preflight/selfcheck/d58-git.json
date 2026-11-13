@@ -1,0 +1,7 @@
+{
+    "diffStat":  " js/data/maps.js     |   9 +++\n js/data/monsters.js |  53 +++++++++++-----\n js/systems/ai.js    | 128 ++++++++++++++++++++++++++++++---------\n js/systems/map.js   | 170 +++++++++++++++++++++++++++++++++++++++++++++++++++-\n js/systems/modal.js |   7 ++-\n 5 files changed, 323 insertions(+), 44 deletions(-)",
+    "head":  "ffed760aa39af47468aab394e9eb095ea298c023",
+    "at":  "2026-11-13T14:14:13",
+    "adaptive":  1,
+    "form":  "d50"
+}
