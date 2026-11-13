@@ -143,11 +143,20 @@
       if (!enabled()) return null;
       var o = info || {};
       var rows = [];
-      if (typeof o.from === 'number' && typeof o.to === 'number') {
-        rows.push('攻击   ' + o.from + ' → ' + o.to + '  (+' + (o.to - o.from) + ')');
+      if (o.item) {
+        /* D-71：战利品是一把具体武器——先写名字与攻击，再写面板前后值 */
+        rows.push('获得【' + o.item + '】攻击 +' + (o.itemAtk || 0));
+        if (typeof o.from === 'number' && typeof o.to === 'number') {
+          rows.push('攻击   ' + o.from + ' → ' + o.to + '  (+' + (o.to - o.from) + ')');
+        }
+        rows.push(o.equipped === false ? '已放入背包' : '已自动装备');
+      } else {
+        if (typeof o.from === 'number' && typeof o.to === 'number') {
+          rows.push('攻击   ' + o.from + ' → ' + o.to + '  (+' + (o.to - o.from) + ')');
+        }
+        if (typeof o.total === 'number') rows.push('累计攻击加成 +' + o.total);
+        rows.push('下一场战斗立刻生效');
       }
-      if (typeof o.total === 'number') rows.push('累计攻击加成 +' + o.total);
-      rows.push('下一场战斗立刻生效');
       return pushCard('elite', '精英之证', rows, COLORS.elite, 2800);
     },
 

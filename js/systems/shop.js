@@ -99,6 +99,8 @@
       var item = Game.Data.ITEMS[id];
       if (!item) return { ok: false, msg: '物品不存在' };
       if (!p.inventory[id] || p.inventory[id] <= 0) return { ok: false, msg: '没有该物品' };
+      /* D-71：精英战利品不可出售（price/sell=0，卖掉等于白丢），避免误操作 */
+      if (item.elite) return { ok: false, msg: '精英战利品不可出售' };
       /* 已装备的不可卖 */
       if (p.equipment.weapon === id || p.equipment.armor === id) return { ok: false, msg: '已装备，请先卸下' };
       Game.Systems.Inventory.remove(id, 1);

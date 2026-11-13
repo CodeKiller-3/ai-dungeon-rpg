@@ -171,8 +171,10 @@
     var decorKeys = Object.keys(D.DECOR || {}).sort().join(',');
     var decorOk = decorKeys === 'barrel,chest,gold_pile,potion_stash,room_chest,torch,vine';
     var rw = D.REWARD || {}, rwOk = rw.maxPerFloor === 2 && rw.floors.length === 5 && rw.floors[4].kind === 'potion';
+    var lootOk = D.ELITE && Array.isArray(D.ELITE.loot) && D.ELITE.loot.length === 5 &&
+      D.ELITE.loot.every(function (lid) { return !!D.ITEMS[lid] && D.ITEMS[lid].elite === true; });
     var aliveDec = D.ELITE && D.ELITE.enabled === true && D.ELITE.atFrac === 0.55 &&
-      D.ELITE.band.join(',') === '0.45,0.65' && D.ELITE.rewardAtk === 2;
+      D.ELITE.band.join(',') === '0.45,0.65' && lootOk;
     var expN = Map.expectedEnemyCount();
     rec('A2_mapUntouched', sizesOk && denOk && posOk && decorOk && rwOk && aliveDec && expN === 8, {
       rule: '尺寸/密度/Boss/装饰/固定奖励点 与 D-68 完全相同；expectedEnemyCount 仍 8（精英不进 enemies，不算普通怪）',
@@ -280,13 +282,14 @@
       mismatch: detBad
     });
 
-    /* ── A6：奖励通道（+1 攻击、随档保存、零随机） ──────────────── */
+    /* ── A6：奖励通道（D-71 起改为该层专属武器；这里的 +2 只测保底通道） ──────── */
     var P = D.Player, Inv = Game.Systems.Inventory;
+    var FALLBACK_STEP = 2;
     P.equipment = { weapon: 'sword_iron', armor: null };
     P.upg = {}; P.eliteAtk = 0;
     Inv.recalcEquip();
     var atk0 = P.atk;
-    P.eliteAtk = D.ELITE.rewardAtk; Inv.recalcEquip();
+    P.eliteAtk = FALLBACK_STEP; Inv.recalcEquip();
     var atk1 = P.atk;
     var n1; try { n1 = Game.Systems.Save.save(); } catch (e) { n1 = false; }
     var savedRaw = null;
@@ -295,12 +298,12 @@
     var loaded = false;
     try { Game.Systems.Save.load(); loaded = true; } catch (e) { loaded = false; }
     var atk2 = P.atk;
-    rec('A6_reward', atk1 - atk0 === D.ELITE.rewardAtk && atk2 === atk1 && savedRaw &&
-      savedRaw.indexOf('"eliteAtk":' + D.ELITE.rewardAtk) >= 0, {
-      rule: '精英之证 = +2 攻击：recalcEquip 叠加 eliteAtk（sword_iron 下 atk 从 X 到 X+2）；存档写入 eliteAtk；读档后 atk 一致',
+    rec('A6_rewardLoot', atk1 - atk0 === FALLBACK_STEP && atk2 === atk1 && savedRaw &&
+      savedRaw.indexOf('"eliteAtk":' + FALLBACK_STEP) >= 0, {
+      rule: '主奖励已改为"该层专属武器"（见 verify_d71）；本页只钉保底通道：eliteAtk 仍按 +2 叠加并随档保存/读回',
       atk0: atk0, atkPlusReward: atk1, atkAfterLoad: atk2, loaded: loaded,
       savedHasField: !!(savedRaw && savedRaw.indexOf('eliteAtk') >= 0),
-      note: '奖励只在 onBattleEnd(result=win && kind=elite) 里发放；不调用 Math.random、不改经验/金币/掉落/商店'
+      note: '正常跑局 eliteAtk 恒为 0；只有战利品表缺失时才走这条 +2 兜底'
     });
 
     /* ── A7：新局不继承精英之证（清零顺序回归） ─────────────────────
@@ -311,14 +314,14 @@
     var restartOk = false, atkDirty = null, atkFresh = null, eliteFresh = null, resetErr = null;
     try {
       P.equipment = { weapon: 'knife', armor: null }; P.upg = {};
-      P.eliteAtk = D.ELITE.rewardAtk; Inv.recalcEquip();
+      P.eliteAtk = FALLBACK_STEP; Inv.recalcEquip();
       atkDirty = P.atk;
       Math.random = mulberry32(7001);
       Game.Core.Main.restart();
       atkFresh = D.Player.atk; eliteFresh = D.Player.eliteAtk;
       restartOk = true;
     } catch (e) { resetErr = String((e && e.message) || e); }
-    rec('A7_restartResetsEliteGift', restartOk && eliteFresh === 0 && atkFresh === atkDirty - D.ELITE.rewardAtk, {
+    rec('A7_restartResetsEliteGift', restartOk && eliteFresh === 0 && atkFresh === atkDirty - FALLBACK_STEP, {
       rule: '带 +2 精英之证的面板 restart 后必须归零：eliteAtk=0 且 atk 回到起手匕首（10+1=11），即 giveStartingGear 重算时 eliteAtk 已经是 0（清零顺序正确）',
       atkBeforeRestart: atkDirty, atkAfterRestart: atkFresh, eliteAtkAfterRestart: eliteFresh,
       err: resetErr

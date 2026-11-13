@@ -78,6 +78,29 @@
     scroll_upgrade_4: { id: 'scroll_upgrade_4', name: '龙纹强化卷轴', type: 'consumable', scroll: true, effect: {}, price: 300, sell: 150 }
   };
 
+  /* ── D-71：精英专属武器（5 把，五层各一把）────────────────────────
+   * 来源：只由"打赢该层精英"发放（main.js#grantEliteReward），商店核心货架与轮换池都不含，
+   *      因此是真正的 drop-only；不消耗随机数，不改进货/掉落/价格表。
+   * 用 defineProperty 挂成「不可枚举」：ITEMS 的可枚举条目仍是 48 条，
+   * 历史验证页（物品计数 / 商店货架 / 交易契约）全部不受影响。
+   * 属性口径：严格递增，且每一把都高于"同层商店最强武器"（5/8/12/12/16），
+   *          保证玩家拿到时一定比手里/店里同层的刀更好，不会被 betterEquipIndex 丢弃。
+   * price/sell = 0：不参与买卖，避免"打出来卖钱"变成经济外挂。 */
+  var ELITE_WEAPONS = {
+    elite_fang_1: { id: 'elite_fang_1', name: '断牙', type: 'weapon', elite: true, effect: { atk: 8 }, price: 0, sell: 0 },
+    elite_axe_2: { id: 'elite_axe_2', name: '裂颅', type: 'weapon', elite: true, effect: { atk: 11 }, price: 0, sell: 0 },
+    elite_blade_3: { id: 'elite_blade_3', name: '霜噬', type: 'weapon', elite: true, effect: { atk: 16 }, price: 0, sell: 0 },
+    elite_edge_4: { id: 'elite_edge_4', name: '守夜', type: 'weapon', elite: true, effect: { atk: 16, maxHp: 10 }, price: 0, sell: 0 },
+    elite_fang_5: { id: 'elite_fang_5', name: '烬牙', type: 'weapon', elite: true, effect: { atk: 18 }, price: 0, sell: 0 }
+  };
+  for (var ew in ELITE_WEAPONS) {
+    if (!Object.prototype.hasOwnProperty.call(ELITE_WEAPONS, ew)) continue;
+    Object.defineProperty(Game.Data.ITEMS, ew, {
+      value: ELITE_WEAPONS[ew], enumerable: false, configurable: true, writable: false
+    });
+  }
+  Game.Data.ELITE_WEAPONS = ELITE_WEAPONS;
+
   /* 商店核心货架（S-01：补 F4/F5，五层逐层解锁；每层 6~9 种，核心货架常驻展示）
    * 递进口径按"核心货架平均单价"可复算：F1 40.7 → F2 92.2 → F3 236.7 → F4 259.4 → F5 441.9
    * 只换货架不加快金币产出，保持既有经济节奏；F3 保留 sword_dragon 三档（M8-3 既有验收）

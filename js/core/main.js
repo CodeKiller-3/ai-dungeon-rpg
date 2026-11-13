@@ -494,27 +494,45 @@
     }
   }
 
-  /* D-69：精英之证——打赢层内精英的确定性强化。
-   * 只加攻击（回合数唯一可感知的量），逐次 +1、上限 +10（本局最多 5 只精英，正常到不了上限）。
-   * 纯确定性：不掷骰、不进掉落池、不改经验/金币/商店价格；
-   * 走 Inventory.recalcEquip 重算，保证面板与下一场战斗立刻生效。 */
+  /* D-71：精英战利品——打赢层内精英，必掉该层专属武器（替代 +2 攻击）。
+   * 纯确定性：不掷骰、不进掉落池、不改经验/金币/商店价格；掉落即入包，比当前武器强就自动装备。
+   * 兜底：战利品表缺失时退回 D-69 的 +2 攻击（eliteAtk），保证极端情况下不空手。 */
   function grantEliteReward() {
-    var step = (Game.Data.ELITE && typeof Game.Data.ELITE.rewardAtk === 'number')
-      ? Game.Data.ELITE.rewardAtk : 1;
+    var floor0 = (Game.Systems.Map && typeof Game.Systems.Map.getFloor === 'function')
+      ? Game.Systems.Map.getFloor() : (player.floor || 1);
+    var loot0 = (Game.Data.ELITE && Game.Data.ELITE.loot) || [];
+    var lootId = loot0.length ? loot0[Math.max(0, Math.min(loot0.length - 1, floor0 - 1))] : null;
+    var item = lootId ? Game.Data.ITEMS[lootId] : null;
+    var Inv = Game.Systems.Inventory;
     var before = player.atk;
-    player.eliteAtk = Math.min(10, (player.eliteAtk || 0) + step);
-    if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
-      Game.Systems.Inventory.recalcEquip();
+
+    if (!item) {
+      /* 兜底通道（D-69 原行为）：旧表/极端情况下仍给 +2 攻击 */
+      player.eliteAtk = Math.min(10, (player.eliteAtk || 0) + 2);
+      if (Inv && typeof Inv.recalcEquip === 'function') Inv.recalcEquip();
+      Game.Core.EventBus.emit('ui:notice', { msg: '精英之证：攻击 +' + (player.atk - before) });
+      return;
     }
+
+    if (Inv && typeof Inv.add === 'function') Inv.add(lootId, 1);
+    var curId = player.equipment.weapon;
+    var curAtk = (curId && Game.Data.ITEMS[curId] && Game.Data.ITEMS[curId].effect)
+      ? (Game.Data.ITEMS[curId].effect.atk || 0) : 0;
+    var atk = item.effect.atk || 0;
+    var equipped = atk > curAtk;
+    if (equipped && Inv && typeof Inv.equip === 'function') Inv.equip(lootId);
+    else if (Inv && typeof Inv.recalcEquip === 'function') Inv.recalcEquip();
+
     Game.Core.EventBus.emit('ui:notice', {
-      msg: '精英之证：攻击 +' + (player.atk - before) + '（累计 +' + player.eliteAtk + '）'
+      msg: '精英战利品【' + item.name + '】攻击 ' + atk +
+        (equipped ? '（面板 ' + before + ' → ' + player.atk + '，已装备）' : '（已放入背包）')
     });
-    /* D-70：打赢精英当场给出"拿到了什么、带来什么变化"的卡片（攻击 34 → 36 / 累计 +2）。
-     * 只读上面已经重算完的面板值；Fx=off 时 Juice 自己跳过，提示条行为与 D-69 一致。 */
+    /* D-70 卡片通道：写明"拿到了哪把刀 + 面板前后值"；off 档 Juice 自己跳过 */
     if (Game.Systems && Game.Systems.Juice && typeof Game.Systems.Juice.eliteReward === 'function') {
       Game.Systems.Juice.eliteReward({
         from: before, to: player.atk,
-        gain: player.atk - before, total: player.eliteAtk
+        gain: player.atk - before,
+        item: item.name, itemAtk: atk, equipped: equipped
       });
     }
     Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
@@ -601,6 +619,8 @@
     _guideVisible: false,  /* M9-5：首次引导覆盖层是否显示 */
     _guidePending: false,  /* D-48：首屏菜单期间挂起，进场景后再显示 */
     HELP: HELP,            /* D-48：玩法说明正文（验证页逐条对照源码） */
+    /* D-71：验证用钩子——直接发放当前层精英战利品，不经过战斗/事件总线；正常游戏不会调用 */
+    _grantEliteReward: grantEliteReward,
 
     init: function (opts) {
       var canvas = document.getElementById('game');

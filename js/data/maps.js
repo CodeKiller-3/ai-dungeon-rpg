@@ -90,14 +90,17 @@
    *   atFrac / band：主路（出生点→下行梯）进度 55%、允许 45%–65%；
    *                  placeElite 在该窗口内优先取"割点"（去掉它出生点就到不了下行梯），
    *                  保证绕不开；窗口内没有割点才退回"绕行代价最大"的合法格并记录 cut=false。
-   *   rewardAtk：打赢后确定性 +1 攻击（main.js grantEliteReward），不消耗随机数。
+   *   loot：打赢后必掉的该层专属武器（D-71，items.js 里的不可枚举条目）；
+   *         纯确定性，不消耗随机数、不进商店、不改经验/金币/普通掉落。
    *   sprite：复用现有贴图（MONSTER_ANIM 的 key），不新增美术素材。
    *   进精英层不改 grid / 连通性 / 普通怪数量，地图指纹与历史基线可逐格对照。 */
   Game.Data.ELITE = {
     enabled: true,
     atFrac: 0.55,
     band: [0.45, 0.65],
-    rewardAtk: 2,
+    /* D-71：精英战利品按楼层固定（1→5），替代 D-69 的"精英之证 +2 攻击"。
+     * 五把武器属性严格递增，且都高于同层商店最强武器，拿到即用。 */
+    loot: ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'],
     floors: [
       { floor: 1, id: 'elite_goblin', sprite: 'goblin' },
       { floor: 2, id: 'elite_orc', sprite: 'orc_warrior' },
