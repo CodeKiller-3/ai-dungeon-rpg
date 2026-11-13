@@ -1347,7 +1347,7 @@
 
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 26px monospace';
-      ctx.fillText('地牢回响', cx, Math.max(78, H * 0.13));
+      ctx.fillText('地牢：我独自升级', cx, Math.max(78, H * 0.13));
 
       /* D-14：补上"目标是什么"与"该往哪走"——原引导只讲按键，玩家不知道该干什么 */
       ctx.fillStyle = '#ffb86b';

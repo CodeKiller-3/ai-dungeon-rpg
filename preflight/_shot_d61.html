@@ -56,7 +56,7 @@
 (function () {
   'use strict';
   var q = String(location.search || '');
-  var view = (q.match(/view=(menu-save|guide|explore|battle|death|ending)/) || [])[1] || 'explore';
+  var view = (q.match(/view=(menu-save|menu-nosave|guide|explore|battle|death|ending|about)/) || [])[1] || 'explore';
   var M = Game.Core.Main;
   var P = Game.Data.Player;
 
@@ -123,6 +123,26 @@
       setTimeout(function () {
         var k = Game.Core.Input.getState();
         k['ArrowDown'] = true;
+      }, 400);
+      return;
+    }
+
+    if (view === 'about') {
+      /* D-62 核对用：从首屏按 4 次 ↓ 到「关于」再 Enter，拍关于页首行。
+       * headless 虚拟时间不跑 rAF，定时器里连发按键只会被最后一帧看到一次，
+       * 所以这里直接调用真实的 _updateMenu() 逐次推进选择。
+       * 只用于验证，不产出 d61 对外图。 */
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: true });
+      M.start();
+      setTimeout(function () {
+        var k = Game.Core.Input.getState();
+        for (var i = 0; i < 4; i++) {
+          k['ArrowDown'] = true;
+          M._updateMenu();
+        }
+        k['Enter'] = true;
+        M._updateMenu();
       }, 400);
       return;
     }

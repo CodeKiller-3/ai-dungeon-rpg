@@ -1601,7 +1601,7 @@
 
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 26px monospace';
-      ctx.fillText('地牢回响', cx, Math.max(78, H * 0.13));
+      ctx.fillText('地牢：我独自升级', cx, Math.max(78, H * 0.13));
 
       /* D-14：补上"目标是什么"与"该往哪走"——原引导只讲按键，玩家不知道该干什么 */
       ctx.fillStyle = '#ffb86b';
@@ -1713,7 +1713,7 @@
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 30px monospace';
-      ctx.fillText('地牢回响', cx, Math.max(88, H * 0.17));
+      ctx.fillText('地牢：我独自升级', cx, Math.max(88, H * 0.17));
       ctx.fillStyle = '#9bbbf4';
       ctx.font = '14px monospace';
       ctx.fillText('往地牢更深处走 · 第 5 层击败地牢巨龙', cx, Math.max(114, H * 0.17) + 28);
@@ -2004,7 +2004,7 @@
       ctx.font = 'bold 22px monospace';
       ctx.fillText('关于', cx, 60);
       var lines = [
-        '地牢回响 · 像素地牢 Roguelike',
+        '地牢：我独自升级 · 像素地牢 Roguelike',
         '零构建、零外部依赖：双击 index.html 即可游玩',
         '目标：穿过 5 层地牢，在第 5 层击败地牢巨龙',
         '操作：方向键 / WASD 移动；B 背包 · E 商店 · M 任务',

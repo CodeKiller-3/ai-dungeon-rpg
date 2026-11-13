@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- D-60：读取上一轮 regression-result.json 与 d22-selftest.json，属元页面 -->
 <meta name="preflight-meta" content="1">
-<title>D-60 更名为《地牢回响》</title>
+<title>D-62 更名扫描（当前名 + 历史名清单）</title>
 <style>
   body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
   h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
@@ -13,7 +13,8 @@
 </style>
 </head>
 <body>
-<h1>D-60 · 全仓旧名扫描 / index 标题与菜单渲染 / 存档键与旧档 / 负例 / 回归（A–E）</h1>
+<h1>D-62 · 全仓更名扫描（当前名 + 两个历史名）/ index 标题与菜单渲染 / 存档键与旧档 / 负例 / 回归（A–E）</h1>
+<p style="color:#8a8f99;margin:0 0 8px">本页 D-60 建页，D-62 原地扩展；文件名保留 verify_d60，避免改页数基线。</p>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
 <script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
@@ -87,33 +88,40 @@
     try { return JSON.parse(t.replace(/^\uFEFF/, '')); } catch (e) { return null; }
   }
 
-  /* 旧名不在源码里写死，避免扫描器扫到自己：
+  /* 当前名与两个历史名都不在源码里写死历史名，避免扫描器扫到自己：
    * 运行时才拼出带空格 / 不带空格两种历史写法。 */
+  var CUR = '地牢：我独自升级';
   var OLD_SP = 'AI 勇' + '者闯地牢';
   var OLD_NS = 'AI勇' + '者闯地牢';
-  var NEW = '地牢回响';
-  var DECL = '> 本卡成卡时项目名为《' + OLD_SP + '》，D-60 起更名为《' + NEW + '》。';
+  var MID = '地牢' + '回响';
+  var HISTORY = [OLD_SP, OLD_NS, MID];
+  var DECL = '> 本卡成卡时项目名为《' + OLD_SP + '》，D-60 起更名为《' + MID + '》，D-62 起更名为《' + CUR + '》。';
 
   /* ── A：全仓扫描 ─────────────────────────────────────────────
+   * 扫的是「历史名清单」（两个历史名），当前名可以出现在任何位置。
    * 允许区只有两类：
    *   ① docs/tasks/ 下、首行正好是 DECL 的历史任务卡（正文按约定不改）；
-   *   ② CHANGELOG.md 中排在 D-60 条目之后的历史条目。
+   *   ② CHANGELOG.md 中排在 D-62 条目之后的历史条目。
    * 其余任何命中都进 violations。 */
   function scanText(rel, text) {
     var lines = String(text || '').split(/\r?\n/);
     var isTask = rel.indexOf('docs/tasks/') === 0 && lines[0] === DECL;
-    var d60Line = -1;
+    var d62Line = -1;
     if (rel === 'CHANGELOG.md') {
       for (var k = 0; k < lines.length; k++) {
-        if (lines[k].indexOf('更名（D-60）') >= 0) { d60Line = k; break; }
+        if (lines[k].indexOf('更名（D-62）') >= 0) { d62Line = k; break; }
       }
     }
     var hits = [], allowed = [], bad = [];
     for (var i = 0; i < lines.length; i++) {
-      if (lines[i].indexOf(OLD_SP) < 0 && lines[i].indexOf(OLD_NS) < 0) continue;
-      var h = { file: rel, line: i + 1, text: lines[i].replace(/^\s+|\s+$/g, '').slice(0, 120) };
+      var matched = [];
+      for (var hi = 0; hi < HISTORY.length; hi++) {
+        if (lines[i].indexOf(HISTORY[hi]) >= 0) matched.push(HISTORY[hi]);
+      }
+      if (!matched.length) continue;
+      var h = { file: rel, line: i + 1, names: matched, text: lines[i].replace(/^\s+|\s+$/g, '').slice(0, 120) };
       if (isTask) { h.why = 'task-card-declaration'; allowed.push(h); }
-      else if (rel === 'CHANGELOG.md' && d60Line >= 0 && i > d60Line) { h.why = 'changelog-history'; allowed.push(h); }
+      else if (rel === 'CHANGELOG.md' && d62Line >= 0 && i > d62Line) { h.why = 'changelog-history'; allowed.push(h); }
       else { h.why = 'violation'; bad.push(h); }
       hits.push(h);
     }
@@ -130,16 +138,16 @@
     done++;
   }
 
-  /* 全仓语料：preflight/selfcheck/d60-corpus.ps1 在提交前把每个文本文件
-   * 以「@@D60FILE@@ 路径」分段写成一份 3.6MB 语料。一次同步读取即可扫完，
+  /* 全仓语料：preflight/selfcheck/d62-corpus.ps1 在提交前把每个文本文件
+   * 以「@@D62FILE@@ 路径」分段写成一份约 3.6MB 语料。一次同步读取即可扫完，
    * 避免 300+ 次 file:// XHR 被 3500ms 虚拟预算截断。 */
   var scanT0 = Date.now();
-  var corpus = readDoc('selfcheck/d60-corpus.txt');
+  var corpus = readDoc('selfcheck/d62-corpus.txt');
   var corpusFiles = 0;
   if (corpus === null) {
-    missing.push('preflight/selfcheck/d60-corpus.txt');
+    missing.push('preflight/selfcheck/d62-corpus.txt');
   } else {
-    var blocks = corpus.split(/^@@D60FILE@@ /m);
+    var blocks = corpus.split(/^@@D62FILE@@ /m);
     for (var bi = 1; bi < blocks.length; bi++) {
       var nl = blocks[bi].indexOf('\n');
       if (nl < 0) continue;
@@ -177,12 +185,12 @@
       scannedFiles: corpusFiles + LIVE.length,
       corpusBytes: corpus ? corpus.length : 0,
       scanMs: scanMs,
-      manifest: 'preflight/selfcheck/d60-corpus.ps1 生成 d60-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件',
+      manifest: 'preflight/selfcheck/d62-corpus.ps1 生成 d62-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件',
       hits: hits.slice(0, 12),
       allowed: allowed.slice(0, 8),
       violations: bad.slice(0, 20),
       missing: missing.slice(0, 10),
-      rule: '旧名只允许出现在历史任务卡首行时点声明（正文随卡保留）与 CHANGELOG 的 D-60 之前条目；其余位置一律 FAIL'
+      rule: '当前名《地牢：我独自升级》可出现在任何位置；两个历史名只允许出现在首行完全匹配时点声明的历史任务卡（正文随卡保留）与 CHANGELOG 的 D-62 之前条目；其余位置一律 FAIL'
     });
 
     /* ── B：index 标题 + 菜单/引导/关于的实际绘制文本 ─────────── */
@@ -209,14 +217,22 @@
     } finally { R._ctx = oldCtx; }
     var oldHits = [];
     for (var ti = 0; ti < texts.length; ti++) {
-      if (texts[ti].indexOf(OLD_SP) >= 0 || texts[ti].indexOf(OLD_NS) >= 0) oldHits.push(texts[ti]);
+      for (var hj = 0; hj < HISTORY.length; hj++) {
+        if (texts[ti].indexOf(HISTORY[hj]) >= 0) { oldHits.push(texts[ti]); break; }
+      }
     }
-    var menuTitle = texts.filter(function (s) { return s === NEW; });
-    var aboutLine = texts.filter(function (s) { return s.indexOf(NEW + ' · 像素地牢 Roguelike') >= 0; });
-    rec('B_title_and_menu', title === NEW && oldHits.length === 0 && menuTitle.length >= 2 && aboutLine.length === 1, {
+    var menuTitle = texts.filter(function (s) { return s === CUR; });
+    var aboutLine = texts.filter(function (s) { return s.indexOf(CUR + ' · 像素地牢 Roguelike') >= 0; });
+    var subtitleOk = texts.some(function (s) { return s.indexOf('往地牢更深处走') >= 0; }) &&
+      texts.some(function (s) { return s.indexOf('第 5 层击败地牢巨龙') >= 0; });
+    var colonOk = CUR.indexOf('：') > 0 && CUR.indexOf(':') < 0;
+    rec('B_title_and_menu', title === CUR && colonOk && subtitleOk && oldHits.length === 0 &&
+      menuTitle.length >= 2 && aboutLine.length === 1, {
       indexTitle: title,
       canvasTitleCount: menuTitle.length,
       aboutLine: aboutLine[0] || '',
+      subtitleKept: subtitleOk,
+      fullWidthColon: colonOk,
       oldNameRendered: oldHits,
       errors: window.__D60ERR.slice(0, 5),
       sample: texts.slice(0, 6)
@@ -229,10 +245,14 @@
     var settingsKey = sm ? sm[1] : '';
     Map.generate();
     Map.setFloor(1);
+    var spawn = Map.getSpawn();
     var legacy = {
       saveVersion: 2,
       savedAt: '2026-11-13T12:00:00',
       floor: 1,
+      /* D-53/D-59：落点与 run 统计都带上的旧档（不是更早的缺字段档） */
+      pos: { floor: 1, x: spawn.x, y: spawn.y },
+      run: { known: true, floorReached: 2, kills: 3, maxLevel: 2, turns: 44, potions: 1 },
       player: {
         hp: 77, maxHp: 100, mp: 20, maxMp: 50, atk: 11, def: 5,
         gold: 42, exp: 12, level: 2,
@@ -242,39 +262,53 @@
       },
       bestiary: {}, map: null
     };
-    var loadOk = false, loadErr = '', landed = null;
+    var loadOk = false, loadErr = '', landed = null, runOk = false;
     try {
       localStorage.setItem(S.KEY, JSON.stringify(legacy));
       var got = S.load();
       loadOk = !!got && P.hp === 77 && P.gold === 42 && P.level === 2;
       landed = S.lastLanding || null;
+      var rs = Game.Core.Main.getRunStats(false);
+      runOk = rs.known === true && rs.turns === 44 && rs.kills === 3 && rs.floorReached === 2;
     } catch (e) { loadErr = String(e && e.message || e); }
+    var landedOk = !!landed && typeof landed.x === 'number' && typeof landed.y === 'number' &&
+      P.floor === 1 && P.x === landed.x && P.y === landed.y && landed.x === spawn.x && landed.y === spawn.y;
     rec('C_keys_and_legacy_save', S.KEY === 'ai_dungeon_rpg_save_v1' &&
-      settingsKey === 'aiDungeon_settings_v1' && loadOk && !loadErr, {
+      settingsKey === 'aiDungeon_settings_v1' && loadOk && landedOk && runOk && !loadErr, {
       saveKey: S.KEY,
       settingsKey: settingsKey,
       legacyLoadOk: loadOk,
+      landingOk: landedOk,
+      runStatsOk: runOk,
       error: loadErr,
       landing: landed,
-      note: '旧档对象没有任何标题字段；更名只影响显示，不改读档路径'
+      expectedLanding: spawn,
+      note: 'D-59 时期 v2 旧档（含 pos / run / npcQuests）没有任何标题字段；更名只影响显示，不改读档路径、落点与统计'
     });
 
-    /* ── D：负例——普通文档留一处旧名必须 FAIL ────────────────── */
-    var neg = scanText('docs/__negative_fixture__.md', '# 普通文档\n\n《' + OLD_SP + '》\n');
-    var negNs = scanText('docs/__negative_fixture_2__.md', '正文 ' + OLD_NS + ' 出现在句中\n');
-    var taskOk = scanText('docs/tasks/__fixture__.md', DECL + '\n\n# 旧卡\n\n标题：' + OLD_SP + '\n');
-    var logBad = scanText('CHANGELOG.md', '# 变更\n\n- 更名（D-60）：新名' + NEW + '\n- 历史（D-1）：《' + OLD_SP + '》\n');
-    var logAbove = scanText('CHANGELOG.md', '# 变更\n\n- 旧条目（D-1）：《' + OLD_SP + '》\n- 更名（D-60）：新名' + NEW + '\n');
-    rec('D_negative_fixture', neg.bad.length === 1 && negNs.bad.length === 1 &&
-      taskOk.bad.length === 0 && taskOk.allowed.length === 2 &&
-      logBad.bad.length === 0 && logBad.allowed.length === 1 &&
-      logAbove.bad.length === 1, {
-      ordinaryDocViolations: neg.bad.length,
-      ordinaryDocNoSpaceViolations: negNs.bad.length,
+    /* ── D：负例——普通文档留一处历史名必须 FAIL ──────────────── */
+    var negMid = scanText('docs/__negative_fixture__.md', '# 普通文档\n\n《' + MID + '》\n');
+    var negOld = scanText('docs/__negative_fixture_2__.md', '正文 ' + OLD_SP + ' 出现在句中\n');
+    var negNs = scanText('docs/__negative_fixture_3__.md', '正文 ' + OLD_NS + ' 出现在句中\n');
+    var taskOk = scanText('docs/tasks/__fixture__.md', DECL + '\n\n# 旧卡\n\n标题：' + MID + '\n');
+    var undeclaredTask = scanText('docs/tasks/__fixture_2__.md', '# 旧卡（无时点声明）\n\n标题：' + MID + '\n');
+    var logOk = scanText('CHANGELOG.md', '# 变更\n\n- 更名（D-62）：新名' + CUR + '\n- 历史（D-60）：《' + MID + '》\n');
+    var logAbove = scanText('CHANGELOG.md', '# 变更\n\n- 新条目（D-62）：《' + MID + '》\n- 更名（D-62）：新名' + CUR + '\n');
+    var logNoBoundary = scanText('CHANGELOG.md', '# 变更\n\n- 历史（D-60）：《' + MID + '》\n');
+    rec('D_negative_fixture', negMid.bad.length === 1 && negOld.bad.length === 1 && negNs.bad.length === 1 &&
+      taskOk.bad.length === 0 && taskOk.allowed.length === 2 && taskOk.allowed[0].names.length === 2 &&
+      undeclaredTask.bad.length === 1 &&
+      logOk.bad.length === 0 && logOk.allowed.length === 1 &&
+      logAbove.bad.length === 1 && logNoBoundary.bad.length === 1, {
+      currentRenameDocViolations: negMid.bad.length,
+      earliestNameDocViolations: negOld.bad.length,
+      earliestNameNoSpaceViolations: negNs.bad.length,
       declaredTaskCardAllowed: taskOk.allowed.length,
-      changelogHistoryAllowed: logBad.allowed.length,
-      changelogAboveD60Violations: logAbove.bad.length,
-      note: '同一条扫描函数同时喂真实文件与合成文本；负例必须被抓到'
+      undeclaredTaskCardViolations: undeclaredTask.bad.length,
+      changelogHistoryAllowed: logOk.allowed.length,
+      changelogAboveD62Violations: logAbove.bad.length,
+      changelogWithoutD62BoundaryViolations: logNoBoundary.bad.length,
+      note: '同一条扫描函数同时喂真实文件与合成文本；三种历史名与三种违规场景都必须被抓到'
     });
 
     /* ── E：全量回归 100/100 + GUARD ──────────────────────────── */

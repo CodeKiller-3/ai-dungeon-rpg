@@ -6,23 +6,23 @@
     {
       "old": "自检报告.md",
       "next": "docs/process/自检报告.md",
-      "note": "> **来源说明**：本文件原位于仓库根目录 `自检报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
-      "bodyHash": "e3673261",
-      "bodyBytes": 14992
+      "note": "> **来源说明**：本文件原位于仓库根目录 `自检报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60、D-62 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
+      "bodyHash": "f2167b11",
+      "bodyBytes": 15004
     },
     {
       "old": "修复报告.md",
       "next": "docs/process/修复报告.md",
-      "note": "> **来源说明**：本文件原位于仓库根目录 `修复报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
-      "bodyHash": "6f87456b",
-      "bodyBytes": 10868
+      "note": "> **来源说明**：本文件原位于仓库根目录 `修复报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60、D-62 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
+      "bodyHash": "8c3ee3b7",
+      "bodyBytes": 10880
     },
     {
       "old": "诊断报告.md",
       "next": "docs/process/诊断报告.md",
-      "note": "> **来源说明**：本文件原位于仓库根目录 `诊断报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
-      "bodyHash": "3292c2e0",
-      "bodyBytes": 10712
+      "note": "> **来源说明**：本文件原位于仓库根目录 `诊断报告.md`，2026-11-12 由 D-32（阶段 B1 目录归位）迁入 `docs/process/`。**除 D-60、D-62 更名替换作品名外，正文与搬家前逐字节一致**；更名后的哈希记录在 `preflight/selfcheck/d32-move-manifest.json`。",
+      "bodyHash": "da790e18",
+      "bodyBytes": 10736
     },
     {
       "old": "对标自检报告.md",
