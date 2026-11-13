@@ -232,6 +232,11 @@
     }
     var cpRate23 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
     if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
+    /* D-69：层内精英是 D-68 之后新增的"必经战"，会改变种子走向与随机数流。
+     * B 组是与 D-19 的纯观测对账，故把精英同样钉回改前（关闭放置），跑完恢复；
+     * verify_d69 A4 已证明开关精英时地图逐格相同、Math.random 调用次数相等。断言未放宽。 */
+    var eliteSnap23 = Game.Data.ELITE ? Game.Data.ELITE.enabled : undefined;
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
     var res = Bot.batch(seeds, { maxActions: 2500 });
     var mine = (res && res.runs) || [];
     var refMiss = [], outMis = [], actMis = [], flrMis = [], cauMis = [], lines = [];
@@ -262,6 +267,7 @@
     Game.Systems.AI.canSee = seeSnap23;
     Game.Systems.AI.tick = tickSnap23;
     if (Game.Data.CHEST_PLACEMENT && cpRate23 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate23;
+    if (Game.Data.ELITE && eliteSnap23 !== undefined) Game.Data.ELITE.enabled = eliteSnap23; /* D-69：恢复精英放置 */
     var diff2 = [];
     for (var n2 = 0; n2 < mine.length && n2 < mine2.length; n2++) {
       var x1 = mine[n2], x2 = mine2[n2];

@@ -238,6 +238,12 @@
     }
     /* D-64：钉回扩图前尺寸，保证 D-34 历史基线可复现（areaRatio=1，密度回到基准）。 */
     Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+    /* D-69：层内精英是 D-68 之后新增的"必经战"，会改变 bot 的遭遇序列与随机数流。
+     * 本组只验"测量台能逐局复现 D-34"，故把精英同样钉回改前（关闭放置），跑完恢复；
+     * verify_d69 A4 已证明开关精英时 grid/decor/traps/enemies/npcs 逐格相同、
+     * Math.random 调用次数相等，所以关掉后与 D-34 逐局可比。断言本身没有放宽。 */
+    var eliteSnap37 = Game.Data.ELITE ? Game.Data.ELITE.enabled : undefined;
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
     M.init();
     M.closeGuide();
     Bot.install();
@@ -295,6 +301,7 @@
     }
     Game.Systems.AI.canSee = legacySee37;
     Game.Systems.AI.tick = legacyTick37;
+    if (Game.Data.ELITE && eliteSnap37 !== undefined) Game.Data.ELITE.enabled = eliteSnap37; /* D-69：恢复精英放置 */
     if (Game.Data.CHEST_PLACEMENT && cpRate37 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate37;
     Game.Systems.Battle.expEarlyBase = curveNow;
     MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;

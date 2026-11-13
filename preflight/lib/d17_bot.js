@@ -69,6 +69,18 @@
 
   /* ── 只读工具 ────────────────────────────────────────────────── */
   function items() { return (Game.Data && Game.Data.ITEMS) || {}; }
+  /* D-69：层内精英是独立实体层（不进 Map.getEnemies）。寻路/遭遇判定要把它
+   * 当成"会触发的怪"，否则 B1 会规划直接穿过它、把必经战误记成遭遇战。
+   * 只影响测量台的寻路口径，不改任何游戏数值。 */
+  function eliteAt(x, y) {
+    var M = Game.Systems.Map;
+    return (M && typeof M.eliteAt === 'function') ? M.eliteAt(x, y) : null;
+  }
+  function monAt(x, y) {
+    var M = Game.Systems.Map;
+    var e = (M && M.enemyAt) ? M.enemyAt(x, y) : null;
+    return e || eliteAt(x, y);
+  }
   function healPotions() {
     var list = Game.Systems.Inventory.list(), out = [];
     for (var i = 0; i < list.length; i++) {
@@ -391,11 +403,11 @@
       return true;
     };
     var walkable = function (x, y, t) { return walkT(t); };
-    var free = function (x, y, t) { return walkT(t) && !Map.enemyAt(x, y); };
+    var free = function (x, y, t) { return walkT(t) && !monAt(x, y); };
     /* 目标格本身要允许入队：非最终层的下行梯是"终点"而不是走廊，
      * 只走 walkT 会让楼梯永远不进队列，BFS 永远找不到它（本卡实测 catches 到的第一版 bug）。 */
     var walkGoal = function (x, y, t) { return walkT(t) || t === 2; };
-    var freeGoal = function (x, y, t) { return free(x, y, t) || (t === 2 && !Map.enemyAt(x, y)); };
+    var freeGoal = function (x, y, t) { return free(x, y, t) || (t === 2 && !monAt(x, y)); };
     var start = { x: P.x, y: P.y };
     var r = d39Bfs(grid, start, function (x, y) { return !Game.fov.isExplored(x, y); }, free);
     if (r.ok) {
@@ -413,7 +425,7 @@
     }
     r = d39Bfs(grid, start, goal.fn, walkGoal);
     if (!r.ok) { d.lastStep = null; return null; }
-    var fe = r.first ? Map.enemyAt(r.first.x, r.first.y) : null;
+    var fe = r.first ? monAt(r.first.x, r.first.y) : null;
     if (fe) {
       var isBoss = !!(goal.boss && fe.monsterId === goal.bossId);
       if (!isBoss) {
@@ -461,8 +473,8 @@
     var dir = nextDir(rec);
     if (!dir) { rec.d39.lastStep = null; return null; }
     var dd = DIR_DELTA[dir];
-    var e = Map.enemyAt(P.x + dd[0], P.y + dd[1]);
-    rec.d39.lastStep = { intoEnemy: !!e, forced: false, boss: false, monsterId: e ? e.monsterId : null };
+    var e = monAt(P.x + dd[0], P.y + dd[1]);
+    rec.d39.lastStep = { intoEnemy: !!e, forced: false, boss: false, monsterId: e ? (e.monsterId || e.id) : null };
     return dir;
   }
   /* D-39 逃跑判据（S1）：先分类，再决定跑不跑。
@@ -588,8 +600,11 @@
       /* D-41 诊断开关 skipBoss：只用于"如果把层 Boss 当门而不是刷怪对象会怎样"的对照，
        * 默认 false（D-40 的 M1 仍会把层 Boss 当最近目标）。最终层不跳（Boss 就是通关目标）。 */
       var skipBoss = rec.m1.skipBoss === true && P.floor < FLOORS;
+      /* D-69：M1 的"清怪"目标仍只认普通怪——层内精英是主路上的"门"，
+       * 不做刷取目标（否则 M1 会在本层 8% 动作处就直奔精英，把层内成长前置到
+       * 进层桶里，三时点失去意义）。精英仍然会在挡路时被踩到并战斗。 */
       r = d39Bfs(grid, start, function (x, y) {
-        var e = Map.enemyAt(x, y);
+        var e = (Game.Systems.Map.enemyAt ? Game.Systems.Map.enemyAt(x, y) : null);
         if (!e) return false;
         if (skipBoss) {
           var md = (Game.Data.MONSTERS || {})[e.monsterId];
@@ -908,7 +923,7 @@
       /* 会换层的楼梯不能当走廊；怪当墙，找不到再无视怪 */
       var walk = function (x, y, tt) {
         if (tt === 0 || tt === 2) return false;
-        return !Map.enemyAt(x, y);
+        return !monAt(x, y);
       };
       var r = d39Bfs(grid, start, goal, walk);
       if (!r.ok) {
@@ -1126,7 +1141,7 @@
       return true;
     };
     var noEnemy = function (x, y, t) {
-      return (walkT(t) || t === 2) && !Map.enemyAt(x, y);
+      return (walkT(t) || t === 2) && !monAt(x, y);
     };
     var start = { x: P.x, y: P.y };
     var toStair = function (x, y, t) { return t === 2; };
@@ -1163,7 +1178,7 @@
       return true;
     };
     var base = function (x, y, t) { return walkT(t) || t === 2; };
-    var noEnemy = function (x, y, t) { return base(x, y, t) && !Map.enemyAt(x, y); };
+    var noEnemy = function (x, y, t) { return base(x, y, t) && !monAt(x, y); };
     var start = { x: P.x, y: P.y };
     var goal = d39Goal(P, Map);
     if (!goal) return null;
@@ -1208,7 +1223,7 @@
     }
     r = d39Bfs(grid, start, goal.fn, base);
     if (r.ok && r.first) {
-      var e = Map.enemyAt(r.first.x, r.first.y);
+      var e = monAt(r.first.x, r.first.y);
       d.lastStep = {
         tx: r.first.x, ty: r.first.y, intoEnemy: !!e,
         forced: !!e && !d.negAvoid, boss: false,
@@ -2231,7 +2246,7 @@
       var d = cur.d39, P = Game.Data.Player, Map = Game.Systems.Map;
       var bid = d39BossId(P.floor);
       var isBoss = !!(bid && e && e.monsterId === bid);
-      var onMe = Map.enemyAt(P.x, P.y);
+      var onMe = monAt(P.x, P.y);
       var stepped = !!(onMe && e && onMe.monsterId === e.monsterId);
       var plannedInto = !!(d.lastStep && d.lastStep.intoEnemy);
       d.battles++;

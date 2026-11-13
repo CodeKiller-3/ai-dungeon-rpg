@@ -209,7 +209,7 @@
     try { raw = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { raw = null; }
     var TOP = ['saveVersion', 'savedAt', 'floor', 'pos', 'player', 'bestiary', 'map', 'run', 'ending'];
     var PLAYER = ['hp', 'maxHp', 'mp', 'maxMp', 'atk', 'def', 'gold', 'exp', 'level',
-      'inventory', 'equipment', 'quests', 'upg', 'npcQuests', 'adaptive'];
+      'inventory', 'equipment', 'quests', 'upg', 'eliteAtk', 'npcQuests', 'adaptive']; /* D-69：新增 eliteAtk（仍要求逐键相等，不放宽） */
     var topKeys = raw ? Object.keys(raw).sort().join(',') : '';
     var pKeys = raw && raw.player ? Object.keys(raw.player).sort().join(',') : '';
     var keyOk = raw && raw.player && raw.player.equipment &&

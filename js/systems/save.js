@@ -37,6 +37,8 @@
           inventory: p.inventory, equipment: p.equipment, quests: p.quests,
           /* S-03：强化等级表（按物品 id）；旧档无此字段时读档补 {} */
           upg: p.upg || {},
+          /* D-69：精英之证累计攻击加成（旧档无此字段 → 读档补 0） */
+          eliteAtk: p.eliteAtk || 0,
           /* D-47：NPC 任务四态（旧档无此字段，读档补 {}，不报错） */
           npcQuests: p.npcQuests || {},
           /* D-49：自适应救援记录（死亡/触发/发放，全部在本档内，不落第二个键） */
@@ -86,6 +88,8 @@
         if (s.quests) p.quests = s.quests;
         /* S-03：旧档无 upg 字段 → 补空表，不破坏已读档的既有数值 */
         p.upg = (s.upg && typeof s.upg === 'object') ? s.upg : {};
+        /* D-69：旧档无 eliteAtk → 补 0（不影响既有数值；新字段随本档保存） */
+        p.eliteAtk = (typeof s.eliteAtk === 'number' && isFinite(s.eliteAtk)) ? s.eliteAtk : 0;
         /* D-47：旧档（D-46 及之前）无 npcQuests → 补 {}；缺失不影响任何既有字段 */
         p.npcQuests = (s.npcQuests && typeof s.npcQuests === 'object') ? s.npcQuests : {};
         /* D-49：旧档无 adaptive → 补默认（自适应开由设置决定，历史记录为空，不报错） */

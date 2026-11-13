@@ -93,6 +93,8 @@
     if (next.x === player.x && next.y === player.y) return false;
     var Map = Game.Systems.Map;
     if (Map.enemyAt && Map.enemyAt(next.x, next.y)) return false;
+    /* D-69：精英是独立实体层，巡逻怪/追击怪也不许叠到它头上 */
+    if (Map.eliteAt && Map.eliteAt(next.x, next.y)) return false;
     if (Map.npcAt && Map.npcAt(next.x, next.y)) return false;
     for (var i = 0; i < patrols.length; i++) {
       if (patrols[i] !== e && patrols[i].x === next.x && patrols[i].y === next.y) return false;

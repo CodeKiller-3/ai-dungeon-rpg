@@ -24,6 +24,10 @@
     /* S-04：状态效果 { bleed: 回合, poison: 回合 }；只作用于玩家，回合数归零即移除 */
     status: {},
     quests: {},
+    /* D-69：层内精英的确定性战利品——"精英之证"累计攻击加成。
+     * 只由"打赢层内精英"发放（onBattleEnd → grantEliteReward），不消耗随机数；
+     * 数值通道与 GROWTH 成长表分离（成长表一字未改），在 recalcEquip 里叠加。 */
+    eliteAtk: 0,
     /* D-49：自适应救援记录（旧档由 save.js 补默认；全部随本档保存，不另开键） */
     adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
   };
@@ -490,12 +494,35 @@
     }
   }
 
+  /* D-69：精英之证——打赢层内精英的确定性强化。
+   * 只加攻击（回合数唯一可感知的量），逐次 +1、上限 +10（本局最多 5 只精英，正常到不了上限）。
+   * 纯确定性：不掷骰、不进掉落池、不改经验/金币/商店价格；
+   * 走 Inventory.recalcEquip 重算，保证面板与下一场战斗立刻生效。 */
+  function grantEliteReward() {
+    var step = (Game.Data.ELITE && typeof Game.Data.ELITE.rewardAtk === 'number')
+      ? Game.Data.ELITE.rewardAtk : 1;
+    var before = player.atk;
+    player.eliteAtk = Math.min(10, (player.eliteAtk || 0) + step);
+    if (Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
+      Game.Systems.Inventory.recalcEquip();
+    }
+    Game.Core.EventBus.emit('ui:notice', {
+      msg: '精英之证：攻击 +' + (player.atk - before) + '（累计 +' + player.eliteAtk + '）'
+    });
+    Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
+  }
+
   function onBattleEnd(evt) {
     /* D-15：先消费遭遇上下文——只有 win 才移除怪物；run 只后退 */
     var enc = encounter;
     encounter = null;
     if (enc && evt.result === 'win') {
-      if (enc.kind === 'ambush' || enc.kind === 'enemy') Game.Systems.Map.removeEnemyAt(enc.x, enc.y);
+      if (enc.kind === 'elite') {
+        /* D-69：精英只在本场胜利时移除并发放确定性"精英之证"（逃跑不给、不提前给）。
+         * 奖励不调用 Math.random，也不改经验/金币/掉落/商店。 */
+        Game.Systems.Map.removeEliteAt(enc.x, enc.y);
+        grantEliteReward();
+      } else if (enc.kind === 'ambush' || enc.kind === 'enemy') Game.Systems.Map.removeEnemyAt(enc.x, enc.y);
       else if (Game.Systems.AI && typeof Game.Systems.AI.removePatrolAt === 'function') {
         Game.Systems.AI.removePatrolAt(enc.x, enc.y);
       }
@@ -880,6 +907,10 @@
       player.mp = 50; player.maxMp = 50; /* M8-1：新档 MP 满 */
       player.atk = 10; player.def = 5;
       player.gold = 0; player.exp = 0; player.level = 1;
+      /* D-69：精英之证必须在 giveStartingGear() 之前清零——后者会调用
+       * Inventory.recalcEquip 重算 atk；若清零放在后面，上一局的 eliteAtk 会被算进
+       * 新局起手面板（实测重开后 atk 11→13，并让同种子两次跑局不再一致）。 */
+      player.eliteAtk = 0;
       player.inventory = {}; giveStartingGear(); /* D-27：新局起手匕首（与 init 的无档路径同一函数） */
       player.quests = {};
       player.upg = {}; /* S-03：新局强化清零 */
@@ -1530,14 +1561,18 @@
             if (Game.Systems.Map && typeof Game.Systems.Map.triggerTrap === 'function') {
               Game.Systems.Map.triggerTrap(nx, ny);
             }
-            var e = Game.Systems.Map.enemyAt(nx, ny);
+            /* D-69：层内精英与普通怪同一条"踩到即战斗"通道，只是遭遇类型记 elite
+             * （胜利后移除并发放确定性奖励，逃跑照旧后退一格、精英留在原地）。 */
+            var el = (typeof Game.Systems.Map.eliteAt === 'function')
+              ? Game.Systems.Map.eliteAt(nx, ny) : null;
+            var e = el || Game.Systems.Map.enemyAt(nx, ny);
             if (e) {
               /* D-15：记录遭遇上下文（含来路），逃跑时据此后退一格、胜利时据此删怪 */
               encounter = {
-                kind: 'ambush', x: nx, y: ny, monsterId: e.monsterId,
+                kind: el ? 'elite' : 'ambush', x: nx, y: ny, monsterId: el ? el.id : e.monsterId,
                 fromX: fromX, fromY: fromY
               };
-              Game.Systems.Battle.start(e.monsterId);
+              Game.Systems.Battle.start(el ? el.id : e.monsterId);
               this.switchScene('battle');
             } else {
               /* M9-1：站上宝箱自动拾取（不阻挡移动，拾取后 decor 置空）

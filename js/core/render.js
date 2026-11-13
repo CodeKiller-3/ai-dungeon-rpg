@@ -756,6 +756,45 @@
           }
         }
       }
+      /* D-69：层内精英——复用本层普通怪的贴图（el.sprite 查 MONSTER_ANIM），
+       * 只额外加"金色脚下光环 + 头顶★"，不新增素材、不改普通怪/巡逻怪的绘制。 */
+      var els = (Game.Systems.Map.getElites) ? Game.Systems.Map.getElites() : [];
+      for (var ei = 0; ei < els.length; ei++) {
+        if (fovOn && !Game.fov.isVisible(els[ei].x, els[ei].y)) continue;
+        var elx = els[ei].x * TILE - cam.x + TILE / 2;
+        var ely = els[ei].y * TILE - cam.y + TILE;
+        if (elx < -20 || ely < -20 || elx > W + 20 || ely > H + 20) continue;
+        var elimg = null;
+        if (this._hasSprites()) {
+          elimg = monsterFrame(els[ei].sprite, false);
+          if (!elimg) elimg = Game.Core.Sprites.get('monster_chort');
+        }
+        if (elimg) {
+          var elbox = unitBox(elimg, elx, ely);
+          if (elbox) {
+            groundShadow(ctx, elx, ely, elbox.w);
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,193,77,0.95)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(elx, ely - 2, Math.max(8, elbox.w * 0.52), 2.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+            ctx.drawImage(elimg, elbox.x, elbox.y, elbox.w, elbox.h);
+            ctx.save();
+            ctx.fillStyle = '#ffc14d';
+            ctx.font = '9px monospace';
+            ctx.fillText('★', elx - 3, elbox.y - 2);
+            ctx.restore();
+            this._drawFrontDecor(ctx, grid, els[ei].x, els[ei].y);
+          }
+        } else {
+          ctx.fillStyle = '#ffc14d';
+          ctx.beginPath();
+          ctx.arc(elx - 3, ely - TILE / 2 - 3, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
       /* 巡逻怪（M5/M7.5）：状态机可视化——待机=chort 追击=chort_run+红底+! */
       var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
       for (var j = 0; j < ps.length; j++) {

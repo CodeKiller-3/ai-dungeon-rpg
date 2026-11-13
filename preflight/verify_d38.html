@@ -74,6 +74,12 @@
     Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
     /* D-64：钉回扩图前尺寸，保证 C/D 组历史复现（areaRatio=1，密度回到基准）。 */
     Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+    /* D-69：层内精英是 D-68 之后新增的"必经战"，会改变 bot 的动作序列与随机数流。
+     * 本页只验地图可达性 / 死亡归因 / 不再卡死（C/D 组要与历史逐项对上），故把精英
+     * 同样钉回改前（关闭放置），跑完恢复；verify_d69 A4 已证明开关精英时地图逐格相同、
+     * Math.random 调用次数相等。断言本身没有放宽。 */
+    var eliteSnap38 = Game.Data.ELITE ? Game.Data.ELITE.enabled : undefined;
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
     M.init();
     M.closeGuide();
     Bot.install();
@@ -250,6 +256,7 @@
     });
 
     Game.Data.REWARD = d46RwSnap;
+    if (Game.Data.ELITE && eliteSnap38 !== undefined) Game.Data.ELITE.enabled = eliteSnap38; /* D-69：恢复精英放置 */
     out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
   } catch (e) {
     out.err = String((e && e.stack) || e);

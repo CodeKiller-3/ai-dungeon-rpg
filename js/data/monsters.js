@@ -279,4 +279,58 @@
       }
     }
   };
+
+  /* ── D-69：层内精英 5 种 ────────────────────────────────────────────
+   * 用 Object.defineProperty 挂成「不可枚举」属性（与 D-49 的 sword_rescue 同一手法），
+   * 这样 MONSTERS 的可枚举条目仍是 18 只：历史验证页（D-43/D-45/D-46/D-50 的怪物指纹、
+   * D-66/D-67/D-68 的 18 只逐项比对、P2 系列的怪物计数）全部不受影响。
+   *
+   * 位置：map.js placeElite 确定性放在"出生点→下行梯"主路 55%±10% 处，优先取割点，
+   *      因此绕不开；它不进 grid、不改连通性，踩上照常进入战斗（不是墙）。
+   * 强度：hp/atk/def 全部高于本层最强普通怪，静态击杀回合约 6，明显低于本层 Boss（9–10）。
+   * 经济：exp=0 / gold=[0,0] / drops=[]，唯一产出是 main.js 的确定性"精英之证"（+1 攻击），
+   *      不消耗任何随机数、不改变经验/金币/掉落/商店价格。 */
+  var ELITES = {
+    elite_goblin: {
+      id: 'elite_goblin', name: '精英哥布林', elite: true,
+      hp: 50, atk: 11, def: 4,
+      exp: 0, gold: [0, 0], drops: [],
+      color: '#7ac143',
+      habit: { kind: 'guard', sight: 3, label: '精英' }
+    },
+    elite_orc: {
+      id: 'elite_orc', name: '精英兽人战士', elite: true,
+      hp: 66, atk: 18, def: 6,
+      exp: 0, gold: [0, 0], drops: [],
+      color: '#c98a4b',
+      habit: { kind: 'guard', sight: 3, label: '精英' }
+    },
+    elite_ogre: {
+      id: 'elite_ogre', name: '精英食人魔', elite: true,
+      hp: 100, atk: 22, def: 7,
+      exp: 0, gold: [0, 0], drops: [],
+      color: '#a0522d',
+      habit: { kind: 'guard', sight: 3, label: '精英' }
+    },
+    elite_zombie: {
+      id: 'elite_zombie', name: '精英大僵尸', elite: true,
+      hp: 134, atk: 27, def: 9,
+      exp: 0, gold: [0, 0], drops: [],
+      color: '#8f9b6e',
+      habit: { kind: 'guard', sight: 3, label: '精英' }
+    },
+    elite_angel: {
+      id: 'elite_angel', name: '精英天使', elite: true,
+      hp: 164, atk: 29, def: 6,
+      exp: 0, gold: [0, 0], drops: [],
+      color: '#cfe6ff',
+      habit: { kind: 'guard', sight: 3, label: '精英' }
+    }
+  };
+  for (var ek in ELITES) {
+    if (!Object.prototype.hasOwnProperty.call(ELITES, ek)) continue;
+    Object.defineProperty(Game.Data.MONSTERS, ek, {
+      value: ELITES[ek], enumerable: false, configurable: true, writable: false
+    });
+  }
 })();

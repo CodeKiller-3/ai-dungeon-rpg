@@ -19,6 +19,10 @@
   var spawn = { x: 1, y: 1 };
   var enemies = []; /* [{x, y, monsterId}] */
   var npcs = [];    /* D-47：本层实体 NPC [{id, x, y}]，位置确定性生成且可通行 */
+  /* D-69：本层层内精英 [{id, sprite, x, y, cut, frac}]。
+   * 独立于 enemies / grid：不改地图格数与连通性，也不进 AI 的静态怪列表，
+   * 因此普通怪数量、寻路、地图指纹与历史基线逐格一致。 */
+  var elites = [];
   /* 修复 P1：楼层快照缓存——回访时恢复同一份地图/敌人/装饰/巡逻，
    * 避免上下楼反复重新生成而刷怪、刷宝箱。只在重新开始（setFloor）时清空。 */
   var floorCache = {};
@@ -559,7 +563,8 @@
     furnishRooms(); /* S-05：密室内固定 1 个密室宝箱 + 2 个火把 */
     placeTraps(w, h); /* S-04：陷阱层（与细节/装饰同批生成，避免二次遍历） */
     placeRewards(w, h); /* D-46：每层固定奖励点（金币/药），放在陷阱之后，互不侵占 */
-    placeNpc(w, h);     /* D-47：实体 NPC（不消耗随机数，放在最后，不挤占任何既有落点） */
+    placeElite(w, h);   /* D-69：层内精英（确定性取主路 55%±10% 割点，不消耗随机数） */
+    placeNpc(w, h);     /* D-47：实体 NPC（不消耗随机数，放在最后；显式避开精英格） */
   }
 
   /* ── D-47：实体 NPC ────────────────────────────────────────────
@@ -617,6 +622,7 @@
     if (down && dist(c.x, c.y, down.x, down.y) < 2) return false;       /* 不压下行梯 */
     if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) return false;
     if (enemyAtCell(c.x, c.y)) return false;                            /* 不占怪物格 */
+    if (eliteAtCell(c.x, c.y)) return false;                            /* D-69：不占精英格 */
     var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
       ? Game.Systems.AI.getPatrols() : [];
     for (var i = 0; i < ps.length; i++) {                               /* 不占巡逻怪格 */
@@ -713,6 +719,173 @@
       if (Math.abs(c.x - down.x) + Math.abs(c.y - down.y) < minStair) continue;
       return c;
     }
+    return null;
+  }
+
+  /* ── D-69：层内精英 ────────────────────────────────────────────
+   * 目标：每层在主路（出生点→下行梯）的 55%±10% 处放 1 只"必须经过"的精英。
+   * 三条硬约束：
+   *   ① 不消耗随机数：取点全按"路径下标 + 固定优先级"挑选，BFS 只读；
+   *   ② 不是墙：不写 grid，格子仍是可通行地板，踩上去照常进入战斗，
+   *      逃跑后仍可后退/绕回（只是主路被它守着，绕不开）；
+   *   ③ 优先割点：若去掉该格后出生点与下行梯不再连通，则该格"必经"；
+   *      窗口内没有割点才退回"绕行代价最大"的合法格，并把 cut=false 记进遥测。
+   * 生成顺序：decor / 陷阱 / 奖励点之后、NPC 之前——不改变任何既有落点；
+   * NPC 通过 npcCellOk 显式避开精英格。 */
+  function eliteCfgOfFloor() {
+    var c = Game.Data.ELITE;
+    if (!c || c.enabled === false || !c.floors) return null;
+    for (var i = 0; i < c.floors.length; i++) {
+      if (c.floors[i].floor === floorIndex + 1) return c.floors[i];
+    }
+    return null;
+  }
+
+  function eliteCellOk(c) {
+    if (!grid[c.y] || grid[c.y][c.x] !== 1) return false;
+    if (c.x === spawn.x && c.y === spawn.y) return false;
+    if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) return false;
+    if (decor[c.y] && decor[c.y][c.x]) return false;
+    if (traps[c.y] && traps[c.y][c.x]) return false;
+    if (enemyAtCell(c.x, c.y)) return false;
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? Game.Systems.AI.getPatrols() : [];
+    for (var i = 0; i < ps.length; i++) if (ps[i].x === c.x && ps[i].y === c.y) return false;
+    return true;
+  }
+
+  /* 去掉 block 格后，出生点还能不能走到下行梯（与真实移动语义一致：
+   * 楼梯是传送门、不能当走廊穿行）。返回 true 表示该格是"必经割点"。 */
+  function isCutCell(c, w, h, down) {
+    var seen = [], q = [[spawn.x, spawn.y]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[spawn.y][spawn.x] = true;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1];
+      qi++;
+      if (cx === down.x && cy === down.y) return false; /* 仍然可达 → 不是割点 */
+      for (var d = 0; d < dirs.length; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        if (seen[ny][nx]) continue;
+        if (nx === c.x && ny === c.y) continue;                  /* 候选格视为阻断 */
+        var t = grid[ny][nx];
+        if (t === 0) continue;
+        if (t === 3 && floorIndex > 0) continue;                 /* 上行梯是传送门，不当走廊 */
+        if (t === 2 && !(nx === down.x && ny === down.y)) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return true;
+  }
+
+  /* D-69：绕行代价——把候选格视为阻断后，出生点→下行梯的最短步数。
+   * 返回 Infinity 表示走不到（即严格割点）；否则数值越大，"挡在主路上"越明显。 */
+  function blockedPathLen(c, w, h, down) {
+    var seen = [], q = [[spawn.x, spawn.y, 0]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[spawn.y][spawn.x] = true;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1], cd = q[qi][2];
+      qi++;
+      if (cx === down.x && cy === down.y) return cd;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny][nx]) continue;
+        if (nx === c.x && ny === c.y) continue;
+        var t = grid[ny][nx];
+        if (t === 0) continue;
+        if (t === 3 && floorIndex > 0) continue;
+        if (t === 2 && !(nx === down.x && ny === down.y)) continue;
+        seen[ny][nx] = true;
+        q.push([nx, ny, cd + 1]);
+      }
+    }
+    return Infinity;
+  }
+
+  function placeElite(w, h) {
+    elites = [];
+    var spec = eliteCfgOfFloor();
+    if (!spec) return;
+    var ec = Game.Data.ELITE;
+    var at = (typeof ec.atFrac === 'number') ? ec.atFrac : 0.55;
+    var band = (ec.band && ec.band.length === 2) ? ec.band : [0.45, 0.65];
+    var down = findTile(2, w, h);
+    if (!down) return;
+    var path = rewardPath(down, w, h, true);
+    if (!path || path.length < 4) return;
+    var n = path.length - 1;
+    var fracOf = function (i) { return i / n; };
+    var lo = Math.max(1, Math.round(n * band[0]));
+    var hi = Math.min(n - 1, Math.round(n * band[1]));
+    var cands = [], i, c, dd;
+    for (i = lo; i <= hi; i++) {
+      c = path[i];
+      if (!eliteCellOk(c)) continue;
+      cands.push({ x: c.x, y: c.y, i: i, cut: isCutCell(c, w, h, down) });
+    }
+    var pick = null, bestD = Infinity;
+    for (i = 0; i < cands.length; i++) {
+      if (!cands[i].cut) continue;
+      dd = Math.abs(fracOf(cands[i].i) - at);
+      if (dd < bestD) { bestD = dd; pick = cands[i]; }
+    }
+    /* D-69：20% 窗口内找不到割点（地图有环路时很常见）时，不做位置外扩——
+     * 卡面把"主路 55%±10%"写死了，外扩会把精英推到出生点门口或楼梯口。
+     * 这类图仍把精英放在窗口内"绕行代价最大"的合法格（cut=false）：
+     * 它挡在主路上，玩家要走更长的环路才能绕过（"绕路能力保留"）；
+     * 实测"离开该层的局里确实打赢精英"的比例：F1 58% / F2 80% / F3 64% / F4 70%（见 D-69 文档）。 */
+    if (pick && pick.band === undefined) {
+      pick.band = (fracOf(pick.i) >= band[0] && fracOf(pick.i) <= band[1]);
+    }
+    if (!pick) {
+      /* 没有严格割点：在窗口内选"绕行代价最大"的格（= 把该格堵上后主路最长的那个），
+       * 同样距离取更接近 55% 的。这样即使地图有环路，精英也压在最难绕开的位置。 */
+      var bestCost = -1;
+      var g0 = n;
+      for (i = 0; i < cands.length; i++) {
+        var cost = blockedPathLen(cands[i], w, h, down) - g0;
+        if (cost === Infinity) cost = 1e6;
+        dd = Math.abs(fracOf(cands[i].i) - at);
+        if (cost > bestCost || (cost === bestCost && dd < bestD)) {
+          bestCost = cost; bestD = dd; pick = cands[i];
+        }
+      }
+    }
+    if (!pick) {
+      /* 兜底：窗口内没有合法格（极少见）。按"离 55% 路径格最近"扫描出生点连通块，
+       * 仍然是确定性取点，只把 cut=false / fallback=true 记进遥测。 */
+      var anchor = path[Math.max(1, Math.min(n - 1, Math.round(n * at)))];
+      var seen = spawnComponent(), best = null, bd = Infinity;
+      for (var y = 1; y < h - 1; y++) {
+        for (var x = 1; x < w - 1; x++) {
+          if (!seen[y][x]) continue;
+          c = { x: x, y: y };
+          if (!eliteCellOk(c)) continue;
+          dd = Math.abs(x - anchor.x) + Math.abs(y - anchor.y);
+          if (dd < bd) { bd = dd; best = c; }
+        }
+      }
+      if (!best) return;
+      elites.push({ id: spec.id, monsterId: spec.id, sprite: spec.sprite, x: best.x, y: best.y, cut: false, frac: null, fallback: true });
+      return;
+    }
+    var detourLen = blockedPathLen(pick, w, h, down);
+    elites.push({
+      id: spec.id, monsterId: spec.id, sprite: spec.sprite, x: pick.x, y: pick.y,
+      cut: !!pick.cut, band: pick.band !== false,
+      detour: (detourLen === Infinity) ? null : Math.max(0, detourLen - n),
+      frac: Math.round(fracOf(pick.i) * 1000) / 1000
+    });
+  }
+
+  /* ── D-69：层内精英查询 ──────────────────────────────────────── */
+  function eliteAtCell(x, y) {
+    for (var i = 0; i < elites.length; i++) if (elites[i].x === x && elites[i].y === y) return elites[i];
     return null;
   }
 
@@ -1120,6 +1293,14 @@
           placeNpc(grid[0].length, grid.length);
           cached.npcs = npcs.slice();
         }
+        /* D-69：旧档快照没有 elites 字段 → 按同一套确定性规则补生成并写回缓存；
+         * 新档直接恢复（已击败的精英不会复活）。 */
+        if (Array.isArray(cached.elites)) {
+          elites = cached.elites.slice();
+        } else {
+          placeElite(grid[0].length, grid.length);
+          cached.elites = elites.slice();
+        }
         Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
         if (!quietQuest) notifyFloorQuest();
         return grid;
@@ -1147,7 +1328,8 @@
         spawn: { x: spawn.x, y: spawn.y },
         patrols: (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
           ? Game.Systems.AI.getPatrols() : [],
-        npcs: npcs.slice() /* D-47：NPC 站位随楼层快照保存 */
+        npcs: npcs.slice(), /* D-47：NPC 站位随楼层快照保存 */
+        elites: elites.slice() /* D-69：精英站位与"是否已被击败"随楼层快照保存 */
       };
       Game.Core.EventBus.emit('map:floorChanged', { floor: floorIndex + 1 });
       if (!quietQuest) notifyFloorQuest();
@@ -1308,6 +1490,21 @@
         if (npcs[i].x === x && npcs[i].y === y) return npcs[i];
       }
       return null;
+    },
+
+    /* D-69：本层层内精英（只读）。与 enemies 分开，普通怪数量与指纹不受影响。
+     * 元素：{id, sprite, x, y, cut, frac}；cut=true 表示"去掉该格出生点就到不了下行梯"。 */
+    getElites: function () { return elites; },
+    eliteAt: function (x, y) { return eliteAtCell(x, y); },
+    /* D-69：胜利结算时移除精英（唯一删除入口；逃跑绝不移除） */
+    removeEliteAt: function (x, y) {
+      for (var i = 0; i < elites.length; i++) {
+        if (elites[i].x === x && elites[i].y === y) {
+          elites.splice(i, 1);
+          return true;
+        }
+      }
+      return false;
     },
 
     /* M9-1：取该格 tile 细节类型（纯视觉），越界返回 null */

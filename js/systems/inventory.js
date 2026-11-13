@@ -125,7 +125,7 @@
       var aN = a ? Math.min(Math.max(p.upg[a.id] || 0, 0), 5) : 0;
       var wAtk = (w && w.effect.atk) ? w.effect.atk : 0;
       var aDef = (a && a.effect.def) ? a.effect.def : 0;
-      p.atk = baseAtk + effValue(wAtk, wN);
+      p.atk = baseAtk + effValue(wAtk, wN) + (typeof p.eliteAtk === 'number' ? p.eliteAtk : 0);
       p.def = baseDef + effValue(aDef, aN);
       p.maxHp = baseMaxHp +
         (w && w.effect.maxHp ? w.effect.maxHp : 0) +

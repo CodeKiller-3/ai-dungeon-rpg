@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-69 层内精英 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-69 · 层内精英：必经 / 强度 / 确定性奖励 / 地图指纹零改动（A–F）</h1>
+<pre id="result">RUNNING</pre>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = Game.Data, M = D.MONSTERS, MP = D.MAPS;
+  var out = { protocol: 'D-69', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var Map = Game.Systems.Map;
+  var ELITE_IDS = ['elite_goblin', 'elite_orc', 'elite_ogre', 'elite_zombie', 'elite_angel'];
+  var BASE = {
+    slime: [40, 6, 2], bat: [30, 9, 1], skeleton: [70, 12, 5], goblin: [45, 7, 3],
+    tiny_zombie: [50, 8, 2], orc_warrior: [85, 14, 6], orc_shaman: [75, 16, 4],
+    wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
+    big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
+    pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+  };
+  var FLOOR_MON = [
+    ['slime', 'bat', 'goblin', 'tiny_zombie'],
+    ['bat', 'skeleton', 'orc_warrior', 'orc_shaman'],
+    ['skeleton', 'wogol', 'ogre', 'imp'],
+    ['big_zombie', 'necromancer', 'masked_orc', 'pumpkin_dude'],
+    ['big_zombie', 'necromancer', 'masked_orc', 'angel']
+  ];
+
+  function gridRows() {
+    var g = Map.getGrid(), o = [];
+    for (var y = 0; y < g.length; y++) o.push(g[y].slice());
+    return o;
+  }
+  function decorRows() {
+    var g = Map.getGrid(), o = [];
+    for (var y = 0; y < g.length; y++) {
+      o[y] = [];
+      for (var x = 0; x < g[y].length; x++) o[y][x] = Map.getDecor(x, y);
+    }
+    return o;
+  }
+  function trapRows() {
+    var g = Map.getGrid(), o = [];
+    for (var y = 0; y < g.length; y++) {
+      o[y] = [];
+      for (var x = 0; x < g[y].length; x++) { var t = Map.getTrap(x, y); o[y][x] = t ? t.id : null; }
+    }
+    return o;
+  }
+  function enemyList() {
+    return (Map.getEnemies() || []).map(function (e) { return e.x + ',' + e.y + ':' + e.monsterId; }).sort();
+  }
+  function findDown(g) {
+    for (var y = 0; y < g.length; y++) for (var x = 0; x < g[y].length; x++) if (g[y][x] === 2) return { x: x, y: y };
+    return null;
+  }
+  /* 去掉 block 后 出生点→下行梯 是否仍连通（与 map.js isCutCell 同一口径） */
+  function reachDown(block) {
+    var g = Map.getGrid(), h = g.length, w = g[0].length;
+    var sp = Map.getSpawn(), down = findDown(g);
+    if (!sp || !down) return false;
+    var seen = [], q = [[sp.x, sp.y]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[sp.y][sp.x] = true;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1]; qi++;
+      if (cx === down.x && cy === down.y) return true;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny][nx]) continue;
+        if (block && nx === block.x && ny === block.y) continue;
+        var t = g[ny][nx];
+        if (t === 0) continue;
+        if (t === 3 && Map.getFloor() > 1) continue;
+        if (t === 2 && !(nx === down.x && ny === down.y)) continue;
+        seen[ny][nx] = true; q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+  function gen(seed, floor, eliteOn) {
+    var saved = Math.random;
+    Math.random = mulberry32(seed);
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = !!eliteOn;
+    Map.setFloor(floor);
+    var snap = {
+      grid: gridRows(), decor: decorRows(), traps: trapRows(), enemies: enemyList(),
+      spawn: Map.getSpawn(), elites: JSON.parse(JSON.stringify(Map.getElites() || [])),
+      npcs: (Map.getNpcs() || []).map(function (n) { return n.id + '@' + n.x + ',' + n.y; })
+    };
+    Math.random = saved;
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = true;
+    return snap;
+  }
+
+  try {
+    /* ── A1：五只精英存在、不可枚举、18 只普通怪/Boss 数值一字未动 ── */
+    var missing = [], enumBad = [];
+    for (var i = 0; i < ELITE_IDS.length; i++) {
+      if (!M[ELITE_IDS[i]] || M[ELITE_IDS[i]].elite !== true) missing.push(ELITE_IDS[i]);
+    }
+    if (Object.keys(M).length !== 18) enumBad.push('可枚举怪物数=' + Object.keys(M).length);
+    var baseBad = [];
+    for (var id in BASE) {
+      if (!Object.prototype.hasOwnProperty.call(BASE, id)) continue;
+      var s = BASE[id];
+      if (!M[id] || M[id].hp !== s[0] || M[id].atk !== s[1] || M[id].def !== s[2]) {
+        baseBad.push(id + '=' + (M[id] ? (M[id].hp + '/' + M[id].atk + '/' + M[id].def) : 'null'));
+      }
+    }
+    var econBad = [];
+    for (var e0 = 0; e0 < ELITE_IDS.length; e0++) {
+      var em = M[ELITE_IDS[e0]];
+      if (em && (em.exp !== 0 || em.gold[0] !== 0 || em.gold[1] !== 0 || em.drops.length !== 0)) econBad.push(em.id);
+    }
+    rec('A1_eliteData', missing.length === 0 && enumBad.length === 0 && baseBad.length === 0 && econBad.length === 0, {
+      rule: '5 只精英用 defineProperty 挂成不可枚举；MONSTERS 可枚举条目仍 18；18 只怪 hp/atk/def 逐项不变；精英 exp/gold/drops 全 0（经济零增量）',
+      missing: missing, enumBad: enumBad, baseBad: baseBad, econBad: econBad,
+      stats: ELITE_IDS.map(function (k) { var m = M[k]; return k + '=' + m.hp + '/' + m.atk + '/' + m.def; })
+    });
+
+    /* ── A2：地图 / 密度 / Boss / 装饰 / 经济 / 普通怪期望数零改动 ── */
+    var sizesOk = MP.sizes.length === 5 && MP.sizes.join('|') === '25,19|29,21|33,23|37,25|41,27';
+    var den = MP.density || {};
+    var denOk = den.enemyArea === 1 && Object.prototype.toString.call(den.patrolArea) === '[object Array]' &&
+      den.patrolArea.join(',') === '1.5,1.5,1,1,1';
+    var bp = MP.bosses || [];
+    var posOk = bp.length === 3 && bp[0].id === 'ogre_boss' && bp[1].id === 'zombie_king' && bp[2].id === 'dragon';
+    var decorKeys = Object.keys(D.DECOR || {}).sort().join(',');
+    var decorOk = decorKeys === 'barrel,chest,gold_pile,potion_stash,room_chest,torch,vine';
+    var rw = D.REWARD || {}, rwOk = rw.maxPerFloor === 2 && rw.floors.length === 5 && rw.floors[4].kind === 'potion';
+    var aliveDec = D.ELITE && D.ELITE.enabled === true && D.ELITE.atFrac === 0.55 &&
+      D.ELITE.band.join(',') === '0.45,0.65' && D.ELITE.rewardAtk === 2;
+    var expN = Map.expectedEnemyCount();
+    rec('A2_mapUntouched', sizesOk && denOk && posOk && decorOk && rwOk && aliveDec && expN === 8, {
+      rule: '尺寸/密度/Boss/装饰/固定奖励点 与 D-68 完全相同；expectedEnemyCount 仍 8（精英不进 enemies，不算普通怪）',
+      sizes: MP.sizes, density: den, decorKeys: decorKeys, expectedEnemyCount: expN,
+      eliteCfg: D.ELITE
+    });
+
+    /* ── A3：放置规则（40 个种子 × 5 层） ──────────────────────── */
+    var SEEDS = [], perFloor = {}, cutCnt = 0, fbCnt = 0, outBand = 0, outBandFrac = [], fracBad = [], overlapBad = [],
+      dupBad = [], spriteBad = [], cutCheckBad = [], fracs = [], detourBad = [], detourSum = 0, detourN = 0;
+    for (var sd = 0; sd < 40; sd++) SEEDS.push(1001 + sd * 7);
+    for (var si = 0; si < SEEDS.length; si++) {
+      for (var fl = 1; fl <= 5; fl++) {
+        var sn = gen(SEEDS[si], fl, true);
+        var key = 'F' + fl;
+        if (!perFloor[key]) perFloor[key] = { n: 0, cut: 0, fb: 0, fracSum: 0, fracN: 0 };
+        perFloor[key].n++;
+        if (sn.elites.length !== 1) { dupBad.push(SEEDS[si] + ':' + key + ' n=' + sn.elites.length); continue; }
+        var el = sn.elites[0];
+        if (ELITE_IDS.indexOf(el.id) < 0) spriteBad.push(el.id);
+        if (M[el.sprite] === undefined) spriteBad.push('sprite:' + el.sprite);
+        if (el.cut) {
+          cutCnt++; perFloor[key].cut++;
+          if (reachDown(el)) cutCheckBad.push(SEEDS[si] + ':' + key); /* cut 却仍可达 → 断言失败 */
+        } else { fbCnt++; perFloor[key].fb++; }
+        if (el.frac != null) {
+          fracs.push(el.frac); perFloor[key].fracSum += el.frac; perFloor[key].fracN++;
+          if (el.band === false) { outBand++; outBandFrac.push(el.frac); }
+          else if (el.frac < 0.43 || el.frac > 0.68) fracBad.push(SEEDS[si] + ':' + key + '=' + el.frac);
+          if (!el.cut) {
+            if (el.detour == null) detourBad.push(SEEDS[si] + ':' + key);
+            else detourSum += el.detour;
+            detourN++;
+          }
+        }
+        var g2 = Map.getGrid();
+        if (g2[el.y][el.x] === 0) overlapBad.push('wall@' + key);
+        if (sn.spawn && el.x === sn.spawn.x && el.y === sn.spawn.y) overlapBad.push('spawn@' + key);
+        var t2 = Map.getTrap(el.x, el.y); if (t2) overlapBad.push('trap@' + key);
+        if (Map.getDecor(el.x, el.y)) overlapBad.push('decor@' + key);
+        if (Map.enemyAt(el.x, el.y)) overlapBad.push('enemy@' + key);
+        if (Map.npcAt(el.x, el.y)) overlapBad.push('npc@' + key);
+      }
+    }
+    var total = SEEDS.length * 5;
+    rec('A3_placement', dupBad.length === 0 && fracBad.length === 0 && overlapBad.length === 0 &&
+      spriteBad.length === 0 && cutCheckBad.length === 0 && detourBad.length === 0 && cutCnt / total >= 0.3, {
+      rule: total + ' 次生成：每层恰 1 只；位置必须在主路 45%–65% 窗口（下标取整容差 ±2%）；不占出生点/墙/楼梯/陷阱/装饰/普通怪/NPC；cut=true 时"去掉该格"必须真的走不到下行梯；无严格割点的图取"绕行代价最大"的窗口格并记录 detour 步数',
+      total: total, cut: cutCnt, cutRate: Math.round(cutCnt / total * 1000) / 1000, nonCut: fbCnt,
+      detourAvg: detourN ? Math.round(detourSum / detourN * 100) / 100 : null,
+      outOfBand: outBand,
+      fracMin: fracs.length ? Math.min.apply(null, fracs) : null,
+      fracMax: fracs.length ? Math.max.apply(null, fracs) : null,
+      fracMed: (function () { var a = fracs.slice().sort(function (x, y) { return x - y; }); return a.length ? a[Math.floor((a.length - 1) * 0.5)] : null; })(),
+      byFloor: perFloor, dupBad: dupBad, fracBad: fracBad, overlapBad: overlapBad,
+      spriteBad: spriteBad, cutCheckBad: cutCheckBad, detourBad: detourBad,
+      note: '36% 的图主路存在严格割点（去掉该格就下不去）；其余 64% 是带环路的地图，' +
+        '精英仍压在窗口内绕行代价最大的一格。卡面把 55%±10% 写死，所以没有把位置外扩到割点。'
+    });
+
+    /* ── A4：地图指纹零改动（精英开/关，同种子逐格相同） ────────── */
+    var fpBad = [], rngBad = [];
+    for (var sj = 0; sj < 20; sj++) {
+      for (var fj = 1; fj <= 5; fj++) {
+        var off = gen(1001 + sj * 13, fj, false);
+        var on = gen(1001 + sj * 13, fj, true);
+        if (JSON.stringify(off.grid) !== JSON.stringify(on.grid) ||
+            JSON.stringify(off.decor) !== JSON.stringify(on.decor) ||
+            JSON.stringify(off.traps) !== JSON.stringify(on.traps) ||
+            JSON.stringify(off.enemies) !== JSON.stringify(on.enemies) ||
+            JSON.stringify(off.npcs) !== JSON.stringify(on.npcs)) {
+          fpBad.push(1001 + sj * 13 + ':F' + fj);
+        }
+        /* 随机数消耗次数：开关精英必须一样 */
+        var nOff = 0, nOn = 0, real = Math.random;
+        var rOff = mulberry32(4242);
+        Math.random = function () { nOff++; return rOff(); };
+        if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
+        Map.setFloor(fj);
+        Math.random = real;
+        var rOn = mulberry32(4242);
+        Math.random = function () { nOn++; return rOn(); };
+        if (Game.Data.ELITE) Game.Data.ELITE.enabled = true;
+        Map.setFloor(fj);
+        Math.random = real;
+        if (nOff !== nOn) rngBad.push('F' + fj + ' off=' + nOff + ' on=' + nOn);
+      }
+    }
+    rec('A4_fingerprint', fpBad.length === 0 && rngBad.length === 0, {
+      rule: '同种子（100 组 种子×层）精英开/关两次生成：grid / decor / traps / enemies / npcs 逐格相同，且 Math.random 调用次数完全相等 —— 精英是"生成后加一层实体"，不吃随机数、不改指纹',
+      mismatch: fpBad, rngMismatch: rngBad
+    });
+
+    /* ── A5：确定性 —— 同种子两次生成，精英坐标完全相同 ─────────── */
+    var detBad = [];
+    for (var sk = 0; sk < 20; sk++) {
+      for (var fk = 1; fk <= 5; fk++) {
+        var a5 = gen(2001 + sk * 11, fk, true);
+        var b5 = gen(2001 + sk * 11, fk, true);
+        if (JSON.stringify(a5.elites) !== JSON.stringify(b5.elites)) detBad.push(2001 + sk * 11 + ':F' + fk);
+      }
+    }
+    rec('A5_deterministic', detBad.length === 0, {
+      rule: '同种子两次开启精英：精英 id / 坐标 / cut / frac 逐项相同（纯函数取点）',
+      mismatch: detBad
+    });
+
+    /* ── A6：奖励通道（+1 攻击、随档保存、零随机） ──────────────── */
+    var P = D.Player, Inv = Game.Systems.Inventory;
+    P.equipment = { weapon: 'sword_iron', armor: null };
+    P.upg = {}; P.eliteAtk = 0;
+    Inv.recalcEquip();
+    var atk0 = P.atk;
+    P.eliteAtk = D.ELITE.rewardAtk; Inv.recalcEquip();
+    var atk1 = P.atk;
+    var n1; try { n1 = Game.Systems.Save.save(); } catch (e) { n1 = false; }
+    var savedRaw = null;
+    try { savedRaw = localStorage.getItem('ai_dungeon_rpg_save_v1'); } catch (e) { }
+    P.eliteAtk = 0; Inv.recalcEquip();
+    var loaded = false;
+    try { Game.Systems.Save.load(); loaded = true; } catch (e) { loaded = false; }
+    var atk2 = P.atk;
+    rec('A6_reward', atk1 - atk0 === D.ELITE.rewardAtk && atk2 === atk1 && savedRaw &&
+      savedRaw.indexOf('"eliteAtk":' + D.ELITE.rewardAtk) >= 0, {
+      rule: '精英之证 = +2 攻击：recalcEquip 叠加 eliteAtk（sword_iron 下 atk 从 X 到 X+2）；存档写入 eliteAtk；读档后 atk 一致',
+      atk0: atk0, atkPlusReward: atk1, atkAfterLoad: atk2, loaded: loaded,
+      savedHasField: !!(savedRaw && savedRaw.indexOf('eliteAtk') >= 0),
+      note: '奖励只在 onBattleEnd(result=win && kind=elite) 里发放；不调用 Math.random、不改经验/金币/掉落/商店'
+    });
+
+    /* ── A7：新局不继承精英之证（清零顺序回归） ─────────────────────
+     * 实测过的真实 bug：清零语句写在 giveStartingGear() 之后，后者内部会调
+     * Inventory.recalcEquip()，于是上一局的 eliteAtk 被算进新局起手面板
+     * （重开后 atk 11→13），并让"同种子两次跑局"不再一致（verify_d17 A3 抓到）。
+     * 这里把"面板存在 +2 残留"复现出来，再 restart，要求新局面板回到无加成状态。 */
+    var restartOk = false, atkDirty = null, atkFresh = null, eliteFresh = null, resetErr = null;
+    try {
+      P.equipment = { weapon: 'knife', armor: null }; P.upg = {};
+      P.eliteAtk = D.ELITE.rewardAtk; Inv.recalcEquip();
+      atkDirty = P.atk;
+      Math.random = mulberry32(7001);
+      Game.Core.Main.restart();
+      atkFresh = D.Player.atk; eliteFresh = D.Player.eliteAtk;
+      restartOk = true;
+    } catch (e) { resetErr = String((e && e.message) || e); }
+    rec('A7_restartResetsEliteGift', restartOk && eliteFresh === 0 && atkFresh === atkDirty - D.ELITE.rewardAtk, {
+      rule: '带 +2 精英之证的面板 restart 后必须归零：eliteAtk=0 且 atk 回到起手匕首（10+1=11），即 giveStartingGear 重算时 eliteAtk 已经是 0（清零顺序正确）',
+      atkBeforeRestart: atkDirty, atkAfterRestart: atkFresh, eliteAtkAfterRestart: eliteFresh,
+      err: resetErr
+    });
+
+    /* ── B：实测验收（B1-2500 / M1-4500 两份跑局矩阵） ─────────── */
+    var b1 = readJson('selfcheck/d69-final-b1-2500.json');
+    var m1 = readJson('selfcheck/d69-m1-4500.json');
+    if (!b1 || !m1) throw new Error('D-69 缺测量 JSON（先跑 d69-report.ps1）');
+    var b1w = b1.agg.b1.wins, b1pct = Math.round(b1w / 50 * 100);
+    var e1 = b1.elite.b1, nx1 = b1.eliteNext.b1;
+    var bossMed = Math.min(b1.boss.ogre_boss.roundsWinMed || 99, b1.boss.zombie_king.roundsWinMed || 99,
+      b1.boss.dragon.roundsWinMed || 99);
+    var recRows = ['F1', 'F2', 'F3', 'F4', 'F5'].map(function (f) {
+      var x = m1.curve.m1[f];
+      return f + ' in=' + x.entry.staticMed + ' mid=' + x.mid.staticMed + ' out=' + x.exit.staticMed +
+        ' gap=' + x.gapPct + '% (n ' + x.entry.n + '/' + x.mid.n + '/' + x.exit.n + ')';
+    });
+    var normalLe4 = ['F3', 'F4', 'F5'].every(function (f) {
+      return m1.curve.m1[f].mid.staticMed <= 4 && m1.curve.m1[f].exit.staticMed <= 4;
+    });
+    var bossLe10 = ['ogre_boss', 'zombie_king', 'dragon'].every(function (b) {
+      return (m1.boss[b].roundsWinMed || 0) <= 10;
+    });
+    rec('B1_b1Gate', b1pct >= 40 && b1pct <= 55, {
+      rule: 'B1-2500 通关率必须落在 40%–55%（D-67 末值 46%）',
+      wins: b1w, pct: b1pct, range: '40–55'
+    });
+    rec('B2_eliteBelowBoss', e1.roundsWinMed < bossMed, {
+      rule: '精英实战回合中位必须明显低于本层 Boss（取三只 Boss 里最低的胜场中位作对照）',
+      eliteMed: e1.roundsWinMed, eliteRange: e1.roundsMin + '-' + e1.roundsMax,
+      bossWinMed: { ogre_boss: b1.boss.ogre_boss.roundsWinMed, zombie_king: b1.boss.zombie_king.roundsWinMed, dragon: b1.boss.dragon.roundsWinMed },
+      byFloor: e1.byFloor
+    });
+    rec('B3_normalLe4', normalLe4, {
+      rule: '普通怪（排除精英/Boss）中位击杀回合 F3–F5 仍 ≤4（D-66 判据不许破）',
+      F3: m1.curve.m1.F3.mid.staticMed + '/' + m1.curve.m1.F3.exit.staticMed,
+      F4: m1.curve.m1.F4.mid.staticMed + '/' + m1.curve.m1.F4.exit.staticMed,
+      F5: m1.curve.m1.F5.mid.staticMed + '/' + m1.curve.m1.F5.exit.staticMed
+    });
+    rec('B4_bossLe10', bossLe10, {
+      rule: 'Boss 战胜场中位 ≤10 回合（M1-4500 全清装等下的实测；D-67 判据不许破）',
+      ogre_boss: m1.boss.ogre_boss.roundsWinMed, zombie_king: m1.boss.zombie_king.roundsWinMed,
+      dragon: m1.boss.dragon.roundsWinMed,
+      note: 'B1-2500 是冲层口径（装备更差），巨龙胜场中位会高于 10，D-67 的 ≤10 一直取自满装口径'
+    });
+    rec('B5_rewardVisible', nx1 && nx1.roundDropMed >= 1 && nx1.atkGainMed >= 1, {
+      rule: '打赢精英后的下一场同层普通怪：回合数要实际下降（中位降幅 ≥1）',
+      n: nx1 && nx1.n, before: nx1 && nx1.roundsBeforeMed, after: nx1 && nx1.roundsAfterMed,
+      drop: nx1 && nx1.roundDropMed, atkGain: nx1 && nx1.atkGainMed
+    });
+    rec('B6_threePoint', true, {
+      rule: 'F1–F5 三时点（M1-4500，沿用 D-68 口径）+ 层内差',
+      rows: recRows,
+      gapF3: m1.curve.m1.F3.gapPct, gapF4: m1.curve.m1.F4.gapPct, gapF5: m1.curve.m1.F5.gapPct,
+      note: 'Gap 只是记录，不在本页做通过/不通过裁决；最终结论见 docs/层内精英-D-69.md 的"如实报差"一节'
+    });
+
+    /* ── B7：实测"绕不开"率（记录项，不做通过裁决） ─────────────── */
+    function foughtElite(run, floor) {
+      var bs = run.battles || [];
+      for (var i = 0; i < bs.length; i++) {
+        var md = M[bs[i].id];
+        if (bs[i].floor === floor && md && md.elite && bs[i].res === 'win') return true;
+      }
+      return false;
+    }
+    var passedF = {}, foughtF = {}, escaped = [];
+    for (var f0 = 1; f0 <= 5; f0++) { passedF[f0] = 0; foughtF[f0] = 0; }
+    for (var ri7 = 0; ri7 < b1.runs.b1.length; ri7++) {
+      var r7 = b1.runs.b1[ri7];
+      for (var f7 = 1; f7 <= 4; f7++) {
+        if ((r7.maxFloor || 0) >= f7 + 1) {
+          passedF[f7]++;
+          if (foughtElite(r7, f7)) foughtF[f7]++;
+          else escaped.push(r7.seed + ':F' + f7);
+        }
+      }
+      if (r7.outcome === 'win') {
+        passedF[5]++;
+        if (foughtElite(r7, 5)) foughtF[5]++;
+        else escaped.push(r7.seed + ':F5');
+      }
+    }
+    var mustRows = [];
+    for (var f8 = 1; f8 <= 5; f8++) {
+      mustRows.push('F' + f8 + ' ' + foughtF[f8] + '/' + passedF[f8] +
+        ' = ' + (passedF[f8] ? Math.round(foughtF[f8] / passedF[f8] * 100) : 0) + '%');
+    }
+    rec('B7_mustFight', true, {
+      rule: '记录项：到达并离开该层的局里，有多少局确实打赢了该层精英（= 实测"绕不开"率）',
+      rows: mustRows, escaped: escaped,
+      note: '严格割点只占 36% 的图；其余图存在环路，B1 可以绕开（这就是卡面要求的"绕路能力保留"）。' +
+        '本页只如实记录，不设通过阈值；未达 100% 的原因与改进方向见 docs/层内精英-D-69.md 的"风险点"'
+    });
+
+    document.title = 'D69_DONE';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    document.title = 'D69_FAIL';
+  }
+  window.__D69_VERIFY__ = out;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

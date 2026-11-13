@@ -5,7 +5,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  3110,
+                     "ms":  2070,
                      "payload":  "{\"loaded\":true,\"api\":true,\"ok\":true,\"sub\":{\"c21_resetOnRestart\":true,\"c21_before\":[\"potion_small\",\"potion_large\",\"knife\",\"machete\",\"sword_rusty\",\"sword_iron\",\"armor_leather\",\"sword_iron_rare\",\"potion_mana\",\"scroll_upgrad…"
                  },
                  {
@@ -13,7 +13,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2073,
+                     "ms":  2065,
                      "payload":  "{\"loaded\":true,\"api\":true,\"ok\":true,\"sub\":{\"c31_poolTierAllFloors\":true,\"c31_rows\":[{\"floor\":1,\"coreEquipMin\":20,\"coreMinId\":\"knife\",\"bad\":0},{\"floor\":2,\"coreEquipMin\":85,\"coreMinId\":\"hammer\",\"bad\":0},{\"floor\":3,\"coreEqu…"
                  },
                  {
@@ -21,7 +21,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2109,
+                     "ms":  2069,
                      "payload":  "{\"loaded\":true,\"api\":true,\"ok\":true,\"sub\":{\"c3b1_noDeeperCoreInPool\":true,\"c3b1_rows\":[{\"floor\":1,\"viol\":[]},{\"floor\":2,\"viol\":[]},{\"floor\":3,\"viol\":[]},{\"floor\":4,\"viol\":[]},{\"floor\":5,\"viol\":[]}],\"c3b2_tierStillOk\":tru…"
                  },
                  {
@@ -29,7 +29,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2077,
                      "payload":  "{\"loaded\":true,\"api\":true,\"ok\":true,\"sub\":{\"c41_newItemsValid\":true,\"c41_rows\":[{\"id\":\"sword_knight\",\"exists\":true,\"name\":\"骑士长剑\",\"type\":\"weapon\",\"price\":240,\"sell\":120,\"effect\":{\"atk\":9},\"ceilOk\":true},{\"id\":\"armor_scale…"
                  },
                  {
@@ -37,7 +37,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2061,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"c53_detail\":{\"first\":{\"episodes\":58,\"successes\":5,\"rate\":9},\"second\":{\"episodes\":58,\"successes\":5,\"rate\":9}},\"c51_harnessValid\":true,\"c51_qRuns\":[{\"seed\":101,\"gridHash\":\"b8a46448\",\"target…"
                  },
                  {
@@ -45,7 +45,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2059,
+                     "ms":  2086,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d21_trapsAndRoomsListed\":true,\"d21_bullets\":true,\"d21_missingNumbers\":[],\"d21_impl\":[{\"file\":\"js/systems/map.js\",\"tokens\":[\"placeTraps\",\"triggerTrap\",\"getTrap\",\"placeSpecialRoom\",\"furnish…"
                  },
                  {
@@ -53,7 +53,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2153,
+                     "ms":  2102,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d51_xc01BothPhrasings\":true,\"d51_cases\":[{\"text\":\"· 物品全表 48 件（含 4 档强化卷轴）\",\"parsed\":[48],\"ok\":true},{\"text\":\"· 物品 48 条（含 4 档强化卷轴）\",\"parsed\":[48],\"ok\":true},{\"text\":\"README.md 实际文本\",\"parsed…"
                  },
                  {
@@ -61,7 +61,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2069,
+                     "ms":  2131,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d61_verdictFromLastLine\":true,\"d61_cases\":[{\"name\":\"only_pass\",\"sample\":\"\u0026lt;title\u0026gt;PASS {\\\"case\\\":\\\"onlyPass\\\"}\u0026lt;/title\u0026gt; ... PASS {\\\"case\\\":\\\"onlyPass\\\",\\\"ok\\\":true}\",\"output\":\"VE…"
                  },
                  {
@@ -69,7 +69,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2071,
+                     "ms":  2075,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d71_f08Marked\":true,\"d71_row\":true,\"d71_note\":\"**FR-08 状态：未排期（v1 / v1.1 不含）** —— 范围裁决，非技术不可行。原因与重启前置见 `规划-对标补齐.md` §七 D-07；原需求描述保留、编号不变。\\n\\n### 2.3 非功能需求（NFR）\\n\\n| 编号 | 需求 | 指标/约束 |\\n|---…"
                  },
                  {
@@ -77,7 +77,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2059,
+                     "ms":  2071,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d81_failOne\":true,\"d82_noneOne\":true,\"d83_mixedOne\":true,\"d81_output\":\"TOTAL=1 PASS=0 FAIL=1 NONE=0 MIXED=0\",\"d82_output\":\"TOTAL=1 PASS=0 FAIL=0 NONE=1 MIXED=0\",\"d83_output\":\"TOTAL=1 PASS…"
                  },
                  {
@@ -85,7 +85,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2064,
+                     "ms":  2065,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d91_markersPresent\":true,\"d91_hits\":{\"verify_d05\":{\"marked\":true,\"line\":\"\u0026lt;meta name=\\\"preflight-meta\\\" content=\\\"1\\\"\u0026gt;\"},\"verify_d06\":{\"marked\":true,\"line\":\"\u0026lt;meta name=\\\"preflight…"
                  },
                  {
@@ -93,15 +93,15 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2065,
-                     "payload":  "{\"e2e\":true,\"runs\":3,\"errors\":0,\"maxGapMs\":53.2,\"allBackToTitle\":true,\"guideDismissed\":true,\"perRun\":[{\"run\":1,\"errors\":0,\"maxGapMs\":53.2,\"backToTitle\":true},{\"run\":2,\"errors\":0,\"maxGapMs\":3,\"backToTitle\":true},{\"run\":3,…"
+                     "ms":  2062,
+                     "payload":  "{\"e2e\":true,\"runs\":3,\"errors\":0,\"maxGapMs\":42.5,\"allBackToTitle\":true,\"guideDismissed\":true,\"perRun\":[{\"run\":1,\"errors\":0,\"maxGapMs\":42.5,\"backToTitle\":true},{\"run\":2,\"errors\":0,\"maxGapMs\":2.8,\"backToTitle\":true},{\"run\":…"
                  },
                  {
                      "page":  "verify_d11",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2094,
+                     "ms":  2105,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"d11_1_sourceGuarded\":true,\"d11_1_notes\":{\"tryBeforeLoop\":false,\"reregisterAfterCatch\":false},\"d11_2_stress\":{\"seeds\":7,\"steps\":6286,\"errors\":0,\"battles\":21,\"modals\":56,\"floors\":28,\"maxFra…"
                  },
                  {
@@ -109,7 +109,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3091,
+                     "ms":  4144,
                      "payload":  "{\"id\":\"d12_a\",\"before_frame_p50\":11.7,\"after_frame_p50\":1.8,\"before_frame_p95\":13.6,\"after_frame_p95\":2.7,\"before_drawImage\":859,\"after_drawImage\":8,\"before_spriteGet\":867,\"after_spriteGet\":11,\"before_tapDrop\":160,\"after…"
                  },
                  {
@@ -117,7 +117,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2093,
+                     "ms":  2083,
                      "payload":  "{\"ok\":true,\"sub\":{\"evidenceLoaded\":true,\"d131_sourceForm\":{\"ok\":true,\"hasNew\":true,\"hasOld\":false},\"d132_oneStep\":{\"ok\":true,\"expect\":\"Q[s][1]=3.64 且 Q[s\u0027][1] 保持 2\"},\"d133_twoStep\":{\"ok\":true,\"expect\":\"Q[s0][1]=4.36 且 Q[…"
                  },
                  {
@@ -125,7 +125,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2075,
+                     "ms":  2062,
                      "payload":  "{\"ok\":true,\"sub\":{\"A0_noticeSubscriber\":{\"ok\":true,\"detail\":\"emit 后进入显示队列=true，MAX=3，LIFE=2400ms，FADE=400ms\"},\"A1_lifecycle\":{\"ok\":true,\"detail\":\"cap3=true(保留 q2..q4) dedupe=true/hist=true expire@2401ms=true\"},\"A2_1_skil…"
                  },
                  {
@@ -133,7 +133,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2079,
+                     "ms":  2074,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_bossFleeKeepsBoss\":{\"ok\":true,\"detail\":\"龙存在=true 遭遇=true 逃跑后仍在=true 怪物数 1→1 后退一格=true 再遭遇=true 再击杀→victory=true 击杀后移除=true\"},\"A2_negativeSpliceOnFlee\":{\"ok\":true,\"detail\":\"旧 splice 行为下逃跑后龙仍在场=false（…"
                  },
                  {
@@ -141,15 +141,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2074,
-                     "payload":  "{\"ok\":true,\"sub\":{\"M1_ledgerCurrentRun\":{\"ok\":true,\"detail\":{\"myRun\":\"20261114031203-ed4c63\",\"ledgerRun\":\"20261114031203-ed4c63\",\"rows\":17}},\"M2_artifactHash\":{\"ok\":true,\"detail\":{\"stored\":\"a5d5f2fc\",\"computed\":\"a5d5f2fc…"
+                     "ms":  2070,
+                     "payload":  "{\"ok\":true,\"sub\":{\"M1_ledgerCurrentRun\":{\"ok\":true,\"detail\":{\"myRun\":\"20261114044126-5bed5c\",\"ledgerRun\":\"20261114044126-5bed5c\",\"rows\":17}},\"M2_artifactHash\":{\"ok\":true,\"detail\":{\"stored\":\"5a9bab64\",\"computed\":\"5a9bab64…"
                  },
                  {
                      "page":  "verify_d16",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2106,
+                     "ms":  2139,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_playerHitBeforeMonsterHit\":{\"ok\":true,\"d\":\"玩家命中 at=100000 / 怪物反击 at=100100（差 100ms）\"},\"A2_twoSegmentsNotSameFrame\":{\"ok\":true,\"d\":\"两段间隔 100ms ≥ seg1=100ms\"},\"A3_negativeMergedSameFrameFails\":{\"ok\":t…"
                  },
                  {
@@ -157,7 +157,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  19223,
+                     "ms":  5137,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_seedDrivesMapGeneration\":{\"ok\":true,\"d\":\"同种子 7001 两次生成的地图指纹相同（475 字符，完全一致），换种子 7004 后指纹改变=true\"},\"A2_sameSeedSameRun\":{\"ok\":true,\"d\":\"同种子跑两次，除 wallMs 外全部字段（结局/步数/位置/金币/装备/任务/死层/帧数）逐字节相同，签名 1330 字符\"}…"
                  },
                  {
@@ -165,7 +165,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  40437,
+                     "ms":  33464,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_birthToUpStairReachable\":{\"ok\":true,\"d\":\"200 种子 × 5 层 = 1000 张地图：去上行梯的路上不踩下行梯（反之亦然）全部可达；失败 0\"},\"A2_exactlyOneStairEach\":{\"ok\":true,\"d\":\"每层恰好 1 个上行梯(3) + 1 个下行梯(2)；异常 0（不靠减楼梯回避）\"},\"A3_mapSizeAndEnemi…"
                  },
                  {
@@ -181,7 +181,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  2066,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_tableMatchesCode\":{\"ok\":true,\"d\":\"双向比对：代码读到的键 23 个 + 方向键 8 个，全部在表里；缺失 []，文案缺行 []\"},\"A2_negativeDrop7Fails\":{\"ok\":true,\"d\":\"删掉 7 用药后：ok=false，missing=[\\\"战斗 Digit7 → 表里没有「7」\\\",\\\"战斗 Numpad7 → 表里没有「7」\\\"…"
                  },
                  {
@@ -189,7 +189,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  2066,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_allRegisteredLoadable\":{\"ok\":true,\"d\":\"注册 207 个 → 成功解码 207，失败 0\"},\"A2_noEmptyFrames\":{\"ok\":true,\"d\":\"不透明像素为 0 的帧：无（共 207 张）\"},\"A2n_negativeClearedFrameFails\":{\"ok\":true,\"d\":\"把 knight_m_hit_anim_f1 的…"
                  },
                  {
@@ -197,15 +197,15 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2066,
-                     "payload":  "{\"loaded\":true,\"ok\":true,\"note\":\"基线 104 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94，D-54 起 94→95，D-55 起 95→96，D-57 起 96→97，D-58 起 97→98，D-59 起 …"
+                     "ms":  2059,
+                     "payload":  "{\"loaded\":true,\"ok\":true,\"note\":\"基线 105 页（含本页 verify_d22；D-46 起 86→87，D-47 起 87→88，D-48 起 88→89，D-49 起 89→90，D-50 起 90→91，D-51 起 91→92，D-52 起 92→93，D-53 起 93→94，D-54 起 94→95，D-55 起 95→96，D-57 起 96→97，D-58 起 97→98，D-59 起 …"
                  },
                  {
                      "page":  "verify_d23",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  10166,
+                     "ms":  9111,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_fieldsPresentAndTyped\":{\"ok\":true,\"d\":\"payload 键 16 个；校验=OK；{\\\"result\\\":\\\"lose\\\",\\\"source\\\":\\\"battle\\\",\\\"monsterId\\\":\\\"slime\\\",\\\"monsterName\\\":\\\"史莱姆\\\",\\\"floor\\\":3,\\\"playerLevel\\\":4,\\\"roundNo\\\":1,\\\"h…"
                  },
                  {
@@ -213,7 +213,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  16250,
+                     "ms":  16206,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_newGameStartsWithKnife\":{\"ok\":true,\"d\":\"M.init()→M.restart() 后：背包键数=0、weapon=knife、armor=null、atk=11、def=5（D-27 起手匕首 +1 攻击；与 init 无档路径、restart 同一函数发放）\"},\"A2_negativeNoWeaponBreaksStartingCheck\":{\"ok…"
                  },
                  {
@@ -221,7 +221,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2063,
+                     "ms":  3070,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_guideHasEquipLine\":{\"ok\":true,\"d\":\"第 11/14 行（机制块起点 8）：「装备：捡到或买到武器/护甲后，按 B 打开背包，↑↓ 选择、Enter 使用/装备，行尾显示 攻击+N / 防御+N」\"},\"A2_equipTextMatchesPanel\":{\"ok\":true,\"d\":\"面板底栏「↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭」，…"
                  },
                  {
@@ -229,7 +229,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2227,
+                     "ms":  2075,
                      "payload":  "{\"ok\":true,\"n\":10,\"fail\":[]}"
                  },
                  {
@@ -237,7 +237,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2064,
+                     "ms":  2092,
                      "payload":  "{\"ok\":true,\"n\":11,\"fail\":[]}"
                  },
                  {
@@ -245,7 +245,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2076,
+                     "ms":  2084,
                      "payload":  "{\"ok\":true,\"n\":11,\"fail\":[]}"
                  },
                  {
@@ -253,7 +253,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2084,
                      "payload":  "{\"ok\":true,\"n\":11,\"fail\":[]}"
                  },
                  {
@@ -261,7 +261,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2076,
+                     "ms":  2091,
                      "payload":  "{\"ok\":true,\"n\":11,\"fail\":[]}"
                  },
                  {
@@ -269,7 +269,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2058,
+                     "ms":  2074,
                      "payload":  "{\"ok\":true,\"n\":11,\"fail\":[]}"
                  },
                  {
@@ -277,7 +277,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2084,
+                     "ms":  2067,
                      "payload":  "{\"mode\":\"full\",\"ok\":true,\"n\":15,\"fail\":[]}"
                  },
                  {
@@ -285,7 +285,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  3645,
+                     "ms":  2067,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_playerHitMatchesIndependent\":{\"ok\":true,\"d\":\"玩家普攻 170 个 (atk,def) 点：真实战斗实测与独立实现 max(1,round(atk²/(atk+def))) 全部一致；不一致 0 处\"},\"A2_monsterHitMatchesIndependent\":{\"ok\":true,\"d\":\"怪物→玩家 64 个 (atk,def) 点：实…"
                  },
                  {
@@ -293,7 +293,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2083,
+                     "ms":  3180,
                      "payload":  "{\"loaded\":true,\"api\":true,\"ok\":true,\"sub\":{\"A_sizes\":[{\"id\":\"player\",\"label\":\"玩家骑士\",\"nat\":\"16x28\",\"content\":\"15x20\",\"drawn\":\"24x42\",\"expectH\":42,\"contentExpect\":30,\"contentDrawn\":30,\"ok\":true},{\"id\":\"slime\",\"label\":\"史莱姆\"…"
                  },
                  {
@@ -301,7 +301,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2082,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"A_initReset\":{\"consecutive\":true,\"afterTrain\":true,\"epsilonFirst\":0.394,\"epsilonDecayed\":0.2739999999999999,\"epsilonBack\":0.394,\"epsilonOldInit\":0.2679999999999999,\"oldPatched\":true,\"nega…"
                  },
                  {
@@ -309,7 +309,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3083,
+                     "ms":  3084,
                      "payload":  "{\"loaded\":true,\"ok\":true,\"sub\":{\"A_G0_reproduces_d34\":{\"ok\":true,\"d\":{\"evidence\":{\"ok\":true,\"bad\":[]},\"liveSeeds\":[1001,1003,1004],\"live\":{\"ok\":true,\"bad\":[]},\"negativeMutatedRunFails\":true,\"negativeBadSeed\":[1001],\"nega…"
                  },
                  {
@@ -317,7 +317,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  4164,
+                     "ms":  4114,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_F5_boss_reachable\":{\"ok\":true,\"d\":{\"seeds\":200,\"unreachableSeeds\":[],\"missingBoss\":[],\"relocated\":[{\"seed\":1144,\"moves\":[{\"kind\":\"boss\",\"id\":\"dragon\",\"from\":\"5,13\",\"to\":\"35,5\"}]}],\"negativeBlockedCor…"
                  },
                  {
@@ -325,15 +325,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3066,
-                     "payload":  "{\"ok\":true,\"sub\":{\"A_stealth_no_pick_fight\":{\"ok\":true,\"d\":{\"stored\":{\"battles\":311,\"active\":0,\"forced\":311,\"byBlock\":50,\"byPatrol\":257,\"byBoss\":4},\"badRuns\":[],\"liveS1\":[{\"seed\":1001,\"battles\":39,\"active\":0,\"forced\":39,…"
+                     "ms":  3081,
+                     "payload":  "{\"ok\":true,\"sub\":{\"A_stealth_no_pick_fight\":{\"ok\":true,\"d\":{\"stored\":{\"battles\":311,\"active\":0,\"forced\":311,\"byBlock\":50,\"byPatrol\":257,\"byBoss\":4},\"badRuns\":[],\"liveS1\":[{\"seed\":1001,\"battles\":23,\"active\":0,\"forced\":23,…"
                  },
                  {
                      "page":  "verify_d40",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2086,
+                     "ms":  2107,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_formula_reproducible\":{\"ok\":true,\"d\":{\"checked\":24,\"mismatches\":[],\"note\":\"atk=10+(L-1)+eff(武器)，def=5+(L-1)+eff(护甲)，maxHp=100+(L-1)*10+装备maxHp\"}},\"B_ceiling_traceable\":{\"ok\":true,\"d\":{\"baseL1\":{\"atk\"…"
                  },
                  {
@@ -341,7 +341,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2065,
+                     "ms":  2063,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_same_matrix\":{\"ok\":true,\"d\":{\"seeds\":50,\"maxActions\":2500,\"startPosSetsEqual\":true,\"fieldsOk\":true,\"s1F5EnterStates\":7}},\"A_legacy_reproduces\":{\"ok\":true,\"d\":{\"m1\":[],\"s1\":[],\"g2\":[],\"g2KnownDelta101…"
                  },
                  {
@@ -349,7 +349,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2063,
+                     "ms":  2086,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_eight_rows_same_formula\":{\"ok\":true,\"d\":{\"rows\":[{\"floor\":1,\"id\":\"tiny_zombie\",\"name\":\"小僵尸\",\"kind\":\"精英\",\"boss\":{\"hp\":50,\"atk\":8,\"def\":2},\"player\":{\"atk\":11.125,\"def\":9,\"hp\":110},\"playerDmg\":9,\"bossDm…"
                  },
                  {
@@ -357,7 +357,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2148,
+                     "ms":  2097,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_hp_balance_exact\":{\"ok\":true,\"d\":{\"checkedFloorRows\":537,\"bad\":[],\"rule\":\"每层：hpIn + healTotal − damageTotal − hpOut = 0（致死溢出按实际掉血记，误差必须为 0）\",\"samples\":[{\"seed\":1001,\"outcome\":\"dead\",\"deathFloor\":3,\"p…"
                  },
                  {
@@ -365,7 +365,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2084,
+                     "ms":  2070,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_b1_active_f1_f4_zero\":{\"ok\":true,\"d\":{\"rule\":\"B1 在 F1–F4 只能因挡路(forced)或巡逻贴脸(patrol)开战；active(主动踩怪) 必须为 0\",\"activeF1F4\":0,\"activeF5\":0,\"activeRuns\":[],\"forced\":74,\"patrol\":73,\"boss\":28,\"battles\":175,\"…"
                  },
                  {
@@ -373,7 +373,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2097,
+                     "ms":  2062,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_per_run_recomputable\":{\"ok\":true,\"d\":{\"rule\":\"25 个到 F5 的局必须逐局可复算：进店次数、当时金币、货架（武器/护甲 是否升级/买不买得起）、成交、原因；原因只允许 bought/noStock/goldShort/priority/noEntry，页面重算必须与 bot 记录一致\",\"f5Runs\":25,\"floorSegments\":125…"
                  },
                  {
@@ -381,7 +381,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2252,
+                     "ms":  2062,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_ledger_recomputable\":{\"ok\":true,\"d\":{\"rule\":\"任取 3 局，初始金币 + 获得 − 支出 = 期末金币，误差必须为 0；50 局全部逐局复算通过\",\"runs\":50,\"bad\":[],\"sample\":[{\"seed\":1001,\"initial\":0,\"income\":{\"chest\":19,\"drop\":84,\"reward\":470,\"ques…"
                  },
                  {
@@ -389,15 +389,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3086,
-                     "payload":  "{\"ok\":true,\"sub\":{\"H_index_smoke\":{\"ok\":true,\"d\":{\"rule\":\"index.html 引用的本地文件全部可读、包含 js/data/npcs.js；真实 init + 一帧 loop 无 JS 错误，场景 explore 且 F1 恰有 1 个 NPC\",\"refs\":41,\"missing\":[],\"npcs\":[{\"id\":\"warden_f1\",\"x\":19,\"y\":15}],\"…"
+                     "ms":  3101,
+                     "payload":  "{\"ok\":true,\"sub\":{\"H_index_smoke\":{\"ok\":true,\"d\":{\"rule\":\"index.html 引用的本地文件全部可读、包含 js/data/npcs.js；真实 init + 一帧 loop 无 JS 错误，场景 explore 且 F1 恰有 1 个 NPC\",\"refs\":41,\"missing\":[],\"npcs\":[{\"id\":\"warden_f1\",\"x\":3,\"y\":11}],\"e…"
                  },
                  {
                      "page":  "verify_d48",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2111,
+                     "ms":  2083,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_cold_start_menu\":{\"ok\":true,\"d\":{\"rule\":\"index.html 显式声明首屏；冷启动 init({menu:true}) 落在 menu 场景；skipMenu 参数可跳过；去掉 skip 必须回到菜单\",\"scene\":\"menu\",\"page\":\"root\",\"items\":[{\"id\":\"new\",\"label\":\"开始新游戏\",\"enabled\":…"
                  },
                  {
@@ -405,7 +405,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2076,
                      "payload":  "{\"ok\":true,\"sub\":{\"E_gear_isolated\":{\"ok\":true,\"d\":{\"rule\":\"救援装备只由 Adaptive 发放：不在 SHOP_STOCK/SHOP_ROTATION/CHEST_LOOT/怪物 drops，也不改变 ITEMS 的 48 件可枚举统计\",\"id\":\"sword_rescue\",\"enumerableKeys\":48,\"hasDirectLookup\":true,\"def\":…"
                  },
                  {
@@ -413,7 +413,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2056,
+                     "ms":  2091,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_f5_split_recomputable\":{\"ok\":true,\"d\":{\"rule\":\"每局最后一战：bossMax−Σdealt=剩余血量；Σtaken=实测承伤；起点HP+实际回血−Σtaken=回合末HP(0)；tNeed=ceil(剩余/每回合输出)；addTaken=tNeed×每回合承伤；三项分量与 f5split 上报值逐项相等\",\"rows\":16,\"mismatches\"…"
                  },
                  {
@@ -421,7 +421,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3090,
+                     "ms":  3096,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_pause_really_stops\":{\"ok\":true,\"d\":{\"rule\":\"暂停 3 秒（180 帧）后步数 / AI tick / 战斗 tick / 回合计时四类计数全部不变；恢复后同一按键继续生效；负例\\\"只盖遮罩不暂停\\\"必须被同一判据判为没停\",\"dir\":\"ArrowRight\",\"opened\":true,\"items\":[\"resume\",\"settings\",\"me…"
                  },
                  {
@@ -429,7 +429,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2120,
+                     "ms":  2079,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_stats_recomputable\":{\"ok\":true,\"d\":{\"rule\":\"结局 7 项统计中抽 6 项（到达层数/总击杀/最高等级/总回合/喝药数/被救援次数）逐局与 bot 被动台账相等；总耗时为运行期实测值（≥0）；至少包含一局通关\",\"runs\":200,\"wins\":17,\"compared\":1200,\"mismatches\":[],\"mismatchCount\":0,\"…"
                  },
                  {
@@ -437,15 +437,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2109,
-                     "payload":  "{\"ok\":true,\"sub\":{\"A_coord_roundtrip\":{\"ok\":true,\"d\":{\"rule\":\"存 → 读 20 次，玩家 x/y/层逐项等于存档时坐标；落点 reason=saved\",\"landableTiles\":197,\"passed\":20,\"failures\":[],\"samples\":[{\"want\":{\"x\":19,\"y\":1},\"got\":{\"x\":19,\"y\":1},\"landing\":{…"
+                     "ms":  2098,
+                     "payload":  "{\"ok\":true,\"sub\":{\"A_coord_roundtrip\":{\"ok\":true,\"d\":{\"rule\":\"存 → 读 20 次，玩家 x/y/层逐项等于存档时坐标；落点 reason=saved\",\"landableTiles\":192,\"passed\":20,\"failures\":[],\"samples\":[{\"want\":{\"x\":19,\"y\":1},\"got\":{\"x\":19,\"y\":1},\"landing\":{…"
                  },
                  {
                      "page":  "verify_d54",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2115,
+                     "ms":  2096,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_keys_exist\":{\"ok\":true,\"d\":{\"rule\":\"抽出脚本里全部「按 X 键」，逐个对照源码键位；键名不在表或源码缺证据即 FAIL\",\"tokens\":[\"1\",\"4\",\"7\",\"Enter\",\"↑/↓\",\"方向\",\"T\",\"M\",\"E\",\"B\",\"Esc\",\"←/→\",\"R\"],\"bad\":[]}},\"B_pages_exist_pass\":{\"ok\":true,\"d\"…"
                  },
                  {
@@ -453,15 +453,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2137,
-                     "payload":  "{\"ok\":true,\"sub\":{\"A_follow_guide_reaches\":{\"ok\":true,\"d\":{\"rule\":\"50 个种子：出生点起只按指引方向走，必须走到 NPC 相邻格；任一步非法/为空即 FAIL\",\"reached\":\"50/50\",\"avgSteps\":27.7,\"bad\":[]}},\"B_bfs_not_straight\":{\"ok\":true,\"d\":{\"rule\":\"逐格对照独立 BFS 的步数与…"
+                     "ms":  2075,
+                     "payload":  "{\"ok\":true,\"sub\":{\"A_follow_guide_reaches\":{\"ok\":true,\"d\":{\"rule\":\"50 个种子：出生点起只按指引方向走，必须走到 NPC 相邻格；任一步非法/为空即 FAIL\",\"reached\":\"50/50\",\"avgSteps\":28.9,\"bad\":[]}},\"B_bfs_not_straight\":{\"ok\":true,\"d\":{\"rule\":\"逐格对照独立 BFS 的步数与…"
                  },
                  {
                      "page":  "verify_d57",
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2091,
+                     "ms":  2064,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_facing_updates\":{\"ok\":true,\"d\":{\"rule\":\"左右/斜向按水平分量更新；纯上下与待机保持原朝向\",\"steps\":[{\"act\":\"左\",\"x\":4,\"y\":5,\"facing\":\"left\"},{\"act\":\"右\",\"x\":5,\"y\":5,\"facing\":\"right\"},{\"act\":\"左\",\"x\":4,\"y\":5,\"facing\":\"left\"},{\"a…"
                  },
                  {
@@ -469,7 +469,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2086,
+                     "ms":  2072,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_habit_table_matches\":{\"ok\":true,\"d\":{\"rule\":\"《平衡定档》附录A 的每行（名称→习性/半径）必须与 MONSTERS[id].habit 相同，AI.habits() 也必须同源；三档视距与不追型至少各一\",\"species\":18,\"docRows\":18,\"tiers\":{\"short\":5,\"mid\":5,\"long\":8,\"guard\":5},…"
                  },
                  {
@@ -477,7 +477,7 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  3082,
+                     "ms":  4082,
                      "payload":  "{\"ok\":true,\"sub\":{\"A_ai_monster_density\":{\"ok\":true,\"d\":{\"rule\":\"每层实际跑 AI 的怪数：D-58 = 2 只巡逻怪；D-59 = 非 guard 的静态怪 + 巡逻怪。要求均值 \u0026gt;2 且三种习性都真实存在\",\"floors\":250,\"beforeAvgMobile\":1.95,\"afterAvgMobile\":9.64,\"afterAvgGuard\":6.16,…"
                  },
                  {
@@ -485,15 +485,15 @@
                      "verdict":  "PASS",
                      "meta":  true,
                      "source":  "current-run",
-                     "ms":  2120,
-                     "payload":  "{\"ok\":true,\"sub\":{\"A_old_name_only_in_history\":{\"ok\":true,\"d\":{\"corpusFiles\":316,\"liveFiles\":13,\"liveViolations\":0,\"scannedFiles\":329,\"corpusBytes\":3003395,\"scanMs\":114,\"manifest\":\"preflight/selfcheck/d62-corpus.ps1 生成 d…"
+                     "ms":  2056,
+                     "payload":  "{\"ok\":true,\"sub\":{\"A_old_name_only_in_history\":{\"ok\":true,\"d\":{\"corpusFiles\":316,\"liveFiles\":13,\"liveViolations\":0,\"scannedFiles\":329,\"corpusBytes\":3003395,\"scanMs\":132,\"manifest\":\"preflight/selfcheck/d62-corpus.ps1 生成 d…"
                  },
                  {
                      "page":  "verify_d65",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  3073,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_baseStatsAtL1\":{\"ok\":true,\"d\":\"statsAt(1) = 10/5/100/50（期望 10/5/100/50）\"},\"A2_tiersAccumulateL1to12\":{\"ok\":true,\"d\":\"L1–L12 与独立累加器完全一致；L6=15/10/150 L7=17/11/160 L8=19/12/170 L9=22/15/180 L10=25/18/1…"
                  },
                  {
@@ -501,7 +501,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2066,
+                     "ms":  2083,
                      "payload":  "{\"ok\":true,\"sub\":{\"A1_hpTableExact\":{\"ok\":true,\"d\":\"18 只怪 hp 与新表一致（改 9 只：wogol,ogre,big_zombie,necromancer,masked_orc,pumpkin_dude,angel,ogre_boss,zombie_king）\"},\"A2_singleVariable\":{\"ok\":true,\"d\":\"atk/def/exp 与 D-65 末快照…"
                  },
                  {
@@ -509,7 +509,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2066,
+                     "ms":  2070,
                      "payload":  "{\"protocol\":\"D-67\",\"ok\":true,\"sub\":{\"A1_onlyDragonDefAndPatrol\":{\"ok\":true,\"d\":{\"rule\":\"18 只怪的 hp/atk/def 里只有 dragon.def 允许变（8→15）；视距、enrage、Boss 位置、地图尺寸一律不动；密度只允许 patrolArea\",\"bad\":[],\"sightBad\":[],\"enrageOk\":true,\"boss…"
                  },
                  {
@@ -517,15 +517,23 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2089,
                      "payload":  "{\"protocol\":\"D-68\",\"ok\":true,\"sub\":{\"A1_monstersUntouched\":{\"ok\":true,\"d\":{\"rule\":\"18 只怪的 hp/atk/def、8 条视距、巨龙 enrage 与 D-67 逐项相等（本卡不许动数值）\",\"bad\":[],\"sightBad\":[],\"enrageOk\":true,\"dragon\":{\"hp\":260,\"atk\":32,\"def\":15}}},\"A…"
+                 },
+                 {
+                     "page":  "verify_d69",
+                     "verdict":  "PASS",
+                     "meta":  false,
+                     "source":  "current-run",
+                     "ms":  3062,
+                     "payload":  "{\"protocol\":\"D-69\",\"ok\":true,\"sub\":{\"A1_eliteData\":{\"ok\":true,\"d\":{\"rule\":\"5 只精英用 defineProperty 挂成不可枚举；MONSTERS 可枚举条目仍 18；18 只怪 hp/atk/def 逐项不变；精英 exp/gold/drops 全 0（经济零增量）\",\"missing\":[],\"enumBad\":[],\"baseBad\":[],\"econB…"
                  },
                  {
                      "page":  "verify_m1",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2058,
+                     "ms":  2074,
                      "payload":  "{\"mapsData\":true,\"initRan\":false,\"gridSize\":null,\"walkable\":0,\"spawnWalkable\":false,\"tileTypes\":{},\"player\":\"1,1\"}"
                  },
                  {
@@ -533,15 +541,15 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2053,
-                     "payload":  "{\"start\":true,\"win\":true,\"exp\":10,\"gold\":6,\"inv\":\"{}\",\"defendTook\":0,\"defendHp\":88,\"ran\":true}"
+                     "ms":  2064,
+                     "payload":  "{\"start\":true,\"win\":true,\"exp\":10,\"gold\":8,\"inv\":\"{\\\"potion_small\\\":1}\",\"defendTook\":0,\"defendHp\":88,\"ran\":true}"
                  },
                  {
                      "page":  "verify_m3",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2052,
+                     "ms":  2071,
                      "payload":  "{\"buy\":true,\"goldAfterBuy\":490,\"use\":true,\"hpAfterUse\":80,\"invAfterUse\":\"{}\",\"equip\":true,\"atkAfter\":13,\"equipped\":\"sword_bone\",\"sellEquippedBlocked\":true,\"sellOk\":true,\"goldAfterSell\":95,\"stockCount\":10,\"stockNames\":\"po…"
                  },
                  {
@@ -549,7 +557,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2074,
+                     "ms":  2070,
                      "payload":  "{\"activeCount\":12,\"slimeDone\":true,\"goldAfterSlime\":30,\"goldQuestDone\":true,\"goldAfterGoldQ\":80,\"dragonDone\":true,\"goldAfterDragon\":280,\"loadOk\":true,\"goldRestored\":123,\"floorRestored\":1}"
                  },
                  {
@@ -557,7 +565,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  2061,
                      "payload":  "{\"npcGuide\":true,\"npcWho\":true,\"patrolCount\":0}"
                  },
                  {
@@ -565,15 +573,15 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2065,
-                     "payload":  "{\"howlerLoaded\":true,\"audioFn\":true,\"episode\":55,\"successRate\":16,\"rateAbove30\":false,\"agentValid\":true,\"sfxEventOk\":true}"
+                     "ms":  2076,
+                     "payload":  "{\"howlerLoaded\":true,\"audioFn\":true,\"episode\":51,\"successRate\":2,\"rateAbove30\":false,\"agentValid\":true,\"sfxEventOk\":true}"
                  },
                  {
                      "page":  "verify_m8_1",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2077,
+                     "ms":  2104,
                      "payload":  "{\"skillLoaded\":true,\"skillApi\":true,\"skillOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_mp\":true,\"t4_oldsave\":true,\"t5_cast\":true,\"t6_mp\":true,\"t7_cooldown\":true,\"t8_shield\":true,\"t9_command\":true,\"t10_notice\":true,\"t…"
                  },
                  {
@@ -581,7 +589,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2105,
+                     "ms":  2099,
                      "payload":  "{\"enrageLoaded\":true,\"enrageApi\":true,\"enrageOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_trigger\":true,\"t4_single\":true,\"t5_breath\":true,\"t6_defend\":true,\"t7_normal\":true,\"t8_dataImmutable\":true,\"t9_getState\":true,\"…"
                  },
                  {
@@ -589,7 +597,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2104,
+                     "ms":  2080,
                      "payload":  "{\"affixLoaded\":true,\"affixApi\":true,\"affixOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_noTiers\":true,\"t4_tiers\":true,\"t5_shop\":true,\"t6_recalc\":true,\"t7_oldFunc\":true,\"t8_repeat\":true}}"
                  },
                  {
@@ -597,7 +605,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2080,
+                     "ms":  2085,
                      "payload":  "{\"bestiaryLoaded\":true,\"bestiaryApi\":true,\"bestiaryOk\":true,\"err\":null,\"sub\":{\"t2_record\":true,\"t3_battle\":true,\"t4_shop\":true,\"t5_save\":true,\"t6_pages\":true,\"t7_monsterRows\":true,\"t8_itemRows\":true,\"t9_questRow\":true,\"t…"
                  },
                  {
@@ -613,7 +621,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2058,
+                     "ms":  2062,
                      "payload":  "{\"curveLoaded\":true,\"curveApi\":true,\"curveOk\":true,\"err\":null,\"sub\":{\"t2_formula\":true,\"t3_level\":true,\"t4_multi\":true,\"t5_idem\":true,\"t6_table\":true,\"t7_nogrind\":true,\"t8_recalc\":true,\"t9_hudData\":true,\"t9_hudDraw\":true…"
                  },
                  {
@@ -621,8 +629,8 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2065,
-                     "payload":  "{\"mapDetailLoaded\":true,\"detailApi\":true,\"detailOk\":true,\"err\":null,\"sub\":{\"t2\":true,\"t3\":true,\"t4\":true,\"t5\":true,\"t6\":true,\"t7\":true},\"found\":{\"detailCount\":69,\"decorCount\":22,\"chest\":true}}"
+                     "ms":  2058,
+                     "payload":  "{\"mapDetailLoaded\":true,\"detailApi\":true,\"detailOk\":true,\"err\":null,\"sub\":{\"t2\":true,\"t3\":true,\"t4\":true,\"t5\":true,\"t6\":true,\"t7\":true},\"found\":{\"detailCount\":98,\"decorCount\":22,\"chest\":true}}"
                  },
                  {
                      "page":  "verify_m9_2",
@@ -637,7 +645,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2057,
+                     "ms":  2083,
                      "payload":  "{\"motionLoaded\":true,\"motionApi\":true,\"motionOk\":true,\"err\":null,\"sub\":{\"t2_motionStart\":true,\"t3_motionMid\":true,\"t4_motionEnd\":true,\"t5_motionNull\":true,\"t6_particleSpawn\":true,\"t7_particleExpire\":true,\"t8_particleLimi…"
                  },
                  {
@@ -645,7 +653,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2063,
+                     "ms":  2052,
                      "payload":  "{\"audioLoaded\":true,\"audioApi\":true,\"audioOk\":true,\"err\":null,\"sub\":{\"t2_bgmExplore\":true,\"t2_bgmBattle\":true,\"t2_bgmVictory\":true,\"t2_bgmStop\":true,\"t2_bgmInvalid\":true,\"t3_muteOn\":true,\"t3_muteOff\":true,\"t4_vol03\":true…"
                  },
                  {
@@ -653,15 +661,15 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2126,
-                     "payload":  "{\"finLoaded\":true,\"finApi\":true,\"finOk\":true,\"err\":null,\"sub\":{\"t2_dpr2\":true,\"t2_scale\":true,\"t2_dpr1\":true,\"t3_narrow\":true,\"t4_perf\":true,\"t4_avgMs\":0.1,\"t4_leak\":true,\"t5_gameover\":true,\"t6_guide\":true,\"t7_empty\":tru…"
+                     "ms":  2086,
+                     "payload":  "{\"finLoaded\":true,\"finApi\":true,\"finOk\":true,\"err\":null,\"sub\":{\"t2_dpr2\":true,\"t2_scale\":true,\"t2_dpr1\":true,\"t3_narrow\":true,\"t4_perf\":true,\"t4_avgMs\":0.06,\"t4_leak\":true,\"t5_gameover\":true,\"t6_guide\":true,\"t7_empty\":tr…"
                  },
                  {
                      "page":  "verify_p1_1",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2081,
+                     "ms":  2099,
                      "payload":  "{\"sceneLoaded\":true,\"sceneApi\":true,\"sceneOk\":true,\"sub\":{\"t2_floor\":true,\"t3_wall\":true,\"t4_decor\":true,\"t5_skelet\":true,\"t5b_skeletDraw\":true,\"t6_draw\":true,\"t6_variants\":8,\"t7_missingNull\":true,\"t7_fallback\":true,\"t8_…"
                  },
                  {
@@ -669,7 +677,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2097,
+                     "ms":  2093,
                      "payload":  "{\"uiLoaded\":true,\"uiApi\":true,\"uiOk\":true,\"sub\":{\"t2_hearts\":true,\"t3_goldIcon\":true,\"t4_mpIcon\":true,\"t5_itemIcon\":true,\"t6_panel\":true,\"t9_idem\":true,\"t7_narrow\":true,\"t8_fallback\":true}}"
                  },
                  {
@@ -677,7 +685,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2084,
+                     "ms":  2074,
                      "payload":  "{\"animLoaded\":true,\"animApi\":true,\"animOk\":true,\"sub\":{\"t2_playerFrames\":true,\"t3_playerDraw\":true,\"t4_monsterMap\":true,\"t5_battle\":true,\"t7_idem\":true,\"t6_fallback\":true}}"
                  },
                  {
@@ -685,7 +693,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2074,
+                     "ms":  2080,
                      "payload":  "{\"moveSteps1s\":8,\"dragonsFinalFloor\":1,\"enemiesFinalFloor\":13,\"chestsBefore\":1,\"enemiesBefore\":4,\"downOk\":true,\"hpAfterDown\":30,\"floorAfterDown\":2,\"upOk\":true,\"hpAfterUp\":30,\"mpAfterUp\":5,\"floorAfterUp\":1,\"gridSameAfterR…"
                  },
                  {
@@ -693,7 +701,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2063,
+                     "ms":  2082,
                      "payload":  "{\"monsterLoaded\":true,\"monsterApi\":true,\"monsterOk\":true,\"sub\":{\"t2_monsterData\":true,\"t3_floorTable\":true,\"t3_strength\":{\"f1\":11.125,\"f2\":20.125,\"f3\":23.75,\"f4\":36.85,\"f5\":44.1},\"t4_animMap\":true,\"t5_drawMap\":true,\"t6_b…"
                  },
                  {
@@ -701,7 +709,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2100,
+                     "ms":  2097,
                      "payload":  "{\"itemLoaded\":true,\"itemApi\":true,\"itemOk\":true,\"sub\":{\"t2_itemCount\":true,\"t2_count\":48,\"t3_weaponTier\":true,\"t4_shopStock\":true,\"t4_counts\":[7,9,9,8,8],\"t5_useMp\":true,\"t6_itemIcon\":true,\"t7_fallback\":true,\"t8_recalc\":…"
                  },
                  {
@@ -709,7 +717,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2070,
+                     "ms":  2063,
                      "payload":  "{\"mapLoaded\":true,\"mapApi\":true,\"mapOk\":true,\"sub\":{\"t2_floors\":true,\"t2_sums\":[1,1,1,1,1],\"t3_strength\":true,\"t3_values\":[11.125,20.125,23.75,36.85,44.1],\"t4_monster15\":true,\"t4_counts\":{\"monsters\":18,\"anim\":18},\"t5_dra…"
                  },
                  {
@@ -717,7 +725,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2085,
+                     "ms":  2081,
                      "payload":  "{\"patchLoaded\":true,\"patchApi\":true,\"patchOk\":true,\"sub\":{\"t2_dialogue\":true,\"t3_bestiaryScroll\":true,\"t4_bestiaryItems\":true,\"t5_oneDragon\":true,\"t5_counts\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"t6_strengthUp\":true…"
                  },
                  {
@@ -725,7 +733,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2057,
+                     "ms":  2066,
                      "payload":  "{\"bossLoaded\":true,\"bossApi\":true,\"bossOk\":true,\"sub\":{\"t2_bossData\":true,\"t2_count\":18,\"t3_bossConfig\":true,\"t4_spawnEvery\":true,\"t4_sample\":{\"f2\":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],\"f4\":[1,1,1,1,1,1,1,1,1,1,1,1,…"
                  },
                  {
@@ -733,7 +741,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  2076,
                      "payload":  "{\"questLoaded\":true,\"questApi\":true,\"questOk\":true,\"sub\":{\"t2_questCount\":true,\"t2_count\":12,\"t3_oldQuests\":true,\"t8_initCompat\":true,\"t8_keys\":12,\"t6_collectQuest\":true,\"t6_state\":{\"rZero\":true,\"rBad\":false,\"progressBef…"
                  },
                  {
@@ -741,7 +749,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2060,
+                     "ms":  2067,
                      "payload":  "{\"rzLoaded\":true,\"rzApi\":true,\"rzOk\":true,\"err\":null,\"sub\":{\"scaleLadder\":true,\"resizeLayout\":true,\"clickMapping\":true,\"noTextOverflow\":true,\"resizeRepeatable\":true}}"
                  },
                  {
@@ -749,7 +757,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2065,
+                     "ms":  2076,
                      "payload":  "{\"shopLoaded\":true,\"shopApi\":true,\"shopOk\":true,\"sub\":{\"t1_shape\":true,\"t2_rows\":true,\"t2_counts\":[7,9,9,8,8],\"t3_floorDiff\":true,\"t3_parts\":{\"diff34\":true,\"a34\":true,\"a45\":true,\"e4\":true,\"e5\":true},\"t3_avg\":{\"f3\":236.67…"
                  },
                  {
@@ -757,7 +765,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2074,
+                     "ms":  2080,
                      "payload":  "{\"decorApi\":true,\"loaded\":true,\"spriteOk\":true,\"pixelOk\":true,\"alphaOk\":true,\"sub\":{\"decorIds\":true,\"barrel\":{\"w\":16,\"h\":16,\"opaque\":152},\"torch\":{\"w\":16,\"h\":16,\"opaque\":56},\"vine\":{\"w\":16,\"h\":16,\"opaque\":76},\"all\":true}…"
                  },
                  {
@@ -765,7 +773,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  3091,
+                     "ms":  2067,
                      "payload":  "{\"s03Loaded\":true,\"s03Api\":true,\"s03Ok\":true,\"sub\":{\"t2_scrollData\":true,\"t3_shopScroll\":true,\"t3_detail\":[{\"f\":1,\"scrolls\":1,\"coreAvg\":40.7},{\"f\":2,\"scrolls\":1,\"coreAvg\":92.2},{\"f\":3,\"scrolls\":1,\"coreAvg\":236.7},{\"f\":4,…"
                  },
                  {
@@ -773,23 +781,23 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2078,
-                     "payload":  "{\"s04Loaded\":true,\"s04Api\":true,\"s04Ok\":true,\"sub\":{\"t2_data\":true,\"t3_placement\":true,\"t3_detail\":[{\"f\":1,\"count\":8,\"kinds\":{\"spike\":8}},{\"f\":2,\"count\":7,\"kinds\":{\"spike\":5,\"gas\":2}},{\"f\":3,\"count\":6,\"kinds\":{\"spike\":4,…"
+                     "ms":  2075,
+                     "payload":  "{\"s04Loaded\":true,\"s04Api\":true,\"s04Ok\":true,\"sub\":{\"t2_data\":true,\"t3_placement\":true,\"t3_detail\":[{\"f\":1,\"count\":8,\"kinds\":{\"spike\":8}},{\"f\":2,\"count\":6,\"kinds\":{\"gas\":2,\"spike\":4}},{\"f\":3,\"count\":4,\"kinds\":{\"gas\":3,\"s…"
                  },
                  {
                      "page":  "verify_s05",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2080,
-                     "payload":  "{\"s05Loaded\":true,\"s05Api\":true,\"s05Ok\":true,\"sub\":{\"t2_data\":true,\"t3_floor1None\":true,\"t4_eachFloorAtMostOne\":true,\"t4_floorsWithRoom\":4,\"t4_perFloor\":[{\"f\":2,\"rooms\":1,\"tries\":1,\"x\":20,\"y\":3,\"w\":5,\"h\":4,\"door\":\"24,2\",…"
+                     "ms":  2065,
+                     "payload":  "{\"s05Loaded\":true,\"s05Api\":true,\"s05Ok\":true,\"sub\":{\"t2_data\":true,\"t3_floor1None\":true,\"t4_eachFloorAtMostOne\":true,\"t4_floorsWithRoom\":4,\"t4_perFloor\":[{\"f\":2,\"rooms\":1,\"tries\":1,\"x\":19,\"y\":12,\"w\":6,\"h\":4,\"door\":\"19,16…"
                  },
                  {
                      "page":  "verify_s3_1",
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2072,
+                     "ms":  2059,
                      "payload":  "{\"rotLoaded\":true,\"fovExists\":true,\"fovOk\":true,\"err\":null}"
                  },
                  {
@@ -797,7 +805,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2066,
+                     "ms":  2057,
                      "payload":  "{\"hudLoaded\":true,\"hudApi\":true,\"hudOk\":true,\"err\":null}"
                  },
                  {
@@ -805,7 +813,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2077,
+                     "ms":  2067,
                      "payload":  "{\"modalLoaded\":true,\"modalApi\":true,\"modalOk\":true,\"err\":null}"
                  },
                  {
@@ -813,7 +821,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2067,
+                     "ms":  2054,
                      "payload":  "{\"fbLoaded\":true,\"fbApi\":true,\"fbOk\":true,\"err\":null,\"sub\":{\"t2\":true,\"t3\":true,\"t4\":true,\"t5\":true,\"t6\":true,\"t7\":true,\"t8\":true}}"
                  },
                  {
@@ -821,7 +829,7 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2070,
+                     "ms":  2074,
                      "payload":  "{\"selfLoaded\":true,\"selfApi\":true,\"selfOk\":true,\"sub\":{\"p1_boot\":true,\"p2_systems\":true,\"p3_floors\":true,\"p3b_noAccum\":true,\"p4_shop\":true,\"p5_battle\":true,\"p6_save\":true,\"p7_npc\":true,\"p7_bagDedupe\":true,\"p8_draw\":true,…"
                  },
                  {
@@ -829,10 +837,10 @@
                      "verdict":  "PASS",
                      "meta":  false,
                      "source":  "current-run",
-                     "ms":  2074,
+                     "ms":  2067,
                      "payload":  "{\"smokeOk\":true,\"errors\":[],\"scene\":\"explore\",\"manualFrame\":true,\"frameError\":null,\"rafFrames\":1,\"rafNote\":\"rAF 帧数仅记录，不参与断言\"}"
                  }
              ],
-    "startedAt":  "2026-11-14T03:12:03",
-    "runId":  "20261114031203-ed4c63"
+    "startedAt":  "2026-11-14T04:41:26",
+    "runId":  "20261114044126-5bed5c"
 }

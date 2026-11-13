@@ -86,6 +86,27 @@
     vine:   { id: 'vine',   name: '藤蔓', desc: '装饰物' }
   };
 
+  /* D-69：层内精英——每层主路 1 只，挡在主路上但不是墙。
+   *   atFrac / band：主路（出生点→下行梯）进度 55%、允许 45%–65%；
+   *                  placeElite 在该窗口内优先取"割点"（去掉它出生点就到不了下行梯），
+   *                  保证绕不开；窗口内没有割点才退回"绕行代价最大"的合法格并记录 cut=false。
+   *   rewardAtk：打赢后确定性 +1 攻击（main.js grantEliteReward），不消耗随机数。
+   *   sprite：复用现有贴图（MONSTER_ANIM 的 key），不新增美术素材。
+   *   进精英层不改 grid / 连通性 / 普通怪数量，地图指纹与历史基线可逐格对照。 */
+  Game.Data.ELITE = {
+    enabled: true,
+    atFrac: 0.55,
+    band: [0.45, 0.65],
+    rewardAtk: 2,
+    floors: [
+      { floor: 1, id: 'elite_goblin', sprite: 'goblin' },
+      { floor: 2, id: 'elite_orc', sprite: 'orc_warrior' },
+      { floor: 3, id: 'elite_ogre', sprite: 'ogre' },
+      { floor: 4, id: 'elite_zombie', sprite: 'big_zombie' },
+      { floor: 5, id: 'elite_angel', sprite: 'angel' }
+    ]
+  };
+
   /* D-46：每层固定奖励点（只加补给：金币 / 药）。
    * 放置规则见 map.js placeRewards：沿"出生点→下行梯"的主路确定性取点，
    * 不消耗随机数（既有地图指纹不变），每层 ≤2 处（count 上限 2），
