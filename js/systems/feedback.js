@@ -105,16 +105,28 @@
           maxLife: (typeof opts.life === 'number') ? opts.life : (opts.kind === 'hit' ? HIT_LIFE : HURT_LIFE)
         };
       } else {
+        /* D-70：碾压档——只在特效非 off 时接管字号/颜色/寿命，并画一圈冲击环；
+         * off 档或旧调用方（无 tier）走的仍是 D-16 的普通/高伤两种样式，逐项不变。 */
+        var crush = false;
+        var lv = 'off';
+        if (opts.tier === 'crush') {
+          var Fx = Game.Fx;
+          lv = (Fx && typeof Fx.effectiveLevel === 'function') ? Fx.effectiveLevel() : 'off';
+          crush = lv !== 'off';
+        }
         item = {
           type: 'text',
           x: opts.x || 0,
           y: opts.y || 0,
           text: (opts.text == null) ? '' : String(opts.text),
-          color: opts.color || '#ffffff',
+          color: crush ? (opts.who === 'player' ? '#ff3b30' : '#ff5a2a')
+            : (opts.color || '#ffffff'),
           /* D-16：伤害分级——普通 18px / 高伤 24~26px（默认 18px，旧调用方行为不变） */
-          size: (typeof opts.size === 'number' && opts.size >= 10) ? opts.size : 18,
+          size: crush ? (lv === 'high' ? 36 : 32)
+            : ((typeof opts.size === 'number' && opts.size >= 10) ? opts.size : 18),
           vy: (typeof opts.vy === 'number') ? opts.vy : TEXT_VY,
-          maxLife: (typeof opts.life === 'number') ? opts.life : TEXT_LIFE
+          maxLife: crush ? 820 : ((typeof opts.life === 'number') ? opts.life : TEXT_LIFE),
+          crush: crush
         };
       }
       item.life = item.maxLife;
@@ -140,6 +152,24 @@
         if (it.type === 'text') {
           var ratio = Math.max(0, it.life / it.maxLife);
           ctx.save();
+          /* D-70：碾压档在数字外画一圈冲击环（固定角度，无随机；off 档不会进这里） */
+          if (it.crush) {
+            var ck = 1 - ratio;
+            ctx.globalAlpha = 0.7 * ratio;
+            ctx.strokeStyle = it.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(it.x, it.y, 14 + 26 * ck, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            for (var ci = 0; ci < 8; ci++) {
+              var ca = (Math.PI * 2 * ci) / 8 + 0.2;
+              var cr0 = 14 + 26 * ck + 2, cr1 = cr0 + 6;
+              ctx.moveTo(it.x + Math.cos(ca) * cr0, it.y + Math.sin(ca) * cr0);
+              ctx.lineTo(it.x + Math.cos(ca) * cr1, it.y + Math.sin(ca) * cr1);
+            }
+            ctx.stroke();
+          }
           ctx.globalAlpha = ratio;
           ctx.fillStyle = it.color;
           ctx.font = 'bold ' + (it.size || 18) + 'px monospace';
@@ -160,6 +190,13 @@
     /* 测试/调试用：清空所有反馈 */
     _clear: function () { items = []; },
     /* 测试用：当前存活数 */
-    _count: function () { return items.length; }
+    _count: function () { return items.length; },
+    /* D-70 测试用：飘字样式快照（只读；不参与游戏逻辑） */
+    _items: function () {
+      return items.map(function (it) {
+        return { type: it.type, text: it.text, color: it.color,
+          size: it.size, life: it.maxLife, crush: !!it.crush };
+      });
+    }
   };
 })();

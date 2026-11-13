@@ -1244,17 +1244,20 @@
       var phase = state.phase || 'idle';
       var roundNo = state.roundNo || ((state.turn | 0) + 1);
       battleSegments(ctx, CX, 244, roundNo, phase);
-      /* 上次行动结果——伤害分级：普通白字 16px，高伤橙字 18px 并带【高伤】标记（无暴击系统） */
+      /* 上次行动结果——伤害分级：普通白字 16px，高伤橙字 18px 并带【高伤】标记（无暴击系统）
+       * D-70：碾压档（特效非 off 时）用更大字与【碾压】标记；off 档与 D-69 完全一致 */
       var la = state.lastAction;
       if (la && typeof la.dmg === 'number') {
+        var fxOn = !(Fx && typeof Fx.effectiveLevel === 'function' && Fx.effectiveLevel() === 'off');
+        var crush = fxOn && la.tier === 'crush';
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.font = (la.heavy ? 'bold 18px monospace' : 'bold 16px monospace');
-        ctx.fillStyle = la.heavy ? '#ffb347' : '#e8e8e8';
+        ctx.font = (crush ? 'bold 20px monospace' : (la.heavy ? 'bold 18px monospace' : 'bold 16px monospace'));
+        ctx.fillStyle = crush ? '#ff6b3d' : (la.heavy ? '#ffb347' : '#e8e8e8');
         var actTxt = la.by === 'player'
           ? ('你对 ' + (la.name || '') + ' 造成 ' + la.dmg + ' 伤害')
           : ((la.name || '') + ' 反击，造成 ' + la.dmg + ' 伤害');
-        ctx.fillText((la.heavy ? '【高伤】' : '') + actTxt, CX, 300);
+        ctx.fillText((crush ? '【碾压】' : (la.heavy ? '【高伤】' : '')) + actTxt, CX, 300);
         ctx.restore();
       } else {
         ctx.save();

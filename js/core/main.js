@@ -509,6 +509,14 @@
     Game.Core.EventBus.emit('ui:notice', {
       msg: '精英之证：攻击 +' + (player.atk - before) + '（累计 +' + player.eliteAtk + '）'
     });
+    /* D-70：打赢精英当场给出"拿到了什么、带来什么变化"的卡片（攻击 34 → 36 / 累计 +2）。
+     * 只读上面已经重算完的面板值；Fx=off 时 Juice 自己跳过，提示条行为与 D-69 一致。 */
+    if (Game.Systems && Game.Systems.Juice && typeof Game.Systems.Juice.eliteReward === 'function') {
+      Game.Systems.Juice.eliteReward({
+        from: before, to: player.atk,
+        gain: player.atk - before, total: player.eliteAtk
+      });
+    }
     Game.Core.EventBus.emit('audio:play', { sfx: 'gold' });
   }
 
@@ -911,6 +919,10 @@
        * Inventory.recalcEquip 重算 atk；若清零放在后面，上一局的 eliteAtk 会被算进
        * 新局起手面板（实测重开后 atk 11→13，并让同种子两次跑局不再一致）。 */
       player.eliteAtk = 0;
+      /* D-70：新局清掉上一局残留的爽感卡片/冲击圈（纯表现，不影响任何数值） */
+      if (Game.Systems && Game.Systems.Juice && typeof Game.Systems.Juice._reset === 'function') {
+        Game.Systems.Juice._reset();
+      }
       player.inventory = {}; giveStartingGear(); /* D-27：新局起手匕首（与 init 的无档路径同一函数） */
       player.quests = {};
       player.upg = {}; /* S-03：新局强化清零 */
@@ -1743,6 +1755,10 @@
       if (Game.Fx && typeof Game.Fx.update === 'function') Game.Fx.update(dt);
       /* D-14：底部提示条生命周期（2.4s 存活 + 400ms 淡出，最多 3 条） */
       if (Game.Notice && typeof Game.Notice.update === 'function') Game.Notice.update(dt);
+      /* D-70：爽感卡片/冲击圈生命周期（纯表现，不推进任何战斗逻辑） */
+      if (Game.Systems && Game.Systems.Juice && typeof Game.Systems.Juice.update === 'function') {
+        Game.Systems.Juice.update(dt);
+      }
       /* M9-3：推进移动插值、粒子生命、战斗死亡消散计时 */
       if (Game.Motion && typeof Game.Motion.update === 'function') Game.Motion.update(dt);
       if (Game.Particles && typeof Game.Particles.update === 'function') Game.Particles.update(dt);
@@ -1791,6 +1807,11 @@
         /* D-48：首屏菜单是 loop 内的一个场景——不新开 rAF 链 */
         this._updateMenu();
         Game.Core.Render.drawMainMenu(this._menuSpec());
+      }
+      /* D-70：爽感表现层（精英之证/升级/碾压卡片 + 冲击圈）画在场景之上、提示条之下 */
+      if (Game.Systems && Game.Systems.Juice && typeof Game.Systems.Juice.draw === 'function' &&
+          (this._scene === 'explore' || this._scene === 'battle' || this._scene === 'npc')) {
+        try { Game.Systems.Juice.draw(); } catch (e) { /* 降级 */ }
       }
       /* D-14：底部提示条画在所有场景之上（含弹窗），但在引导覆盖层之下 */
       if (Game.Notice && typeof Game.Notice.draw === 'function') {

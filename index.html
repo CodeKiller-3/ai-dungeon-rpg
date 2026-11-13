@@ -57,6 +57,8 @@
 <script src="js/systems/particles.js"></script>
 <!-- D-16：fx.js 在 particles.js 之后、battle.js 之前（战斗最小特效：顿帧/震屏/挤退/闪白/斩击弧） -->
 <script src="js/systems/fx.js"></script>
+<!-- D-70：爽感表现层（精英之证/升级/碾压卡片 + 伤害三档），只依赖 Fx 档位，须在 battle.js 之前 -->
+<script src="js/systems/juice.js"></script>
 <script src="js/systems/quest.js"></script>
 <!-- M8-1：技能运行时（需在 battle.js 之前；战斗命令经 Battle.playerAction → Skills.cast） -->
 <script src="js/systems/skills.js"></script>

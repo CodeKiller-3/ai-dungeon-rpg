@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-70 爽感表现层 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-70 · 爽感表现层：四件事 / off 逐局一致 / 绘制增量 / 数值冻结（A–C）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = Game.Data, M = D.MONSTERS, MP = D.MAPS;
+  var J = Game.Systems.Juice, Fx = Game.Fx, Fb = Game.Feedback;
+  var out = { protocol: 'D-70', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function readText(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var BASE = {
+    slime: [40, 6, 2], bat: [30, 9, 1], skeleton: [70, 12, 5], goblin: [45, 7, 3],
+    tiny_zombie: [50, 8, 2], orc_warrior: [85, 14, 6], orc_shaman: [75, 16, 4],
+    wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
+    big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
+    pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+  };
+  var GROWTH_FROZEN = {
+    1: [10, 5, 100], 2: [11, 6, 110], 3: [12, 7, 120], 4: [13, 8, 130], 5: [14, 9, 140],
+    6: [15, 10, 150], 7: [17, 11, 160], 8: [19, 12, 170], 9: [22, 15, 180], 10: [25, 18, 190]
+  };
+
+  /* 假 ctx：只统计调用次数，不真的画 */
+  function fakeCtx() {
+    var ops = 0;
+    function bump() { ops++; }
+    return {
+      save: bump, restore: bump, beginPath: bump, arc: bump, stroke: bump,
+      moveTo: bump, lineTo: bump, fillText: bump, fillRect: bump, strokeRect: bump,
+      measureText: function (t) { return { width: String(t).length * 7 }; },
+      _ops: function () { return ops; },
+      _resetOps: function () { ops = 0; }
+    };
+  }
+
+  try {
+    var P = D.Player, Inv = Game.Systems.Inventory, Battle = Game.Systems.Battle;
+    if (!P || !Battle || !J || !Fx) throw new Error('缺少依赖：main/battle/juice/fx');
+
+    /* ── A1：数值冻结（D-70 不许动任何数值）────────────────────── */
+    var badMon = [], badGrow = [], badElite = [];
+    for (var mid in BASE) {
+      if (!Object.prototype.hasOwnProperty.call(BASE, mid)) continue;
+      var s = BASE[mid], m = M[mid];
+      if (!m || m.hp !== s[0] || m.atk !== s[1] || m.def !== s[2]) {
+        badMon.push(mid + '=' + (m ? (m.hp + '/' + m.atk + '/' + m.def) : 'null'));
+      }
+    }
+    for (var lv = 1; lv <= 10; lv++) {
+      var g = D.GROWTH.statsAt(lv), f = GROWTH_FROZEN[lv];
+      if (g.atk !== f[0] || g.def !== f[1] || g.maxHp !== f[2]) badGrow.push('L' + lv + '=' + g.atk + '/' + g.def + '/' + g.maxHp);
+      if (D.GROWTH.expToNext(lv) !== (lv < 5 ? 15 * lv : 60 * lv)) badGrow.push('expL' + lv);
+    }
+    if (!D.ELITE || D.ELITE.atFrac !== 0.55 || D.ELITE.band.join(',') !== '0.45,0.65' ||
+        D.ELITE.rewardAtk !== 2 || D.ELITE.enabled !== true) badElite.push('ELITE');
+    if (MP.sizes.join('|') !== '25,19|29,21|33,23|37,25|41,27') badElite.push('sizes');
+    rec('A1_numbersFrozen', badMon.length === 0 && badGrow.length === 0 && badElite.length === 0, {
+      rule: '18 只怪 hp/atk/def、成长曲线 L1–L10、经验阈值、精英配置、5 层地图尺寸全部与 D-69 一字不差',
+      badMon: badMon, badGrow: badGrow, badElite: badElite
+    });
+
+    /* ── A2：off 档一个像素都不画 ────────────────────────────────── */
+    Fx._setPrefersReduced(false);
+    Fx.setLevel('off');
+    J._reset();
+    var rc1 = J.levelUp({ from: 1, to: 2, levels: 1, atkFrom: 11, atkTo: 12, defFrom: 5, defTo: 6, hpFrom: 100, hpTo: 110 });
+    var rc2 = J.eliteReward({ from: 32, to: 34, gain: 2, total: 2 });
+    var rc3 = J.crushKill({ rounds: 1, name: '史莱姆' });
+    var peekOff = J._peek();
+    var renderStub = { _ctx: fakeCtx(), cssW: 960, cssH: 600 };
+    Game.Core = Game.Core || {};
+    var realRender = Game.Core.Render;
+    Game.Core.Render = renderStub;
+    var opsOff = J.draw();
+    rec('A2_offSilent', rc1 === null && rc2 === null && rc3 === null &&
+      peekOff.cards === 0 && peekOff.bursts === 0 && opsOff === 0, {
+      rule: 'Fx=off 时 levelUp / eliteReward / crushKill 一律不建卡片，draw() 返回 0 次 canvas 调用',
+      peek: peekOff, ops: opsOff, returns: [rc1, rc2, rc3]
+    });
+
+    /* ── A3：伤害三档阈值（纯函数）──────────────────────────────── */
+    var cases = [
+      [8, 45, 'normal'], [12, 70, 'normal'], [5, 50, 'normal'],
+      [20, 100, 'heavy'], [17, 85, 'heavy'], [24, 130, 'heavy'], [9, 40, 'heavy'],
+      [26, 50, 'crush'], [30, 40, 'crush'], [25, 30, 'crush'],
+      [45, 260, 'heavy'], [40, 0, 'crush']
+    ];
+    var tierBad = [];
+    for (var tc = 0; tc < cases.length; tc++) {
+      var got = J.tierOf(cases[tc][0], cases[tc][1]);
+      if (got !== cases[tc][2]) tierBad.push(cases[tc].join(':') + '=>' + got);
+    }
+    rec('A3_tiers', tierBad.length === 0, {
+      rule: 'normal / heavy / crush 三档：crush = 单次打掉目标 ≥50% 生命；heavy 沿用 D-16 阈值（≥20 或 ≥20%）；其余 normal',
+      cases: cases.map(function (c) { return c[0] + '/' + c[1] + '=' + J.tierOf(c[0], c[1]); }),
+      bad: tierBad
+    });
+
+    /* ── A4：零随机（表现层不许消耗 Math.random）────────────────── */
+    Fx.setLevel('low');
+    J._reset();
+    var rndCalls = 0, realRnd = Math.random;
+    Math.random = function () { rndCalls++; return realRnd(); };
+    J.levelUp({ from: 1, to: 2, levels: 1, atkFrom: 11, atkTo: 12, defFrom: 5, defTo: 6, hpFrom: 100, hpTo: 110 });
+    J.eliteReward({ from: 32, to: 34, gain: 2, total: 2 });
+    J.crushKill({ rounds: 1, name: '史莱姆' });
+    J.update(16);
+    J.draw();
+    Math.random = realRnd;
+    var src = readText('../js/systems/juice.js');
+    var hasRnd = src.indexOf('Math.random(') >= 0;
+    rec('A4_zeroRandom', rndCalls === 0 && !hasRnd && src.length > 1000, {
+      rule: '调用四项表现 + 一帧绘制期间 Math.random 调用次数 = 0；juice.js 源码里不存在 Math.random',
+      rndCalls: rndCalls, sourceHasRandom: hasRnd, sourceBytes: src.length
+    });
+
+    /* ── A5：off 档伤害飘字与 D-69 逐项一致；low/high 才出碾压样式 ── */
+    Fx.setLevel('off');
+    Fb._clear();
+    Fb.spawn({ x: 100, y: 100, text: '-26', tier: 'crush', who: 'monster', color: '#ffc14d', size: 26, life: 760 });
+    var offItem = Fb._items()[0];
+    Fx.setLevel('low');
+    Fb._clear();
+    Fb.spawn({ x: 100, y: 100, text: '-26', tier: 'crush', who: 'monster', color: '#ffc14d', size: 26, life: 760 });
+    var lowItem = Fb._items()[0];
+    Fx.setLevel('high');
+    Fb._clear();
+    Fb.spawn({ x: 100, y: 100, text: '-26', tier: 'crush', who: 'monster', color: '#ffc14d', size: 26, life: 760 });
+    var highItem = Fb._items()[0];
+    Fx.setLevel('low');
+    Fb._clear();
+    Fb.spawn({ x: 100, y: 100, text: '-9', tier: 'normal', who: 'monster', color: '#ffffff', size: 18, life: 620 });
+    var normItem = Fb._items()[0];
+    Fb._clear();
+    rec('A5_damageStyles',
+      offItem.size === 26 && offItem.color === '#ffc14d' && !offItem.crush &&
+      lowItem.size === 32 && lowItem.color === '#ff5a2a' && lowItem.crush && lowItem.life === 820 &&
+      highItem.size === 36 && highItem.crush &&
+      normItem.size === 18 && normItem.color === '#ffffff' && !normItem.crush, {
+      rule: 'off 档：碾压也按 D-69 高伤样式（26px/#ffc14d）画；low：32px/#ff5a2a + 冲击环；high：36px；普通命中三档下都是 18px/#ffffff',
+      off: offItem, low: lowItem, high: highItem, normal: normItem
+    });
+
+    /* ── A6：升级卡片（真实 checkLevelUp → 卡片写出前后值）──────── */
+    Fx.setLevel('low');
+    J._reset();
+    P.equipment = { weapon: 'knife', armor: null };
+    P.upg = {}; P.eliteAtk = 0;
+    P.level = 1; P.exp = 15; P.hp = 40; P.mp = 0;
+    Inv.recalcEquip();
+    var ups1 = Battle.checkLevelUp();
+    var upPeek = J._peek();
+    var upRows = upPeek.rows[upPeek.rows.length - 1] || [];
+    var upOk = ups1 === 1 && upPeek.titles[upPeek.titles.length - 1] === '升级！Lv.1 → Lv.2' &&
+      upRows[0] === '攻击   11 → 12  (+1)' && upRows[1] === '防御   5 → 6  (+1)' &&
+      upRows[2] === '生命上限   100 → 110  (+10)' && upRows[3] === 'HP / MP 已回满';
+    J._reset();
+    P.level = 1; P.exp = 90; P.hp = 10; P.mp = 0;
+    Inv.recalcEquip();
+    var ups3 = Battle.checkLevelUp();
+    var multiPeek = J._peek();
+    var multiTitle = multiPeek.titles[multiPeek.titles.length - 1] || '';
+    rec('A6_levelUpCard', upOk && ups3 === 3 && multiTitle === '升级！Lv.1 → Lv.4（连升 3 级）', {
+      rule: '一次升级：卡片标题写 Lv.1 → Lv.2，三行写出 攻击 11→12 / 防御 5→6 / 生命上限 100→110；连升 3 级时标题带"连升 3 级"',
+      single: { ups: ups1, title: upPeek.titles, rows: upRows },
+      multi: { ups: ups3, title: multiTitle }
+    });
+
+    /* ── A7：精英之证卡片（+2 与新旧对比）──────────────────────── */
+    J._reset();
+    var ec = J.eliteReward({ from: 32, to: 34, gain: 2, total: 2 });
+    var ep = J._peek();
+    var eRows = ep.rows[ep.rows.length - 1] || [];
+    var mainSrc = readText('../js/core/main.js');
+    var wired = mainSrc.indexOf('Juice.eliteReward') >= 0 && mainSrc.indexOf('from: before') >= 0;
+    rec('A7_eliteCard', !!ec && ep.titles[0] === '精英之证' &&
+      eRows[0] === '攻击   32 → 34  (+2)' && eRows[1] === '累计攻击加成 +2' && wired, {
+      rule: '卡片标题"精英之证"；第一行写"攻击 32 → 34（+2）"，第二行写累计加成；main.js#grantEliteReward 真的接上了',
+      title: ep.titles[0], rows: eRows, wired: wired
+    });
+
+    /* ── A8：碾压击杀（1–2 回合、非 Boss/精英）───────────────────── */
+    var crushCases = [
+      [1, 'slime', true], [2, 'goblin', true], [3, 'slime', false],
+      [1, 'dragon', false], [1, 'elite_goblin', false]
+    ];
+    var crushBad = [];
+    for (var cc = 0; cc < crushCases.length; cc++) {
+      var cg = J.isCrushKill(crushCases[cc][0], crushCases[cc][1]);
+      if (cg !== crushCases[cc][2]) crushBad.push(crushCases[cc].join(':') + '=>' + cg);
+    }
+    J._reset();
+    P.level = 1; P.exp = 0; P.gold = 0; P.hp = 100; P.maxHp = 100;
+    P.equipment = { weapon: 'knife', armor: null }; P.upg = {}; P.eliteAtk = 0;
+    Inv.recalcEquip();
+    Math.random = mulberry32(9101);
+    Battle.start('slime');
+    var st8 = Battle.getState();
+    st8.monster.hp = 1;
+    Battle.playerAction('attack');
+    var killPeek = J._peek();
+    var killCardOk = killPeek.titles.indexOf('碾压击杀') >= 0;
+    var killRows = killPeek.rows.filter(function (r) { return r && r.indexOf('用时：1 回合') >= 0; }).length === 1;
+    Battle.abort();
+    Math.random = realRnd;
+    var battleSrc = readText('../js/systems/battle.js');
+    var crushWired = battleSrc.indexOf('J2.isCrushKill') >= 0 && battleSrc.indexOf('J2.crushKill') >= 0;
+    rec('A8_crushKill', crushBad.length === 0 && killCardOk && killRows && crushWired, {
+      rule: '1–2 回合解决普通怪 → 卡片"碾压击杀 / 用时：1 回合"；3 回合、Boss、精英都不算；battle.js#settleWin 真的接上了',
+      cases: crushCases.map(function (c) { return c[0] + ':' + c[1] + '=' + J.isCrushKill(c[0], c[1]); }),
+      bad: crushBad, card: killPeek.titles, rowsHaveOneRound: killRows, wired: crushWired
+    });
+
+    /* ── C：绘制增量（假 ctx 计数，与地图尺寸无关）─────────────── */
+    J._reset();
+    var opsIdle = J.draw();
+    J.update(16);
+    J.levelUp({ from: 6, to: 7, levels: 1, atkFrom: 15, atkTo: 17, defFrom: 10, defTo: 11, hpFrom: 150, hpTo: 160 });
+    J.eliteReward({ from: 30, to: 32, gain: 2, total: 4 });
+    J.crushKill({ rounds: 2, name: '哥布林' });
+    var opsLow = J.draw();
+    var opsHigh;
+    Fx.setLevel('high');
+    opsHigh = J.draw();
+    Fx.setLevel('off');
+    var opsOff2 = J.draw();
+    Fx.setLevel('low');
+    var perFrameBudgetOk = opsIdle === 0 && opsOff2 === 0 && opsLow > 0 && opsLow <= 60 && opsHigh <= 60;
+    rec('C1_drawBudget', perFrameBudgetOk, {
+      rule: '空闲/off 时 0 次新增调用；3 张卡片 + 冲击圈同时存在时 ≤60 次 canvas 调用/帧；与 41×27 地图的格数无关（屏幕空间绘制）',
+      idle: opsIdle, off: opsOff2, low: opsLow, high: opsHigh,
+      note: '对照：D-12 实测探索场景静态层 ~1.7k 次/帧，新增量不到 4%'
+    });
+    Game.Core.Render = realRender;
+
+    /* ── B：跑局回归（特效三档 + 四策略逐局对照 D-69）──────────── */
+    var b1 = readJson('selfcheck/d70-b1-2500.json');
+    var b1off = readJson('selfcheck/d70-fx-off.json');
+    var b1high = readJson('selfcheck/d70-fx-high.json');
+    var g2 = readJson('selfcheck/d70-g2-4500.json');
+    var s1 = readJson('selfcheck/d70-s1-2500.json');
+    var m14 = readJson('selfcheck/d70-m1-4500.json');
+    var m16 = readJson('selfcheck/d70-m1-6000.json');
+    var d69b1 = readJson('selfcheck/d69-final-b1-2500.json');
+    var d69g2 = readJson('selfcheck/d69-g2-4500.json');
+    var d69s1 = readJson('selfcheck/d69-s1-2500.json');
+    var d69m14 = readJson('selfcheck/d69-m1-4500.json');
+    var d69m16 = readJson('selfcheck/d69-m1-6000.json');
+    if (!b1 || !b1off || !b1high || !g2 || !s1 || !m14 || !m16 || !d69b1 || !d69g2 || !d69s1 || !d69m14 || !d69m16) {
+      throw new Error('D-70 缺测量 JSON（先跑 d70-report.ps1）');
+    }
+    function fp(run) {
+      return [run.seed, run.outcome, run.floor, run.maxFloor, run.hp, run.gold,
+        run.level, run.kills, run.actions, run.battleTurns].join('|');
+    }
+    function diffRuns(a, b) {
+      var bad = [];
+      var n = Math.min(a.length, b.length);
+      for (var i = 0; i < n; i++) if (fp(a[i]) !== fp(b[i])) bad.push(fp(a[i]) + ' != ' + fp(b[i]));
+      return bad;
+    }
+    var b1w = b1.agg.b1.wins, b1pct = Math.round(b1w / 50 * 100);
+    var d69w = d69b1.agg.b1.wins;
+    rec('B1_b1Unchanged', b1w === d69w && b1pct >= 40 && b1pct <= 55, {
+      rule: 'B1-2500（特效 low，50 局）通关数与 D-69 完全相同，且仍在 40%–55%',
+      wins: b1w, d69Wins: d69w, pct: b1pct, range: '40–55'
+    });
+    var fxBad = diffRuns(b1.runs.b1, b1off.runs.b1).concat(diffRuns(b1.runs.b1, b1high.runs.b1));
+    rec('B2_fxThreeLevels', fxBad.length === 0 &&
+      b1.env.fx === 'low' && b1off.env.fx === 'off' && b1high.env.fx === 'high', {
+      rule: '同 50 个种子，Fx=off / low / high 三档的 B1 逐局指纹（outcome/楼层/HP/金币/等级/击杀/动作/回合）完全一致',
+      fx: [b1off.env.fx, b1.env.fx, b1high.env.fx],
+      wins: [b1off.agg.b1.wins, b1.agg.b1.wins, b1high.agg.b1.wins],
+      mismatch: fxBad.slice(0, 6)
+    });
+    var pairs = [
+      ['b1-2500', b1.runs.b1, d69b1.runs.b1],
+      ['g2-4500', g2.runs.g2, d69g2.runs.g2],
+      ['s1-2500', s1.runs.s1, d69s1.runs.s1],
+      ['m1-4500', m14.runs.m1, d69m14.runs.m1],
+      ['m1-6000', m16.runs.m1, d69m16.runs.m1]
+    ];
+    var pairBad = {};
+    for (var pi = 0; pi < pairs.length; pi++) {
+      var dd = diffRuns(pairs[pi][1], pairs[pi][2]);
+      pairBad[pairs[pi][0]] = dd.length;
+      if (dd.length) pairBad[pairs[pi][0] + '_sample'] = dd[0];
+    }
+    var allSame = pairs.every(function (p) { return pairBad[p[0]] === 0; });
+    rec('B3_fourStrategies', allSame, {
+      rule: '四策略（B1/G2/S1/M1-4500/M1-6000 五种跑法）同种子逐局指纹与 D-69 完全一致 —— 表现层没有改变任何跑局结果',
+      wins: {
+        b1: [b1.agg.b1.wins, d69b1.agg.b1.wins],
+        g2: [g2.agg.g2.wins, d69g2.agg.g2.wins],
+        s1: [s1.agg.s1.wins, d69s1.agg.s1.wins],
+        m1_4500: [m14.agg.m1.wins, d69m14.agg.m1.wins],
+        m1_6000: [m16.agg.m1.wins, d69m16.agg.m1.wins]
+      },
+      mismatch: pairBad
+    });
+    function staticMed(f) {
+      var x = m16.curve.m1[f];
+      return x ? x.mid.staticMed + '/' + x.exit.staticMed : null;
+    }
+    var normalLe4 = ['F3', 'F4', 'F5'].every(function (f) {
+      var x = m16.curve.m1[f];
+      return x && x.mid.staticMed <= 4 && x.exit.staticMed <= 4;
+    });
+    var bossLe10 = ['ogre_boss', 'zombie_king', 'dragon'].every(function (b) {
+      return (m14.boss[b].roundsWinMed || 0) <= 10;
+    });
+    rec('B4_gatesHold', normalLe4 && bossLe10, {
+      rule: 'D-66/D-67 判据不许破：普通怪 F3–F5 中/出层 ≤4；Boss 胜场中位 ≤10（M1-4500）',
+      normal: { F3: staticMed('F3'), F4: staticMed('F4'), F5: staticMed('F5') },
+      boss: {
+        ogre_boss: m14.boss.ogre_boss.roundsWinMed,
+        zombie_king: m14.boss.zombie_king.roundsWinMed,
+        dragon: m14.boss.dragon.roundsWinMed
+      }
+    });
+
+    document.title = 'D70_DONE';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    document.title = 'D70_FAIL';
+  }
+  window.__D70_VERIFY__ = out;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

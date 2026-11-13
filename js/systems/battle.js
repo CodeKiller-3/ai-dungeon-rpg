@@ -56,6 +56,14 @@
     return !!(maxHp > 0 && dmg / maxHp >= 0.2);
   }
 
+  /* D-70：三档展示分级（normal / heavy / crush）。纯展示：只决定字号/颜色/寿命，
+   * 不改伤害、不改命中判定。Juice 未加载时退回 D-16 的两档，老验证页行为不变。 */
+  function dmgTier(dmg, maxHp) {
+    var J = Game.Systems && Game.Systems.Juice;
+    if (J && typeof J.tierOf === 'function') return J.tierOf(dmg, maxHp);
+    return isHeavy(dmg, maxHp) ? 'heavy' : 'normal';
+  }
+
   function roll(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
 
   /* D-34：伤害公式解冻（仅此一项）——减法改「比例减伤」。
@@ -132,6 +140,17 @@
       if (state && state.log) logPush(upMsg);
       if (Game.Core && Game.Core.EventBus) {
         Game.Core.EventBus.emit('ui:notice', { msg: upMsg, ok: true });
+      }
+      /* D-70：升级瞬间的"变强"表现（卡片列出 atk/def/生命上限前后值）。
+       * 纯展示：只读上面已经结算完的面板值，不改数值；Fx=off 时 Juice 自己跳过。 */
+      var J = Game.Systems && Game.Systems.Juice;
+      if (J && typeof J.levelUp === 'function') {
+        J.levelUp({
+          from: oldLv, to: p.level, levels: p.level - oldLv,
+          atkFrom: oldAtk, atkTo: p.atk,
+          defFrom: oldDef, defTo: p.def,
+          hpFrom: oldMax, hpTo: p.maxHp
+        });
       }
     }
     return ups;
@@ -217,14 +236,15 @@
   function spawnHitMonster(dmg, opt) {
     var m = monsterPos();
     var heavy = isHeavy(dmg, state ? state.monster.maxHp : 0);
+    var tier = dmgTier(dmg, state ? state.monster.maxHp : 0); /* D-70：仅展示分级 */
     var o = opt || {};
     pushEvent('player-hit', { dmg: dmg, heavy: heavy });
     if (state) {
-      state.lastAction = { by: 'player', name: state.monster.name, dmg: dmg, heavy: heavy, at: now() };
+      state.lastAction = { by: 'player', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
       Game.Feedback.spawn({
-        x: m.cx, y: m.cy, text: '-' + dmg,
+        x: m.cx, y: m.cy, text: '-' + dmg, tier: tier, who: 'monster',
         color: heavy ? '#ffc14d' : '#ffffff',
         size: heavy ? 26 : 18, life: heavy ? 760 : 620
       });
@@ -237,13 +257,14 @@
   function spawnHurtPlayer(dmg) {
     var p = playerPos();
     var heavy = isHeavy(dmg, Game.Data.Player.maxHp);
+    var tier = dmgTier(dmg, Game.Data.Player.maxHp); /* D-70：仅展示分级 */
     pushEvent('monster-hit', { dmg: dmg, heavy: heavy });
     if (state) {
-      state.lastAction = { by: 'monster', name: state.monster.name, dmg: dmg, heavy: heavy, at: now() };
+      state.lastAction = { by: 'monster', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
       Game.Feedback.spawn({
-        x: p.cx, y: p.cy, text: '-' + dmg,
+        x: p.cx, y: p.cy, text: '-' + dmg, tier: tier, who: 'player',
         color: heavy ? '#ff8a3d' : '#ff5555',
         size: heavy ? 24 : 18
       });
@@ -315,6 +336,14 @@
     state.dyingMs = DYING_MS;
     spawnDeathParticles();
     pendingWin = { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops };
+    /* D-70：碾压击杀表现——1–2 回合解决普通怪时给一张区别于苦战的卡片。
+     * rounds 直接读本场已发生的回合数（roundNo 在回合起拍时 +1，击杀那一击也算）；
+     * Boss/精英由 Juice.isCrushKill 自行排除。纯展示，不改结算与掉落。 */
+    var J2 = Game.Systems && Game.Systems.Juice;
+    if (J2 && typeof J2.crushKill === 'function' && typeof J2.isCrushKill === 'function' &&
+        J2.isCrushKill(state.roundNo, m.id)) {
+      J2.crushKill({ rounds: state.roundNo, name: m.name });
+    }
   }
 
   /* 怪物行动：反击（玩家未逃跑且怪物存活）
