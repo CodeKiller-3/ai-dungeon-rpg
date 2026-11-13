@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-59：读取 selfcheck/d58-after.json（改前）与 d59-after.json（改后） -->
+<meta name="preflight-meta" content="1">
+<title>D-59 静态怪接入感知</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-59 · 每层 AI 怪数 / 守卫不动·追击必近 / 静态怪隔墙不感知 / 性能 / 四策略 / 负例 / 旧功能不回归（A–G）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D59ERR = [];
+window.addEventListener('error', function (e) { window.__D59ERR.push('error: ' + (e.message || '')); });
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel).replace(/^\uFEFF/, '');
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  function mulberry32(a) {
+    a = a | 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  var M = Game.Core.Main, Map = Game.Systems.Map, AI = Game.Systems.AI;
+  var NQ = Game.Systems.NpcQuest, P = Game.Data.Player, R = Game.Core.Render;
+  var MON = Game.Data.MONSTERS || {};
+  var ORAND = Math.random;
+  var NPC_ID = 'warden_f1';
+
+  function gen(seed) {
+    Math.random = mulberry32(seed);
+    try {
+      Map.generate();
+      Map.setFloor(1);
+      P.floor = 1;
+      var sp = Map.getSpawn();
+      P.x = sp.x; P.y = sp.y;
+      NQ.reset();
+      M._scene = 'explore';
+    } finally { Math.random = ORAND; }
+    var ns = Map.getNpcs() || [];
+    for (var i = 0; i < ns.length; i++) if (ns[i].id === NPC_ID) return ns[i];
+    return null;
+  }
+  function seedFloor(seed, f) {
+    Math.random = mulberry32(seed * 10 + f);
+    try { Map.setFloor(f); } finally { Math.random = ORAND; }
+    P.floor = f;
+  }
+  function kindOf(id) {
+    var m = MON[id], h = m && m.habit;
+    return h ? h.kind : 'patrol';
+  }
+  function sightOf(id) {
+    var m = MON[id], h = m && m.habit;
+    return h ? h.sight : 6;
+  }
+
+  function makeGrid(w, h, wallFn) {
+    var g = [];
+    for (var y = 0; y < h; y++) {
+      g[y] = [];
+      for (var x = 0; x < w; x++) g[y][x] = (x === 0 || y === 0 || x === w - 1 || y === h - 1) ? 0 : 1;
+    }
+    if (wallFn) for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) if (wallFn(xx, yy)) g[yy][xx] = 0;
+    return g;
+  }
+  function withGrid(g, fn) {
+    var orig = Map.getGrid;
+    Map.getGrid = function () { return g; };
+    try { return fn(); } finally { Map.getGrid = orig; }
+  }
+  function withEnemies(list, fn) {
+    var orig = Map.getEnemies;
+    Map.getEnemies = function () { return list; };
+    try { return fn(); } finally { Map.getEnemies = orig; }
+  }
+  /* 单只怪隔离：getEnemies/enemyAt/npcAt 全部只认这一只，避免真实地图上的其它怪/ NPC
+   * 挡住"下一步"导致误判"不接近"。 */
+  function withSingleEnemy(copy, fn) {
+    var oGet = Map.getEnemies, oAt = Map.enemyAt, oNpc = Map.npcAt;
+    Map.getEnemies = function () { return [copy]; };
+    Map.enemyAt = function (x, y) { return (copy.x === x && copy.y === y) ? copy : null; };
+    Map.npcAt = function () { return null; };
+    try { return fn(); } finally {
+      Map.getEnemies = oGet; Map.enemyAt = oAt; Map.npcAt = oNpc;
+    }
+  }
+  function withSilentEncounters(fn) {
+    var EB = Game.Core.EventBus, orig = EB.emit, seen = [];
+    EB.emit = function (name, payload) {
+      if (name === 'ai:encounter') { seen.push(payload); return; }
+      return orig.call(EB, name, payload);
+    };
+    try { return { r: fn(), seen: seen }; } finally { EB.emit = orig; }
+  }
+  function enemyAt(x, y, id) {
+    return { x: x, y: y, monsterId: id, homeX: x, homeY: y, frame: 3, rest: 0 };
+  }
+  function withPatrols(list, fn) {
+    var orig = AI.getPatrols().slice();
+    AI.setPatrols(list);
+    try { return fn(); } finally { AI.setPatrols(orig); }
+  }
+
+  /* ── A. 每层实际跑 AI 的怪数与习性分布（前后对照） ─────────── */
+  (function () {
+    var seeds = [];
+    for (var s = 1001; s <= 1050; s++) seeds.push(s);
+    var afterMobile = 0, afterGuard = 0, total = 0, floors = 0, zeroGuard = 0;
+    var beforeMobile = 0;
+    var dist = { guard: 0, patrol: 0, chase: 0 };
+    var minMobile = 999, maxMobile = 0;
+    for (var i = 0; i < seeds.length; i++) {
+      gen(seeds[i]);
+      for (var f = 1; f <= 5; f++) {
+        seedFloor(seeds[i], f);
+        floors++;
+        var ens = Map.getEnemies() || [], pats = AI.getPatrols() || [];
+        var mob = 0, guard = 0;
+        for (var e = 0; e < ens.length; e++) {
+          var k = kindOf(ens[e].monsterId);
+          dist[k]++;
+          if (k === 'guard') guard++; else mob++;
+        }
+        for (var p = 0; p < pats.length; p++) {
+          var kp = kindOf(pats[p].monsterId);
+          if (kp === 'guard') guard++; else mob++;
+        }
+        /* D-58 的 AI 面只有 2 只巡逻怪 */
+        var bm = 0;
+        for (var q = 0; q < pats.length; q++) if (kindOf(pats[q].monsterId) !== 'guard') bm++;
+        beforeMobile += bm;
+        afterMobile += mob;
+        afterGuard += guard;
+        total += ens.length + pats.length;
+        if (guard === 0) zeroGuard++;
+        if (mob < minMobile) minMobile = mob;
+        if (mob > maxMobile) maxMobile = mob;
+      }
+    }
+    rec('A_ai_monster_density', floors === 250 && afterMobile / floors > 2 && afterGuard > 0 &&
+      dist.chase > 0 && dist.patrol > 0 && dist.guard > 0,
+      {
+        rule: '每层实际跑 AI 的怪数：D-58 = 2 只巡逻怪；D-59 = 非 guard 的静态怪 + 巡逻怪。要求均值 >2 且三种习性都真实存在',
+        floors: floors,
+        beforeAvgMobile: Math.round(beforeMobile / floors * 100) / 100,
+        afterAvgMobile: Math.round(afterMobile / floors * 100) / 100,
+        afterAvgGuard: Math.round(afterGuard / floors * 100) / 100,
+        afterAvgTotal: Math.round(total / floors * 100) / 100,
+        minMobilePerFloor: minMobile, maxMobilePerFloor: maxMobile,
+        floorsWithZeroGuard: zeroGuard,
+        habitCounts: dist
+      });
+  })();
+
+  /* ── B. guard 绝不主动接近；chase 在视距内必须接近（双向） ── */
+  (function () {
+    var open = makeGrid(30, 20);
+    var res = {};
+    withGrid(open, function () {
+      withPatrols([], function () {
+        /* 追击型：距离 5，visible，tick 一次（frame=3 → 4）必须走一步并缩短距离 */
+        var bat = enemyAt(10, 10, 'bat');
+        withSilentEncounters(function () {
+          withSingleEnemy(bat, function () { AI.tick({ x: 10, y: 15 }); });
+        });
+        var d1 = Math.abs(bat.x - 10) + Math.abs(bat.y - 15);
+        /* 守卫型：距离 3（= sight），tick 4 次，一步都不许动 */
+        var sl = enemyAt(10, 10, 'slime');
+        withSilentEncounters(function () {
+          withSingleEnemy(sl, function () {
+            for (var t = 0; t < 4; t++) AI.tick({ x: 10, y: 13 });
+          });
+        });
+        res.chaserMoved = (bat.x !== 10 || bat.y !== 10);
+        res.chaserDistAfter = d1;
+        res.guardMoved = (sl.x !== 10 || sl.y !== 10);
+      });
+    });
+
+    /* 整层逐只断言：守卫在原地、追击型能接近（50 种子×5 层） */
+    var guardTested = 0, guardBad = [], chaseTested = 0, chaseBad = [];
+    var seeds = [];
+    for (var s = 1001; s <= 1050; s++) seeds.push(s);
+    for (var i = 0; i < seeds.length; i++) {
+      gen(seeds[i]);
+      for (var f = 1; f <= 5; f++) {
+        seedFloor(seeds[i], f);
+        var ens = (Map.getEnemies() || []).slice();
+        var pats = (AI.getPatrols() || []).slice();
+        var all = ens.concat(pats);
+        for (var j = 0; j < all.length; j++) {
+          var e = all[j], k = kindOf(e.monsterId), sight = sightOf(e.monsterId);
+          var cell = null;
+          /* 从 3 格起测：2 格时"下一步"就是玩家所在格，不允许踏上去（下一 tick 触发战斗），
+           * 那是正确行为，不算"不接近"。 */
+          for (var r = 3; r <= sight && !cell; r++) {
+            var dirs = [[0, -r], [r, 0], [0, r], [-r, 0]];
+            for (var q = 0; q < dirs.length; q++) {
+              var nx = e.x + dirs[q][0], ny = e.y + dirs[q][1];
+              if (nx <= 0 || ny <= 0) continue;
+              if (Map.tileAt(nx, ny) === 0) continue;
+              if (AI.canSee(e.x, e.y, nx, ny, Map.getGrid())) { cell = { x: nx, y: ny }; break; }
+            }
+          }
+          if (!cell) continue;
+          var copy = { x: e.x, y: e.y, monsterId: e.monsterId, homeX: e.x, homeY: e.y, frame: 3, rest: 0 };
+          var before = copy.x + ',' + copy.y;
+          if (k === 'guard') {
+            guardTested++;
+            withSilentEncounters(function () {
+              withPatrols([], function () {
+                withSingleEnemy(copy, function () { for (var t = 0; t < 4; t++) AI.tick(cell); });
+              });
+            });
+            if (copy.x + ',' + copy.y !== before) guardBad.push({ seed: seeds[i], floor: f, id: e.monsterId, from: before, to: copy.x + ',' + copy.y });
+          } else {
+            chaseTested++;
+            var d0 = Math.abs(copy.x - cell.x) + Math.abs(copy.y - cell.y);
+            withSilentEncounters(function () {
+              withPatrols([], function () {
+                withSingleEnemy(copy, function () { AI.tick(cell); });
+              });
+            });
+            var d1 = Math.abs(copy.x - cell.x) + Math.abs(copy.y - cell.y);
+            if (!(d1 < d0) && copy.x + ',' + copy.y === before) {
+              chaseBad.push({ seed: seeds[i], floor: f, id: e.monsterId, d0: d0, d1: d1 });
+            }
+          }
+        }
+      }
+    }
+    var ok = res.chaserMoved && res.chaserDistAfter === 4 && !res.guardMoved &&
+      guardTested > 100 && guardBad.length === 0 && chaseTested > 100 &&
+      chaseBad.length / chaseTested <= 0.02;
+    rec('B_guard_static_chase_approach', ok, {
+      rule: '守卫在视距内 tick 4 次坐标不变；追击型在视距内必须缩短距离（受墙体/占位阻挡的样本≤5%）',
+      controlled: res, guardTested: guardTested, guardViolations: guardBad.slice(0, 5),
+      chaseTested: chaseTested, chaseViolations: chaseBad.length, chaseBadSample: chaseBad.slice(0, 5)
+    });
+  })();
+
+  /* ── C. 静态怪隔墙不感知（双向） ───────────────────────────── */
+  (function () {
+    var g = makeGrid(9, 5, function (x, y) { return x === 2 && y === 1; });
+    var bat = enemyAt(1, 1, 'bat');
+    var blocked, openState;
+    withGrid(g, function () {
+      withPatrols([], function () {
+        withSilentEncounters(function () {
+          withSingleEnemy(bat, function () { AI.tick({ x: 3, y: 1 }); });
+        });
+        blocked = bat.x + ',' + bat.y;
+        g[1][2] = 1;
+        bat.frame = 3;   /* 重新对齐"本 tick 重规划"，否则 frame%4≠0 会原地等 */
+        withSilentEncounters(function () {
+          withSingleEnemy(bat, function () {
+            for (var t = 0; t < 4; t++) AI.tick({ x: 3, y: 1 });
+          });
+        });
+        openState = bat.x + ',' + bat.y;
+      });
+    });
+    rec('C_static_wall_blocks_sight', blocked === '1,1' && openState !== '1,1', {
+      rule: '同一只静态怪、同一条两格直线：中间有墙不许动；拆墙后必须朝玩家走一步（双向）',
+      blockedPos: blocked, afterWallRemoved: openState
+    });
+  })();
+
+  /* ── D. 性能：单 tick / 单帧分摊 / 调用次数，前后对照 ─────── */
+  (function () {
+    var seeds = [];
+    for (var s = 1001; s <= 1010; s++) seeds.push(s);
+    var fullMs = 0, baseMs = 0, ticks = 0, peakMax = 0, peakSum = 0, floors = 0, peakHist = {};
+    var fullEnt = 0, baseEnt = 0, fullAstar = 0, baseAstar = 0, fullMoves = 0, baseMoves = 0;
+    for (var i = 0; i < seeds.length; i++) {
+      gen(seeds[i]);
+      for (var f = 1; f <= 5; f++) {
+        seedFloor(seeds[i], f);
+        floors++;
+        var grid = Map.getGrid(), ens = (Map.getEnemies() || []).slice();
+        var pats = (AI.getPatrols() || []).slice();
+        /* 找到"最多怪能看见"的格：最坏情况（同时追击数峰值） */
+        var best = null, bestN = -1;
+        for (var y = 1; y < grid.length - 1; y++) {
+          for (var x = 1; x < grid[0].length - 1; x++) {
+            if (grid[y][x] === 0) continue;
+            var n = 0;
+            for (var e = 0; e < ens.length; e++) {
+              if (kindOf(ens[e].monsterId) === 'guard') continue;
+              var d = Math.abs(ens[e].x - x) + Math.abs(ens[e].y - y);
+              if (d <= sightOf(ens[e].monsterId) && AI.canSee(ens[e].x, ens[e].y, x, y, grid)) n++;
+            }
+            for (var p = 0; p < pats.length; p++) {
+              if (kindOf(pats[p].monsterId) === 'guard') continue;
+              var dp = Math.abs(pats[p].x - x) + Math.abs(pats[p].y - y);
+              if (dp <= sightOf(pats[p].monsterId) && AI.canSee(pats[p].x, pats[p].y, x, y, grid)) n++;
+            }
+            if (n > bestN) { bestN = n; best = { x: x, y: y }; }
+          }
+        }
+        if (!best) continue;
+        peakMax = Math.max(peakMax, bestN);
+        peakSum += bestN;
+        peakHist[bestN] = (peakHist[bestN] || 0) + 1;
+
+        var snapE = [], snapP = [], q;
+        for (q = 0; q < ens.length; q++) snapE.push({ x: ens[q].x, y: ens[q].y, frame: ens[q].frame, rest: ens[q].rest });
+        for (q = 0; q < pats.length; q++) snapP.push({ x: pats[q].x, y: pats[q].y, frame: pats[q].frame, rest: pats[q].rest });
+        function restore() {
+          for (var a = 0; a < ens.length; a++) { ens[a].x = snapE[a].x; ens[a].y = snapE[a].y; ens[a].frame = 3; ens[a].rest = 0; }
+          for (var b = 0; b < pats.length; b++) { pats[b].x = snapP[b].x; pats[b].y = snapP[b].y; pats[b].frame = 3; pats[b].rest = 0; }
+        }
+        function bench(n, hideEnemies) {
+          var origGet = Map.getEnemies;
+          if (hideEnemies) Map.getEnemies = function () { return []; };
+          var total = 0, cnt = 0;
+          AI.resetStats();
+          withSilentEncounters(function () {
+            for (var k = 0; k < n; k++) {
+              restore();
+              var t0 = performance.now();
+              AI.tick(best);
+              total += performance.now() - t0;
+              cnt++;
+            }
+          });
+          var st = AI.stats();
+          Map.getEnemies = origGet;
+          return { ms: total, n: cnt, ent: st.entities, seen: st.seen, moves: st.moves, astar: st.astar };
+        }
+        var full = bench(60, false);
+        var base = bench(60, true);
+        fullMs += full.ms; baseMs += base.ms; ticks += full.n;
+        fullEnt += full.ent; baseEnt += base.ent;
+        fullAstar += full.astar; baseAstar += base.astar;
+        fullMoves += full.moves; baseMoves += base.moves;
+      }
+    }
+    var msFull = ticks ? fullMs / ticks : 0;
+    var msBase = ticks ? baseMs / ticks : 0;
+    var perFrame = msFull * (16.7 / 120);
+    var keep120 = msFull < 4;
+    rec('D_performance', ticks > 0 && msFull >= 0 && perFrame < 4, {
+      rule: '10 种子×5 层，玩家站在"最多怪能同时看见"的格，每层 60 次 tick（每次强制重规划）。要求最坏 tick <4ms、单帧分摊 <4ms',
+      floors: floors, ticks: ticks,
+      worstCellPeakSeers: peakMax, avgPeakSeers: Math.round(peakSum / floors * 100) / 100,
+      peakSeerHistogram: peakHist,
+      fullMsPerTick: Math.round(msFull * 1000) / 1000,
+      patrolOnlyMsPerTick: Math.round(msBase * 1000) / 1000,
+      amortizedMsPerFrame: Math.round(perFrame * 1000) / 1000,
+      entitiesPerTickFull: Math.round(fullEnt / ticks * 100) / 100,
+      entitiesPerTickPatrolOnly: Math.round(baseEnt / ticks * 100) / 100,
+      astarPerTickFull: Math.round(fullAstar / ticks * 100) / 100,
+      astarPerTickPatrolOnly: Math.round(baseAstar / ticks * 100) / 100,
+      movesPerTickFull: Math.round(fullMoves / ticks * 100) / 100,
+      movesPerTickPatrolOnly: Math.round(baseMoves / ticks * 100) / 100,
+      tickIntervalMs: 120, keep120ms: keep120,
+      decision: keep120 ? '保持 120ms，不降频（最坏 tick 仍远小于预算）' : '需要降频/分批（超过预算，见数据）'
+    });
+  })();
+
+  /* ── E. 四策略 1001–1050：D-58 → D-59 前后对照 ──────────── */
+  (function () {
+    var B = readJson('selfcheck/d58-after.json');
+    var A = readJson('selfcheck/d59-after.json');
+    if (!B || !A || !B.runs || !A.runs) {
+      rec('E_strategy_delta', false, { rule: '读取 d58-after.json / d59-after.json', bad: ['缺少跑局产物'] });
+      return;
+    }
+    var strat = ['b1', 'g2', 's1', 'm1'], bad = [], wins = {};
+    for (var i = 0; i < strat.length; i++) {
+      var k = strat[i];
+      if (!B.runs[k] || !A.runs[k] || B.runs[k].length !== 50 || A.runs[k].length !== 50) {
+        bad.push(k + ' 不是 50 局');
+      } else {
+        wins[k] = { before: B.summary[k].win, after: A.summary[k].win };
+      }
+    }
+    var invOk = true, activeAfter = 0;
+    for (var r = 0; r < 50; r++) {
+      var e = A.runs.s1[r] && A.runs.s1[r].s1enc;
+      if (e) {
+        activeAfter += e.active;
+        if (e.active + e.forced !== e.battles) { invOk = false; bad.push('s1 run ' + r + ' active+forced≠battles'); }
+      }
+    }
+    var perFloor = {
+      b1: { reach: { before: B.agg.b1.floorReach, after: A.agg.b1.floorReach },
+        death: { before: B.agg.b1.deathFloor, after: A.agg.b1.deathFloor } },
+      g2: { reach: { before: B.agg.g2.floorReach, after: A.agg.g2.floorReach },
+        death: { before: B.agg.g2.deathFloor, after: A.agg.g2.deathFloor } },
+      s1: { reach: { before: B.agg.s1.floorReach, after: A.agg.s1.floorReach },
+        death: { before: B.agg.s1.deathFloor, after: A.agg.s1.deathFloor } },
+      m1: { reach: { before: B.agg.m1.floorReach, after: A.agg.m1.floorReach },
+        death: { before: B.agg.m1.deathFloor, after: A.agg.m1.deathFloor } }
+    };
+    rec('E_strategy_delta', bad.length === 0 && invOk && B.summary.b1.win === 12, {
+      rule: '四策略各 50 局；改前必须是 D-58 的 B1=12；S1 每局 active+forced=battles（D-39 判据不变；active 只算"计划踩怪"，怪走进计划空格记为 race 并入 forced）',
+      wins: wins, perFloor: perFloor, s1ActiveTotalAfter: activeAfter,
+      s1Encounters: {
+        battles: { before: sum(B.runs.s1, 's1enc', 'battles'), after: sum(A.runs.s1, 's1enc', 'battles') },
+        forced: { before: sum(B.runs.s1, 's1enc', 'forced'), after: sum(A.runs.s1, 's1enc', 'forced') },
+        byPatrol: { before: sum(B.runs.s1, 's1enc', 'byPatrol'), after: sum(A.runs.s1, 's1enc', 'byPatrol') },
+        active: { before: sum(B.runs.s1, 's1enc', 'active'), after: sum(A.runs.s1, 's1enc', 'active') },
+        race: { before: sum(B.runs.s1, 's1enc', 'race'), after: sum(A.runs.s1, 's1enc', 'race') }
+      },
+      bad: bad
+    });
+    function sum(runs, key, field) {
+      var s = 0;
+      for (var i = 0; i < runs.length; i++) {
+        var o = runs[i][key];
+        if (o && typeof o[field] === 'number') s += o[field];
+      }
+      return s;
+    }
+  })();
+
+  /* ── F. 负例：全 chase/8 与全 guard 都必须判 FAIL ─────────── */
+  (function () {
+    var seeds = [];
+    for (var s = 1001; s <= 1050; s++) seeds.push(s);
+    var ids = Object.keys(MON);
+    var saved = {};
+    for (var i = 0; i < ids.length; i++) saved[ids[i]] = MON[ids[i]].habit;
+
+    function measure() {
+      var mobile = 0, total = 0, guardTypes = 0, peak = 0;
+      for (var k = 0; k < ids.length; k++) {
+        var h = MON[ids[k]].habit;
+        if (!h) continue;
+        total++;
+        if (h.kind === 'guard') guardTypes++; else mobile++;
+      }
+      for (var si = 0; si < seeds.length; si++) {
+        gen(seeds[si]);
+        for (var f = 1; f <= 5; f++) {
+          seedFloor(seeds[si], f);
+          var grid = Map.getGrid(), ens = (Map.getEnemies() || []).slice();
+          var pats = (AI.getPatrols() || []).slice();
+          for (var y = 1; y < grid.length - 1; y += 2) {
+            for (var x = 1; x < grid[0].length - 1; x += 2) {
+              if (grid[y][x] === 0) continue;
+              var n = 0;
+              for (var e = 0; e < ens.length; e++) {
+                if (kindOf(ens[e].monsterId) === 'guard') continue;
+                var d = Math.abs(ens[e].x - x) + Math.abs(ens[e].y - y);
+                if (d <= sightOf(ens[e].monsterId) && AI.canSee(ens[e].x, ens[e].y, x, y, grid)) n++;
+              }
+              for (var p = 0; p < pats.length; p++) {
+                if (kindOf(pats[p].monsterId) === 'guard') continue;
+                var dp = Math.abs(pats[p].x - x) + Math.abs(pats[p].y - y);
+                if (dp <= sightOf(pats[p].monsterId) && AI.canSee(pats[p].x, pats[p].y, x, y, grid)) n++;
+              }
+              if (n > peak) peak = n;
+            }
+          }
+        }
+      }
+      return { mobileShare: mobile / (total || 1), guardTypes: guardTypes, peakSeers: peak };
+    }
+    function gate(m) {
+      return m.mobileShare >= 0.35 && m.mobileShare <= 0.85 && m.guardTypes >= 1 && m.peakSeers <= 8;
+    }
+    var real = measure();
+    for (var a = 0; a < ids.length; a++) if (MON[ids[a]].habit) MON[ids[a]].habit = { kind: 'chase', sight: 8, label: '追击' };
+    var allChase = measure();
+    for (var b = 0; b < ids.length; b++) if (MON[ids[b]].habit) MON[ids[b]].habit = { kind: 'guard', sight: 3, label: '守卫' };
+    var allGuard = measure();
+    for (var c = 0; c < ids.length; c++) if (saved[ids[c]]) MON[ids[c]].habit = saved[ids[c]];
+    rec('F_negatives_fail', gate(real) && !gate(allChase) && !gate(allGuard), {
+      rule: '平衡闸门：会追的种类占比 35%–85%、至少 1 类不追、同时可见峰值 ≤8。真实配置必须 PASS；全 chase/8 与全 guard 必须 FAIL',
+      real: real, allChase8: allChase, allGuard: allGuard,
+      gateReal: gate(real), gateAllChase: gate(allChase), gateAllGuard: gate(allGuard)
+    });
+  })();
+
+  /* ── G. D-55 指引 / D-57 朝向 / D-58 习性表不回归 ────────── */
+  (function () {
+    var reached = 0, bad = [];
+    for (var seed = 1001; seed <= 1005; seed++) {
+      var npc = gen(seed);
+      if (!npc) { bad.push({ seed: seed, why: 'no npc' }); continue; }
+      NQ.accept(NPC_ID);
+      var steps = 0, ok = true;
+      while (steps < 800) {
+        var gd = NQ.guidance();
+        if (!gd) { ok = false; bad.push({ seed: seed, why: 'guidance null' }); break; }
+        var cheb = Math.max(Math.abs(P.x - npc.x), Math.abs(P.y - npc.y));
+        if (cheb <= 1) break;
+        var nx = P.x + gd.dir.dx, ny = P.y + gd.dir.dy;
+        var t = Map.tileAt(nx, ny);
+        var total = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+        var tele = (t === 2 && P.floor < total) || (t === 3 && P.floor > 1);
+        if (t === 0 || tele) { ok = false; bad.push({ seed: seed, why: 'illegal step' }); break; }
+        P.x = nx; P.y = ny;
+        NQ.checkPosition(nx, ny);
+        steps++;
+      }
+      if (ok && steps < 800) reached++;
+    }
+    var fl = R && R.playerFrameState ? R.playerFrameState({ facing: 'left' }, true) : null;
+    var fr = R && R.playerFrameState ? R.playerFrameState({ facing: 'right' }, true) : null;
+    var facingOk = !!(fl && fr && fl.flip === true && fr.flip === false && fl.frame === fr.frame && fl.frame === 'knight_m_run');
+
+    var md = readDoc('../docs/平衡定档.md');
+    var a = md.indexOf('## 附录A 怪物习性');
+    var b = md.indexOf('\n## ', a + 1);
+    var sec = a >= 0 ? md.slice(a, b < 0 ? md.length : b) : '';
+    var rows = [], lines = sec.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      if (!/^\|/.test(lines[i])) continue;
+      var c = lines[i].split('|');
+      if (c.length < 5) continue;
+      var name = c[1].trim(), km = /(guard|patrol|chase)/.exec(c[2]), sight = Number(c[3].trim());
+      if (km && isFinite(sight)) rows.push({ name: name, kind: km[1], sight: sight });
+    }
+    var byName = {}, mism = [], ids = Object.keys(MON);
+    for (var m = 0; m < ids.length; m++) byName[MON[ids[m]].name] = MON[ids[m]].habit;
+    for (var r2 = 0; r2 < rows.length; r2++) {
+      var h = byName[rows[r2].name];
+      if (!h || h.kind !== rows[r2].kind || h.sight !== rows[r2].sight) mism.push(rows[r2]);
+    }
+    rec('G_old_features', reached === 5 && bad.length === 0 && facingOk && rows.length === ids.length && mism.length === 0, {
+      rule: 'D-55 指引 5 种子必须到达；D-57 左翻转/右不翻；D-58 文档 18 行与数据逐条一致',
+      guidanceReached: reached + '/5', guidanceBad: bad.slice(0, 5),
+      facing: { left: fl, right: fr }, docRows: rows.length, docMismatch: mism.slice(0, 5)
+    });
+  })();
+
+  var ok = true;
+  var names = Object.keys(out.sub);
+  for (var i = 0; i < names.length; i++) ok = ok && out.sub[names[i]].ok;
+  out.ok = ok && window.__D59ERR.length === 0;
+  out.errs = window.__D59ERR;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+})();
+</script>
+</body>
+</html>

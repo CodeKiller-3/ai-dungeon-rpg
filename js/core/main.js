@@ -484,6 +484,10 @@
     if (enc.kind === 'patrol' && Game.Systems.AI && typeof Game.Systems.AI.fleeStunAt === 'function') {
       Game.Systems.AI.fleeStunAt(enc.x, enc.y, 6);
     }
+    /* D-59：静态怪主动贴脸被逃跑后，同样给 6 tick 喘息，避免下一 tick 立刻再粘上 */
+    if (enc.kind === 'enemy' && Game.Systems.Map && typeof Game.Systems.Map.stunEnemyAt === 'function') {
+      Game.Systems.Map.stunEnemyAt(enc.x, enc.y, 6);
+    }
   }
 
   function onBattleEnd(evt) {
@@ -491,7 +495,7 @@
     var enc = encounter;
     encounter = null;
     if (enc && evt.result === 'win') {
-      if (enc.kind === 'ambush') Game.Systems.Map.removeEnemyAt(enc.x, enc.y);
+      if (enc.kind === 'ambush' || enc.kind === 'enemy') Game.Systems.Map.removeEnemyAt(enc.x, enc.y);
       else if (Game.Systems.AI && typeof Game.Systems.AI.removePatrolAt === 'function') {
         Game.Systems.AI.removePatrolAt(enc.x, enc.y);
       }
@@ -529,8 +533,9 @@
 
   /* M5：巡逻怪贴脸 → 触发战斗 */
   function onAiEncounter(evt) {
-    /* D-15：记录遭遇上下文（巡逻怪已在 evt 中带上坐标；战斗期间 AI 不 tick，坐标保持有效） */
-    encounter = { kind: 'patrol', x: evt.x, y: evt.y, monsterId: evt.monsterId };
+    /* D-15：记录遭遇上下文（巡逻怪已在 evt 中带上坐标；战斗期间 AI 不 tick，坐标保持有效）
+     * D-59：静态怪主动贴脸时 evt.kind='enemy'，胜利后走 removeEnemyAt 删除，逃跑后冻结 6 tick。 */
+    encounter = { kind: (evt.kind === 'enemy') ? 'enemy' : 'patrol', x: evt.x, y: evt.y, monsterId: evt.monsterId };
     Game.Systems.Battle.start(evt.monsterId);
     Game.Core.Main.switchScene('battle');
   }

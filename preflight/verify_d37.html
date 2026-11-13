@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 A/C 组复现 D-34 活体跑局，跑完立即恢复。 -->
 <!-- D-37：本页读取 preflight/selfcheck/d37-g*.json 与 d34-bot-report.json（测量产物），故声明为元页面 -->
 <meta name="preflight-meta" content="1">
 <title>D-37 测量台校准：四组对照</title>
@@ -13,6 +14,7 @@
 </style>
 </head>
 <body>
+<p id="d58-pin-note" style="color:#e0b050;">D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 A/C 组复现 D-34 活体跑局，跑完立即恢复。</p>
 <h1>D-37 · 测量台校准（G0 基线 / G1 +火球 / G2 +火球+逃跑 / G3 +火球+逃跑+刷级）</h1>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
@@ -219,6 +221,10 @@
      * 断言本身没有放宽：仍然是"现跑必须与 D-34 逐局完全相同"。 */
     var legacySee37 = Game.Systems.AI.canSee;
     Game.Systems.AI.canSee = function () { return true; };
+    var legacyTick37 = Game.Systems.AI.tick;
+    if (typeof Game.Systems.AI.tickPatrolsOnly === 'function') {
+      Game.Systems.AI.tick = Game.Systems.AI.tickPatrolsOnly;
+    }
     var cpRate37 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
     if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
     var habitSnap37 = {};
@@ -283,6 +289,7 @@
       if (Object.prototype.hasOwnProperty.call(habitSnap37, hr37)) Game.Data.MONSTERS[hr37].habit = habitSnap37[hr37];
     }
     Game.Systems.AI.canSee = legacySee37;
+    Game.Systems.AI.tick = legacyTick37;
     if (Game.Data.CHEST_PLACEMENT && cpRate37 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate37;
     Game.Systems.Battle.expEarlyBase = curveNow;
     MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;

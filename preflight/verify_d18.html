@@ -2,10 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 B 组复现历史 A* 结果的跑局段落，跑完立即恢复。 -->
 <meta name="preflight-meta" content="1">
 <title>verify_d18</title>
 </head>
 <body>
+<p id="d58-pin-note" style="color:#e0b050;">D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 B 组复现历史 A* 结果的跑局段落，跑完立即恢复。</p>
 <canvas id="game"></canvas>
 <!-- D-18 验证页：
      A) 楼梯落点可达性——200 种子 × 5 层，出生点→上行梯（不踩下行梯）、出生点→下行梯（不踩上行梯）
@@ -165,6 +167,10 @@
      * 跑完 B 组立刻恢复；断言仍是"转置写回必须抛错"。 */
     var legacySee18 = Game.Systems.AI.canSee;
     Game.Systems.AI.canSee = function () { return true; };
+    var legacyTick18 = Game.Systems.AI.tick;
+    if (typeof Game.Systems.AI.tickPatrolsOnly === 'function') {
+      Game.Systems.AI.tick = Game.Systems.AI.tickPatrolsOnly;
+    }
     var cpRate18 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
     if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
     var habitSnap18 = {};
@@ -248,6 +254,7 @@
       if (Object.prototype.hasOwnProperty.call(habitSnap18, hr18)) Game.Data.MONSTERS[hr18].habit = habitSnap18[hr18];
     }
     Game.Systems.AI.canSee = legacySee18;
+    Game.Systems.AI.tick = legacyTick18;
     if (Game.Data.CHEST_PLACEMENT && cpRate18 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate18;
 
     /* ══ C) bot 商店行为 ═══════════════════════════════════════ */

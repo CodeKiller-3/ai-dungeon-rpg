@@ -2,6 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 C 组 seed 1025 死因复现跑局，跑完立即恢复。 -->
 <title>D-38 F5 必经目标可达性与死因归类</title>
 <style>
   body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
@@ -11,6 +12,7 @@
 </style>
 </head>
 <body>
+<p id="d58-pin-note" style="color:#e0b050;">D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 C 组 seed 1025 死因复现跑局，跑完立即恢复。</p>
 <h1>D-38 · F5 必经目标连通性 + 状态致死归类</h1>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
@@ -201,6 +203,10 @@
      * 这与上面经验曲线、掉落、补给钉回是同一模式，断言仍是"seed 1025 必须判为状态效果"。 */
     var legacySee38 = Game.Systems.AI.canSee;
     Game.Systems.AI.canSee = function () { return true; };
+    var legacyTick38 = Game.Systems.AI.tick;
+    if (typeof Game.Systems.AI.tickPatrolsOnly === 'function') {
+      Game.Systems.AI.tick = Game.Systems.AI.tickPatrolsOnly;
+    }
     var habitSnap38 = {};
     for (var hk38 in Game.Data.MONSTERS) {
       if (!Game.Data.MONSTERS[hk38] || !Game.Data.MONSTERS[hk38].habit) continue;
@@ -215,6 +221,7 @@
       if (Object.prototype.hasOwnProperty.call(habitSnap38, hk38b)) Game.Data.MONSTERS[hk38b].habit = habitSnap38[hk38b];
     }
     Game.Systems.AI.canSee = legacySee38;
+    Game.Systems.AI.tick = legacyTick38;
     for (var r38 in snap38.drops) Game.Data.MONSTERS[r38].drops = snap38.drops[r38];
     Game.Data.CHEST_LOOT = snap38.chest;
     Game.Systems.Battle.expEarlyBase = curveNow38;

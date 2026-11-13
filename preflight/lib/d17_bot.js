@@ -285,7 +285,7 @@
     return {
       avoid: cfg.avoid !== false,   /* 负例开关：false = 不把怪当障碍（用来证明"绕怪"真的在起作用） */
       skill: cfg.skill !== false,
-      battles: 0, forced: 0, active: 0, byBlock: 0, byPatrol: 0, byBoss: 0,
+      battles: 0, forced: 0, active: 0, byBlock: 0, byPatrol: 0, byBoss: 0, race: 0,
       fleeAttempts: 0, fleeSuccess: 0, fleeFail: 0, fleeTriesThisBattle: 0,
       reengaged: 0, respite: 0, lastFleeWhy: null,
       blockedCount: 0, blocked: [],
@@ -2206,7 +2206,11 @@
      * 判据一律用"战斗开始那一刻玩家站的那格"：
      *   · 站在静态怪格上 → 是我们走进去的（ambush）：lastStep.forced 决定算"挡路"还是负例的"主动"；
      *   · 没站在怪格上 → 巡逻怪贴脸（ai:encounter），属于被动遭遇。
-     * 怪格用 Map.enemyAt（只含静态刷怪点，巡逻怪不在其中），所以不会把巡逻误判成踩怪。 */
+     * 怪格用 Map.enemyAt（只含静态刷怪点，巡逻怪不在其中），所以不会把巡逻误判成踩怪。
+     * D-59 适用说明：静态怪也会主动追之后，"站在怪格上"不再等价于"我们主动踩上去"——
+     * 计划的空格可能被怪走进来。这里沿用 B1 的 race 口径：lastStep.intoEnemy=false 却是踩怪开局，
+     * 判为遭遇战（race），不算主动开战；只有"计划就踩怪"（intoEnemy=true 且非 forced）才记 active。
+     * 判定没有放宽：S1 的 active 仍然必须为 0，只是把"怪撞上来"从误记里摘出去。 */
     EB.on('battle:start', function (e) {
       if (!cur || !cur.d39) return;
       var d = cur.d39, P = Game.Data.Player, Map = Game.Systems.Map;
@@ -2214,10 +2218,12 @@
       var isBoss = !!(bid && e && e.monsterId === bid);
       var onMe = Map.enemyAt(P.x, P.y);
       var stepped = !!(onMe && e && onMe.monsterId === e.monsterId);
+      var plannedInto = !!(d.lastStep && d.lastStep.intoEnemy);
       d.battles++;
       if (isBoss) { d.byBoss++; d.battleKind = 'boss'; }
       else if (stepped && d.lastStep && d.lastStep.forced) { d.byBlock++; d.battleKind = 'blocked'; }
-      else if (stepped) { d.active++; d.battleKind = 'active'; }
+      else if (stepped && plannedInto) { d.active++; d.battleKind = 'active'; }
+      else if (stepped) { d.race++; d.byPatrol++; d.battleKind = 'patrol'; }
       else { d.byPatrol++; d.battleKind = 'patrol'; }
       /* "被 6 tick 喘息期拖回战斗"：上一次逃跑成功的喘息还没走完就又开打 */
       if (d.respite > 0) d.reengaged++;

@@ -80,6 +80,137 @@
     return null;
   }
 
+  /* D-59：AI 运行期计数器（只读遥测；验证页据此给"调用次数/感知/移动/A*"前后对照） */
+  var stat = { ticks: 0, entities: 0, seen: 0, moves: 0, astar: 0 };
+
+  /* 单步移动：所有会动的怪共用同一套限制——必须可走、不能叠怪/叠 NPC/直接踩到玩家。
+   * 仍是"每 REPLAN 帧求一次下一步"，不瞬移、不跨层。 */
+  function moveEntity(e, target, player, grid) {
+    var next = nextStep(grid, e, target);
+    stat.astar++;
+    if (!next) return false;
+    if (!grid[next.y] || grid[next.y][next.x] === 0) return false;
+    if (next.x === player.x && next.y === player.y) return false;
+    var Map = Game.Systems.Map;
+    if (Map.enemyAt && Map.enemyAt(next.x, next.y)) return false;
+    if (Map.npcAt && Map.npcAt(next.x, next.y)) return false;
+    for (var i = 0; i < patrols.length; i++) {
+      if (patrols[i] !== e && patrols[i].x === next.x && patrols[i].y === next.y) return false;
+    }
+    e.x = next.x;
+    e.y = next.y;
+    stat.moves++;
+    return true;
+  }
+
+  /* 巡逻怪 tick（D-58 逻辑原样保留）。返回 true 表示本 tick 已触发战斗，调用方不要再跑别的怪。 */
+  function tickPatrols(player) {
+    var grid = Game.Systems.Map.getGrid();
+    var seeFn = (Game.Systems.AI && typeof Game.Systems.AI.canSee === 'function')
+      ? Game.Systems.AI.canSee : canSee;
+    for (var i = 0; i < patrols.length; i++) {
+      var e = patrols[i];
+      e.frame++;
+      /* D-15：逃跑后的喘息期——只暂停追击，怪物仍在场景里 */
+      if (e.rest > 0) {
+        e.rest--;
+        e.state = 'idle';
+        e.path = [];
+        continue;
+      }
+      stat.entities++;
+      var hb = habitOf(e.monsterId);
+      var d = dist(e.x, e.y, player.x, player.y);
+      /* D-58：半径内 + 视线不被墙挡住才算"发现"；两个条件任一不满足都回 idle。
+       * 视线函数经导出表取用，便于历史验证页临时替换为"全可见"复现改前行为。 */
+      var seen = (d <= hb.sight) && seeFn(e.x, e.y, player.x, player.y, grid);
+      if (!seen) {
+        e.state = 'idle';
+        e.path = [];
+        continue;
+      }
+      stat.seen++;
+      /* 贴脸：触发战斗（D-15：不删怪；胜利才由 removePatrolAt 移除） */
+      if (d <= 1) {
+        e.state = (hb.kind === 'guard') ? 'alert' : 'chase';
+        Game.Core.EventBus.emit('ai:encounter', { monsterId: e.monsterId, x: e.x, y: e.y });
+        return true; /* 一帧只触发一次遭遇，避免相邻多怪同时开局 */
+      }
+      /* 不追型：发现即警戒，但一步都不走（守卫原地） */
+      if (hb.kind === 'guard') {
+        e.state = 'alert';
+        e.path = [];
+        continue;
+      }
+      e.state = 'chase';
+      /* 周期重规划路径 */
+      if (e.frame % REPLAN === 0) {
+        var next = nextStep(grid, e, player);
+        stat.astar++;   /* D-59 遥测：巡逻怪与静态怪共用同一口径的 A* 次数 */
+        /* 不额外做越界兜底：旧实现就是"下一步必须是可走格"，D-18 的负例靠这条
+         * （A* 坐标转置后必须抛错）证明测量台抓得住回归。 */
+        if (next && grid[next.y][next.x] !== 0) {
+          var pfx = e.x, pfy = e.y;
+          e.x = next.x;
+          e.y = next.y;
+          stat.moves++;
+          /* M9-3：登记巡逻怪移动插值（渲染层用 patrol_<index> 取视觉位置） */
+          if (Game.Motion && typeof Game.Motion.setStep === 'function') {
+            Game.Motion.setStep('patrol_' + i, pfx, pfy, next.x, next.y, 160);
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /* D-59：静态怪接入感知。
+   * - 只处理 chase / patrol；guard 一步不动（"有可能不会追赶"）。
+   * - 感知规则与巡逻怪完全一致：各自 sight、隔墙不可见、丢失目标回原位。
+   * - 回原位也是单步 A*（不是瞬移）；没离开过的怪不会产生任何寻路。 */
+  function tickEnemies(player) {
+    var Map = Game.Systems.Map;
+    if (!Map || typeof Map.getEnemies !== 'function') return;
+    var list = Map.getEnemies() || [];
+    var grid = Map.getGrid();
+    var seeFn = (Game.Systems.AI && typeof Game.Systems.AI.canSee === 'function')
+      ? Game.Systems.AI.canSee : canSee;
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      var hb = habitOf(e.monsterId);
+      if (hb.kind === 'guard') continue;
+      e.frame = (e.frame || 0) + 1;
+      if (e.rest > 0) {
+        e.rest--;
+        e.state = 'idle';
+        continue;
+      }
+      stat.entities++;
+      var d = dist(e.x, e.y, player.x, player.y);
+      var seen = (d <= hb.sight) && seeFn(e.x, e.y, player.x, player.y, grid);
+      if (seen) {
+        stat.seen++;
+        /* 贴脸：由静态怪发起战斗。保留"踩到即战斗"（那是 main.js 的 ambush 通道） */
+        if (d <= 1) {
+          e.state = 'chase';
+          if (Game.Core.EventBus) {
+            Game.Core.EventBus.emit('ai:encounter', { kind: 'enemy', monsterId: e.monsterId, x: e.x, y: e.y });
+          }
+          return;
+        }
+        e.state = 'chase';
+        if (e.frame % REPLAN === 0) moveEntity(e, player, player, grid);
+      } else {
+        e.state = 'idle';
+        var hx = (typeof e.homeX === 'number') ? e.homeX : e.x;
+        var hy = (typeof e.homeY === 'number') ? e.homeY : e.y;
+        if ((e.x !== hx || e.y !== hy) && e.frame % REPLAN === 0) {
+          moveEntity(e, { x: hx, y: hy }, player, grid);
+        }
+      }
+    }
+  }
+
   Game.Systems.AI = {
     /* 每层生成巡逻怪（由 map.js generate 调用） */
     initPatrols: function (count) {
@@ -139,66 +270,30 @@
     /* 修复 P1：楼层快照恢复时回填巡逻怪（保持回访层的怪物状态） */
     setPatrols: function (arr) { patrols = arr || []; },
 
-    /* 主循环每帧调用：更新所有巡逻怪。
-     * D-58：每只怪按自己的习性走——
-     *   guard  守卫：发现玩家只进 alert（原地不动），贴脸才触发战斗；
-     *   patrol 巡逻：视距 5–6，发现后 A* 追击；
-     *   chase  追击：视距 7–8，发现后 A* 追击。
-     * 失去视线立即回 idle，不保留"上次见过你"的锁定状态。 */
+    /* 主循环每帧调用：先巡逻怪，再静态怪。任一触发战斗就结束本 tick。
+     * D-58：guard 只警戒不追 / patrol、chase 主动接近，视距各自不同；
+     * D-59：静态怪也走同一套感知，guard 仍一步不动。
+     * 失去视线立即回 idle（静态怪随后单步走回 homeX/homeY），不保留锁定状态。 */
     tick: function (player) {
-      var grid = Game.Systems.Map.getGrid();
-      for (var i = 0; i < patrols.length; i++) {
-        var e = patrols[i];
-        e.frame++;
-        /* D-15：逃跑后的喘息期——只暂停追击，怪物仍在场景里 */
-        if (e.rest > 0) {
-          e.rest--;
-          e.state = 'idle';
-          e.path = [];
-          continue;
-        }
-        var hb = habitOf(e.monsterId);
-        var d = dist(e.x, e.y, player.x, player.y);
-        /* D-58：半径内 + 视线不被墙挡住才算"发现"；两个条件任一不满足都回 idle。
-         * 视线函数经导出表取用，便于历史验证页临时替换为"全可见"复现改前行为。 */
-        var seeFn = (Game.Systems.AI && typeof Game.Systems.AI.canSee === 'function')
-          ? Game.Systems.AI.canSee : canSee;
-        var seen = (d <= hb.sight) && seeFn(e.x, e.y, player.x, player.y, grid);
-        if (!seen) {
-          e.state = 'idle';
-          e.path = [];
-          continue;
-        }
-        /* 贴脸：触发战斗（D-15：不删怪；胜利才由 removePatrolAt 移除） */
-        if (d <= 1) {
-          e.state = (hb.kind === 'guard') ? 'alert' : 'chase';
-          Game.Core.EventBus.emit('ai:encounter', { monsterId: e.monsterId, x: e.x, y: e.y });
-          return; /* 一帧只触发一次遭遇，避免相邻多怪同时开局 */
-        }
-        /* 不追型：发现即警戒，但一步都不走（守卫原地） */
-        if (hb.kind === 'guard') {
-          e.state = 'alert';
-          e.path = [];
-          continue;
-        }
-        e.state = 'chase';
-        /* 周期重规划路径 */
-        if (e.frame % REPLAN === 0) {
-          var next = nextStep(grid, e, player);
-          /* 不额外做越界兜底：旧实现就是"下一步必须是可走格"，D-18 的负例靠这条
-           * （A* 坐标转置后必须抛错）证明测量台抓得住回归。 */
-          if (next && grid[next.y][next.x] !== 0) {
-            var pfx = e.x, pfy = e.y;
-            e.x = next.x;
-            e.y = next.y;
-            /* M9-3：登记巡逻怪移动插值（渲染层用 patrol_<index> 取视觉位置） */
-            if (Game.Motion && typeof Game.Motion.setStep === 'function') {
-              Game.Motion.setStep('patrol_' + i, pfx, pfy, next.x, next.y, 160);
-            }
-          }
-        }
-      }
+      stat.ticks++;
+      if (tickPatrols(player)) return;
+      tickEnemies(player);
     },
+
+    /* 历史基线页复现 D-58 及更早结果时用：只跑 2 只巡逻怪，静态怪保持原地。
+     * 游戏运行时不会调用这个入口。 */
+    tickPatrolsOnly: function (player) {
+      stat.ticks++;
+      tickPatrols(player);
+    },
+
+    tickEnemies: tickEnemies,
+
+    /* D-59：只读计数器（tick / 参与感知的怪 / 发现次数 / 移动次数 / A* 次数） */
+    stats: function () {
+      return { ticks: stat.ticks, entities: stat.entities, seen: stat.seen, moves: stat.moves, astar: stat.astar };
+    },
+    resetStats: function () { stat = { ticks: 0, entities: 0, seen: 0, moves: 0, astar: 0 }; },
 
     /* D-58：只读习性表（验证页 A 组与文档逐条对照的入口）。
      * 返回 { id: {kind, sight} }，直接由 Game.Data.MONSTERS[id].habit 推导，

@@ -408,7 +408,9 @@
           acc += table[i].rate;
           if (roll <= acc) { pick = table[i].id; break; }
         }
-        enemies.push({ x: x, y: y, monsterId: pick });
+        /* D-59：静态怪也接入 AI——记住出生格（丢失目标后走回去）与 tick 帧计数。
+         * 这两个字段是运行期状态，不入存档；读档/换层后由本函数重新生成。 */
+        enemies.push({ x: x, y: y, monsterId: pick, homeX: x, homeY: y, frame: 0, rest: 0 });
         placed++;
       }
     }
@@ -1232,6 +1234,17 @@
       return false;
     },
     getEnemies: function () { return enemies; },
+
+    /* D-59：逃跑成功后的喘息期——只冻结这只静态怪的 AI，不移除、不改数值 */
+    stunEnemyAt: function (x, y, turns) {
+      for (var i = 0; i < enemies.length; i++) {
+        if (enemies[i].x === x && enemies[i].y === y) {
+          enemies[i].rest = Math.max(enemies[i].rest || 0, turns || 0);
+          return true;
+        }
+      }
+      return false;
+    },
 
     /* D-47：本层实体 NPC（只读）。位置在 placeNpc 里确定性生成，
      * 渲染、交互判定与验证页共用这一份数据。 */

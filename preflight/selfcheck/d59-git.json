@@ -1,0 +1,7 @@
+{
+    "diffStat":  " js/core/main.js   |  11 ++-\n js/systems/ai.js  | 210 +++++++++++++++++++++++++++++++++++++++---------------\n js/systems/map.js |  15 +++-\n 3 files changed, 174 insertions(+), 62 deletions(-)",
+    "head":  "dacbca2c5d9267daa6fde9b4ef5be9e8a193f566",
+    "at":  "2026-11-13T15:06:58",
+    "adaptive":  1,
+    "form":  "d50"
+}

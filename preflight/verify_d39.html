@@ -119,31 +119,33 @@
       }
     }
     var liveS1 = [];
-    var liveActive = 0;
+    var liveActive = 0, liveRace = 0;
     var liveSeeds = [1001, 1004];
     for (var li = 0; li < liveSeeds.length; li++) {
       var rr = Bot.run(liveSeeds[li], { maxActions: 1200, d39: { avoid: true, skill: true } });
       liveS1.push({ seed: rr.seed, battles: rr.d39.battles, active: rr.d39.active,
-        forced: rr.d39.forced, byBlock: rr.d39.byBlock, byPatrol: rr.d39.byPatrol,
+        forced: rr.d39.forced, race: rr.d39.race || 0,
+        byBlock: rr.d39.byBlock, byPatrol: rr.d39.byPatrol,
         byBoss: rr.d39.byBoss, outcome: rr.outcome, floor: rr.floor });
       liveActive += rr.d39.active;
+      liveRace += (rr.d39.race || 0);
     }
     var liveNeg = [];
     var negActive = 0;
     for (var ni = 0; ni < liveSeeds.length; ni++) {
       var rn = Bot.run(liveSeeds[ni], { maxActions: 1200, d39: { avoid: false, skill: true } });
       liveNeg.push({ seed: rn.seed, battles: rn.d39.battles, active: rn.d39.active,
-        blockedCount: rn.d39.blockedCount, outcome: rn.outcome, floor: rn.floor });
+        race: rn.d39.race || 0, blockedCount: rn.d39.blockedCount, outcome: rn.outcome, floor: rn.floor });
       negActive += rn.d39.active;
     }
     rec('A_stealth_no_pick_fight', !!s1 && !!neg &&
       aStored.active === 0 && aStored.forced === aStored.battles && aBadRuns.length === 0 &&
       liveActive === 0 && negActive > 0 && neg.summary.d39.encounters.active > 0, {
       stored: aStored, badRuns: aBadRuns.slice(0, 5),
-      liveS1: liveS1, liveS1ActiveSum: liveActive,
+      liveS1: liveS1, liveS1ActiveSum: liveActive, liveS1RaceSum: liveRace,
       liveNeg: liveNeg, liveNegActiveSum: negActive,
       storedNegActive: neg ? neg.summary.d39.encounters.active : null,
-      note: 'S1=绕怪（active 必须 0）；neg=关掉绕怪（active 必须 >0）'
+      note: 'S1=绕怪（主动踩怪 active 必须 0）；D-59 起静态怪会走进计划空格，这类"踩怪"按 race 记入遭遇战、不算主动开战，判定未放宽；neg=关掉绕怪（active 必须 >0）'
     });
 
     /* ══ B 组：绕怪 BFS 真的改变路径（真实例子 + 合成对照） ═══════════ */
