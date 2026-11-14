@@ -51,8 +51,9 @@
   }
   var IDS = ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'];
   var NAMES = ['断牙', '裂颅', '霜噬', '守夜', '烬牙'];
-  var ATK = [8, 11, 16, 16, 18];
-  var HP = [0, 0, 0, 10, 0];   /* F4 额外 +10 生命上限：与 F3 同为 16 攻，但总强度更高一档 */
+  /* D-72 起：曲线回正后的五把刀（本页的断言结构不变，只把期望值钉到当前版本） */
+  var ATK = [8, 12, 16, 16, 22];
+  var HP = [0, 0, 0, 10, 10];
   var SHOP_MAX = [5, 8, 16, 12, 16];  /* 各层商店最强武器 atk（F3 含 600g 的 sword_dragon_epic=16） */
 
   try {
@@ -141,7 +142,7 @@
       }
     }
     rec('A5_beatsSameFloorShop', weak.length === 0, {
-      rule: '五把刀 atk 全部不低于同层商店最强武器（8>5 / 11>8 / 16=16 / 18>12 / 18>16，F4 另带 +10 生命上限）；不再出现"店里立刻有更好的"',
+      rule: '五把刀 atk 全部不低于同层商店最强武器（8>5 / 12>8 / 16=16 / 16>12 / 22>16，F4/F5 另带 +10 生命上限）；不再出现"店里立刻有更好的"',
       weak: weak,
       compare: IDS.map(function (id, k2) { return NAMES[k2] + ' ' + ATK[k2] + ' vs shop ' + SHOP_MAX[k2]; })
     });

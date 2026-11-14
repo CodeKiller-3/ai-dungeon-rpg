@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-72 曲线回正 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-72 · 精英武器曲线回正：单调递增 / 最大一跳在 F4→F5 / B1 45–52（A–B）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var D = Game.Data, IT = D.ITEMS, P = D.Player;
+  var Main = Game.Core.Main, Map = Game.Systems.Map, Inv = Game.Systems.Inventory;
+  var Shop = Game.Systems.Shop;
+  var out = { protocol: 'D-72', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  var IDS = ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'];
+  var NAMES = ['断牙', '裂颅', '霜噬', '守夜', '烬牙'];
+  var ATK = [8, 12, 16, 16, 22];
+  var HP = [0, 0, 0, 10, 10];
+  var SHOP_MAX = [5, 8, 16, 12, 16];  /* 各层商店最强武器 atk（F3 含 600g 的 sword_dragon_epic=16+10） */
+  var BASE_ATK = 10;                  /* 1 级裸装攻击（起手匕首 atk1 → 面板 11） */
+  var PANEL = ATK.map(function (a) { return BASE_ATK + a; });
+  var INC = [1, 2, 3, 4].map(function (i) { return PANEL[i] - PANEL[i - 1]; });
+
+  try {
+    Map.generate();
+    /* ── A1：五把刀、不可枚举、逐层不减（atk 与 hp 都不倒挂）──────── */
+    var miss = [], bad = [], mono = [];
+    for (var i = 0; i < IDS.length; i++) {
+      var it = IT[IDS[i]];
+      if (!it || it.elite !== true || it.type !== 'weapon') miss.push(IDS[i]);
+      else if (it.effect.atk !== ATK[i] || (it.effect.maxHp || 0) !== HP[i] ||
+        it.name !== NAMES[i] || it.price !== 0 || it.sell !== 0) bad.push(IDS[i]);
+    }
+    if (Object.keys(IT).length !== 48) bad.push('可枚举物品数=' + Object.keys(IT).length);
+    for (var j = 1; j < ATK.length; j++) {
+      if (ATK[j] < ATK[j - 1] || HP[j] < HP[j - 1]) mono.push('倒挂@F' + (j + 1));
+      if (ATK[j] === ATK[j - 1] && HP[j] === HP[j - 1]) mono.push('无增长@F' + (j + 1));
+    }
+    rec('A1_monotonic', miss.length === 0 && bad.length === 0 && mono.length === 0, {
+      rule: '五层各一把、不可枚举（可枚举仍 48 条）、price/sell=0；atk 与 maxHp 逐层都不下降且每层总强度严格上升',
+      missing: miss, bad: bad, mono: mono,
+      table: IDS.map(function (id, k) {
+        return NAMES[k] + ' ' + ATK[k] + (HP[k] ? '+hp' + HP[k] : '') + '（面板 ' + PANEL[k] + '）';
+      })
+    });
+
+    /* ── A2：最大一跳在 F4→F5，且 F5 明显最强 ─────────────────────── */
+    var maxInc = Math.max.apply(null, INC), maxIdx = INC.indexOf(maxInc);
+    var shapeOk = maxIdx === 3 && inc3Ok() && ATK[4] - ATK[3] >= 2 && HP[4] >= HP[3];
+    function inc3Ok() { return INC[3] >= 2; }
+    rec('A2_curveShape', shapeOk, {
+      rule: '面板攻击逐层增量里最大的一跳必须是 F4→F5；F5 攻击比 F4 至少高 2、生命上限不低于 F4（不倒挂）',
+      panel: PANEL, inc: INC, maxInc: maxInc, maxIndex: maxIdx,
+      f5vsF4: { atk: ATK[4] - ATK[3], hp: HP[4] - HP[3] }
+    });
+
+    /* ── A3：商店买不到 ───────────────────────────────────────────── */
+    var coreBad = [], rotBad = [], stockBad = [];
+    var rows = D.SHOP_STOCK || [], rot = D.SHOP_ROTATION || [];
+    for (var f = 1; f <= 5; f++) {
+      Map.setFloor(f);
+      var st = Shop.getStock();
+      for (var k2 = 0; k2 < st.length; k2++) if (IDS.indexOf(st[k2].id) >= 0) stockBad.push('F' + f + ':' + st[k2].id);
+      var cr = rows[Math.min(f - 1, rows.length - 1)] || [];
+      var rr = rot[Math.min(f - 1, rot.length - 1)] || [];
+      for (var c = 0; c < cr.length; c++) if (IDS.indexOf(cr[c]) >= 0) coreBad.push(cr[c]);
+      for (var r2 = 0; r2 < rr.length; r2++) if (IDS.indexOf(rr[r2]) >= 0) rotBad.push(rr[r2]);
+    }
+    rec('A3_shopExcluded', coreBad.length === 0 && rotBad.length === 0 && stockBad.length === 0, {
+      rule: '五把刀不在任何一层核心货架、不在任何轮换池、getStock() 五层实测都拿不到',
+      coreBad: coreBad, rotBad: rotBad, stockBad: stockBad
+    });
+
+    /* ── A4：逐层发放 → 入包 + 自动装备 + 面板真涨 ───────────────── */
+    var grant = [];
+    for (var f3 = 1; f3 <= 5; f3++) {
+      P.level = 1; P.exp = 0; P.hp = 100; P.maxHp = 100; P.eliteAtk = 0;
+      P.inventory = {}; P.upg = {}; P.equipment = { weapon: 'knife', armor: null };
+      Inv.recalcEquip();
+      var before = P.atk;
+      Map.setFloor(f3);
+      Main._grantEliteReward();
+      grant.push({
+        floor: f3, weapon: P.equipment.weapon, atk: P.atk, before: before,
+        delta: P.atk - before, inBag: (P.inventory[IDS[f3 - 1]] || 0) > 0, eliteAtk: P.eliteAtk
+      });
+    }
+    var grantOk = grant.every(function (g) {
+      return g.weapon === IDS[g.floor - 1] && g.delta === ATK[g.floor - 1] - 1 && g.inBag && g.eliteAtk === 0;
+    });
+    rec('A4_grantAndEquip', grantOk, {
+      rule: '在 1–5 层分别发放：装备栏换成该层刀、背包里有 1 把、面板从匕首(11) 涨到 10+atk、eliteAtk 保持 0（替换不是叠加）',
+      grants: grant
+    });
+
+    /* ── A5：零随机 ───────────────────────────────────────────────── */
+    var rnd = 0, real = Math.random;
+    P.inventory = {}; P.upg = {}; P.eliteAtk = 0;
+    P.equipment = { weapon: 'knife', armor: null }; Inv.recalcEquip();
+    Map.setFloor(3);
+    Math.random = function () { rnd++; return real(); };
+    Main._grantEliteReward();
+    Math.random = real;
+    rec('A5_zeroRandom', rnd === 0, {
+      rule: '发放全过程 Math.random 调用次数 = 0；掉落是楼层索引查表，不进随机掉落池',
+      rndCalls: rnd
+    });
+
+    /* ── A6：不低于同层商店最强武器（F3 持平，其余更强）────────────── */
+    var weak = [], tooFar = [];
+    for (var f5 = 1; f5 <= 5; f5++) {
+      var maxStock = 0;
+      Map.setFloor(f5);
+      Shop.getStock().forEach(function (s) {
+        if (s.item.type === 'weapon') maxStock = Math.max(maxStock, s.item.effect.atk || 0);
+      });
+      var cur = Math.max(maxStock, SHOP_MAX[f5 - 1]);
+      if (ATK[f5 - 1] < cur) weak.push('F' + f5 + ':' + ATK[f5 - 1] + '<shop' + cur);
+      if (ATK[f5 - 1] > cur + 6) tooFar.push('F' + f5 + ':' + ATK[f5 - 1] + '>>shop' + cur);
+    }
+    rec('A6_notBelowShop', weak.length === 0, {
+      rule: '五把刀 atk 全部不低于同层商店最强武器（8>5 / 12>8 / 16=16 / 16>12 / 22>16）；F3 与 600g 稀有龙牙剑同攻（该货 F3 阶段买不起，见 D-71 实测收入）',
+      weak: weak, tooFar: tooFar,
+      compare: IDS.map(function (id, k2) { return NAMES[k2] + ' ' + ATK[k2] + ' vs shop ' + SHOP_MAX[k2]; })
+    });
+
+    /* ── A7：存读档 + 不可出售 ─────────────────────────────────────── */
+    P.level = 1; P.exp = 0; P.eliteAtk = 0;
+    P.inventory = {}; P.upg = {}; P.equipment = { weapon: 'knife', armor: null };
+    Inv.recalcEquip();
+    Map.setFloor(3);
+    Main._grantEliteReward();
+    var atkSaved = P.atk;
+    var savedOk = false;
+    try { Game.Systems.Save.save(); savedOk = true; } catch (e) { savedOk = false; }
+    P.equipment = { weapon: 'knife', armor: null }; P.inventory = {}; Inv.recalcEquip();
+    var loadOk = false;
+    try { Game.Systems.Save.load(); loadOk = true; } catch (e) { loadOk = false; }
+    var saveVeryOk = savedOk && loadOk && P.equipment.weapon === IDS[2] && P.atk === atkSaved;
+    P.equipment = { weapon: 'knife', armor: null }; P.inventory = {}; Inv.recalcEquip();
+    Map.setFloor(1);
+    Main._grantEliteReward();
+    P.equipment = { weapon: 'knife', armor: null }; Inv.recalcEquip();
+    var sellRes = Shop.sell(IDS[0]);
+    var sellOk = sellRes && sellRes.ok === false && String(sellRes.msg).indexOf('不可出售') >= 0;
+    rec('A7_saveSell', saveVeryOk && sellOk, {
+      rule: '存档按物品 id 记录装备/背包（读档后仍是霜噬且面板不变）；Shop.sell 拒绝精英战利品',
+      savedOk: savedOk, loadOk: loadOk, weapon: P.equipment.weapon, sell: sellRes
+    });
+
+    /* ── B：跑局验收（五份测量）──────────────────────────────────── */
+    var b1 = readJson('selfcheck/d72-b1-2500.json');
+    var g2 = readJson('selfcheck/d72-g2-4500.json');
+    var s1 = readJson('selfcheck/d72-s1-2500.json');
+    var m14 = readJson('selfcheck/d72-m1-4500.json');
+    var m16 = readJson('selfcheck/d72-m1-6000.json');
+    var d71b = readJson('selfcheck/d71-b1-2500.json');
+    if (!b1 || !g2 || !s1 || !m14 || !m16 || !d71b) throw new Error('D-72 缺测量 JSON（先跑 d72-report.ps1）');
+    var wins = b1.agg.b1.wins, pct = Math.round(wins / 50 * 100);
+    rec('B1_b1Window', pct >= 45 && pct <= 52, {
+      rule: 'B1-2500 必须落在 45%–52%（硬约束），与 D-71 同口径逐层对比',
+      wins: wins, pct: pct, d71wins: d71b.agg.b1.wins, d71pct: Math.round(d71b.agg.b1.wins / 50 * 100),
+      reach: {
+        d71: [1, 2, 3, 4, 5].map(function (f) { return d71b.agg.b1.floorReach[f]; }),
+        d72: [1, 2, 3, 4, 5].map(function (f) { return b1.agg.b1.floorReach[f]; })
+      },
+      deaths: { d71: d71b.agg.b1.dead, d72: b1.agg.b1.dead },
+      stuck: { d71: d71b.agg.b1.stuck, d72: b1.agg.b1.stuck }
+    });
+    var curve = m16.curve.m1;
+    var normalOk = ['F3', 'F4', 'F5'].every(function (f) {
+      return curve[f] && curve[f].mid.staticMed <= 4 && curve[f].exit.staticMed <= 4;
+    });
+    var boss = m16.boss;
+    var bossOk = boss.ogre_boss.roundsWinMed <= 10 && boss.zombie_king.roundsWinMed <= 10 &&
+      boss.dragon.roundsWinMed <= 10 && boss.dragon.roundsWinMed >= boss.zombie_king.roundsWinMed;
+    rec('B2_gates', normalOk && bossOk, {
+      rule: '普通怪 F3–F5 中/出层 ≤4；Boss 胜场中位 ≤10 且巨龙不低于僵尸王（M1-6000 有效口径）',
+      normal: { F3: curve.F3 && [curve.F3.mid.staticMed, curve.F3.exit.staticMed],
+        F4: curve.F4 && [curve.F4.mid.staticMed, curve.F4.exit.staticMed],
+        F5: curve.F5 && [curve.F5.mid.staticMed, curve.F5.exit.staticMed] },
+      boss: { ogre_boss: boss.ogre_boss.roundsWinMed, zombie_king: boss.zombie_king.roundsWinMed,
+        dragon: boss.dragon.roundsWinMed },
+      retiredNote: 'M1-4500 仍退休：该口径巨龙只打到 5 场（中位 10），不作验收'
+    });
+    rec('B3_fourStrategies', true, {
+      rule: '四策略同种子 50 局现值（D-72 口径，供总收口）',
+      wins: { b1: b1.agg.b1.wins, g2: g2.agg.g2.wins, s1: s1.agg.s1.wins,
+        m1_4500: m14.agg.m1.wins, m1_6000: m16.agg.m1.wins },
+      stuck: { b1: b1.agg.b1.stuck, g2: g2.agg.g2.stuck, s1: s1.agg.s1.stuck, m1_4500: m14.agg.m1.stuck }
+    });
+    document.title = 'D72_DONE';
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    document.title = 'D72_FAIL';
+  }
+  window.__D72_VERIFY__ = out;
+  document.getElementById('result').textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

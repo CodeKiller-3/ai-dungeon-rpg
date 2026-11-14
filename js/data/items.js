@@ -88,10 +88,10 @@
    * price/sell = 0：不参与买卖，避免"打出来卖钱"变成经济外挂。 */
   var ELITE_WEAPONS = {
     elite_fang_1: { id: 'elite_fang_1', name: '断牙', type: 'weapon', elite: true, effect: { atk: 8 }, price: 0, sell: 0 },
-    elite_axe_2: { id: 'elite_axe_2', name: '裂颅', type: 'weapon', elite: true, effect: { atk: 11 }, price: 0, sell: 0 },
+    elite_axe_2: { id: 'elite_axe_2', name: '裂颅', type: 'weapon', elite: true, effect: { atk: 12 }, price: 0, sell: 0 },
     elite_blade_3: { id: 'elite_blade_3', name: '霜噬', type: 'weapon', elite: true, effect: { atk: 16 }, price: 0, sell: 0 },
     elite_edge_4: { id: 'elite_edge_4', name: '守夜', type: 'weapon', elite: true, effect: { atk: 16, maxHp: 10 }, price: 0, sell: 0 },
-    elite_fang_5: { id: 'elite_fang_5', name: '烬牙', type: 'weapon', elite: true, effect: { atk: 18 }, price: 0, sell: 0 }
+    elite_fang_5: { id: 'elite_fang_5', name: '烬牙', type: 'weapon', elite: true, effect: { atk: 22, maxHp: 10 }, price: 0, sell: 0 }
   };
   for (var ew in ELITE_WEAPONS) {
     if (!Object.prototype.hasOwnProperty.call(ELITE_WEAPONS, ew)) continue;
