@@ -37,6 +37,10 @@
 - 🖥️ **性能与收尾**：DPR 高清适配（canvas 按 devicePixelRatio 缩放，上限 2，setTransform 统一缩放不改坐标语义）· 窄窗口 <520px 紧凑版（HUD/底部提示不截断）· 100 帧渲染审计平均 <20ms · 首次引导覆盖层（无存档时自动显示目标/去向/按键，Enter 或点按钮确认）· 游戏中随时按 H 重看引导 · 粒子/移动插值无累积泄漏
 - 🧠 **AI 演示（Q-learning 寻宝鼠）** —— 实时训练演示：成功率随地图与训练轮次波动，实测口径见下方 AI 亮点说明表
 - 🤖 **AI 亮点**：怪物 A\* 寻路追击 · 按种类分守卫 / 巡逻 / 追击三档习性与 3–8 格视距（隔墙看不见，守卫不追；巡逻怪与静态怪共用同一套感知，静态怪丢失目标会走回原位）· 贴脸触发战斗的行为状态机 · 大模型 NPC 自由对话（含离线兜底）· Q-learning 在线学习
+- 🌟 **层内精英（D-69）**：每层主路 45%–65% 区间固定 1 只（优先取割点、绕不开），复用本层怪贴图 + 金色脚下光环 + 头顶★；可战斗、可逃跑、不是墙，逃跑后留在原地、胜利后移除
+- 🗡️ **精英专属武器（D-71/D-72）**：五层五把（断牙 / 裂颅 / 霜噬 / 守夜 / 烬牙），攻击 8 / 12 / 16 / 16 / 22，F4/F5 额外 +10 生命上限；打赢必掉、比当前武器强则自动装备、`price=sell=0` 且不可出售，商店核心货架与轮换池都买不到
+- 💢 **伤害三档与碾压（D-70）**：单次伤害按目标生命上限分 normal / heavy / crush 三档，单次 ≥ 半血为 crush（橙红大字 + 冲击环）；1–2 回合解决普通怪额外给「碾压击杀」卡片，Boss 与精英不走碾压判定
+- 🎴 **爽感表现层四件套（D-70）**：精英之证卡片 / 升级卡片（列出攻击·防御·生命上限前后值）/ 伤害分级 / 碾压击杀；只画不算——零 `Math.random`、不改任何数值与结算顺序，F 键切换关 / 低 / 高，off 档一个像素都不画
 
 ## 操作说明
 
@@ -61,7 +65,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 207 张、验证页 100 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 207 张、验证页 109 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -97,9 +101,9 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 100 个 headless 验证页（M1 至今）
+├── preflight/            # 109 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
-├── preflight/artifacts/  # 证据截图（D-32 起：shots_resize/ 12 张响应式截图；D-35：d35-old/new.png 8× 对照、d35-map-*.png 1280×800 实机）
+├── preflight/artifacts/  # 证据截图：preflight/artifacts/d73/ 为 D-73 对外图 9 张；shots_resize/ 12 张响应式；D-35 8× 对照
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明
 ├── docs/tasks/           # 里程碑任务卡（每卡一份，含契约与验收）
 ├── docs/process/         # 过程报告（自检 / 修复 / 诊断 / 对标自检，D-32 从根目录迁入，正文未改）

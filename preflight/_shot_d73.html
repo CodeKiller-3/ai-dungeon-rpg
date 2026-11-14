@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-73 shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-73 对外截图复现页：?view=menu-nosave|menu-save|guide|explore-elite|battle-crush|elite-loot|levelup|death|ending
+     - 本页加载与主游戏完全相同的脚本与顺序，只负责把状态推进到要拍的那一帧，
+       之后停掉 rAF 让画布保持该帧；所有像素仍由游戏真实渲染循环绘制，不合成、不改字。
+     - 与 D-61 的区别：菜单/引导沿用同一口径；探索换成"含精英怪"、战斗换成"伤害碾压档"、
+       新增"精英胜利拿刀"与"升级瞬间"两个场景；旧 d61/ 目录原样保留，不覆盖。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = String(location.search || '');
+  var view = (q.match(/view=(menu-nosave|menu-save|guide|explore-elite|battle-crush|elite-loot|levelup|death|ending)/) || [])[1] || 'explore-elite';
+  var M = Game.Core.Main;
+  var P = Game.Data.Player;
+  var Map = Game.Systems.Map;
+
+  /* 沿用 D-61 口径：headless（--virtual-time-budget）不驱动 rAF，底部 FPS 恒为 0，
+   * 截图页只隐去 "FPS=… | " 一段；index.html 实机仍显示真实 FPS。不改 js/、不填假数字。 */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d73FpsPatched) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d73FpsPatched = true;
+  })();
+
+  /* 本页在 preflight/ 下：把素材目录改到 ../assets/sprites/，否则贴图全部 404。 */
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  /* 按"帧"停，而不是按"时间"停（headless 的虚拟时间会先把 setTimeout 跑完）。 */
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if ((Game.Core.Sprites && Game.Core.Sprites.isReady()) || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame;
+    var left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+
+  /* 真实 BFS（同 d61）：从当前位置走到目标格，返回不含起点的路径。 */
+  function planPath(tx, ty) {
+    var dirs = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+    function walkable(x, y) { return Map.tileAt(x, y) !== 0; }
+    var start = { x: P.x, y: P.y };
+    var seen = {}, prev = {}, qq = [start], qi = 0;
+    seen[start.x + ',' + start.y] = 1;
+    while (qi < qq.length) {
+      var c = qq[qi++];
+      if (c.x === tx && c.y === ty) {
+        var path = [], cur = c;
+        while (!(cur.x === start.x && cur.y === start.y)) {
+          path.push(cur);
+          cur = prev[cur.x + ',' + cur.y];
+        }
+        return path.reverse();
+      }
+      for (var i = 0; i < dirs.length; i++) {
+        var nx = c.x + dirs[i][0], ny = c.y + dirs[i][1];
+        var key = nx + ',' + ny;
+        if (seen[key] || !walkable(nx, ny)) continue;
+        seen[key] = 1;
+        prev[key] = { x: c.x, y: c.y };
+        qq.push({ x: nx, y: ny });
+      }
+    }
+    return [];
+  }
+
+  /* 沿真实路径前进 upto 格，用同一个 fov.update 累积记忆——等价于真的走了这一段。 */
+  function walkMemory(path, upto) {
+    var fs = Game.fov.RADIUS || 5;
+    var blocked = function (x, y) { return Map.tileAt(x, y) === 0; };
+    Game.fov.update(P.x, P.y, fs, blocked);
+    for (var i = 0; i < upto; i++) {
+      P.x = path[i].x; P.y = path[i].y;
+      Game.fov.update(P.x, P.y, fs, blocked);
+    }
+  }
+
+  try {
+    /* ── 首屏：无档 ────────────────────────────────────────────── */
+    if (view === 'menu-nosave') {
+      localStorage.removeItem('ai_dungeon_rpg_save_v1');
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: true });
+      M.start();
+      return;
+    }
+
+    /* ── 首屏：有档（写一份 v2 存档让菜单判为可继续，再选中「继续游戏」）── */
+    if (view === 'menu-save') {
+      localStorage.setItem('aiDungeon_guided', '1');
+      localStorage.setItem('ai_dungeon_rpg_save_v1', JSON.stringify({
+        saveVersion: 2, savedAt: '2026-11-14T12:00:00', floor: 3,
+        player: {
+          hp: 82, maxHp: 100, mp: 30, maxMp: 50, atk: 13, def: 6,
+          gold: 168, exp: 24, level: 3,
+          inventory: { potion_small: 3 }, equipment: { weapon: 'sword_rusty', armor: null },
+          quests: {}, upg: {}, npcQuests: {},
+          adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+        },
+        bestiary: {}, map: null
+      }));
+      M.init({ menu: true });
+      M.start();
+      setTimeout(function () {
+        var k = Game.Core.Input.getState();
+        k['ArrowDown'] = true;
+      }, 400);
+      return;
+    }
+
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init({ menu: false });
+
+    /* ── 首次引导覆盖层 ────────────────────────────────────────── */
+    if (view === 'guide') {
+      M._guideVisible = true;
+      M.start();
+      return;
+    }
+
+    /* ── 探索：画面内必须有一只带金环★的层内精英 ──────────────── */
+    if (view === 'explore-elite') {
+      var el0 = (Map.getElites && Map.getElites()[0]) || null;
+      if (el0) {
+        var path0 = planPath(el0.x, el0.y);
+        /* 停在精英前 3 格：既在视野半径内，又不会踩进战斗 */
+        var upto0 = Math.max(0, path0.length - 3);
+        walkMemory(path0, upto0);
+      } else {
+        var fs0 = Game.fov.RADIUS || 5;
+        var blocked0 = function (x, y) { return Map.tileAt(x, y) === 0; };
+        Game.fov.update(P.x, P.y, fs0, blocked0);
+      }
+      if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+        Game.Core.Render.invalidateStatic();
+      }
+      if (M._scene !== 'explore') M.switchScene('explore');
+      M.start();
+      return;
+    }
+
+    /* ── 战斗：断牙打暗影蝙蝠，单次伤害 18 ≥ 半血，落在 crush 档 ── */
+    if (view === 'battle-crush') {
+      P.floor = 1;
+      P.level = 2;
+      P.exp = 0;
+      P.gold = 37;
+      Game.Systems.Inventory.add('elite_fang_1', 1);
+      Game.Systems.Inventory.equip('elite_fang_1');
+      P.hp = P.maxHp; P.mp = P.maxMp;
+      Game.Systems.Battle.start('bat');
+      M.switchScene('battle');
+      M.start();
+      waitSprites(function () {
+        setTimeout(function () {
+          Game.Systems.Battle.playerAction('attack');
+          setTimeout(function () { stopAfterFrames(3); }, 150);
+        }, 300);
+      });
+      return;
+    }
+
+    /* ── 精英胜利拿刀：真实走进精英格 → 真实战斗 → onBattleEnd 发放 ──
+     * 不走 _grantEliteReward 钩子：这里让玩家真的踩进精英格触发 encounter=elite，
+     * 再真的打完这场战斗，战利品由 main.js#onBattleEnd → grantEliteReward 发放。 */
+    if (view === 'elite-loot') {
+      P.floor = 1;
+      P.level = 3;
+      P.exp = 0;
+      P.gold = 42;
+      Game.Systems.Inventory.recalcEquip();
+      P.hp = P.maxHp; P.mp = P.maxMp;
+
+      var el = (Map.getElites && Map.getElites()[0]) || null;
+      if (!el) { M.start(); return; }
+      var dirs4 = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+      var stand = null, step = null;
+      for (var di = 0; di < dirs4.length; di++) {
+        var sx = el.x + dirs4[di][0], sy = el.y + dirs4[di][1];
+        if (!Map.isWalkable(sx, sy)) continue;
+        if (Map.enemyAt && Map.enemyAt(sx, sy)) continue;
+        if (Map.eliteAt && Map.eliteAt(sx, sy)) continue;
+        stand = { x: sx, y: sy };
+        step = { dx: -dirs4[di][0], dy: -dirs4[di][1] };
+        break;
+      }
+      if (!stand) { M.start(); return; }
+      P.x = stand.x; P.y = stand.y;
+      var fs1 = Game.fov.RADIUS || 5;
+      Game.fov.update(P.x, P.y, fs1, function (x, y) { return Map.tileAt(x, y) === 0; });
+      if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+        Game.Core.Render.invalidateStatic();
+      }
+      M.switchScene('explore');
+      M.start();
+
+      waitSprites(function () {
+        setTimeout(function () {
+          /* 真实的"按方向键走进精英格"：set 键 → 调一次 _updateExplore（与主循环同一入口） */
+          var k = Game.Core.Input.getState();
+          var code = step.dx > 0 ? 'ArrowRight' : (step.dx < 0 ? 'ArrowLeft' : (step.dy > 0 ? 'ArrowDown' : 'ArrowUp'));
+          k[code] = true;
+          M._updateExplore(performance.now());
+          delete k[code];
+
+          /* 精英哥布林 50 血 / def 4；L3 面板 atk 13 → 每刀 9，打 6 刀。 */
+          var swings = 0;
+          var iv = setInterval(function () {
+            var st = Game.Systems.Battle.getState();
+            if (!st || !st.monster || st.monster.hp <= 0 || st.dying) {
+              clearInterval(iv);
+              return;
+            }
+            Game.Systems.Battle.playerAction('attack');
+            swings++;
+            if (swings > 12) clearInterval(iv);
+          }, 220);
+          /* 胜利后 onBattleEnd 已回到探索并弹出精英之证卡片；再等几帧后停链。 */
+          setTimeout(function () { stopAfterFrames(2); }, 3600);
+        }, 300);
+      });
+      return;
+    }
+
+    /* ── 升级瞬间：真实 checkLevelUp（exp 达标 → 升级 → Juice 卡片）──
+     * headless 的虚拟时间会跑得比帧快，2400ms 的卡片可能在最后一帧前过期；
+     * 这里用 Juice 自带的验证时钟钩子把时钟钉在 1000ms（只冻结卡片寿命，
+     * 升级数值与卡片内容仍由真实的 checkLevelUp / Juice.levelUp 生成）。 */
+    if (view === 'levelup') {
+      P.floor = 2;
+      P.level = 4;
+      P.exp = Game.Systems.Battle.expToNext(4); /* L4→L5 的真实阈值 */
+      P.gold = 66;
+      Game.Systems.Inventory.recalcEquip();
+      P.hp = P.maxHp; P.mp = P.maxMp;
+      Game.Systems.Battle.start('slime');
+      M.switchScene('battle');
+      M.start();
+      waitSprites(function () {
+        setTimeout(function () {
+          Game.Systems.Juice._setClock(1000); /* 只冻结表现层卡片寿命，不改任何数值 */
+          Game.Systems.Battle.checkLevelUp(); /* 真实升级入口：会回满 HP/MP 并触发 Juice.levelUp */
+          setTimeout(function () { stopAfterFrames(3); }, 60);
+        }, 300);
+      });
+      return;
+    }
+
+    /* ── 死亡结算（沿用 D-61 的真实 openGameOver）────────────────── */
+    if (view === 'death') {
+      P.floor = 3;
+      P.hp = 0; P.maxHp = 100; P.gold = 93; P.level = 3;
+      M._restoreRunStats({ known: true, floorReached: 3, kills: 2, maxLevel: 3, turns: 88, potions: 2 });
+      M.start();
+      setTimeout(function () {
+        M.openGameOver({
+          source: 'battle', monsterId: 'skeleton', monsterName: '骷髅士兵',
+          floor: 3, maxHp: 100, hp: 0, potionsLeft: 0,
+          playerAtk: 12, monsterDef: 4, monsterHpLeft: 26
+        });
+      }, 180000);
+      return;
+    }
+
+    /* ── 通关结局（沿用 D-61 的真实 _commitVictory）───────────────── */
+    P.gold = 471; P.level = 5; P.exp = 0;
+    Game.Systems.Map.setFloor(5);
+    P.floor = 5;
+    var sp5 = Game.Systems.Map.getSpawn();
+    P.x = sp5.x; P.y = sp5.y;
+    P.adaptive = P.adaptive || {};
+    P.adaptive.triggers = 1;
+    M._restoreRunStats({ known: true, floorReached: 5, kills: 6, maxLevel: 5, turns: 302, potions: 7 });
+    M.start();
+    setTimeout(function () { M._commitVictory(); }, 300000);
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>

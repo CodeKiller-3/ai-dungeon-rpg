@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-73 交付材料总同步 · 验收</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-73 · 对外截图 9 张 + 六份文档数字 ↔ D-72 代码（A–C）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-73', ok: true, sub: {} };
+  var done = false;
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+
+  /* ── 读文本：run-all.ps1 以 --allow-file-access-from-files 启动，file:// 同步 XHR 可用 ──
+   * 注意：window 里的同步 XHR 不允许把 responseType 设成 arraybuffer，
+   * 这里用默认的 responseText（file:// 文本按 UTF-8 解码）。 */
+  function readRaw(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function readText(rel) { return readRaw('../' + rel); }
+  function readJson(rel) {
+    try { return JSON.parse(readRaw(rel)); } catch (e) { return null; }
+  }
+  function has(t, s) { return !!t && t.indexOf(s) >= 0; }
+  function no(t, s) { return !!t && t.indexOf(s) < 0; }
+
+  /* ── A：截图存在 + 尺寸（Image 真正解码，不是只看文件名）──────── */
+  var SHOTS = [
+    '01-menu-nosave', '02-menu-save', '03-guide', '04-explore-elite',
+    '05-battle-crush', '06-elite-loot', '07-levelup', '08-death', '09-ending'
+  ];
+  var shotState = {};
+  var pending = SHOTS.length;
+  function finishShots() {
+    var bad = [], rows = [];
+    for (var i = 0; i < SHOTS.length; i++) {
+      var s = shotState[SHOTS[i]] || { ok: false, w: 0, h: 0 };
+      rows.push({ file: 'd73/' + SHOTS[i] + '.png', w: s.w, h: s.h, ok: s.ok });
+      if (!s.ok || s.w !== 1280 || s.h !== 800) bad.push(SHOTS[i] + ' ' + s.w + 'x' + s.h);
+    }
+    rec('A1_nineShots', bad.length === 0, {
+      rule: 'd73/ 九张对外图必须能解码，且都是 1280×800',
+      count: SHOTS.length, bad: bad, rows: rows
+    });
+    finalize();
+  }
+  (function loadShots() {
+    for (var i = 0; i < SHOTS.length; i++) {
+      (function (name) {
+        var img = new Image();
+        img.onload = function () {
+          shotState[name] = { ok: true, w: img.naturalWidth, h: img.naturalHeight };
+          if (--pending === 0) finishShots();
+        };
+        img.onerror = function () {
+          shotState[name] = { ok: false, w: 0, h: 0 };
+          if (--pending === 0) finishShots();
+        };
+        img.src = 'artifacts/d73/' + name + '.png';
+      })(SHOTS[i]);
+    }
+  })();
+
+  /* ── B：代码现值（D-72 定档，文档必须与它一致）──────────────── */
+  try {
+    var IT = Game.Data.ITEMS;
+    var IDS = ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'];
+    var NAMES = ['断牙', '裂颅', '霜噬', '守夜', '烬牙'];
+    var ATK = [8, 12, 16, 16, 22];
+    var HP = [0, 0, 0, 10, 10];
+    var badIt = [];
+    for (var i = 0; i < IDS.length; i++) {
+      var it = IT[IDS[i]];
+      if (!it || it.elite !== true) { badIt.push(IDS[i] + ' 缺失'); continue; }
+      if (it.name !== NAMES[i] || it.effect.atk !== ATK[i] || (it.effect.maxHp || 0) !== HP[i]) {
+        badIt.push(IDS[i] + '=' + it.name + '/' + it.effect.atk + '/' + (it.effect.maxHp || 0));
+      }
+      if (it.price !== 0 || it.sell !== 0) badIt.push(IDS[i] + ' 价格非 0');
+    }
+    var loot = (Game.Data.ELITE && Game.Data.ELITE.loot) || [];
+    var lootOk = loot.length === 5 && loot.every(function (id, k) { return id === IDS[k]; });
+    var J = Game.Systems.Juice;
+    var juiceOk = !!(J && J.tierOf(18, 30) === 'crush' && J.tierOf(6, 30) === 'heavy' &&
+      J.tierOf(5, 100) === 'normal' && J.isCrushKill(2, 'bat') === true &&
+      J.isCrushKill(2, 'elite_goblin') === false && J.isCrushKill(2, 'dragon') === false);
+    rec('B1_codeValues', badIt.length === 0 && lootOk && juiceOk && Object.keys(IT).length === 48, {
+      rule: '五把刀 8/12/16/16/22（F4/F5 +10 血）、loot 顺序一致、可枚举物品 48 条、tierOf/isCrushKill 语义正确',
+      bad: badIt, lootOk: lootOk, juiceOk: juiceOk,
+      enumItems: Object.keys(IT).length,
+      panel: ATK.map(function (a) { return 10 + a; })
+    });
+
+    var BASE = readJson('selfcheck/page-baseline.json');
+    rec('B2_pageBaseline', !!BASE && BASE.count === 109 && BASE.count === BASE.pages.length &&
+      BASE.pages.indexOf('verify_d73') >= 0 && BASE.pages.indexOf('verify_d72') >= 0, {
+      rule: 'page-baseline.json：count=109、清单长度一致、含 verify_d73 与 verify_d72',
+      count: BASE ? BASE.count : null, len: BASE && BASE.pages ? BASE.pages.length : null,
+      hasD73: BASE && BASE.pages ? BASE.pages.indexOf('verify_d73') >= 0 : false
+    });
+
+    /* ── C：六份文档逐项对齐 ─────────────────────────────────── */
+    var README = readText('README.md');
+    var RUN = readText('docs/运行说明.md');
+    var DEMO = readText('docs/演示脚本.md');
+    var CHK = readText('docs/功能点检表.md');
+    var TALK = readText('docs/答辩讲稿.md');
+    var BAL = readText('docs/平衡定档.md');
+    var ACC = readText('docs/最终验收清单-D-73.md');
+
+    var docs = {
+      README: {
+        must: ['验证页 109 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d73/'],
+        no: ['验证页 100 个']
+      },
+      RUN: {
+        must: ['当前 109', 'TOTAL=109', 'GUARD=OK expected=109', 'd73/01-menu-nosave.png', 'd73/09-ending.png'],
+        no: ['当前 100', 'TOTAL=100']
+      },
+      DEMO: {
+        must: ['24/50（48%）', '断牙', '碾压', 'd73/04-explore-elite.png', 'd73/06-elite-loot.png'],
+        no: ['14/50']
+      },
+      CHK: {
+        must: ['共 29 条（R01–R29）', 'R26', 'R27', 'R28', 'R29'],
+        no: ['共 25 条']
+      },
+      TALK: {
+        must: ['24 局（48%）', '断牙', '烬牙', '碾压'],
+        no: ['14/50']
+      },
+      BAL: {
+        must: ['## 二十二', '24/50（48%）', '8 / 12 / 16 / 16 / 22', '18 / 22 / 26 / 26 / 32', '5 / 9 / 9'],
+        no: []
+      },
+      ACC: {
+        must: ['已知不足（7 条）', '已退休口径（4 条）', '24/50（48%）', '109', 'F3 霜噬'],
+        no: []
+      }
+    };
+    var txt = { README: README, RUN: RUN, DEMO: DEMO, CHK: CHK, TALK: TALK, BAL: BAL, ACC: ACC };
+    var docBad = [], docRows = {};
+    for (var k in docs) {
+      if (!Object.prototype.hasOwnProperty.call(docs, k)) continue;
+      var miss = docs[k].must.filter(function (s) { return !has(txt[k], s); });
+      var stale = docs[k].no.filter(function (s) { return !no(txt[k], s); });
+      docRows[k] = { bytes: txt[k].length, missing: miss, stale: stale };
+      if (miss.length) docBad.push(k + ' 缺：' + miss.join('、'));
+      if (stale.length) docBad.push(k + ' 仍有旧值：' + stale.join('、'));
+    }
+    rec('C1_docsAligned', docBad.length === 0, {
+      rule: 'README / 运行说明 / 演示脚本 / 功能点检表 / 答辩讲稿 / 平衡定档 / 验收清单：必备数字在、旧数字不在',
+      bad: docBad, rows: docRows
+    });
+
+    var demoLineOk = has(DEMO, '面板 11 → 18') && has(DEMO, 'crush 碾压档') && has(DEMO, '断牙');
+    rec('C2_demoCrushLine', demoLineOk, {
+      rule: '演示脚本必须写出"F1 精英 → 断牙（面板 11→18）→ S08 碾压档"这条爽感线',
+      s03: has(DEMO, '面板 11 → 18'), s08: has(DEMO, 'crush 碾压档')
+    });
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+    finalize();
+  }
+
+  function finalize() {
+    if (done) return;
+    done = true;
+    window.__D73_VERIFY__ = out;
+    var el = document.getElementById('result');
+    if (el) el.textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = out.ok ? 'D73_DONE' : 'D73_FAIL';
+  }
+  /* 兜底：图片 2.5s 内没全部回调也必须给裁决，避免批跑拿 NONE */
+  setTimeout(function () {
+    if (!done) { rec('A0_shotTimeout', false, '图片未在 2.5s 内全部 onload'); finishShots(); }
+  }, 2500);
+})();
+</script>
+</body>
+</html>
