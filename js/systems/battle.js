@@ -431,7 +431,7 @@
        * 不结束战斗、不重置怪物血量，只把玩家从 0 拉回；未启用时行为与 D-49 完全一致。 */
       var Ad = Game.Systems && Game.Systems.Adaptive;
       if (Ad && typeof Ad.reviveInPlace === 'function' && Ad.reviveInPlace(Pfloor())) {
-        logPush('守夜人把你按回地上：「还没到闭眼的时候。」');
+        logPush('系统：濒死协议介入。');
         return;
       }
       logPush('你被击败了…');

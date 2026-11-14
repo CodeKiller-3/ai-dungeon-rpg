@@ -743,12 +743,14 @@
 
       /* ③ 离下一层还差什么（血量 / 回合 / 药）——来自死亡遥测的可复算字段 */
       if (st.gap && st.gap.text) {
-        line('离下一层：' + st.gap.text, '#9fe3a1', 13, false);
+        line('系统评估：' + st.gap.text + '。', '#9fe3a1', 13, false);
       }
       /* ④ 只在自适应名额真的还没用完时出现（关闭/用尽都不显示） */
       if (st.canRescue) {
         var used = (run.rescues || 0);
-        line('守夜人还能拉你一次（自适应救援 ' + used + '/2）', '#ffcf6e', 13, true);
+        var _mx = (Game.Systems && Game.Systems.Adaptive && Game.Systems.Adaptive.MAX_TRIGGERS) || 2;
+        var remain = Math.max(0, _mx - used);
+        line('系统：应急协议剩余 ' + remain + ' 次', '#ffcf6e', 13, true);
       }
 
       /* ⑤ 双按钮：再来一局 / 回主菜单（←→ 选择，Enter 确认） */

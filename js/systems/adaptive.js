@@ -118,7 +118,7 @@
     if (floor <= 4 && !s.gearGranted && curAtk < GEAR_ATK) {
       equipGear(p);
       s.gearGranted = true;
-      return { id: GEAR_ID, value: GEAR_VALUE, text: '守夜人的旧剑（攻击 +' + GEAR_ATK + '）' };
+      return { id: GEAR_ID, value: GEAR_VALUE, text: '残响·旧剑（攻击 +' + GEAR_ATK + '）' };
     }
     /* D-49 原口径：没有"中间档"可发（F5 可买最好=最强 atk16，或当前武器已不差）→ 等值 60 的补给包 */
     addPotion('potion_large', 1);
@@ -156,11 +156,11 @@
   }
 
   var MSG = {
-    1: function (n) { return '楼梯口的守夜人递来两瓶小血瓶：「刚才那一下够狠，先活着。」（自适应救援 ' + n + '/2 · 补给）'; },
-    2: function (n) { return '守夜人塞来 60 金币：「买点保命的，别硬撑。」（自适应救援 ' + n + '/2 · 金币）'; },
-    3: function (n) { return '守夜人把自己的旧剑按进你手里（攻击 +' + GEAR_ATK + '）：「拿着，活着下去比什么都强。」（自适应救援 ' + n + '/2 · 救援装备）'; },
-    f5: function (n, g) { return '守夜人把整包药塞给你（' + g.text + '）：「龙不等人，喝完再上。」（自适应救援 ' + n + '/2 · 补给）'; },
-    revive: function (n) { return '守夜人把你从地上拽起来：「药留到最后一口气再用。」（自适应救援 ' + n + '/2 · 复活）'; }
+    1: function (n) { return '系统：检测到濒死。应急补给已注入（2 瓶小血瓶）。本局协议 ' + n + '/2 已用。'; },
+    2: function (n) { return '系统：应急额度已划入 60 金币。本局协议 ' + n + '/2 已用。'; },
+    3: function (n) { return '系统：武器解析完成——残响·旧剑，攻击 +' + GEAR_ATK + '。本局协议 ' + n + '/2 已用。'; },
+    f5: function (n, g) { return '系统：终局协议启动。补给已注入（' + g.text + '）。本局协议 ' + n + '/2 已用。'; },
+    revive: function (n) { return '系统：濒死协议介入。'; }
   };
 
   Game.Systems.Adaptive = {

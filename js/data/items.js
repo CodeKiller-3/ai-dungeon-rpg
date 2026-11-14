@@ -220,7 +220,7 @@
    * F5 可买最好已是 16，没有中间档，故 F5 的救援改为 60 金币。 */
   Game.Data.RESCUE_ITEMS = {
     sword_rescue: {
-      id: 'sword_rescue', name: '守夜人的旧剑', type: 'weapon',
+      id: 'sword_rescue', name: '残响·旧剑', type: 'weapon',
       effect: { atk: 13 }, price: 90, sell: 45, rescue: true
     }
   };
