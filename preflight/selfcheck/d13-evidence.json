@@ -1,5 +1,7 @@
 {
   "at": "2026-11-11T02:21:52.314Z",
+  "d77At": "2026-11-14T00:00:00.000Z",
+  "d77Note": "D-77（楼梯不得单口）只对 seed101 的 F1 地图开了一格邻墙：上行梯 (7,1) 的南侧 (7,2) 0→1，gridHash b8a46448→cedbbf78；同一行走廊变化使 R1（合法动作均匀随机）成功率 9%→7%（5→4 次）。其余 6 个 seed 的 gridHash 与四组数值、demo(seed909) 全部逐值不变，已用同协议复核。",
   "page": "preflight/d13_harness.html",
   "commit": "",
   "result": {
@@ -38,7 +40,7 @@
     "maps": [
       {
         "seed": 101,
-        "gridHash": "b8a46448",
+        "gridHash": "cedbbf78",
         "target": {
           "x": 9,
           "y": 1
@@ -60,8 +62,8 @@
         },
         "R1": {
           "episodes": 58,
-          "successes": 5,
-          "rate": 9
+          "successes": 4,
+          "rate": 7
         },
         "R2": {
           "episodes": 58,
@@ -299,7 +301,7 @@
       },
       "R1": {
         "values": [
-          9,
+          7,
           2,
           4,
           5,

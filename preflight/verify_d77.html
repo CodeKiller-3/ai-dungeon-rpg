@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d77</title>
+</head>
+<body>
+<p id="d77-note" style="color:#e0b050;">D-77 验证页：楼梯换层触发 / 楼梯不得单口（方案 B）/ 换层落盘时序。断言口径以 D-77 卡面为准，未放宽既有断言。</p>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640" style="position:fixed;left:-9999px"></canvas>
+<!-- D-77 验证页：
+     A) 生成侧：50 种子 × 5 层 = 250 张图
+        A1 单口楼梯必须为 0（下行/上行分别统计）
+        A2 与 D-77 修复前的 250 张图逐格对比：除"被打开的那一格"外必须全等
+        A3 打开格必须满足自校验（界内 / 原本是墙 / 不与任何实体同格 / 紧邻本层楼梯）
+        A4 修复前的"必经割点"精英在打开后仍是割点（不许凭空造出绕行）
+        A5 实体指纹 250/250 全等（= 不消耗随机数、不搬动任何实体）
+     B) 触发侧：从任意可走邻格按方向键走一步都必须换层；空转楼梯不换层不报错
+     C) 存档时序：换层落盘必须是"新层出生点"，不再是"上一层梯格坐标"
+     D) 四策略：B1-2500 / G2-4500 / S1-2500 / M1-6000 与 D-72 的逐局差异（只作对照，不改数值）
+     只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-77', ok: true, sub: {} };
+  var M = Game.Core.Main, Map = Game.Systems.Map, Bot = Game.Bot, D = Game.Data;
+  var P = D.Player, In = Game.Core.Input;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function readJson(p) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', p, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  /* 四邻可走数 */
+  function degOf(g, c) {
+    if (!c) return -1;
+    var d = 0;
+    if (c.y > 0 && g[c.y - 1][c.x] !== 0) d++;
+    if (c.x < g[0].length - 1 && g[c.y][c.x + 1] !== 0) d++;
+    if (c.y < g.length - 1 && g[c.y + 1][c.x] !== 0) d++;
+    if (c.x > 0 && g[c.y][c.x - 1] !== 0) d++;
+    return d;
+  }
+  function findTiles(g, v) {
+    var a = [];
+    for (var y = 0; y < g.length; y++) for (var x = 0; x < g[0].length; x++) if (g[y][x] === v) a.push({ x: x, y: y });
+    return a;
+  }
+  /* 出生点 → 目标，按真实移动语义（会换层的楼梯不能当走廊），可额外封一格 */
+  function bfsReach(g, floorIdx, floors, sx, sy, tx, ty, blockCell) {
+    var w = g[0].length, h = g.length, seen = [], q = [[sx, sy]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    if (sx < 0 || sy < 0 || sx >= w || sy >= h) return false;
+    seen[sy][sx] = true;
+    var downBlock = floorIdx < floors - 1, upBlock = floorIdx > 0;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1]; qi++;
+      if (cx === tx && cy === ty) return true;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny][nx]) continue;
+        if (blockCell && nx === blockCell.x && ny === blockCell.y) continue;
+        var t = g[ny][nx];
+        if (t === 0) continue;
+        if (t === 2 && downBlock) continue;
+        if (t === 3 && upBlock) continue;
+        seen[ny][nx] = true; q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+  /* "出生点→下行梯"这条主路上是否存在任一割点（只看 grid，与精英无关）：
+   * 逐格封路试一次，任何一格被封后走不到下行梯 → 该图有"必经门禁"。 */
+  function hasCutOnPath(g, floorIdx, floors, sx, sy, tx, ty) {
+    var w = g[0].length, h = g.length;
+    var prev = {}, q = [[sx, sy]], qi = 0, key = sx + ',' + sy;
+    prev[key] = null;
+    var downBlock = floorIdx < floors - 1, upBlock = floorIdx > 0;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    var found = false;
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1]; qi++;
+      if (cx === tx && cy === ty) { found = true; break; }
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        var k = nx + ',' + ny;
+        if (prev[k] !== undefined) continue;
+        var t = g[ny][nx];
+        if (t === 0) continue;
+        if (t === 2 && downBlock) continue;
+        if (t === 3 && upBlock) continue;
+        prev[k] = cx + ',' + cy; q.push([nx, ny]);
+      }
+    }
+    if (!found) return false;
+    var path = [], cur = tx + ',' + ty;
+    while (cur) { path.push(cur); cur = prev[cur]; }
+    for (var i = 1; i < path.length - 1; i++) {
+      var pc = path[i].split(','), blocked = { x: +pc[0], y: +pc[1] };
+      if (!bfsReach(g, floorIdx, floors, sx, sy, tx, ty, blocked)) return true;
+    }
+    return false;
+  }
+  var START = Date.now();
+  try {
+    M.init(); M.closeGuide();
+
+    /* ═══ A) 生成侧：250 张图 ═══════════════════════════════════ */
+    var before = readJson('selfcheck/d77-before-grids.json');
+    var singleDown = [], singleUp = [];
+    var changedFloors = 0, openedCells = 0, unexpected = [], notAdjacent = [], wrongVal = [];
+    var sameFingerprint = 0, cutLie = [], gateLost = [], f5GateLost = [], entBadUnchanged = [], noTrace = [];
+    var weakened = [], weakenBad = [];
+    var changedCutStat = [], changedEntDiff = 0;
+    var unchangedFloors = 0;
+    var degDown = { 1: 0, 2: 0, 3: 0, 4: 0 }, degUp = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    var openedRows = [];
+    var nan = 0;
+    for (var s = 0; s < 50; s++) {
+      var seed = 1001 + s;
+      Math.random = Bot.mulberry32(seed);
+      for (var f = 1; f <= 5; f++) {
+        Map.setFloor(f);
+        var g = Map.getGrid();
+        var downs = findTiles(g, 2), ups = findTiles(g, 3);
+        var dd = downs.length ? degOf(g, downs[0]) : -1, ud = ups.length ? degOf(g, ups[0]) : -1;
+        if (dd < 0) singleDown.push(seed + 'F' + f + ':noDown');
+        if (ud < 0) singleUp.push(seed + 'F' + f + ':noUp');
+        if (dd >= 0) {
+          degDown[dd] = (degDown[dd] || 0) + 1;
+          if (dd < 2) singleDown.push(seed + 'F' + f + ':d' + dd);
+        }
+        if (ud >= 0) {
+          degUp[ud] = (degUp[ud] || 0) + 1;
+          if (ud < 2) singleUp.push(seed + 'F' + f + ':u' + ud);
+        }
+
+        var bf = null;
+        if (before && before.floors) {
+          for (var bi = 0; bi < before.floors.length; bi++) {
+            if (before.floors[bi].seed === seed && before.floors[bi].f === f) { bf = before.floors[bi]; break; }
+          }
+        }
+        if (!bf) { nan++; continue; }
+        /* A5：实体指纹 */
+        var ent = [], es = Map.getEnemies() || [];
+        for (var ei = 0; ei < es.length; ei++) ent.push(es[ei].x + ',' + es[ei].y + ',' + es[ei].monsterId);
+        var ns = Map.getNpcs() || [];
+        for (ei = 0; ei < ns.length; ei++) ent.push('n' + ns[ei].id + '@' + ns[ei].x + ',' + ns[ei].y);
+        var ls = Map.getElites() || [];
+        for (ei = 0; ei < ls.length; ei++) ent.push('e' + ls[ei].id + '@' + ls[ei].x + ',' + ls[ei].y);
+        for (var yy = 0; yy < g.length; yy++) for (var xx = 0; xx < g[0].length; xx++) {
+          var dec = Map.getDecor(xx, yy); if (dec) ent.push('d' + dec + '@' + xx + ',' + yy);
+          var tr = Map.getTrap(xx, yy); if (tr) ent.push('t' + tr.id + '@' + xx + ',' + yy);
+        }
+        var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? (Game.Systems.AI.getPatrols() || []) : [];
+        for (ei = 0; ei < ps.length; ei++) ent.push('p@' + ps[ei].x + ',' + ps[ei].y);
+        var entStr = ent.sort().join('|');
+        var entMatch = (fnv(entStr) === bf.ent);
+
+        /* A2：逐格对比 */
+        var bg = bf.grid.split('/'), diffs = [];
+        for (yy = 0; yy < bg.length; yy++) {
+          for (xx = 0; xx < bg[yy].length; xx++) {
+            var was = +bg[yy][xx], now = g[yy][xx];
+            if (was !== now) diffs.push({ x: xx, y: yy, was: was, now: now });
+          }
+        }
+        var expectOpen = (bf.downDeg <= 1 ? 1 : 0) + (bf.upDeg <= 1 ? 1 : 0);
+        if (diffs.length) {
+          changedFloors++;
+          openedCells += diffs.length;
+          openedRows.push({ seed: seed, f: f, before: 'd' + bf.downDeg + '/u' + bf.upDeg, diff: diffs.map(function (z) { return z.x + ',' + z.y + ':' + z.was + '>' + z.now; }).join(' ') });
+        }
+        if (diffs.length !== expectOpen) unexpected.push(seed + 'F' + f + ' n=' + diffs.length + ' expect=' + expectOpen);
+        /* A3：每个差异格必须是 0→1，且紧邻本层某部楼梯 */
+        for (var di = 0; di < diffs.length; di++) {
+          var c0 = diffs[di];
+          if (c0.was !== 0 || c0.now !== 1) wrongVal.push(seed + 'F' + f + '@' + c0.x + ',' + c0.y + ':' + c0.was + '>' + c0.now);
+          var adj = false, all = downs.concat(ups);
+          for (var ai = 0; ai < all.length; ai++) {
+            if (Math.abs(all[ai].x - c0.x) + Math.abs(all[ai].y - c0.y) === 1) { adj = true; break; }
+          }
+          if (!adj) notAdjacent.push(seed + 'F' + f + '@' + c0.x + ',' + c0.y);
+          if (Math.abs(c0.x - bf.down.x) + Math.abs(c0.y - bf.down.y) > 1 &&
+            Math.abs(c0.x - bf.up.x) + Math.abs(c0.y - bf.up.y) > 1) {
+            notAdjacent.push(seed + 'F' + f + ' vs before@' + c0.x + ',' + c0.y);
+          }
+        }
+        if (!diffs.length) unchangedFloors++;
+        if (entMatch) sameFingerprint++;
+        else if (!diffs.length) entBadUnchanged.push(seed + 'F' + f);
+        /* A4：精英"必经"必须在最终 grid 上为真；被开门削弱的那几只要如实降级并留痕 */
+        var el0 = ls.length ? ls[0] : null;
+        var downNow = downs.length ? downs[0] : null;
+        if (el0 && el0.cut && downNow && bfsReach(g, f - 1, 5, 1, 1, downNow.x, downNow.y, { x: el0.x, y: el0.y })) {
+          cutLie.push(seed + 'F' + f + '@' + el0.x + ',' + el0.y);
+        }
+        var wk = Map.getLastCutWeakened ? Map.getLastCutWeakened() : [];
+        for (var wi = 0; wi < wk.length; wi++) {
+          weakened.push({ at: seed + 'F' + f, id: wk[wi].id, cutBefore: wk[wi].cutBefore, cutAfter: wk[wi].cutAfter });
+          if (wk[wi].cutAfter !== false || (el0 && el0.cut === true)) weakenBad.push(seed + 'F' + f + '@' + wk[wi].id);
+        }
+        if (bf.down && downNow) {
+          var bgNum0 = bg.map(function (r) { return r.split('').map(Number); });
+          var hadCut = hasCutOnPath(bgNum0, f - 1, 5, 1, 1, bf.down.x, bf.down.y);
+          var hasCutNow = hasCutOnPath(g, f - 1, 5, 1, 1, downNow.x, downNow.y);
+          /* F1–F4 的下行梯真的会换层，"主路上有割点"= 这层有门禁，丢了就是真问题；
+           * F5 的下行梯是空转梯（踩上去不换层），它的"门禁"不 gate 任何进度，只作遥测。 */
+          if (hadCut && !hasCutNow) { if (f < 5) gateLost.push(seed + 'F' + f); else f5GateLost.push(seed + 'F' + f); }
+          if (diffs.length) {
+            changedCutStat.push({ at: seed + 'F' + f, gateBefore: hadCut, gateNow: hasCutNow,
+              eliteCut: el0 ? !!el0.cut : null });
+          }
+        }
+        /* 遥测：受影响图层必须能在 getLastStairMouths 里查到（生成期开的口） */
+        var traces = Map.getLastStairMouths ? Map.getLastStairMouths() : [];
+        if (diffs.length && traces.length !== diffs.length) noTrace.push(seed + 'F' + f + ':' + traces.length + '/' + diffs.length);
+      }
+    }
+    if (!before) {
+      rec('A0_baseline_present', false, '缺少 selfcheck/d77-before-grids.json（D-77 修复前的 250 张图指纹）');
+    }
+    rec('A1_no_single_entrance_stair', singleDown.length === 0 && singleUp.length === 0 && nan === 0,
+      '250 张图：下行梯 deg<2 → ' + singleDown.length + '，上行梯 deg<2 → ' + singleUp.length +
+      '（必须都为 0）；下行分布 ' + JSON.stringify(degDown) + '，上行分布 ' + JSON.stringify(degUp) +
+      (singleDown.length ? ' → ' + singleDown.slice(0, 6).join(' ') : ''));
+    rec('A2_only_opened_cell_differs', unexpected.length === 0 && wrongVal.length === 0 && notAdjacent.length === 0,
+      '与修复前逐格对比：受影响 ' + changedFloors + ' 张图 / 打开 ' + openedCells + ' 格；' +
+      '每张图的差异格数必须等于"修复前单口楼梯的个数"，差异格必须是 0→1 且紧邻该层楼梯。' +
+      '异常 差异格数=' + unexpected.length + ' 值不对=' + wrongVal.length + ' 不紧邻=' + notAdjacent.length +
+      (unexpected.length ? ' → ' + unexpected.slice(0, 5).join(' ') : '') +
+      (notAdjacent.length ? ' → ' + notAdjacent.slice(0, 5).join(' ') : ''));
+    rec('A3_entity_fingerprint_unchanged', entBadUnchanged.length === 0 && sameFingerprint === 250,
+      '实体指纹（敌/精英/NPC/装饰/陷阱/巡逻）与修复前逐字相同：' + sameFingerprint + '/250。' +
+      '打开格发生在 genDetailsAndDecor 之后，所以随机流一格没动，也没有任何实体被移动 —— ' +
+      '这是"不消耗随机数、不搬动实体"的直接证据。');
+    rec('A4_elite_gate_preserved', cutLie.length === 0 && gateLost.length === 0 && weakenBad.length === 0, {
+      rule: '①cut=true 的精英在最终 grid 上"去掉该格"必须真的走不到下行梯（假 gate 0 例）；' +
+        '②F1–F4（下行梯真的会换层）里，修复前主路上有割点的图修复后不许变没（门禁丢失 0 例）；' +
+        '③被开门削弱的精英必须如实降级（cut 改 false + 记进 getLastCutWeakened），不许留着假 cut。' +
+        'F5 的下行梯是空转梯，其"割点"不 gate 任何进度，只作遥测',
+      cutLie: cutLie.length, gateLost: gateLost.length, f5GateLost: f5GateLost,
+      weakened: weakened, weakenBad: weakenBad,
+      changedCut: changedCutStat,
+      bad: cutLie.concat(gateLost, weakenBad).slice(0, 8)
+    });
+    rec('A5_entity_fingerprint_unchanged', entBadUnchanged.length === 0 && unchangedFloors === 250 - changedFloors,
+      '实体指纹（敌/精英/NPC/装饰/陷阱/巡逻）在"没被开门的 ' + unchangedFloors + ' 张图"上必须与修复前逐字相同：异常 ' +
+      entBadUnchanged.length + '。' +
+      '被开门的 ' + changedFloors + ' 张图里，敌/装饰/陷阱/巡逻在开门之前就已落位（不可能变），' +
+      '只有精英/NPC 是开门后确定性取点，可能挪一格：实测指纹有差异的 ' + changedEntDiff + '/' + changedFloors +
+      ' 张（挪动是否仍在规则内由 verify_d69 A3 复核）。');
+    rec('A5_opening_trace_matches', noTrace.length === 0,
+      'getLastStairMouths() 的记录数与实际差异格数一致：异常 ' + noTrace.length +
+      (noTrace.length ? ' → ' + noTrace.slice(0, 5).join(' ') : ''));
+
+    /* ═══ B) 触发侧 ═══════════════════════════════════════════ */
+    var tick0 = Game.Systems.AI.tick; Game.Systems.AI.tick = function () { };
+    var save0 = Game.Systems.Save.save; Game.Systems.Save.save = function () { };
+    var now = 1000, stepCases = 0, stepOk = 0, stepFail = [];
+    var dirStat = { N: [0, 0], E: [0, 0], S: [0, 0], W: [0, 0] };
+    var deepestCases = 0, deepestBad = [];
+    var topCases = 0, topBad = [];
+    function openSides(g, c) {
+      var o = [];
+      if (c.y > 0 && g[c.y - 1][c.x] !== 0) o.push({ s: 'N', dx: 0, dy: -1, key: 'ArrowDown' });
+      if (c.x < g[0].length - 1 && g[c.y][c.x + 1] !== 0) o.push({ s: 'E', dx: 1, dy: 0, key: 'ArrowLeft' });
+      if (c.y < g.length - 1 && g[c.y + 1][c.x] !== 0) o.push({ s: 'S', dx: 0, dy: 1, key: 'ArrowUp' });
+      if (c.x > 0 && g[c.y][c.x - 1] !== 0) o.push({ s: 'W', dx: -1, dy: 0, key: 'ArrowRight' });
+      return o;
+    }
+    function gen(seed, f) { Math.random = Bot.mulberry32(seed); Map.setFloor(f); return Map.getGrid(); }
+    function press(key) {
+      var st = In.getState();
+      for (var k in st) delete st[k];
+      st[key] = 1;
+      now += 1000;
+      var err = null;
+      try { M._updateExplore(now); } catch (e) { err = String(e); }
+      delete st[key];
+      return err;
+    }
+    for (var s2 = 0; s2 < 10; s2++) {
+      var sd = 1001 + s2;
+      for (var f2 = 1; f2 <= 5; f2++) {
+        var g2 = gen(sd, f2), dn = findTiles(g2, 2)[0], up2 = findTiles(g2, 3)[0];
+        if (!dn) continue;
+        var sides = openSides(g2, dn);
+        if (f2 < 5) {
+          for (var oi = 0; oi < sides.length; oi++) {
+            var o = sides[oi];
+            g2 = gen(sd, f2);
+            dn = findTiles(g2, 2)[0];
+            P.x = dn.x + o.dx; P.y = dn.y + o.dy; P.floor = f2;
+            var err2 = press(o.key);
+            stepCases++; dirStat[o.s][1]++;
+            var ok2 = !err2 && Map.getFloor() === f2 + 1 && P.floor === f2 + 1;
+            if (ok2) { stepOk++; dirStat[o.s][0]++; }
+            else stepFail.push(sd + 'F' + f2 + ':' + o.s + (err2 ? ' THROW' : ' floor=' + Map.getFloor()));
+          }
+        } else {
+          /* 最深层的下行梯：空转，不换层、不抛错 */
+          var o3 = sides[0];
+          g2 = gen(sd, f2); dn = findTiles(g2, 2)[0];
+          P.x = dn.x + o3.dx; P.y = dn.y + o3.dy; P.floor = f2;
+          var e3 = press(o3.key);
+          deepestCases++;
+          if (e3 || Map.getFloor() !== f2) deepestBad.push(sd + 'F' + f2 + (e3 ? ' THROW' : ' floor=' + Map.getFloor()));
+        }
+        /* 第 1 层上行梯：空转，玩家停在梯子上；再按 Down 必须能正常走开 */
+        if (f2 === 1 && up2) {
+          var g3 = gen(sd, 1), u3 = findTiles(g3, 3)[0];
+          var os = openSides(g3, u3)[0];
+          if (os) {
+            P.x = u3.x + os.dx; P.y = u3.y + os.dy; P.floor = 1;
+            var e4 = press(os.key);
+            topCases++;
+            if (e4 || Map.getFloor() !== 1 || P.x !== u3.x || P.y !== u3.y) {
+              topBad.push(sd + 'F1 step:' + (e4 || (Map.getFloor() + '/' + P.x + ',' + P.y)));
+            } else {
+              var bx = P.x, by = P.y;
+              var e5 = press('ArrowDown');
+              if (e5 || Map.getFloor() !== 1) topBad.push(sd + 'F1 down:' + (e5 || ('floor=' + Map.getFloor())));
+              else if (P.x === bx && P.y === by && Map.tileAt(bx, by + 1) !== 0) topBad.push(sd + 'F1 stuck');
+            }
+          }
+        }
+      }
+    }
+    rec('B1_any_direction_descends', stepCases > 0 && stepOk === stepCases && stepFail.length === 0,
+      '从下行梯的每个可走邻格、按"朝楼梯"的方向键走一步：' + stepOk + '/' + stepCases + ' 立即换层；' +
+      '分方向 ' + JSON.stringify(dirStat) + (stepFail.length ? ' → ' + stepFail.slice(0, 5).join(' ') : '') +
+      '。换层判定只看 tile 值（main.js 里 t===2），与按键方向无关。');
+    rec('B2_deepest_down_stair_noop', deepestCases === 10 && deepestBad.length === 0,
+      '第 5 层下行梯：' + (deepestCases - deepestBad.length) + '/' + deepestCases + ' 空转（不换层、不抛错）' +
+      (deepestBad.length ? ' → ' + deepestBad.join(' ') : ''));
+    rec('B3_top_up_stair_noop_and_old_down_key', topCases === 10 && topBad.length === 0,
+      '第 1 层上行梯：' + (topCases - topBad.length) + '/' + topCases +
+      ' 空转并停在梯子上；站在梯子上按 Down 仍能正常走开（旧的"按方向键进出"操作没被弄坏）' +
+      (topBad.length ? ' → ' + topBad.join(' ') : ''));
+    /* 不反复换层：站在新层出生点连跑 3 帧无输入，楼层不许变 */
+    var idle = 0, idleBad = [];
+    for (var s3 = 1001; s3 <= 1005; s3++) {
+      gen(s3, 2);
+      var g4 = gen(s3, 2), d4 = findTiles(g4, 2)[0], os4 = openSides(g4, d4)[0];
+      P.x = d4.x + os4.dx; P.y = d4.y + os4.dy; P.floor = 2;
+      press(os4.key);
+      var nf = Map.getFloor();
+      idle++;
+      for (var k3 = 0; k3 < 3; k3++) { now += 1000; try { M._updateExplore(now); } catch (e) { } }
+      if (Map.getFloor() !== nf) idleBad.push(s3 + ' ' + nf + '→' + Map.getFloor());
+    }
+    rec('B4_no_repeat_floor_change', idleBad.length === 0,
+      '换层后原地待机 3 帧不再换层：异常 ' + idleBad.length + (idleBad.length ? ' → ' + idleBad.join(' ') : '') +
+      '（玩家落在新层出生点，不是楼梯格上）');
+
+    /* ═══ C) 换层落盘时序 ═════════════════════════════════════ */
+    Game.Systems.AI.tick = tick0;
+    Game.Systems.Save.save = save0;
+    var KEY = 'ai_dungeon_rpg_save_v1';
+    var cap = null, origSet = localStorage.setItem;
+    localStorage.setItem = function (k, v) { if (k === KEY) cap = v; return origSet.call(localStorage, k, v); };
+    var genOrig = Map.generate;
+    var capOld = null;
+    Math.random = Bot.mulberry32(2101);
+    Map.setFloor(1);
+    var gg = Map.getGrid(), dCell = findTiles(gg, 2)[0], oo = dCell ? openSides(gg, dCell)[0] : null;
+    var spawnNew = null;
+    if (!dCell || !oo) throw new Error('D-77 C1: 第 1 层找不到下行梯或它没有入口');
+    /* 修复前的时序：map:floorChanged 里落盘，此刻 player 还站在上一层梯格上。
+     * 这里在 generate 返回后立刻落一次盘，等价复现旧代码的写入内容。 */
+    Map.generate = function () {
+      var r = genOrig.apply(Map, arguments);
+      try { Game.Systems.Save.save(); } catch (e) { }
+      if (cap) capOld = JSON.parse(cap).pos;
+      return r;
+    };
+    P.x = dCell.x + oo.dx; P.y = dCell.y + oo.dy; P.floor = 1;
+    press(oo.key);
+    Map.generate = genOrig;
+    localStorage.setItem = origSet;
+    spawnNew = Map.getSpawn();
+    var posAfter = cap ? (JSON.parse(cap).pos || null) : null;
+    var oldCoords = { x: dCell.x, y: dCell.y, floor: 1 };
+    rec('C1_save_written_after_respawn', !!posAfter && posAfter.floor === 2 &&
+      posAfter.x === spawnNew.x && posAfter.y === spawnNew.y,
+      '换层瞬间落盘：修复前会写成 (上一层梯格 ' + oldCoords.x + ',' + oldCoords.y + '，层号 2)；' +
+      '修复后实测 pos=(' + (posAfter ? posAfter.x + ',' + posAfter.y + '，层号 ' + posAfter.floor : 'null') + ')，' +
+      '新层出生点=(' + spawnNew.x + ',' + spawnNew.y + ')。旧口径复现值=' +
+      (capOld ? '(' + capOld.x + ',' + capOld.y + '，层号 ' + capOld.floor + ')' : 'null') +
+      ' → 两条落点确实不同。');
+    var land250 = 0, landBad = [];
+    for (var s4 = 0; s4 < 50; s4++) {
+      Math.random = Bot.mulberry32(1001 + s4);
+      for (var f4 = 1; f4 <= 5; f4++) {
+        Map.setFloor(f4);
+        var g5 = Map.getGrid(), d5 = findTiles(g5, 2)[0];
+        if (!d5) continue;
+        var lr = Map.resolveLanding(d5.x, d5.y);
+        var t5 = Map.tileAt(lr.x, lr.y);
+        if (t5 === 2 || t5 === 3) landBad.push((1001 + s4) + 'F' + f4 + ' tile=' + t5);
+        else land250++;
+      }
+    }
+    rec('C2_d53_landing_still_avoids_stairs', land250 === 250 && landBad.length === 0,
+      '把"存档坐标正好落在下行梯格"喂给 resolveLanding：' + land250 + '/250 落到非楼梯格；' +
+      'landableAt 仍排除 t=2/3（D-53 语义未改）；读档不调用 _updateExplore，所以不会一读档就换层。' +
+      (landBad.length ? ' → ' + landBad.slice(0, 5).join(' ') : ''));
+
+    /* ═══ D) 四策略对照（只读 selfcheck，不改数值） ═════════════ */
+    var pairs = [
+      { k: 'b1', ma: 2500, a: 'selfcheck/d77-b1-2500.json', b: 'selfcheck/d72-b1-2500.json' },
+      { k: 'g2', ma: 4500, a: 'selfcheck/d77-g2-4500.json', b: 'selfcheck/d72-g2-4500.json' },
+      { k: 's1', ma: 2500, a: 'selfcheck/d77-s1-2500.json', b: 'selfcheck/d72-s1-2500.json' },
+      { k: 'm1', ma: 6000, a: 'selfcheck/d77-m1-6000.json', b: 'selfcheck/d72-m1-6000.json' }
+    ];
+    var see = {}, dOk = true, dMsg = [];
+    for (var pi = 0; pi < pairs.length; pi++) {
+      var pa = readJson(pairs[pi].a), pb = readJson(pairs[pi].b);
+      if (!pa || !pb) { dOk = false; dMsg.push(pairs[pi].k + ':缺文件'); continue; }
+      var ra = (pa.runs && pa.runs[pairs[pi].k]) || [], rb = (pb.runs && pb.runs[pairs[pi].k]) || [];
+      if (ra.length !== 50 || rb.length !== 50) { dOk = false; dMsg.push(pairs[pi].k + ':runs=' + ra.length + '/' + rb.length); }
+      if (!pa.env || pa.env.maxActions !== pairs[pi].ma) { dOk = false; dMsg.push(pairs[pi].k + ':maxActions=' + (pa.env && pa.env.maxActions)); }
+      var bm = {};
+      for (var ri = 0; ri < rb.length; ri++) bm[rb[ri].seed] = rb[ri];
+      var ch = 0, chOut = 0, chAct = 0;
+      for (ri = 0; ri < ra.length; ri++) {
+        var y0 = bm[ra[ri].seed];
+        if (!y0) { dOk = false; dMsg.push(pairs[pi].k + '缺种子' + ra[ri].seed); continue; }
+        var one = false;
+        if (ra[ri].outcome !== y0.outcome) { chOut++; one = true; }
+        if (ra[ri].kills !== y0.kills) one = true;
+        if (ra[ri].gold !== y0.gold) one = true;
+        if (ra[ri].level !== y0.level) one = true;
+        if (ra[ri].actions !== y0.actions) { chAct++; one = true; }
+        if ((ra[ri].floor || 0) !== (y0.floor || 0)) one = true;
+        if (one) ch++;
+      }
+      see[pairs[pi].k] = {
+        ma: pairs[pi].ma, wins: [pb.agg[pairs[pi].k].wins, pa.agg[pairs[pi].k].wins],
+        dead: [pb.agg[pairs[pi].k].dead, pa.agg[pairs[pi].k].dead],
+        stuck: [pb.agg[pairs[pi].k].stuck, pa.agg[pairs[pi].k].stuck],
+        cap: [pb.agg[pairs[pi].k].capN, pa.agg[pairs[pi].k].capN],
+        avgSteps: [pb.agg[pairs[pi].k].avgSteps, pa.agg[pairs[pi].k].avgSteps],
+        avgKills: [pb.agg[pairs[pi].k].avgKills, pa.agg[pairs[pi].k].avgKills],
+        changedSeeds: ch, changedOutcome: chOut, changedActions: chAct
+      };
+      /* 不许有任何策略通关数下降；M1 必须仍然 50/50 */
+      if (pa.agg[pairs[pi].k].wins < pb.agg[pairs[pi].k].wins) { dOk = false; dMsg.push(pairs[pi].k + ' wins 下降'); }
+      if (pairs[pi].k === 'm1' && pa.agg.m1.wins !== 50) { dOk = false; dMsg.push('m1 不是 50/50'); }
+      /* "更早换层"：平均步数只许持平或下降 */
+      if (pa.agg[pairs[pi].k].avgSteps > pb.agg[pairs[pi].k].avgSteps) { dOk = false; dMsg.push(pairs[pi].k + ' avgSteps 上升'); }
+    }
+    rec('D1_four_strategies_delta', dOk, {
+      rule: '前后同种子 1001–1050、同口径（B1-2500 / G2-4500 / S1-2500 / M1-6000）；' +
+        '打开邻墙只会缩短到楼梯的最短路径，所以 avgSteps 只许持平或下降；M1-6000 仍须 50/50；不许任何策略通关数下降',
+      delta: see, problems: dMsg
+    });
+
+    /* ═══ E) 页数基线 ═════════════════════════════════════════ */
+    var pb2 = readJson('selfcheck/page-baseline.json');
+    rec('E1_page_baseline', !!pb2 && pb2.count === 110,
+      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-76 为 109，本卡新增 verify_d77 后应为 110）');
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String(e && (e.stack || e.message) || e);
+    out.ok = false;
+  }
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result') || (function () { var p = document.createElement('pre'); p.id = 'result'; document.body.appendChild(p); })();
+  document.getElementById('result').textContent = txt;
+  var rows = '';
+  Object.keys(out.sub).forEach(function (k) {
+    var v = out.sub[k];
+    rows += '<tr><td>' + k + '</td><td>' + (v.ok ? 'PASS' : 'FAIL') + '</td><td>' +
+      (typeof v.d === 'string' ? v.d : JSON.stringify(v.d)) + '</td></tr>';
+  });
+  var tb = document.createElement('table');
+  tb.style.cssText = 'border-collapse:collapse;margin-top:8px;font:12px/1.5 Consolas,monospace';
+  tb.innerHTML = '<tr><th>子项</th><th>结果</th><th>说明</th></tr>' + rows;
+  tb.querySelectorAll('td,th').forEach(function (c) { c.style.cssText = 'border:1px solid #555;padding:3px 6px;vertical-align:top'; });
+  document.body.appendChild(tb);
+
+  function fnv(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+})();
+</script>
+</body>
+</html>

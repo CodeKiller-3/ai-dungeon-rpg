@@ -27,6 +27,8 @@
    * 避免上下楼反复重新生成而刷怪、刷宝箱。只在重新开始（setFloor）时清空。 */
   var floorCache = {};
   var lastMoves = [];   /* D-38：最近一次生成里被搬进出生点连通块的必经目标（只读遥测） */
+  var lastMouths = [];  /* D-77：最近一次生成里被打开的楼梯入口（只读遥测） */
+  var lastCutWeakened = []; /* D-77：因开门被削弱的精英"必经"身份（只读遥测） */
 
   /* D-64：扩图前的每层尺寸。密度参数（怪/宝箱/陷阱/装饰/巡逻）按
    * 当前面积 / 基准面积 等比放大，避免"格子多了但内容没变多"的空旷大地图。
@@ -325,6 +327,145 @@
       grid[up.y][up.x] = 3;
       grid[down.y][down.x] = 2;
     }
+  }
+
+  /* ── D-77：楼梯不得单口 ────────────────────────────────────────
+   * 症状：楼梯落点若正好在迷宫的"叶子"（可走邻居 ≤1），玩家只能从唯一方向踩上去，
+   * 其余三面撞墙，体感就是"站在梯子旁按方向键没反应，只有按某个方向才下楼"。
+   * 修法（方案 B）：落点确定后，若某部楼梯的可走邻居 ≤1，就在它旁边打开一格墙。
+   * 三条硬约束：
+   *   ① 不消耗任何随机数（不调 Math.random；扫序固定 N→E→S→W）；
+   *   ② 不移动/新增/删除任何实体，只把一格"墙(0)"改成"地板(1)"；
+   *   ③ 打开前逐格自校验：界内、当前是墙、不在密室（含密室四周封墙圈）上、
+   *      且新入口必须真的通回出生点连通块（否则只是挖了个 1 格口袋，入口是假的）；
+   *   ④ 打开后不得让任何"必经目标"失效：只用出生点可达性复核（见下）。
+   * 调用点在生成末尾（实体全部落位之后）：此时打开一格墙不改变任何一次随机抽样，
+   * 除被打开的那一格以外 250 张图逐格不变，也不移动任何实体。
+   * 唯一会被"多一条路"影响的既有属性是 D-69 精英的 cut：开门后按最终 grid 重算，
+   * 被削弱的那几例如实记进 getLastCutWeakened（不假装割点还在）。 */
+
+  /* 楼梯格的四邻可走数（只看 grid，不看实体） */
+  function stairDegOf(c) {
+    var d = 0;
+    if (c.y > 0 && grid[c.y - 1][c.x] !== 0) d++;
+    if (c.x < grid[0].length - 1 && grid[c.y][c.x + 1] !== 0) d++;
+    if (c.y < grid.length - 1 && grid[c.y + 1][c.x] !== 0) d++;
+    if (c.x > 0 && grid[c.y][c.x - 1] !== 0) d++;
+    return d;
+  }
+
+  /* 密室"内部 + 四周封墙圈"整体排除：打开圈上的墙会多开一扇门，让密室提前暴露 */
+  function inRoomRing(x, y) {
+    for (var i = 0; i < rooms.length; i++) {
+      var r = rooms[i];
+      if (x >= r.x - 1 && x <= r.x + r.w && y >= r.y - 1 && y <= r.y + r.h) return true;
+    }
+    return false;
+  }
+
+  /* 该格能否改成楼梯的第二个入口（纯读，不写 grid） */
+  function mouthCellOk(c) {
+    if (c.x < 1 || c.y < 1 || c.x > grid[0].length - 2 || c.y > grid.length - 2) return false;
+    if (grid[c.y][c.x] !== 0) return false;               /* 只开墙 */
+    if (inRoomRing(c.x, c.y)) return false;               /* 不动密室 */
+    if (decor && decor[c.y] && decor[c.y][c.x]) return false;
+    if (traps && traps[c.y] && traps[c.y][c.x]) return false;
+    if (enemyAtCell(c.x, c.y)) return false;
+    if (eliteAtCell(c.x, c.y)) return false;
+    var ns = npcs || [];
+    for (var i = 0; i < ns.length; i++) if (ns[i].x === c.x && ns[i].y === c.y) return false;
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? (Game.Systems.AI.getPatrols() || []) : [];
+    for (i = 0; i < ps.length; i++) if (ps[i].x === c.x && ps[i].y === c.y) return false;
+    return true;
+  }
+
+  /* 出生点→target 的可达性（可封一格 blockCell；会换层的另一部楼梯不能当走廊）。
+   * 与真实移动语义一致。 */
+  function bfsToStair(target, otherTile, blockCell) {
+    var w = grid[0].length, h = grid.length;
+    var seen = [], q = [[spawn.x, spawn.y]], qi = 0;
+    for (var y = 0; y < h; y++) { seen[y] = []; for (var x = 0; x < w; x++) seen[y][x] = false; }
+    seen[spawn.y][spawn.x] = true;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1];
+      qi++;
+      if (cx === target.x && cy === target.y) return true;
+      for (var d = 0; d < 4; d++) {
+        var nx = cx + dirs[d][0], ny = cy + dirs[d][1];
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny][nx]) continue;
+        if (blockCell && nx === blockCell.x && ny === blockCell.y) continue;
+        var t = grid[ny][nx];
+        if (t === 0) continue;
+        if (t === otherTile) continue;   /* 会换层的另一部楼梯不能当走廊 */
+        seen[ny][nx] = true;
+        q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+
+  /* 生成末尾调用：把仍为单口的楼梯补成两个入口。返回本次打开的入口数。 */
+  function ensureStairMouths(w, h) {
+    lastMouths = [];
+    lastCutWeakened = [];
+    var stairs = [];
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        if (grid[y][x] === 2) stairs.push({ x: x, y: y, kind: 'down' });
+        else if (grid[y][x] === 3) stairs.push({ x: x, y: y, kind: 'up' });
+      }
+    }
+    /* D-77：开门只可能让"必经精英"被绕开。落盘前沿用 placeElite 的同一判据
+     * （isCutCell / blockedPathLen）在最终 grid 上重算，被削弱的如实降级为 cut=false
+     * 并补一个 detour（不假装割点还在）；什么都不改时本段不写任何字段，
+     * 也不消耗随机数。 */
+    var DIRS = [[0, -1, 'N'], [1, 0, 'E'], [0, 1, 'S'], [-1, 0, 'W']];
+    for (var i = 0; i < stairs.length; i++) {
+      var sc = stairs[i];
+      /* 另一部楼梯若真的会换层，就不能当走廊穿行（与 placeStairs 的 fits 同语义） */
+      var otherTile = 0;
+      if (sc.kind === 'down' && floorIndex > 0) otherTile = 3;
+      if (sc.kind === 'up' && floorIndex < cfg.floors - 1) otherTile = 2;
+      for (var guard = 0; guard < 2 && stairDegOf(sc) < 2; guard++) {
+        var opened = null;
+        for (var d = 0; d < DIRS.length; d++) {
+          var c = { x: sc.x + DIRS[d][0], y: sc.y + DIRS[d][1] };
+          if (!mouthCellOk(c)) continue;
+          grid[c.y][c.x] = 1;
+          /* 新入口必须真的连回出生点连通块（排除"1 格口袋"假入口） */
+          if (!bfsToStair(c, otherTile, sc)) { grid[c.y][c.x] = 0; continue; }
+          if (details && details[c.y]) details[c.y][c.x] = null; /* 墙上苔藓不带到新地板 */
+          opened = { x: c.x, y: c.y, side: DIRS[d][2] };
+          break;
+        }
+        if (!opened) break; /* 该楼梯四个方向都不合法：保持原样，交给 verify 报数 */
+        lastMouths.push({
+          floor: floorIndex + 1, stair: sc.kind,
+          at: { x: sc.x, y: sc.y }, opened: { x: opened.x, y: opened.y }, side: opened.side
+        });
+      }
+    }
+    /* D-77：开门之后按最终 grid 重算精英的"必经"身份（不移动、不删除任何实体） */
+    if (lastMouths.length && elites.length) {
+      var downTile = findTile(2, w, h);
+      if (downTile) {
+        for (var e = 0; e < elites.length; e++) {
+          var el = elites[e];
+          var wasCut = !!el.cut;
+          var nowCut = isCutCell(el, w, h, downTile);
+          if (wasCut === nowCut) continue;
+          el.cut = nowCut;
+          if (!nowCut) el.detour = blockedPathLen(el, w, h, downTile);
+          lastCutWeakened.push({
+            floor: floorIndex + 1, id: el.id, at: { x: el.x, y: el.y },
+            cutBefore: wasCut, cutAfter: nowCut
+          });
+        }
+      }
+    }
+    return lastMouths.length;
   }
 
   /* D-38：出生点连通块。楼梯是传送门——踩到会真正换层的楼梯格不能当走廊穿行，
@@ -1275,6 +1416,8 @@
       var cached = floorCache[floorIndex];
       if (cached) {
         lastMoves = [];
+        lastMouths = []; /* D-77：快照里的入口已经开好，本层不再新开 */
+        lastCutWeakened = [];
         grid = cached.grid;
         enemies = cached.enemies;
         details = cached.details;
@@ -1318,6 +1461,9 @@
       if (Game.Systems.AI) Game.Systems.AI.initPatrols(patrolCount(size[0], size[1]));
       spawn = { x: 1, y: 1 };
       genDetailsAndDecor(size[0], size[1]); /* M9-1：细节层 + 装饰层 */
+      /* D-77：实体全部落位之后再补楼梯的第二入口 —— 打开一格墙不会改变任何一次
+       * 随机抽样，也不移动任何实体；精英的 cut 若因此被削弱，会在函数内按最终 grid 重算。 */
+      ensureStairMouths(size[0], size[1]);
       floorCache[floorIndex] = {
         grid: grid,
         enemies: enemies,
@@ -1338,6 +1484,10 @@
 
     /* D-38：最近一次生成里被搬动的必经目标（只读；用于统计"修复了多少张图"） */
     getLastMoves: function () { return lastMoves.slice(); },
+
+    /* D-77：最近一次生成里被打开的楼梯入口（只读遥测；verify_d77 用） */
+    getLastStairMouths: function () { return lastMouths.slice(); },
+    getLastCutWeakened: function () { return lastCutWeakened.slice(); },
 
     /* D-38：当前层的必经目标（只读，供 verify_d38 与生成期共用同一份定义） */
     getMandatoryTargets: function () {

@@ -413,8 +413,16 @@
     if (Game.Particles && typeof Game.Particles.clear === 'function') Game.Particles.clear();
   }
 
+  /* D-77：换层落盘时序。
+   * changeFloor → generate → 'map:floorChanged' 发生在 resetPlayer() 之前：
+   * 那一刻 player.floor 还是旧层、坐标还停在上一层梯格上，落盘会写成
+   * "上一层梯格坐标 + 新层层号"。踩楼梯换层时把这次自动落盘让给换层分支，
+   * 等 resetPlayer() 把坐标定到新层出生点之后再写；其余换层路径行为不变。 */
+  var deferFloorSave = false;
+
   function onFloorChanged() {
     if (booting) return; /* 启动/读档期间不写档（含 Save.load 内部换层） */
+    if (deferFloorSave) return; /* D-77：踩楼梯换层，见换层分支里的显式落盘 */
     Game.Systems.Save.save();
   }
 
@@ -1570,23 +1578,32 @@
           if (t === 2) {
             /* 修复：最深层踩下行梯不再静默重生成当前层（changeFloor 边界返回 null） */
             var prevDown = player.floor;
-            if (Game.Systems.Map.changeFloor(1)) {
+            deferFloorSave = true;
+            var movedDown;
+            try { movedDown = Game.Systems.Map.changeFloor(1); } finally { deferFloorSave = false; }
+            if (movedDown) {
               player.floor = Game.Systems.Map.getFloor();
               resetPlayer();
               /* D-49：层间落点检查"上一层出口血 <20%"——只在换层后触发，不在战斗中 */
               if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
                 Game.Systems.Adaptive.onFloorArrived(prevDown);
               }
+              /* D-77：坐标已定在新层出生点，此时落盘才是对的落点 */
+              if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
             }
           } else if (t === 3) {
             /* 修复：第 1 层踩上行梯不再静默重生成当前层 */
             var prevUp = player.floor;
-            if (Game.Systems.Map.changeFloor(-1)) {
+            deferFloorSave = true;
+            var movedUp;
+            try { movedUp = Game.Systems.Map.changeFloor(-1); } finally { deferFloorSave = false; }
+            if (movedUp) {
               player.floor = Game.Systems.Map.getFloor();
               resetPlayer();
               if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
                 Game.Systems.Adaptive.onFloorArrived(prevUp);
               }
+              if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
             }
           } else {
             /* S-04：先判陷阱（踩中即结算、该格永久显现），再判遭遇——同格有怪时先吃陷阱伤害 */

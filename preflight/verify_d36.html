@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><title>D-36 Q-learning 复位与指标口径</title>
-<!-- D-64 时点声明：D-64 扩图会改变地图与 Q 表；本页把 MAPS.sizes 钉回 21×15…37×23 以复现历史证据，断言未放宽。 --></head>
+<!-- D-64 时点声明：D-64 扩图会改变地图与 Q 表；本页把 MAPS.sizes 钉回 21×15…37×23 以复现历史证据，断言未放宽。 -->
+<!-- D-77 时点声明：D-77（楼梯不得单口）在固定尺寸下只改了 seed101 的 F1 地图（上行梯 (7,1) 南侧 (7,2) 0→1），
+     证据 JSON 的 maps[0].gridHash 已按新图刷新（b8a46448→cedbbf78），trainingRate/epsilonEnd 与其余 6 个 seed 逐值未变；
+     result.deep / result.deepAll 仍是 D-36 时点快照（无断言消费）。本页断言、阈值均未改动。 --></head>
 <body>
 <div id="result">RUNNING</div>
 <canvas id="game" width="1280" height="720"></canvas>

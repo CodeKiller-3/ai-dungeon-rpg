@@ -1,5 +1,7 @@
 {
   "at": "2026-11-12T09:50:03.291Z",
+  "d77At": "2026-11-14T00:00:00.000Z",
+  "d77Note": "D-77（楼梯不得单口）只对 seed101 的 F1 地图开了一格邻墙：上行梯 (7,1) 的南侧 (7,2) 0→1，gridHash b8a46448→cedbbf78；maps[0] 的 trainingRate(35)/epsilonEnd(0.05) 与其余 6 个 seed 全部逐值不变（同协议复核）。result.deep / result.deepAll 是 D-36 时点的深探快照（无断言消费，仅为文档佐证），未在 D-77 后重跑，其 gridHash 仍是旧图 b8a46448。",
   "page": "preflight/d36_harness.html",
   "commit": "",
   "result": {
@@ -271,7 +273,7 @@
     "maps": [
       {
         "seed": 101,
-        "gridHash": "b8a46448",
+        "gridHash": "cedbbf78",
         "target": {
           "x": 9,
           "y": 1
