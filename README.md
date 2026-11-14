@@ -6,6 +6,12 @@
 
 [在线试玩](https://CodeKiller-3.github.io/ai-dungeon-rpg/)（GitHub Pages 静态托管；线上各验证页的可用性以 `preflight/selfcheck/d26-online-verify.*` 的逐页记录为准，不以本行代替核验）
 
+## 快速开始（Windows）
+
+- **双击 [`跑起来.cmd`](跑起来.cmd)**：用默认浏览器打开仓库里的 `index.html`（`file://`），零安装、不联网。脚本会读 `.html` 默认关联，若检测到旧版 IE 会提示改用 Edge。
+- **一键出全部对外截图**：双击 [`截图.cmd`](截图.cmd)（或运行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\截图.ps1`）。脚本自动推导路径、用独立 `--user-data-dir` 避开已开浏览器、逐张核对尺寸与落盘，输出 `preflight/artifacts/d74/` 10 张 + `manifest.md`。
+- 手动步骤与附录命令见 [docs/运行说明.md](docs/运行说明.md)。
+
 ## 项目简介
 
 一款可离线运行的像素风冒险 RPG 小游戏：随机迷宫探索、回合制战斗、背包装备、商店交易、任务系统、本地存档、**强化学习演示**一应俱全，并集成四层 AI 能力——**A\* 寻路、AI 行为状态机、大模型 NPC 对话、Q-learning 强化学习**。项目采用组件化拼装思路构建：站在开源巨人肩膀上，引入 GitHub 现成模块（javascript-astar、howler.js）与 freeCodeCamp 经典教程结构，全程零构建、零依赖，浏览器双击即玩。
@@ -95,6 +101,8 @@
 ```
 ai-dungeon-rpg/
 ├── index.html            # 入口（canvas + NPC 对话面板；meta game-version = 版本唯一来源）
+├── 跑起来.cmd            # 双击即玩：默认浏览器打开 index.html（含 IE 关联提示）
+├── 截图.cmd / 截图.ps1   # 一键出全部对外截图（自动路径 / 独立 user-data-dir / 核对落盘 / 清单）
 ├── css/style.css
 ├── js/core/              # 事件总线 / 输入 / 渲染 / 精灵表 / 主循环与场景调度
 ├── js/data/              # 地图 / 怪物 / 物品（含 ITEM_ICONS 图标映射）/ 任务 / 对话 / 配置
@@ -103,7 +111,7 @@ ai-dungeon-rpg/
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
 ├── preflight/            # 109 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
-├── preflight/artifacts/  # 证据截图：preflight/artifacts/d73/ 为 D-73 对外图 9 张；shots_resize/ 12 张响应式；D-35 8× 对照
+├── preflight/artifacts/  # 证据截图：preflight/artifacts/d74/ 为 D-74 对外图 10 张（含 1920×1080）；d73/ 9 张、d61/ 8 张为历史；shots_resize/ 12 张响应式；D-35 8× 对照
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明
 ├── docs/tasks/           # 里程碑任务卡（每卡一份，含契约与验收）
 ├── docs/process/         # 过程报告（自检 / 修复 / 诊断 / 对标自检，D-32 从根目录迁入，正文未改）
