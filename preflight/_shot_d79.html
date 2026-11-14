@@ -1,0 +1,146 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-79 F1 同视角样张（固定地图 / 固定机位 / 无迷雾）</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0c14; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-79 第 1 阶段样张页：不是为了验证逻辑，而是为了让"改前/改后"两张图
+     在同一张地图、同一机位、同一光照下只差贴图。地图是写死的，不走 map.generate，
+     因此两次截图逐格一致（不含任何随机）。 -->
+<script>window.__D79ERR = [];
+window.addEventListener('error', function (e) { window.__D79ERR.push(String(e.message || e)); });</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var W = 30, H = 20;
+  var grid = [], decor = {}, enemies = [];
+
+  /* 固定布局：外圈墙 + 两根 2×2 柱 + 一条中廊；不含随机 */
+  for (var y = 0; y < H; y++) {
+    grid[y] = [];
+    for (var x = 0; x < W; x++) {
+      var wall = (x === 0 || y === 0 || x === W - 1 || y === H - 1);
+      if ((x >= 6 && x <= 7 && y >= 5 && y <= 7) ||
+          (x >= 21 && x <= 22 && y >= 5 && y <= 7) ||
+          (x >= 12 && x <= 14 && y >= 12 && y <= 13)) wall = true;
+      grid[y][x] = wall ? 0 : 1;
+    }
+  }
+  /* 装饰（不占格）：火把 / 木桶 / 藤蔓 / 板条箱 / 骷髅 / 宝箱 / 金币堆 / 补给包 */
+  decor['3,2'] = 'torch'; decor['10,2'] = 'torch'; decor['25,2'] = 'torch';
+  decor['5,9'] = 'barrel'; decor['19,9'] = 'vine'; decor['4,16'] = 'crate';
+  decor['16,4'] = 'skull'; decor['13,9'] = 'chest'; decor['9,15'] = 'gold_pile';
+  decor['23,15'] = 'potion_stash';
+  enemies = [{ x: 11, y: 6, monsterId: 'slime' },
+             { x: 18, y: 11, monsterId: 'goblin' },
+             { x: 24, y: 16, monsterId: 'imp' },
+             { x: 8, y: 17, monsterId: 'orc_warrior' }];
+
+  var FLOOR = 1;
+  (function () {
+    var m = /[?&]floor=(\d+)/.exec(location.search || '');
+    if (m) {
+      var v = parseInt(m[1], 10);
+      if (v >= 1 && v <= 5) FLOOR = v;
+    }
+  })();
+  var playerObj = { x: 15, y: 9, floor: FLOOR, hp: 84, maxHp: 120, mp: 30, maxMp: 50, gold: 268, level: 4 };
+
+  function stub() {
+    Game.Systems = Game.Systems || {};
+    Game.Systems.Map = {
+      getDetail: function () { return null; },
+      getDecor: function (x, y) { return decor[x + ',' + y] || null; },
+      getEnemies: function () { return enemies; },
+      getElites: function () { return []; },
+      getNpcs: function () { return []; },
+      getGrid: function () { return grid; },
+      getTrap: function () { return null; },
+      isSecretRoom: function () { return false; },
+      isSecretRoomDoor: function () { return false; },
+      getFloor: function () { return FLOOR; }
+    };
+    Game.Systems.AI = { getPatrols: function () { return []; } };
+    Game.fov = undefined;
+    Game.Particles = undefined;
+    Game.Feedback = undefined;
+    Game.Motion = undefined;
+  }
+
+  function boot() {
+    try {
+      var cv = document.getElementById('game');
+      var R = Game.Core.Render;
+      R.init(cv);
+      R.resize(0);
+      R._staticBypass = true;
+      R._animNow = function () { return 0; };
+      stub();
+      Game.hud.update({ hp: playerObj.hp, hpMax: playerObj.maxHp, mp: playerObj.mp, mpMax: playerObj.maxMp,
+        gold: playerObj.gold, floor: FLOOR, kills: 3, killTarget: 12, level: 4, exp: 12, expNext: 40 });
+      draw();
+      /* 字体/图片解码完成后重画一次，保证截图稳定 */
+      setTimeout(draw, 120);
+      setTimeout(draw, 400);
+    } catch (e) {
+      window.__D79ERR.push('boot: ' + (e && e.message) + ' @' + (e && e.stack ? e.stack.split('\n')[1] : ''));
+      var c2 = document.getElementById('game');
+      var x2 = c2.getContext('2d');
+      c2.width = 1280; c2.height = 800;
+      x2.fillStyle = '#200';
+      x2.fillRect(0, 0, 1280, 800);
+      x2.fillStyle = '#ff8080';
+      x2.font = '16px monospace';
+      x2.fillText(window.__D79ERR.join(' | '), 20, 80);
+    }
+  }
+
+  function draw() {
+    var R = Game.Core.Render;
+    var ctx = R._ctx;
+    ctx.setTransform(R.dpr * R.scale, 0, 0, R.dpr * R.scale, 0, 0);
+    ctx.fillStyle = '#0b0c14';
+    ctx.fillRect(0, 0, R.cssW, R.cssH);
+    try {
+      R.drawMap(grid, playerObj);
+      R.drawPlayer(playerObj);
+      if (Game.Lighting && Game.Lighting.draw) Game.Lighting.draw();
+      Game.hud.draw();
+    } catch (e) {
+      window.__D79ERR.push('draw: ' + (e && e.message) + ' @' + (e && e.stack ? e.stack.split('\n')[1] : ''));
+    }
+    if (window.__D79ERR.length) {
+      ctx.fillStyle = '#ff8080';
+      ctx.font = '14px monospace';
+      ctx.fillText(window.__D79ERR.join(' | '), 20, 60);
+    }
+    document.title = 'D-79 F1 shot ready ' + (window.__D79ERR.length ? 'ERR' : 'OK');
+  }
+
+  var t0 = Date.now();
+  Game.Core.Sprites.load('../assets/sprites/');
+  (function poll() {
+    var S = Game.Core && Game.Core.Sprites;
+    if (S && S.isReady()) { boot(); return; }
+    if (Date.now() - t0 > 8000) { boot(); return; }
+    setTimeout(poll, 50);
+  })();
+})();
+</script>
+</body>
+</html>

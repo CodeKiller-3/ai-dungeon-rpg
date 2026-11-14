@@ -1671,8 +1671,11 @@
       return decor[y][x] || null;
     },
 
-    /* S-04：取该格陷阱（{id, seen}），无陷阱返回 null；seen=true 的陷阱仍然返回，供渲染画"已显现"格 */
-    getTrap: function (x, y) {
+    /* D-79：只读查询——该格是否位于密室内部 / 是否是密室门（供渲染层区分房间材质，不参与生成与寻路） */
+    isSecretRoom: function (x, y) { return inRoom(x, y); },
+    isSecretRoomDoor: function (x, y) { return inRoomDoor(x, y); },
+
+    /* S-04：取该格陷阱（{id, seen}），无陷阱返回 null；seen=true 的陷阱仍然返回，供渲染画"已显现"格 */    getTrap: function (x, y) {
       if (!traps || !traps[y]) return null;
       if (x < 0 || y < 0 || x >= traps[0].length || y >= traps.length) return null;
       return traps[y][x] || null;

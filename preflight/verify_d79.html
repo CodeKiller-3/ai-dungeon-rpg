@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="preflight-meta" content="1">
+<title>D-79 美术与地图表现</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-79 · 24×24 五层主题地块 / 84 色调色板 / 房间材质 / 纯装饰层 / 环境色可读性</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="480" height="360"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var R = Game.Core.Render, S = Game.Core.Sprites, M = Game.Systems.Map;
+  var cv = document.getElementById('game'), ctx = cv.getContext('2d');
+
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readDoc(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  function readJson(rel) { try { return JSON.parse(readDoc(rel)); } catch (e) { return null; } }
+
+  var THEME = {
+    1: { base: [0x48,0x3b,0x3a] },
+    2: { base: [0x7a,0x5a,0x30] },
+    3: { base: [0x8f,0x2a,0x12] },
+    4: { base: [0x2c,0x56,0x6b] },
+    5: { base: [0x47,0x2a,0x5c] }
+  };
+  var TINT = { 1: [150,180,210,0.040], 2: [255,186,90,0.040], 3: [255,96,40,0.030], 4: [120,200,255,0.035], 5: [170,80,210,0.035] };
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function lum(rgb) {
+    function f(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+    return 0.2126 * f(rgb[0]) + 0.7152 * f(rgb[1]) + 0.0722 * f(rgb[2]);
+  }
+  function contrast(a, b) {
+    var la = lum(a), lb = lum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function over(base, tint) {
+    var a = tint[3];
+    return [0,1,2].map(function (i) { return Math.round(base[i] * (1-a) + tint[i] * a); });
+  }
+  function fp(grid) {
+    var s = 0;
+    for (var y = 0; y < grid.length; y++) {
+      for (var x = 0; x < grid[y].length; x++) s = (s * 31 + grid[y][x] * (x + 7) * (y + 13)) >>> 0;
+    }
+    return s;
+  }
+  function bfs(grid, sx, sy) {
+    var H = grid.length, W = grid[0].length, seen = {}, q = [[sx, sy]], n = 0;
+    seen[sx + ',' + sy] = 1;
+    while (q.length) {
+      var p = q.pop(); n++;
+      var dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      for (var i = 0; i < 4; i++) {
+        var x = p[0] + dirs[i][0], y = p[1] + dirs[i][1];
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        if (!grid[y][x]) continue;
+        var k = x + ',' + y;
+        if (seen[k]) continue;
+        seen[k] = 1; q.push([x, y]);
+      }
+    }
+    return { n: n, seen: seen };
+  }
+
+  function checks() {
+    /* ===== A. 资产与调色板 ===== */
+    var src = readDoc('../js/core/sprites.js');
+    var i0 = src.indexOf('var NAMES ='), i1 = src.indexOf('];', i0);
+    var names = (src.slice(i0, i1).match(/'([a-z0-9_]+)'/g) || []).map(function (s) { return s.slice(1, -1); });
+    var audit = readJson('selfcheck/d21-audit.json') || {};
+    var lic = readDoc('../assets/sprites/LICENSE.md');
+    var pal = audit.palette || [];
+    rec('A1_registry', names.length === 303 && audit.total === 303 && pal.length === 84 &&
+      (audit.empty || []).length === 0 && (audit.paletteBad || []).length === 0 &&
+      lic.indexOf('303 个 PNG') >= 0 && lic.indexOf('84 色') >= 0,
+      { names: names.length, disk: audit.total, palette: pal.length,
+        empty: (audit.empty || []).length, paletteBad: (audit.paletteBad || []).length });
+
+    var per = {}, a2 = true;
+    for (var f = 1; f <= 5; f++) {
+      var fc = names.filter(function (n) {
+        return f === 1 ? /^floor_[1-8]$/.test(n) : new RegExp('^t' + f + '_floor_[1-8]$').test(n);
+      }).length;
+      var wc = names.filter(function (n) {
+        return f === 1 ? /^wall_(left|mid|right|top_left|top_mid|top_right)$/.test(n)
+          : new RegExp('^t' + f + '_(wall_(left|mid|right)|wall_top_(left|mid|right))$').test(n);
+      }).length;
+      var dc = names.filter(function (n) { return new RegExp('^t' + f + '_dc_').test(n); }).length;
+      per[f] = { floor: fc, wall: wc, door: names.indexOf('t' + f + '_door') >= 0 ? 1 : 0, decor: dc };
+      if (fc !== 8 || wc !== 6 || per[f].door !== 1 || dc !== 7) a2 = false;
+    }
+    rec('A2_perFloor', a2, per);
+    rec('A3_baseOf', S.baseOf('floor_1') === 24 && S.baseOf('t3_wall_mid') === 24 &&
+      S.baseOf('t5_dc_web') === 24 && S.baseOf('chest') === 24 && S.baseOf('knight_m_idle_anim_f0') === 24 &&
+      S.baseOf('coin') === 24,
+      { floor: S.baseOf('floor_1'), themeWall: S.baseOf('t3_wall_mid'), ambient: S.baseOf('t5_dc_web'),
+        chest: S.baseOf('chest'), player: S.baseOf('knight_m_idle_anim_f0'), coin: S.baseOf('coin'),
+        note: 'D-79 只把地块改 24 基；D-80 起玩家帧与道具图标也按 24 基原生重画，故这两项同步为 24' });
+
+    /* ===== B. 24×24 原生 1:1 绘制 ===== */
+    var recs = [], orig = ctx.drawImage;
+    ctx.drawImage = function (img) {
+      try {
+        if (img && img.src) recs.push({ n: String(img.src).split('/').pop().replace(/\.png$/i, ''),
+          w: +arguments[3], h: +arguments[4] });
+      } catch (e) {}
+      return orig.apply(ctx, arguments);
+    };
+    R.init(cv); R.resize(1); R._staticBypass = true; R._animNow = function () { return 0; };
+    var grid0 = [];
+    for (var y = 0; y < 8; y++) { grid0[y] = []; for (var x = 0; x < 8; x++) grid0[y][x] = (x === 0 || y === 0 || x === 7 || y === 7) ? 0 : 1; }
+    var decorAt = { '3,3': 'chest', '4,4': 'barrel', '5,5': 'gold_pile' };
+    var enemies = [{ x: 2, y: 2, monsterId: 'slime' }];
+    var player = { x: 3, y: 5, floor: 1 };
+    var saveMap = Game.Systems.Map, saveAI = Game.Systems.AI;
+    var saveFov = Game.fov, saveLight = Game.Lighting, saveParts = Game.Particles,
+      saveFb = Game.Feedback, saveMotion = Game.Motion;
+    Game.Systems.Map = {
+      getDetail: function () { return null; }, getDecor: function (x, y) { return decorAt[x + ',' + y] || null; },
+      getEnemies: function () { return enemies; }, getElites: function () { return []; }, getNpcs: function () { return []; },
+      getGrid: function () { return grid0; }, getTrap: function () { return null; }, getFloor: function () { return 1; },
+      isSecretRoom: function () { return false; }, isSecretRoomDoor: function () { return false; }
+    };
+    Game.Systems.AI = { getPatrols: function () { return []; } };
+    Game.fov = undefined; Game.Lighting = undefined; Game.Particles = undefined; Game.Feedback = undefined; Game.Motion = undefined;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+    R.drawMap(grid0, player);
+    R.drawPlayer(player);
+    ctx.drawImage = orig;
+    Game.Systems.Map = saveMap;
+    Game.Systems.AI = saveAI;
+    /* B 组为强制直绘临时清空渲染依赖，画完必须还原：
+     * map:floorChanged 监听器会调用 Game.fov.reset()（js/systems/fov.js），
+     * 不还原会让后续 D 组 setFloor 直接抛错。 */
+    Game.fov = saveFov; Game.Lighting = saveLight; Game.Particles = saveParts;
+    Game.Feedback = saveFb; Game.Motion = saveMotion;
+    var tiles = recs.filter(function (r) { return /^floor_[1-8]$/.test(r.n) || /^wall_/.test(r.n); });
+    var props = recs.filter(function (r) { return r.n === 'chest' || r.n === 'barrel'; });
+    var pl = recs.filter(function (r) { return /^knight_m_/.test(r.n); })[0];
+    var tileOk = tiles.length >= 20 && tiles.every(function (r) { return r.w === 24 && r.h === 24; });
+    var propOk = props.length >= 2 && props.every(function (r) { return r.w === 24 && r.h === 24; });
+    var playerOk = !!pl && pl.w === 24 && pl.h === 42;
+    rec('B1_oneToOne', tileOk && propOk && playerOk,
+      { tiles: tiles.length, sample: tiles[0], props: props, player: pl, negOldFormula: Math.round(24 * 24 / 16) === 36 });
+
+    /* ===== C. 房间分类 ===== */
+    var openG = [], corrG = [];
+    for (var yy = 0; yy < 15; yy++) {
+      openG[yy] = []; corrG[yy] = [];
+      for (var xx = 0; xx < 15; xx++) {
+        openG[yy][xx] = (xx === 0 || yy === 0 || xx === 14 || yy === 14) ? 0 : 1;
+        corrG[yy][xx] = (yy === 7) ? 1 : 0;
+      }
+    }
+    var kRoom = R._roomKind(openG, 7, 7, false, false);
+    var kCorr = R._roomKind(corrG, 7, 7, false, false);
+    var kSecret = R._roomKind(openG, 7, 7, true, false);
+    var kBoss = R._roomKind(openG, 7, 7, false, true);
+    rec('C1_roomKinds', kRoom === 'room' && kCorr === 'corridor' && kSecret === 'secret' && kBoss === 'boss',
+      { room: kRoom, corridor: kCorr, secret: kSecret, boss: kBoss });
+
+    /* ===== D. 纯装饰层：50 种子 × 5 层 ===== */
+    var seeds = 50, badCells = 0, badWrite = 0, badReach = 0, totalDecor = 0, sampleRow = null;
+    var origRandom = Math.random;
+    /* setFloor 内部 generate() 会走非 quiet 分支推进 floor 任务（map.js notifyFloorQuest），
+     * 本页不加载 main.js，Game.Data.Player 不存在；补一个最小 Player 桩即可，
+     * 不影响地图生成与装饰层判定。 */
+    if (!Game.Data.Player) Game.Data.Player = { quests: {}, gold: 0, exp: 0, level: 1 };
+    try {
+      M.generate({ quietQuest: true });   /* 初始化 cfg，之后 setFloor 才能清缓存重生成 */
+      for (var sd = 0; sd < seeds; sd++) {
+        Math.random = mulberry32(sd + 1);
+        for (var fl = 1; fl <= 5; fl++) {
+          M.setFloor(fl);
+          var g = M.getGrid();
+          var before = fp(g);
+          var sp = M.getSpawn ? M.getSpawn() : { x: 1, y: 1 };
+          var reach0 = bfs(g, sp.x, sp.y);
+          var stairs = [];
+          for (var y3 = 0; y3 < g.length; y3++) {
+            for (var x3 = 0; x3 < g[0].length; x3++) if (g[y3][x3] === 2) stairs.push([x3, y3]);
+          }
+          var cellSet = function (list) { var m = {}; list.forEach(function (o) { m[o.x + ',' + o.y] = 1; }); return m; };
+          var eM = cellSet(M.getEnemies() || []), nM = cellSet(M.getNpcs() || []), lM = cellSet(M.getElites() || []);
+          var cnt = 0;
+          for (var y4 = 0; y4 < g.length; y4++) {
+            for (var x4 = 0; x4 < g[0].length; x4++) {
+              var a = R._ambientAt(g, x4, y4, fl);
+              if (!a) continue;
+              cnt++;
+              if (g[y4][x4] !== 1) badCells++;
+              if (M.getDecor(x4, y4) || M.getTrap(x4, y4)) badCells++;
+              if (eM[x4 + ',' + y4] || nM[x4 + ',' + y4] || lM[x4 + ',' + y4]) badCells++;
+            }
+          }
+          totalDecor += cnt;
+          if (fp(M.getGrid()) !== before) badWrite++;
+          for (var si = 0; si < stairs.length; si++) {
+            if (!reach0.seen[stairs[si][0] + ',' + stairs[si][1]]) badReach++;
+          }
+          if (bfs(M.getGrid(), sp.x, sp.y).n !== reach0.n) badWrite++;
+          if (!sampleRow) sampleRow = { seed: sd + 1, floor: fl, decor: cnt, stairs: stairs.length, reach: reach0.n };
+        }
+      }
+    } catch (e) {
+      rec('D1_ambientLayer', false, 'throw: ' + (e && e.message));
+    } finally {
+      Math.random = origRandom;
+    }
+    if (!out.sub.D1_ambientLayer) {
+      rec('D1_ambientLayer', badCells === 0 && badWrite === 0 && badReach === 0 && totalDecor > 0,
+        { seeds: 50, floors: 5, samples: 250, decorCells: totalDecor, onBlockedOrEntity: badCells,
+          gridChanged: badWrite, unreachableStairs: badReach, sample: sampleRow });
+    }
+
+    /* ===== E. 环境色可读性（指引箭头 / 可交互提示） ===== */
+    /* 底色不是拍脑袋的常量：取该层地板贴图的实测平均色，依次叠 P2-3 主题 tint 与
+     * D-79 环境色偏（两层都是真实存在的），再算对比度。 */
+    var hints = { hint: [0xff,0xe0,0x66], arrow: [0xfd,0xf7,0xed], danger: [0xdc,0x3c,0x3c] };
+    function avgColor(img) {
+      if (!img) return null;
+      var oc = document.createElement('canvas'); oc.width = img.naturalWidth; oc.height = img.naturalHeight;
+      var oct = oc.getContext('2d'); oct.drawImage(img, 0, 0);
+      var d = oct.getImageData(0, 0, oc.width, oc.height).data, s = [0, 0, 0], n = 0;
+      for (var i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 8) continue;
+        s[0] += d[i]; s[1] += d[i + 1]; s[2] += d[i + 2]; n++;
+      }
+      return n ? [Math.round(s[0] / n), Math.round(s[1] / n), Math.round(s[2] / n)] : null;
+    }
+    function parseRgba(str) {
+      var m = /rgba?\(([^)]+)\)/.exec(str || '');
+      if (!m) return null;
+      var p = m[1].split(',').map(function (v) { return parseFloat(v); });
+      return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1];
+    }
+    var themes = (Game.Data.MAPS && Game.Data.MAPS.themes) || [];
+    var rows = [], worst = { ratio: 999 }, bases = {};
+    for (var f2 = 1; f2 <= 5; f2++) {
+      var img = S.get(f2 === 1 ? 'floor_1' : 't' + f2 + '_floor_1');
+      var base = avgColor(img) || THEME[f2].base;
+      bases[f2] = base;
+      var legacy = parseRgba(themes.length ? themes[(f2 - 1) % themes.length].tint : '');
+      var bg1 = legacy ? over(base, legacy) : base;
+      var bg = over(bg1, TINT[f2]), row = { floorBase: base, bg: bg };
+      ['hint', 'arrow'].forEach(function (k) {
+        var cr = contrast(hints[k], bg);
+        row[k] = Math.round(cr * 100) / 100;
+        if (cr < worst.ratio) worst = { ratio: cr, floor: f2, kind: k };
+      });
+      row.danger = Math.round(contrast(hints.danger, bg) * 100) / 100;
+      rows.push(row);
+    }
+    rec('E1_readability', worst.ratio >= 3.0,
+      { rows: rows, worst: { floor: worst.floor, kind: worst.kind, ratio: Math.round(worst.ratio * 100) / 100 }, need: 3.0 });
+
+    /* E2：绘制顺序——光影/环境色必须在 HUD、提示条、引导层之前结束。
+     * 用源码位置做顺序断言（不跑主循环），保证"叠加色只作用于场景，不会压住 UI"。 */
+    var rsrc = readDoc('../js/core/render.js');
+    var msrc = readDoc('../js/core/main.js');
+    var iLight = rsrc.indexOf('Game.Lighting.draw');
+    var iHud = rsrc.indexOf('this._drawHud()');
+    var iNotice = msrc.indexOf('Game.Notice.draw');
+    var iGuide = msrc.indexOf('Game.Core.Render.drawGuide');
+    var iMap = msrc.indexOf('Render.draw');
+    var orderOk = iLight > 0 && iHud > iLight && iNotice > 0 && iGuide > iNotice && iMap >= 0;
+    rec('E2_hudAfterLight', orderOk,
+      { lighting: iLight, hud: iHud, notice: iNotice, guide: iGuide, mapDraw: iMap,
+        rule: 'render.js 中 Lighting.draw < _drawHud()；main.js 中场景绘制 < Notice.draw < drawGuide' });
+
+    /* ===== F. 确定性 / 负例 ===== */
+    /* 取一个**确实出装饰**的格子做确定性比对：若只取空格，"null === null" 是空判据。
+     * 本段临时换成 B 组那份带宝箱/木桶的 Map 桩，否则 getDecor 读的是真实地图、
+     * "装饰格不出氛围层"这条负例就等于没测。 */
+    var saveMap2 = Game.Systems.Map;
+    Game.Systems.Map = {
+      getDetail: function () { return null; }, getDecor: function (x, y) { return decorAt[x + ',' + y] || null; },
+      getEnemies: function () { return enemies; }, getElites: function () { return []; }, getNpcs: function () { return []; },
+      getGrid: function () { return grid0; }, getTrap: function () { return null; }, getFloor: function () { return 1; },
+      isSecretRoom: function () { return false; }, isSecretRoomDoor: function () { return false; }
+    };
+    var hitXY = null, a1 = null;
+    for (var fy = 1; fy <= 6 && !hitXY; fy++) {
+      for (var fx = 1; fx <= 6; fx++) {
+        var v = R._ambientAt(grid0, fx, fy, 3);
+        if (v) { hitXY = [fx, fy]; a1 = v; break; }
+      }
+    }
+    var a2v = hitXY ? R._ambientAt(grid0, hitXY[0], hitXY[1], 3) : null;
+    var wallNull = R._ambientAt(grid0, 0, 0, 3) === null;
+    var enemyNull = R._ambientAt(grid0, 2, 2, 3) === null;
+    var decorNull = R._ambientAt(grid0, 3, 3, 3) === null;   /* (3,3) 放着宝箱 */
+    Game.Systems.Map = saveMap2;
+    rec('F1_deterministic', !!a1 && a1 === a2v && wallNull && enemyNull && decorNull,
+      { at: hitXY, cell: a1, repeat: a2v, wallNull: wallNull, enemyNull: enemyNull, decorNull: decorNull });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.getElementById('result').textContent = txt;
+    document.title = txt.slice(0, 120);
+  }
+
+  S.load('../assets/sprites/');
+  var t0 = Date.now();
+  (function wait() {
+    if (S.isReady()) { try { checks(); } catch (e) {
+      var t = 'FAIL ' + JSON.stringify({ ok: false, error: String(e && e.message), stack: e && e.stack });
+      document.getElementById('result').textContent = t; document.title = t.slice(0, 120);
+    } return; }
+    if (Date.now() - t0 > 15000) { try { checks(); } catch (e) {} return; }
+    setTimeout(wait, 60);
+  })();
+})();
+</script>
+</body>
+</html>

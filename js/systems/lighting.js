@@ -196,6 +196,30 @@
   }
 
   /* ---------- 对外接口 ---------- */
+
+  /* D-79：每层环境色偏——只叠在探索场景上（HUD 在之后绘制，不受影响）。
+   * 注意：场景层内已有一层 P2-3 的 MAPS.themes tint（0.06~0.12）打在地板/墙上，
+   * 这里再加的一层是**压在实体与雾上的统一空气色**，两层相加才是最终观感，
+   * 因此本层 alpha 取 0.03~0.04（合计 ≤0.16），避免 F3/F5 过饱和。 */
+  var AMBIENT = {
+    1: 'rgba(150,180,210,0.040)',
+    2: 'rgba(255,186,90,0.040)',
+    3: 'rgba(255,96,40,0.030)',
+    4: 'rgba(120,200,255,0.035)',
+    5: 'rgba(170,80,210,0.035)'
+  };
+  function drawAmbientTint(ctx) {
+    var fl = (Game.Systems && Game.Systems.Map && typeof Game.Systems.Map.getFloor === 'function')
+      ? Game.Systems.Map.getFloor() : 1;
+    var col = AMBIENT[fl] || AMBIENT[1];
+    var s = getCssSize();
+    if (!s.w || !s.h) return;
+    ctx.save();
+    ctx.fillStyle = col;
+    ctx.fillRect(0, 0, s.w, s.h);
+    ctx.restore();
+  }
+
   Game.Lighting = {
     init: function () {
       try {
@@ -216,6 +240,9 @@
       }
       var cam = getCam();
       var TILE = getTile();
+
+      /* 0. 环境色偏（先铺底色，软边/光晕/暗角都叠在它上面） */
+      drawAmbientTint(ctx);
 
       /* 1. FOV 软边（先画，作为迷雾到可见的过渡） */
       drawSoftEdge(ctx, grid, cam, TILE);
