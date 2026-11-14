@@ -190,7 +190,9 @@
       var s1 = seq();
       var floorUsed = {};
       for (var ri = 0; ri < rec.length; ri++) {
-        if (/^floor_[1-8]$/.test(rec[ri].n)) floorUsed[rec[ri].n] = true;
+        /* D-79 口径更新：地板名从 floor_1..8 扩为 每层主题前缀 t{层}_floor_1..8（F1 仍无前缀）。
+         * 判据不变——"同一张图上用了 ≥2 种地板变体"，只是把命名空间一起算进来。 */
+        if (/^(?:t[1-5]_)?floor_[1-8]$/.test(rec[ri].n)) floorUsed[rec[ri].n] = true;
       }
       var variantCount = Object.keys(floorUsed).length;
       rec = [];
@@ -235,9 +237,11 @@
       sub.t8_idem = (m1 === m2) && (m1.length > 0);
       ok = ok && sub.t8_idem;
 
-      /* 墙/楼梯贴图确实落笔（覆盖 wall 顶行与墙身、楼梯） */
+      /* 墙/楼梯贴图确实落笔（覆盖 wall 顶行与墙身、楼梯）
+       * D-79 口径更新：F2~F5 的墙贴图带主题前缀（t{层}_wall_*），F1 无前缀；
+       * 判据仍是"顶行 / 左中右墙身 / 上下楼梯这六类都真的落笔"，不涉及数量或像素放宽。 */
       var wallNames = {};
-      for (var mri = 0; mri < rec.length; mri++) wallNames[rec[mri].n] = true;
+      for (var mri = 0; mri < rec.length; mri++) wallNames[rec[mri].n.replace(/^t[1-5]_/, '')] = true;
       var wallOk = !!(wallNames['wall_top_mid'] && wallNames['wall_mid'] && wallNames['wall_left'] &&
         wallNames['wall_right'] && wallNames['floor_stairs'] && wallNames['floor_ladder']);
       sub.t8b_wallStairsDraw = wallOk;

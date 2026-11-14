@@ -13,7 +13,7 @@
 </style>
 </head>
 <body>
-<h1>D-57 · 角色朝向：左右状态 / 镜像帧 / 非对称特征 / 素材登记 / 渲染回归 / 负例（A–F）</h1>
+<h1>D-57 · 角色朝向：左右状态 / 镜像保真 / 侧身特征位置 / 素材登记 / 渲染回归 / 负例（A–G）</h1>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="320" height="240"></canvas>
 <script>window.__D57ERR = [];
@@ -175,17 +175,17 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
     var onlyLocal = names.filter(function (n) { return auditNames.indexOf(n) < 0; });
     var onlyAudit = auditNames.filter(function (n) { return names.indexOf(n) < 0; });
     var meta = (audit && audit.names) || {};
-    var ok = names.length === 207 && !!audit && audit.total === 207 &&
-      meta.count === 207 && auditNames.length === 207 && onlyLocal.length === 0 && onlyAudit.length === 0 &&
+    var ok = names.length === 303 && !!audit && audit.total === 303 &&
+      meta.count === 303 && auditNames.length === 303 && onlyLocal.length === 0 && onlyAudit.length === 0 &&
       (meta.missingFiles || []).length === 0 && (meta.extraFiles || []).length === 0 && (meta.dupNames || []).length === 0 &&
       missingFrames.length === 0 && names.indexOf('player') >= 0 &&
-      lic.indexOf('207 个 PNG') >= 0 && lic.indexOf('207 注册 / 207 落盘') >= 0;
+      lic.indexOf('303 个 PNG') >= 0 && lic.indexOf('303 注册 / 303 落盘') >= 0;
     rec('D_assets_registered', ok, {
-      rule: 'NAMES 207 = 落盘 207 = LICENSE 207；玩家 12 帧 + player 单图全部登记；本卡不新增 PNG',
+      rule: 'NAMES 303 = 落盘 303 = LICENSE 303（D-79 主题贴图 +96）；玩家 12 帧 + player 单图全部登记',
       names: names.length, auditTotal: audit && audit.total, files: auditNames.length,
       auditCount: meta.count, missingFiles: meta.missingFiles, extraFiles: meta.extraFiles, dupNames: meta.dupNames,
       missingFrames: missingFrames, onlyLocal: onlyLocal.slice(0, 5), onlyAudit: onlyAudit.slice(0, 5),
-      license207: lic.indexOf('207 个 PNG') >= 0
+      license303: lic.indexOf('303 个 PNG') >= 0
     });
   })();
 
@@ -195,7 +195,10 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
     try {
       var img = Game.Core.Sprites.getFrame('knight_m_idle', 0);
       if (img && img.naturalHeight) {
-        h = Math.max(2, Math.round(img.naturalHeight * TILE / 16));
+        /* D-80 口径更新：帧基底由 16 变 24（24×42 原生）。屏幕落位尺寸断言不变：
+         * 高必须仍是 42、宽必须仍是 24。 */
+        var b = img.__base === 24 ? 24 : 16;
+        h = Math.max(2, Math.round(img.naturalHeight * TILE / b));
         w = Math.max(2, Math.round(img.naturalWidth * h / img.naturalHeight));
         var c = document.createElement('canvas'); c.width = 96; c.height = 96;
         var g = c.getContext('2d');
@@ -204,7 +207,7 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
       }
     } catch (e) { h = -1; }
     rec('E_render_regression', h === 42 && w === 24 && boxOk && typeof R.drawPlayer === 'function', {
-      rule: 'D-35 口径不变：16×28 骑士 → 42px 高 / 24px 宽；drawPlayer 仍在；C 组另做像素断言',
+      rule: 'D-35 口径不变：玩家帧（24×42 原生，基底 24）→ 42px 高 / 24px 宽；drawPlayer 仍在；C 组另做像素断言',
       frameHeight: h, frameWidth: w, boxOk: boxOk
     });
   }
@@ -218,7 +221,8 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
       var st = R.playerFrameState({ facing: facing }, false);
       var img = Game.Core.Sprites.getFrame(st.frame, 0);
       var nh = img.naturalHeight, nw = img.naturalWidth;
-      var h = Math.max(2, Math.round(nh * TILE / 16));
+      var bb = img.__base === 24 ? 24 : 16;
+      var h = Math.max(2, Math.round(nh * TILE / bb));
       var w = Math.max(2, Math.round(nw * h / nh));
       var x = Math.round(48 - w / 2), y = 80 - h;
       if (st.flip) { g.translate(48, 0); g.scale(-1, 1); g.translate(-48, 0); }
@@ -250,26 +254,65 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
     var left = dataOf('left', false);
     var right = dataOf('right', false);
     var realDiff = diffCount(left, mirror(right, 96, 96));
-    /* 纯镜像对照：不加任何方向特征，只翻帧 */
+    /* 纯镜像对照：只翻帧、不加任何方向特征 */
     var pl = dataOf('left', true);
     var pr = dataOf('right', true);
     var pureDiff = diffCount(pl, mirror(pr, 96, 96));
-    /* F①：强制左右同帧（两边都 flip=false）→ B 的判据必须为 false（同 flip） */
-    rec('C_not_pure_mirror', realDiff > 0 && pureDiff === 0, {
-      rule: '真实左右渲染 vs 镜像的差异像素必须 > 0；无特征的纯镜像对照差异必须 = 0',
+
+    /* ── C1：镜像保真 ────────────────────────────────────────────
+     * D-80 裁定 A 后底帧是真侧面，左朝向 = 同一帧水平镜像，
+     * 因此"左 == mirror(右)"必须是**精确 0 差异**（旧口径要求 >0，是补丁时代的口径）。 */
+    rec('C1_mirror_exact', realDiff === 0 && pureDiff === 0, {
+      rule: '真侧面 + 镜像：左渲染与 mirror(右渲染) 的差异必须精确为 0；纯镜像对照同样 = 0',
       realDiffPixels: realDiff, pureMirrorDiffPixels: pureDiff
     });
-    var forcedFlipDiff = (false !== false);
-    rec('F_negatives_fail', forcedFlipDiff === false && pureDiff === 0 && realDiff > 0, {
-      rule: '负例：强制左右同 flip → B 判据为 false；强制纯镜像（无特征）→ C 差异=0；真实渲染必须 >0',
-      forcedSameFlipDetected: forcedFlipDiff, forcedPureMirrorDiff: pureDiff, realDiffPixels: realDiff
+
+    /* ── C2：朝向特征在渲染结果里的位置（不是靠补丁，而是靠轮廓本身）──
+     * 在 96×96 落屏画面上取三种特征色的横向位置：眼缝冷光 #5698cc、剑身 #fdf7ed、
+     * 盔缨尾 #9f294e。朝右时前两者在画面右半、缨尾在左半；朝左（镜像）必须整体翻转。 */
+    function spanOf(data, rgb) {
+      var minX = 999, maxX = -1, n = 0;
+      for (var i = 0; i < data.length; i += 4) {
+        if (data[i] === rgb[0] && data[i + 1] === rgb[1] && data[i + 2] === rgb[2] && data[i + 3] > 0) {
+          var x = (i / 4) % 96;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          n++;
+        }
+      }
+      return { min: minX, max: maxX, n: n };
+    }
+    var EYE = [0x56, 0x98, 0xcc], BLADE = [0xfd, 0xf7, 0xed], TAIL = [0x9f, 0x29, 0x4e];
+    var rEye = spanOf(right, EYE), rBlade = spanOf(right, BLADE), rTail = spanOf(right, TAIL);
+    var lEye = spanOf(left, EYE), lBlade = spanOf(left, BLADE), lTail = spanOf(left, TAIL);
+    var okRight = rEye.n > 0 && rEye.min > 48 && rBlade.n > 0 && rBlade.min > 48 && rTail.n > 0 && rTail.max < 48;
+    var okLeft = lEye.n > 0 && lEye.max < 48 && lBlade.n > 0 && lBlade.max < 48 && lTail.n > 0 && lTail.min > 48;
+    rec('C2_side_profile', okRight && okLeft, {
+      rule: '朝右：眼缝/剑身在画面右半、缨尾在左半；朝左镜像后三项必须全部翻到另一半',
+      right: { eye: rEye, blade: rBlade, plumeTail: rTail },
+      left: { eye: lEye, blade: lBlade, plumeTail: lTail }, center: 48
+    });
+
+    /* ── F：负例 ────────────────────────────────────────────────
+     * ① 强制左右同 flip（不翻转）→ C1 必须不成立（realDiff > 0）；
+     * ② 把素材自身镜像当作"朝右"底帧 → C2 的朝右三项必须不成立。 */
+    var noFlipDiff = diffCount(right, mirror(right, 96, 96));
+    var mirroredAsset = dataOf('right', true);
+    var forged = mirror(mirroredAsset, 96, 96);      /* 伪造"镜像过的素材当右朝向" */
+    var fEye = spanOf(forged, EYE), fBlade = spanOf(forged, BLADE), fTail = spanOf(forged, TAIL);
+    var forgedRightOk = fEye.min > 48 && fBlade.min > 48 && fTail.max < 48;
+    var c1WouldPassNoFlip = (noFlipDiff === 0);
+    rec('F_negatives_fail', c1WouldPassNoFlip === false && forgedRightOk === false, {
+      rule: '负例①不翻转 → C1 差异必须 ≠0 判负；负例②镜像后的素材再当朝右 → 眼缝/剑身落到左半，C2 必须判负',
+      noFlipDiffPixels: noFlipDiff, c1WouldPassNoFlip: c1WouldPassNoFlip,
+      forgedRight: { eye: fEye, blade: fBlade, plumeTail: fTail }, forgedRightPassesC2: forgedRightOk
     });
     finish();
   }
 
   function finish() {
     var names = Object.keys(out.sub);
-    var ok = names.length === 6;
+    var ok = names.length === 7;
     for (var i = 0; i < names.length; i++) ok = ok && out.sub[names[i]].ok;
     out.ok = ok && window.__D57ERR.length === 0;
     out.errs = window.__D57ERR;

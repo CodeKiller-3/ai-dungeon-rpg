@@ -151,9 +151,10 @@
     return hit;
   }
 
-  /* 尺寸口径判据（负例复用）：h 是否等于原生高 × TILE/16 */
-  function sizeOk(natH, drawnH) {
-    return Math.abs(drawnH - Math.round(natH * TILE / 16)) < 0.01;
+  /* 尺寸口径判据（负例复用）：h 是否等于原生高 × TILE/素材基准（16 基怪物/道具、24 基主题地块/装饰） */
+  function sizeOk(natH, drawnH, base) {
+    var b = (base === 24) ? 24 : 16;
+    return Math.abs(drawnH - Math.round(natH * TILE / b)) < 0.01;
   }
 
   function run() {
@@ -189,15 +190,16 @@
       var hit = lastByPrefix(list, sp.pfx);
       if (!hit) { sizeAll = false; sizeRows.push({ id: sp.key, found: false }); continue; }
       var ab = assetBox(hit.r.src);
-      var expect = Math.round(ab.nh * TILE / 16);
-      var contentExpect = ab.ch * TILE / 16;                 /* 内容高 × TILE/16 */
+      var base = (Sp.baseOf ? Sp.baseOf(hit.r.n) : 16);
+      var expect = Math.round(ab.nh * TILE / base);
+      var contentExpect = ab.ch * TILE / base;               /* 内容高 × TILE/素材基准 */
       var contentDrawn = hit.r.h * ab.ch / ab.nh;            /* 等比缩放后实际可见内容高 */
-      var good = !!ab && sizeOk(ab.nh, hit.r.h) && Math.abs(contentDrawn - contentExpect) <= 0.51 &&
+      var good = !!ab && sizeOk(ab.nh, hit.r.h, base) && Math.abs(contentDrawn - contentExpect) <= 0.51 &&
         Math.abs(hit.r.w / hit.r.h - ab.nw / ab.nh) <= 0.03;
       if (!good) sizeAll = false;
       sizeRows.push({
         id: sp.key, label: sp.label, nat: ab.nw + 'x' + ab.nh, content: ab.cw + 'x' + ab.ch,
-        drawn: hit.r.w + 'x' + hit.r.h, expectH: expect,
+        drawn: hit.r.w + 'x' + hit.r.h, base: base, expectH: expect,
         contentExpect: Math.round(contentExpect * 10) / 10,
         contentDrawn: Math.round(contentDrawn * 10) / 10, ok: good
       });
@@ -226,14 +228,14 @@
     var pTile = tileXY(5, 5);
     var pAsset = pBox ? assetBox(lastByPrefix(scene({ player: true }), 'knight_m_').r.src) : null;
     var pBottom = Math.round((5 * TILE - camNow.y + TILE - 1) * S);
-    var pTopExpect = pBottom - Math.round((pBox.contentDrawn + (pAsset ? pAsset.padBottom : 0) * TILE / 16) * S);
+    var pTopExpect = pBottom - Math.round((pBox.contentDrawn + (pAsset ? pAsset.padBottom : 0) * TILE / (pBox.base || 16)) * S);
     var pTopMeasured = firstDiffRow(baseSnap, pSnap,
       dv(pTile.x), dv(pTile.x + TILE - 1), Math.max(0, pTopExpect - dv(TILE * 2)), pBottom);
     var bSnap = (scene({ decor: { x: 5, y: 5, id: 'barrel' } }), snap());
     var bBox = sizeRows.filter(function (r) { return r.id === 'barrel'; })[0];
     var bAsset = assetBox(lastByPrefix(scene({ decor: { x: 5, y: 5, id: 'barrel' } }), 'barrel').r.src);
     var bBottom = Math.round((5 * TILE - camNow.y + TILE) * S);
-    var bTopExpect = bBottom - Math.round((bBox.contentDrawn + bAsset.padBottom * TILE / 16) * S);
+    var bTopExpect = bBottom - Math.round((bBox.contentDrawn + bAsset.padBottom * TILE / 24) * S);
     var bTopMeasured = firstDiffRow(baseSnap, bSnap,
       dv(pTile.x), dv(pTile.x + TILE - 1), Math.max(0, bTopExpect - dv(TILE * 2)), bBottom);
     sub.A_pixelPlayer = { topMeasured: pTopMeasured, topExpect: pTopExpect };
@@ -269,7 +271,9 @@
     var mvWith = (scene({ player: true, decor: { x: 5, y: 6, id: 'chest' } }), snap());
     var mvChestOnly = (scene({ decor: { x: 5, y: 6, id: 'chest' } }), snap());
     Game.Motion = undefined;
-    var probe = [dv(tp.x + 12), dv(tp.y + TILE + 6)];
+    /* D-79：宝箱改为 24×24 原生（箱体在格内 y=9..20），探针下移到箱体中部，
+     * 断言口径不变（仍是"脚部像素显示宝箱色而不是骑士色"），只是取样点随新素材几何调整 */
+    var probe = [dv(tp.x + 12), dv(tp.y + TILE + 15)];
     var cWith = at(mvWith, probe[0], probe[1]);
     var cChest = at(mvChestOnly, probe[0], probe[1]);
     var cPlayer = at(mvOnly, probe[0], probe[1]);
@@ -293,7 +297,9 @@
     var stPlayer = (scene({ player: true }), snap());
     var stWith = (scene({ player: true, decor: { x: 5, y: 5, id: 'barrel' } }), snap());
     var stBarrel = (scene({ decor: { x: 5, y: 5, id: 'barrel' } }), snap());
-    var p2 = [dv(tp.x + 12), dv(tp.y + TILE - 10)];
+    /* D-80 口径更新：玩家换成 24×42 原生帧后，脚底 10px 处是两腿之间的空隙，
+     * 取样点移到躯干（底上方 22px）。判据不变：该点必须显示玩家像素、且与"只有木桶"不同。 */
+    var p2 = [dv(tp.x + 12), dv(tp.y + TILE - 22)];
     var sWith = at(stWith, p2[0], p2[1]);
     var b5 = dist(sWith, at(stPlayer, p2[0], p2[1])) === 0 && dist(sWith, at(stBarrel, p2[0], p2[1])) > 0;
     sub.B_standOnDecor = { point: p2, with: sWith, playerOnly: at(stPlayer, p2[0], p2[1]),
@@ -386,7 +392,8 @@
     scene({});
     var bar = Game.Core.Sprites.get('barrel');
     var bNat = bar ? { w: bar.naturalWidth, h: bar.naturalHeight } : { w: 16, h: 16 };
-    var bh = Math.round(bNat.h * TILE / 16), bw = Math.round(bNat.w * bh / bNat.h);
+    /* D-79 起 barrel 是 24 基（24×24 原生），这里按 24 基还原 1:1 尺寸 */
+    var bh = Math.round(bNat.h * TILE / 24), bw = Math.round(bNat.w * bh / bNat.h);
     if (bar) {
       ctx.drawImage(bar, dv(pp.x + 12 - bw / 2), dv(5 * TILE - camNow.y + TILE - bh), dv(bw), dv(bh));
     }

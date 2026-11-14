@@ -208,14 +208,14 @@
         '；审计产物缺口=' + (auditMiss.length ? auditMiss.join(',') : '无') +
         '；opaque 明细=' + stats.map(function (s) { return s.name.replace('icon_', '') + ':' + s.opaque; }).join(' '));
 
-      /* ══ A3. 调色板仍恰好 60 色，新图标无越界色 ══════════════════ */
+      /* ══ A3. 调色板恰好 84 色（D-79 五层主题扩容），新图标无越界色 ══ */
       var colors9 = uniq([].concat.apply([], stats.map(function (s) { return s.colors; })));
       var bad = AC.paletteViolations(stats, palette);
-      var a3 = palette.length === 60 && (audit && audit.paletteSize === 60) &&
-        bad.length === 0 && !!audit && audit.total === 198 + NEW_ICONS.length;
+      var a3 = palette.length === 84 && (audit && audit.paletteSize === 84) &&
+        bad.length === 0 && !!audit && audit.total === 303;
       rec('A3_paletteStill60', a3,
         '审计调色板=' + palette.length + '（paletteSize=' + (audit ? audit.paletteSize : 'n/a') +
-        '）、审计文件数=' + (audit ? audit.total : 'n/a') + '（期望 198+9=207）；' +
+        '）、审计文件数=' + (audit ? audit.total : 'n/a') + '（期望 198+9+96=303）；' +
         '9 张新图标用到 ' + colors9.length + ' 种色，越界=' +
         (bad.length ? JSON.stringify(bad) : '0'));
 
@@ -235,7 +235,10 @@
       Inv.recalcEquip();
       var r4 = drawWith('inventory');
       Inv.list = realList;
-      var got4 = iconsOf(r4.log).map(function (e) { return e.n; });
+      var got4 = iconsOf(r4.log).filter(function (e) {
+        /* D-80 起右栏装备槽也用真实图标（24px），这里只取左列表区内的行图标 */
+        return e.x < r4.L.panelLeft + r4.L.listW;
+      }).map(function (e) { return e.n; });
       var exp4 = ['icon_armor_leather', 'icon_scroll_3', 'weapon_regular_sword',
         'flask_red', 'weapon_katana'];
       var a4 = got4.length === exp4.length && got4.every(function (n, i) { return n === exp4[i]; });
@@ -265,13 +268,13 @@
       var i0 = imgs6[0] || null;
       var rowText6 = r6.log.filter(function (e) { return e.t === 'text' && e.s.indexOf('皮革甲') === 0; })[0] || null;
       var iconEnd = i0 ? i0.x + i0.w : null;
-      var a6 = !!i0 && i0.w === 16 && i0.h === 16 && !!rowText6 &&
-        Math.abs(i0.x - (px6 + 16)) < 0.01 && Math.abs(rowText6.x - (px6 + 36)) < 0.01 &&
+      var a6 = !!i0 && i0.w === 24 && i0.h === 24 && !!rowText6 &&
+        Math.abs(i0.x - (px6 + 14)) < 0.01 && Math.abs(rowText6.x - (px6 + 44)) < 0.01 &&
         iconEnd <= rowText6.x;
       rec('A6_iconDoesNotInvadeText', a6,
         'panelLeft=' + px6 + '；图标 x=' + (i0 ? i0.x : 'n/a') + ' 宽=' + (i0 ? i0.w : 'n/a') +
-        '（期望 ' + (px6 + 16) + '/16）；文字 x=' + (rowText6 ? rowText6.x : 'n/a') +
-        '（期望 ' + (px6 + 36) + '）；图标右缘 ' + iconEnd + ' ≤ 文字起点 ' +
+        '（期望 ' + (px6 + 14) + '/24，D-80 起原生 1:1）；文字 x=' + (rowText6 ? rowText6.x : 'n/a') +
+        '（期望 ' + (px6 + 44) + '）；图标右缘 ' + iconEnd + ' ≤ 文字起点 ' +
         (rowText6 ? rowText6.x : 'n/a'));
 
       /* ══ A7. _rowText 逐条与 D-29 相同 ═══════════════════════════ */

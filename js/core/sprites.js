@@ -90,7 +90,21 @@
     /* D-30：背包图标补齐——护甲 5 类 + 强化卷轴 4 档（16×16，全部落在既有 60 色内）。
      * 与物品 id 的对应关系不在这里猜，显式表见 js/data/items.js 的 Game.Data.ITEM_ICONS。 */
     'icon_armor_leather', 'icon_armor_chain_mail', 'icon_armor_plate', 'icon_armor_robe', 'icon_armor_scale',
-    'icon_scroll_1', 'icon_scroll_2', 'icon_scroll_3', 'icon_scroll_4'];
+    'icon_scroll_1', 'icon_scroll_2', 'icon_scroll_3', 'icon_scroll_4',
+    /* D-79：五层主题地块（24×24 原生 1:1）+ 氛围装饰层（不占格、不参与寻路） */
+    't1_dc_blood', 't1_dc_chain', 't1_dc_mold', 't1_dc_puddle', 't1_dc_rubble', 't1_dc_torch', 't1_dc_web', 't1_door',
+    't2_dc_blood', 't2_dc_chain', 't2_dc_mold', 't2_dc_puddle', 't2_dc_rubble', 't2_dc_torch', 't2_dc_web', 't2_door',
+    't2_floor_1', 't2_floor_2', 't2_floor_3', 't2_floor_4', 't2_floor_5', 't2_floor_6', 't2_floor_7', 't2_floor_8',
+    't2_wall_left', 't2_wall_mid', 't2_wall_right', 't2_wall_top_left', 't2_wall_top_mid', 't2_wall_top_right',
+    't3_dc_blood', 't3_dc_chain', 't3_dc_mold', 't3_dc_puddle', 't3_dc_rubble', 't3_dc_torch', 't3_dc_web', 't3_door',
+    't3_floor_1', 't3_floor_2', 't3_floor_3', 't3_floor_4', 't3_floor_5', 't3_floor_6', 't3_floor_7', 't3_floor_8',
+    't3_wall_left', 't3_wall_mid', 't3_wall_right', 't3_wall_top_left', 't3_wall_top_mid', 't3_wall_top_right',
+    't4_dc_blood', 't4_dc_chain', 't4_dc_mold', 't4_dc_puddle', 't4_dc_rubble', 't4_dc_torch', 't4_dc_web', 't4_door',
+    't4_floor_1', 't4_floor_2', 't4_floor_3', 't4_floor_4', 't4_floor_5', 't4_floor_6', 't4_floor_7', 't4_floor_8',
+    't4_wall_left', 't4_wall_mid', 't4_wall_right', 't4_wall_top_left', 't4_wall_top_mid', 't4_wall_top_right',
+    't5_dc_blood', 't5_dc_chain', 't5_dc_mold', 't5_dc_puddle', 't5_dc_rubble', 't5_dc_torch', 't5_dc_web', 't5_door',
+    't5_floor_1', 't5_floor_2', 't5_floor_3', 't5_floor_4', 't5_floor_5', 't5_floor_6', 't5_floor_7', 't5_floor_8',
+    't5_wall_left', 't5_wall_mid', 't5_wall_right', 't5_wall_top_left', 't5_wall_top_mid', 't5_wall_top_right'];
 
   /* P1-1：帧序列映射——把逻辑名 + 帧序号解析到具体文件。
    * 新增动画只需在此登记一行，getFrame 行为不变。 */
@@ -138,7 +152,7 @@
       NAMES.forEach(function (n) {
         var img = new Image();
         COUNT++;
-        img.onload = function () { IMG[n] = img; self._check(); };
+        img.onload = function () { IMG[n] = img; img.__base = self.baseOf(n); self._check(); };
         img.onerror = function () { self._check(); };   /* 加载失败不入库，渲染层自动程序化兜底 */
         img.src = dir + n + '.png';
       });
@@ -168,6 +182,21 @@
       /* 约定命名 base_anim_fN 的兜底解析 */
       var direct = IMG[name + '_anim_f' + i];
       return direct || null;
+    },
+    /* D-79：原生像素基准（16 或 24）。24 基用于 24×24 主题地块与 24 基装饰，
+     * 其余（怪物/道具/UI/旧装饰）仍按 16 基；渲染层与验证页共用同一判定。 */
+    baseOf: function (name) {
+      if (typeof name !== 'string' || !name) return 16;
+      if (/^t[1-5]_/.test(name)) return 24;
+      if (/^(floor_[1-8]|floor_stairs|floor_ladder|wall_(left|mid|right)|wall_top_(left|mid|right))$/.test(name)) return 24;
+      if (/^(chest|room_chest|barrel|torch|vine|crate|skull)$/.test(name)) return 24;
+      /* D-80：角色/怪物帧按 24 基原生重画——原生高即当前屏幕绘制高（玩家 24×42、小怪 24×24）
+       * 15 组怪物全部覆盖：漏掉任意一组都会让 24 基素材按 16 基放大 1.5 倍（落屏尺寸变大），
+       * verify_d80 A9 逐组钉死 base=24 与 unitBox=原生尺寸。 */
+      if (/^(knight_m_|tiny_slug_|imp_|goblin_|tiny_zombie_|angel_|skelet_|orc_warrior_|orc_shaman_|wogol_|necromancer_|masked_orc_|pumpkin_dude_|ogre_|big_demon_|big_zombie_)/.test(name)) return 24;
+      /* D-80 裁定 B：道具/UI 图标全部 24×24 原生 1:1（背包行 / 商店行 / HUD 一律按原生尺寸绘制） */
+      if (/^(weapon_|icon_armor_|icon_scroll_|flask_|flask_big_|ui_heart_|coin$|button_)/.test(name)) return 24;
+      return 16;
     }
   };
 })();

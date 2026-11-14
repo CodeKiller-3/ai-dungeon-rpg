@@ -901,15 +901,19 @@
         } else {
           c.fillStyle = '#cfcfcf';
         }
-        /* P1-2：行左物品图标（16×16，y 居中）；无图标时文字保持原位 */
+        /* D-80：行左物品图标按素材原生 24×24 1:1 绘制（旧版固定 16×16 会把 24 素材压到 2/3）；
+         * 文字起点随之右移到 px+14+24+6，行宽上限同步扣掉 30。 */
         var ric = this._rowIcon(entry);
+        var ICON = 24, ICON_GAP = 6;
         var rowTextX = px + 14;
         var rowMaxW = listW - 28;
         if (ric) {
-          rowTextX = px + 14 + 22;
-          rowMaxW = listW - 28 - 22;
-          var riy = ry + Math.floor((ROW_H - 16) / 2);
-          c.drawImage(ric, px + 14 + 2, riy, 16, 16);
+          rowTextX = px + 14 + ICON + ICON_GAP;
+          rowMaxW = listW - 28 - (ICON + ICON_GAP);
+          var riy = ry + Math.floor((ROW_H - ICON) / 2);
+          var Rr = Game.Core && Game.Core.Render;
+          if (Rr && Rr.drawIcon) Rr.drawIcon(c, ric, px + 14, riy);
+          else c.drawImage(ric, px + 14, riy, ICON, ICON);
         }
         /* D-28：行尾徽标独立绘制（已装备 / 强化后数值），行串本身不变
          * D-29：再往右独立绘制差值徽标（▲+N / ▼-N / 持平），两者都不拼进 _rowText */
@@ -989,6 +993,20 @@
       if (overflow && kind === 'inventory') {
         return {
           lines: [(scrolling ? '↑↓ 浏览 · ' : '↑↓ 选择 · ') + 'Enter 使用/装备', 'Esc/点遮罩关闭'],
+          full: hint, overflow: true, width: hintW, maxW: maxW
+        };
+      }
+      /* D-80：320 逻辑宽下商店/任务页的底栏同样会越界（只是原先没有折行分支），
+       * 按背包同款口径折两行；宽屏不触发，full 原串不变（D-25 逐字节比对不受影响）。 */
+      if (overflow && kind === 'shop') {
+        return {
+          lines: ['↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换', 'Esc/点遮罩关闭'],
+          full: hint, overflow: true, width: hintW, maxW: maxW
+        };
+      }
+      if (overflow && kind === 'quests') {
+        return {
+          lines: ['Tab/←→ 切页 · ↑↓ 选择', 'Esc/点遮罩关闭'],
           full: hint, overflow: true, width: hintW, maxW: maxW
         };
       }
@@ -1110,15 +1128,21 @@
         c.strokeStyle = s.empty ? 'rgba(255,255,255,0.22)' : 'rgba(255,207,110,0.45)';
         c.strokeRect(s.x + 1.5, s.y + 1.5, s.w - 3, s.h - 3);
 
-        /* 图标位 26×26：程序化色块（武器=剑形，护甲=胸甲形，空槽=短横） */
+        /* D-80：图标位 26×26——已装备物品改用与行内同一张 24×24 原生图标（1:1 居中，
+         * 不再用程序化色块，避免"行内真图标 / 右栏假图标"两套画法）；空槽仍是短横。 */
         var ix = s.x + 8, iy = s.y + Math.floor((s.h - 26) / 2);
         c.fillStyle = '#0f0f1e';
         c.fillRect(ix, iy, 26, 26);
         c.strokeStyle = 'rgba(255,255,255,0.18)';
         c.strokeRect(ix + 0.5, iy + 0.5, 25, 25);
+        var railIcon = s.empty ? null : this._rowIcon({ id: s.id });
         if (s.empty) {
           c.fillStyle = 'rgba(255,255,255,0.16)';
           c.fillRect(ix + 9, iy + 12, 8, 2);
+        } else if (railIcon) {
+          var Rr2 = Game.Core && Game.Core.Render;
+          if (Rr2 && Rr2.drawIcon) Rr2.drawIcon(c, railIcon, ix + 1, iy + 1);
+          else c.drawImage(railIcon, ix + 1, iy + 1, 24, 24);
         } else if (s.slot === 'weapon') {
           c.fillStyle = '#c9d4e3';
           c.fillRect(ix + 12, iy + 5, 2, 12);

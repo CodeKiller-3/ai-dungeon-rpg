@@ -169,8 +169,8 @@
       /* ══ A7. 调色板：60 色，且无越界颜色 ══ */
       var palBad = palette.length ? AC.paletteViolations(stats, palette) : [];
       var colorTotal = uniq(stats.reduce(function (a, s) { return a.concat(s.colors || []); }, [])).length;
-      rec('A7_paletteWithin60', palette.length === 60 && palBad.length === 0 && colorTotal === 60,
-        '调色板 ' + palette.length + ' 色（来源：全量 198 张不透明像素 RGB 去重，见 d21-audit.json）；' +
+      rec('A7_paletteWithin60', palette.length === 84 && palBad.length === 0 && colorTotal === 84,
+        '调色板 ' + palette.length + ' 色（D-79 五层主题扩容后 84 色，见 d21-audit.json）；' +
         '页内实测并集 ' + colorTotal + ' 色；越界颜色 ' + (palBad.length ? JSON.stringify(palBad) : '无'));
 
       /* ══ A8. 被修的那一帧：有像素、与同组 f0 同尺寸同调色板 ══ */

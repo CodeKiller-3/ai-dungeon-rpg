@@ -7,8 +7,8 @@
 <body>
 <canvas id="game"></canvas>
 <!-- S-02a 验证页：装饰素材补齐（barrel/torch/vine）。
-     断言口径：① DECOR 中确有这三个 id；② 图片真实加载成功且尺寸 16×16；
-     ③ 抽样像素非空（不是空白图）；④ 四角透明（PNG 透明底）。
+     断言口径：① DECOR 中确有这三个 id；② 图片真实加载成功且尺寸 = Sprites.baseOf 基准
+     （D-79 起装饰为 24×24，此前为 16×16）；③ 抽样像素非空；④ 左上角透明。
      只加载 sprites + maps，不启动主循环。 -->
 <script src="../js/core/eventBus.js"></script>
 <script src="../js/core/sprites.js"></script>
@@ -48,20 +48,26 @@
         if (!out.loaded) { finish(); return; }
 
         var spriteOk = true, pixelOk = true, alphaOk = true;
+        /* D-79 口径更新：装饰素材从 16×16 重画为 24×24 原生（TILE=24 下 1:1）。
+         * 断言语义不变：尺寸必须**精确等于**该素材的基准尺寸（Sprites.baseOf），
+         * 仍然是逐像素相等，不是"放宽容差"。 */
+        var base = (S.baseOf ? S.baseOf('barrel') : 16);
+        var expect = base === 24 ? 24 : 16;
         var cv = document.createElement('canvas');
-        cv.width = 16; cv.height = 16;
+        cv.width = expect; cv.height = expect;
         var cx = cv.getContext('2d');
+        var minOpaque = 20;   /* 与 16×16 时代同一绝对门槛："不是空白图"，不随尺寸加码 */
         for (var j = 0; j < NAMES.length; j++) {
           var img = S.get(NAMES[j]);
-          if (!img || img.naturalWidth !== 16 || img.naturalHeight !== 16) { spriteOk = false; continue; }
-          cx.clearRect(0, 0, 16, 16);
+          if (!img || img.naturalWidth !== expect || img.naturalHeight !== expect) { spriteOk = false; continue; }
+          cx.clearRect(0, 0, expect, expect);
           cx.drawImage(img, 0, 0);
-          var data = cx.getImageData(0, 0, 16, 16).data;
+          var data = cx.getImageData(0, 0, expect, expect).data;
           var opaque = 0;
           for (var k = 3; k < data.length; k += 4) { if (data[k] > 0) opaque++; }
-          if (opaque < 20) pixelOk = false;
+          if (opaque < minOpaque) pixelOk = false;
           if (data[3] !== 0) alphaOk = false;   /* 左上角必须透明：证明是透明底 PNG */
-          out.sub[NAMES[j]] = { w: img.naturalWidth, h: img.naturalHeight, opaque: opaque };
+          out.sub[NAMES[j]] = { w: img.naturalWidth, h: img.naturalHeight, opaque: opaque, base: base };
         }
         out.spriteOk = spriteOk;
         out.pixelOk = pixelOk;

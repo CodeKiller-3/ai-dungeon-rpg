@@ -38,13 +38,43 @@
     return Math.floor(s / 60) + '分' + (s % 60) + '秒';
   }
 
-  /* P1-1：地板变体名——坐标 + 楼层哈希（同一格同一层恒定，不依赖 Math.random，避免逐帧闪烁） */
+  /* P1-1：地板变体名——坐标 + 楼层哈希（同一格同一层恒定，不依赖 Math.random，避免逐帧闪烁）
+   * D-79：F1 用 legacy 名（已重画为 24×24），F2~F5 用 t{n}_floor_* 主题名 */
   function floorVariantName(x, y, floor) {
     var f = (typeof floor === 'number' && floor > 0) ? floor : 1;
     var h = (x * 7 + y * 13 + f * 3) % 8;
     if (h < 0) h += 8;
-    return 'floor_' + (h + 1);
+    return (f === 1 ? 'floor_' : 't' + f + '_floor_') + (h + 1);
   }
+
+  /* D-79：房间类型（纯渲染分类，不写任何地图数据）
+   * open  = 5×5 内 ≥18 格可走（房间）
+   * hall  = 12~17 格（大厅/宽走廊）
+   * corridor = 其余（窄走廊）
+   * secret / boss 由地图只读接口与楼梯位置给出 */
+  function roomKind(grid, x, y, secret, bossNear) {
+    if (secret) return 'secret';
+    if (bossNear) return 'boss';
+    var n = 0;
+    for (var dy = -2; dy <= 2; dy++) {
+      for (var dx = -2; dx <= 2; dx++) {
+        var yy = y + dy, xx = x + dx;
+        if (!grid[yy] || grid[yy][xx] === undefined || grid[yy][xx] === 0) continue;
+        n++;
+      }
+    }
+    if (n >= 21) return 'room';
+    if (n <= 6) return 'corridor';
+    return 'hall';
+  }
+
+  var ROOM_TINT = {
+    room: 'rgba(255,238,205,0.045)',
+    hall: null,
+    corridor: 'rgba(0,0,0,0.10)',
+    secret: 'rgba(120,255,180,0.05)',
+    boss: 'rgba(255,60,40,0.065)'
+  };
 
   /* P1-3：通用动画帧序号——按真实时间取模（fps 帧/秒），同一调用窗口内结果稳定。
    * key 为序列名（字符串哈希作固定相位偏移，不同序列错相，同序列同刻同帧）。
@@ -78,20 +108,46 @@
    * 比例完全失真：史莱姆实测 17.9px，反而比独眼酋长 15.2px 还高。
    * 现在按素材自身比例缩放（16px 素材 → 1.5 格 = 36px/16 = 1.5×），
    * 战场层（drawBattle）仍用 drawSpriteByHeight 的绝对高度口径，112.5px 基线不受影响。 */
-  function unitBox(img, cx, bottom) {
+  /* D-79：素材原生基准（24 基为 24×24 主题地块/装饰，16 基为怪物/道具/UI）。
+   * 未注入 Sprites.baseOf 时按 16 兼容旧行为。 */
+  function baseOfName(name) {
+    var S = Game.Core && Game.Core.Sprites;
+    if (S && typeof S.baseOf === 'function') return S.baseOf(name || '');
+    return 16;
+  }
+  /* D-80：帧图在加载时由 Sprites 打上 __base，实体绘制路径直接读它，
+   * 避免每次绘制再按文件名猜基准（getFrame 只返回图像、拿不到名字）。 */
+  function imgBase(img) {
+    return (img && img.__base === 24) ? 24 : 16;
+  }
+  function unitBox(img, cx, bottom, base) {
     var nw = img && (img.naturalWidth || 0);
     var nh = img && (img.naturalHeight || 0);
     if (nw <= 0 || nh <= 0) return null;
-    var h = Math.max(2, Math.round(nh * TILE / 16));
+    var b = (base === 24) ? 24 : 16;
+    var h = Math.max(2, Math.round(nh * TILE / b));
     var w = Math.max(2, Math.round(nw * h / nh));
     return { x: Math.round(cx - w / 2), y: Math.round(bottom - h), w: w, h: h };
   }
 
-  function drawSpriteByUnit(ctx, img, cx, bottom) {
-    var b = unitBox(img, cx, bottom);
+  function drawSpriteByUnit(ctx, img, cx, bottom, base) {
+    var b = unitBox(img, cx, bottom, base);
     if (!b) return null;
     ctx.drawImage(img, b.x, b.y, b.w, b.h);
     return b;
+  }
+
+  /* D-80：只读口径出口——验证页按真实绘制公式取"落屏尺寸"，避免各页各写一套公式。 */
+  function unitBoxOf(img) { return unitBox(img, 0, 100, imgBase(img)); }
+
+  /* D-80 裁定 B：图标一律按素材原生尺寸 1:1 绘制，禁止任何缩放。
+   * 背包/商店行、HUD 都走这里；返回实际绘制尺寸，验证页据此断言
+   * "绘制尺寸 == 原生尺寸"（任何非整数缩放必须判负）。 */
+  function drawIcon(ctx, img, x, y) {
+    if (!ctx || !img) return null;
+    var w = img.naturalWidth || 24, h = img.naturalHeight || 24;
+    ctx.drawImage(img, x, y, w, h);
+    return { x: x, y: y, w: w, h: h };
   }
 
   /* D-35：地面投影——站在地面上的角色/怪物/装饰统一补一层柔和椭圆影，解决"贴图浮着"。
@@ -291,13 +347,14 @@
     ];
   }
 
-  /* ── D-57：角色朝向 ────────────────────────────────────────────
-   * 审计结论：玩家只有正面帧（knight_m_* 16×28），没有侧面帧。
-   * 方案 = 正面帧水平镜像 + 两处方向性特征（不是真侧身，报告已注明）：
-   *   ① 朝向侧鞋底前冲尘屑：3×2 金条，右朝向在盒右外 1px、左朝向在盒左外 4px；
-   *   ② 固定世界左侧的受光高光：2×2，始终在盒左 +2px——不随朝向翻转，
-   *      因此左右画面不是彼此的纯镜像（C 组按像素采样验证这一点）。
-   * 纯查询函数，验证页 B/F 组直接调用。 */
+  /* ── D-57 / D-80：角色朝向 ─────────────────────────────────────
+   * D-57 时玩家只有 3/4 正面帧（16×28），只能"镜像正面帧 + 两处方向性补丁"
+   * （鞋底前冲尘屑、固定世界左侧受光高光）来伪造左右差异。
+   * D-80 裁定 A：底帧改为 24×42 真侧面（朝右），朝向由轮廓本身承担
+   * （面甲前沿外凸 1px、单侧护肩、前伸的武器手、前后错步）；
+   * 左朝向 = 同一帧水平镜像。于是那两处补丁不再需要，已删除——
+   * 删掉后左右画面严格互为镜像（verify_d57 C 组按像素验证 realDiff === 0，
+   * 另加"素材侧身性"断言保证镜像前素材本身有方向）。 */
   function playerFrameState(player, moving) {
     var facing = (player && player.facing === 'left') ? 'left' : 'right';
     return {
@@ -314,7 +371,7 @@
       img = Game.Core.Sprites.getFrame(st.frame, typeof animT === 'number' ? animT : 0);
     }
     if (!img) return null;
-    var b = unitBox(img, cx, bottom);
+    var b = unitBox(img, cx, bottom, imgBase(img));
     if (!b) return null;
     ctx.save();
     if (st.flip) {
@@ -324,13 +381,6 @@
     }
     ctx.drawImage(img, b.x, b.y, b.w, b.h);
     ctx.restore();
-    /* ① 朝向侧前冲尘屑 */
-    ctx.fillStyle = 'rgba(255,207,110,0.85)';
-    if (st.flip) ctx.fillRect(b.x - 4, b.y + b.h - 4, 3, 2);
-    else ctx.fillRect(b.x + b.w + 1, b.y + b.h - 4, 3, 2);
-    /* ② 固定世界左侧受光高光（打破纯镜像） */
-    ctx.fillStyle = 'rgba(255,246,214,0.45)';
-    ctx.fillRect(b.x + 2, b.y + Math.round(b.h * 0.30), 2, 2);
     return { box: b, frame: st.frame, facing: st.facing, flip: st.flip };
   }
 
@@ -489,22 +539,26 @@
     },
 
     /* P1-1：墙贴图选择——墙下方是地板 → 顶行 wall_top_*；否则按左右相邻墙选 wall_left/mid/right。
-     * edge/outer 系列为本卡可选增强，未接入；保底"墙身 + 顶行"两套即可显著改善观感。 */
-    _wallSprite: function (grid, x, y) {
-      if (!this._hasSprites()) return null;
-      var S = Game.Core.Sprites;
+     * D-79：返回贴图名（含楼层主题前缀），由调用方按 baseOf 决定绘制尺寸。 */
+    _wallSpriteName: function (grid, x, y, floor) {
+      var f = (typeof floor === 'number' && floor > 0) ? floor : 1;
+      var p = (f === 1) ? '' : ('t' + f + '_');
       if (!this._isWall(grid, x, y + 1)) {
         var leftTop = this._isWall(grid, x - 1, y) && !this._isWall(grid, x - 1, y + 1);
         var rightTop = this._isWall(grid, x + 1, y) && !this._isWall(grid, x + 1, y + 1);
         var topName = (!leftTop && rightTop) ? 'wall_top_left'
           : (leftTop && !rightTop) ? 'wall_top_right'
           : 'wall_top_mid';
-        return S.get(topName);
+        return p + topName;
       }
       var leftWall = this._isWall(grid, x - 1, y);
       var rightWall = this._isWall(grid, x + 1, y);
-      var bodyName = !leftWall ? 'wall_left' : (!rightWall ? 'wall_right' : 'wall_mid');
-      return S.get(bodyName);
+      return p + (!leftWall ? 'wall_left' : (!rightWall ? 'wall_right' : 'wall_mid'));
+    },
+
+    _wallSprite: function (grid, x, y, floor) {
+      if (!this._hasSprites()) return null;
+      return Game.Core.Sprites.get(this._wallSpriteName(grid, x, y, floor));
     },
 
     /* M9-1：tile 细节绘制——素材就绪用贴图，否则程序化色块兜底
@@ -558,7 +612,7 @@
       var sp = this._hasSprites() ? Game.Core.Sprites.get(id) : null;
       /* P1-1：chest/crate/skull/wall_goo 有同名贴图则直接绘制；
        * barrel/torch/vine 无同名文件（get 返回 null）→ 继续走下方程序化兜底 */
-      if (sp) { drawSpriteByUnit(ctx, sp, px + TILE / 2, py + TILE); return; }
+      if (sp) { drawSpriteByUnit(ctx, sp, px + TILE / 2, py + TILE, baseOfName(id)); return; }
       if (id === 'room_chest') {
         ctx.fillStyle = '#5a3a18';
         ctx.fillRect(px + 2, py + 6, TILE - 4, TILE - 8);
@@ -614,16 +668,25 @@
         ctx.fillRect(px + 14, py + 6, 3, TILE - 10);
         ctx.fillRect(px + 9, py + 10, 3, TILE - 14);
       } else if (id === 'gold_pile') {
-        /* D-46：金币堆——三枚叠放的小金币，远看是地面上的金色点 */
-        var coins = [[4, 9], [9, 7], [6, 11]];
-        for (var ci = 0; ci < coins.length; ci++) {
-          ctx.fillStyle = '#d9a021';
-          ctx.beginPath();
-          ctx.arc(px + coins[ci][0], py + coins[ci][1], 3, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#ffd24a';
-          ctx.lineWidth = 1;
-          ctx.stroke();
+        /* D-79：金币堆改用重绘后的 coin 贴图（16×16 → 每枚 10×10），三枚叠放；
+         * 贴图缺失时回退旧的三圆点画法（保持可玩性，不因素材缺失白屏） */
+        var cimg = this._hasSprites() ? Game.Core.Sprites.get('coin') : null;
+        if (cimg) {
+          var cpos = [[1, 12], [13, 10], [7, 14]];
+          for (var ci2 = 0; ci2 < cpos.length; ci2++) {
+            ctx.drawImage(cimg, px + cpos[ci2][0], py + cpos[ci2][1], 10, 10);
+          }
+        } else {
+          var coins0 = [[4, 9], [9, 7], [6, 11]];
+          for (var ci0 = 0; ci0 < coins0.length; ci0++) {
+            ctx.fillStyle = '#d9a021';
+            ctx.beginPath();
+            ctx.arc(px + coins0[ci0][0], py + coins0[ci0][1], 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffd24a';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
         }
       } else if (id === 'potion_stash') {
         /* D-46：补给包——红瓶身 + 白瓶塞，与背包里的血瓶同一视觉语言 */
@@ -730,7 +793,7 @@
              * 一起染红（实测加怪后该格 784/784 设备像素全部变化），现在只描怪物自己的框。 */
             var ecx = es[i].x * TILE - cam.x + TILE / 2;
             var ebt = es[i].y * TILE - cam.y + TILE;
-            var ebox = unitBox(eimg, ecx, ebt);
+            var ebox = unitBox(eimg, ecx, ebt, imgBase(eimg));
             if (ebox) {
               groundShadow(ctx, ecx, ebt, ebox.w);
               /* D-35：埋伏标记从"整格 24×24 半透明红膜"改为"脚下红色警戒环"。
@@ -769,7 +832,7 @@
           if (!elimg) elimg = Game.Core.Sprites.get('monster_chort');
         }
         if (elimg) {
-          var elbox = unitBox(elimg, elx, ely);
+          var elbox = unitBox(elimg, elx, ely, imgBase(elimg));
           if (elbox) {
             groundShadow(ctx, elx, ely, elbox.w);
             ctx.save();
@@ -817,7 +880,7 @@
              * 避免把怪物脚下的装饰整块染红。 */
             var pcx = prx * TILE - cam.x + TILE / 2;
             var pbt = pry * TILE - cam.y + TILE;
-            var pbox = unitBox(pimg, pcx, pbt);
+            var pbox = unitBox(pimg, pcx, pbt, imgBase(pimg));
             if (pbox) {
               groundShadow(ctx, pcx, pbt, pbox.w);
               if (chasing) {
@@ -892,12 +955,16 @@
           ctx.fillStyle = '#ffe6b0';
           ctx.fillText(nlabel, ncx - nw / 2, nbt - 30);
           if (pd <= 1) {
+            /* D-79：火把光晕/环境色会把亮色文字冲淡（实测光圈核心处对比度仅 ~1.2），
+             * 给"按 T"提示加一层深底，保证任何底色下都可读。 */
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(ncx - 7, nbt - 55, 15, 13);
             ctx.fillStyle = '#9bbbf4';
             ctx.fillText('T', ncx - 2, nbt - 46);
           }
         }
       }
-      /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
+    /* M9-2：光影层（火把光晕 + FOV 软边 + 暗角），在迷雾之后、HUD 之前 */
       try { if (Game.Lighting && typeof Game.Lighting.draw === 'function') Game.Lighting.draw(); } catch (e) { /* 降级：照明异常不影响主画面 */ }
       /* M9-3：粒子特效层（探索场景命中/死亡粒子），叠在光影之上、HUD 之下 */
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
@@ -910,6 +977,9 @@
 
     /* D-14：只读镜头偏移（验证页做未探索格"无缝"像素断言用；不参与绘制决策） */
     _cam: function () { return { x: cam.x, y: cam.y }; },
+    /* D-80：按真实绘制公式返回某帧图的落屏 box（{x,y,w,h}），供验证页断言尺寸口径 */
+    _unitBoxOf: function (img) { return unitBoxOf(img); },
+    drawIcon: drawIcon,
 
     /* D-12：静态层失效（FOV/装饰/陷阱/换层变化时由 main.js 调用） */
     invalidateStatic: function () {
@@ -948,6 +1018,46 @@
       this._staticRebuilds++;
     },
 
+    /* D-79：氛围装饰层——纯渲染，不写地图数据、不占格、不参与寻路。
+     * 越深密度越高（F1 6% → F5 16%）；避开可交互格（装饰/陷阱/密室门/怪物/NPC/精英）。 */
+    _ambientAt: function (grid, x, y, pf) {
+      if (!this._hasSprites()) return null;
+      if (!grid[y] || grid[y][x] !== 1) return null;
+      var M = Game.Systems.Map;
+      if (M) {
+        if (typeof M.getDecor === 'function' && M.getDecor(x, y)) return null;
+        if (typeof M.getTrap === 'function' && M.getTrap(x, y)) return null;
+        if (typeof M.isSecretRoomDoor === 'function' && M.isSecretRoomDoor(x, y)) return null;
+      }
+      var dens = [0, 6, 8, 11, 13, 16][pf] || 6;
+      var hv = ((x * 73856093) ^ (y * 19349663) ^ (pf * 83492791)) >>> 0;
+      if ((hv % 100) >= dens) return null;
+      var i, list;
+      if (M && typeof M.getEnemies === 'function') {
+        list = M.getEnemies() || [];
+        for (i = 0; i < list.length; i++) if (list[i].x === x && list[i].y === y) return null;
+      }
+      if (M && typeof M.getNpcs === 'function') {
+        list = M.getNpcs() || [];
+        for (i = 0; i < list.length; i++) if (list[i].x === x && list[i].y === y) return null;
+      }
+      if (M && typeof M.getElites === 'function') {
+        list = M.getElites() || [];
+        for (i = 0; i < list.length; i++) if (list[i].x === x && list[i].y === y) return null;
+      }
+      var wallAdj = this._isWall(grid, x - 1, y) || this._isWall(grid, x + 1, y) ||
+        this._isWall(grid, x, y - 1) || this._isWall(grid, x, y + 1);
+      var types = ['puddle', 'rubble', 'blood', 'mold'];
+      if (wallAdj) types = types.concat(['web', 'chain', 'torch']);
+      var k = types[(hv >>> 9) % types.length];
+      return 't' + pf + '_dc_' + k;
+    },
+
+    /* D-79：房间分类（纯函数，供渲染与 verify_d79 共用；只读 grid，不写任何状态） */
+    _roomKind: function (grid, x, y, secret, bossNear) {
+      return roomKind(grid, x, y, !!secret, !!bossNear);
+    },
+
     /* D-12：静态场景层——原 drawMap 逐格部分原样迁入；直绘与离屏缓存共用这一份代码，
      * 保证"缓存命中"与"直绘"像素一致。ctx 为目标上下文（主画布或缓存画布）。 */
     _drawSceneStatic: function (ctx, grid, pf, W, H) {
@@ -955,6 +1065,19 @@
       ctx.fillRect(0, 0, W, H);
       /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
       var fovOn = !!(Game.fov && Game.fov.isVisible);
+      /* D-79：Boss 前室判定——距下行梯 ≤3 格，且下一层确实有 Boss（MAPS.bosses）。
+       * 楼梯是静态的，用楼梯而不是 Boss 本人做锚点：Boss 会移动，静态缓存会留下过期色块。 */
+      var bossAhead = false;
+      var bossList = (Game.Data.MAPS && Game.Data.MAPS.bosses) || [];
+      for (var bi = 0; bi < bossList.length; bi++) if (bossList[bi].floor === pf + 1) bossAhead = true;
+      var stairPts = [];
+      if (bossAhead) {
+        for (var sy0 = 0; sy0 < grid.length; sy0++) {
+          for (var sx0 = 0; sx0 < grid[0].length; sx0++) {
+            if (grid[sy0][sx0] === 2) stairPts.push([sx0, sy0]);
+          }
+        }
+      }
       for (var y = 0; y < grid.length; y++) {
         for (var x = 0; x < grid[0].length; x++) {
           var t = grid[y][x];
@@ -969,10 +1092,11 @@
             continue;
           }
           if (t === 0) {
-            /* P1-1：墙贴图（顶行 wall_top_* / 墙身 wall_left|mid|right）；素材缺失回退砖纹色块 */
-            var wsp = this._wallSprite(grid, x, y);
+            /* P1-1：墙贴图（顶行 wall_top_* / 墙身 wall_left|mid|right）；素材缺失回退砖纹色块
+             * D-79：按楼层主题取 t{n}_ 前缀，24×24 原生 1:1 绘制 */
+            var wsp = this._wallSprite(grid, x, y, pf);
             if (wsp) {
-              ctx.drawImage(wsp, px, py, TILE - 1, TILE - 1);
+              ctx.drawImage(wsp, px, py, TILE, TILE);
             } else {
               /* 墙：砖纹 */
               ctx.fillStyle = '#3a2e5c';
@@ -982,10 +1106,11 @@
               ctx.fillRect(px + (x % 2) * 8, py, 1, TILE - 1);
             }
           } else if (t === 1) {
-            /* P1-1：地板贴图 floor_1~8 按坐标哈希选变体；素材缺失回退稳定噪点色块 */
+            /* P1-1：地板贴图 floor_1~8 按坐标哈希选变体；素材缺失回退稳定噪点色块
+             * D-79：24×24 原生 1:1；按房间类型叠明暗；密门铺门槛；再叠纯装饰层 */
             var fsp = this._hasSprites() ? Game.Core.Sprites.get(floorVariantName(x, y, pf)) : null;
             if (fsp) {
-              ctx.drawImage(fsp, px, py, TILE - 1, TILE - 1);
+              ctx.drawImage(fsp, px, py, TILE, TILE);
             } else {
               /* 地板：稳定噪点 */
               ctx.fillStyle = '#2b2b4a';
@@ -995,6 +1120,28 @@
               if (seed === 0) ctx.fillRect(px + 6, py + 6, 2, 2);
               else if (seed === 1) ctx.fillRect(px + 14, py + 3, 2, 2);
               else if (seed === 2) ctx.fillRect(px + 4, py + 12, 2, 2);
+            }
+            var M9 = Game.Systems.Map;
+            var sec = !!(M9 && typeof M9.isSecretRoom === 'function' && M9.isSecretRoom(x, y));
+            var bn = false;
+            for (var spi = 0; spi < stairPts.length; spi++) {
+              if (Math.max(Math.abs(stairPts[spi][0] - x), Math.abs(stairPts[spi][1] - y)) <= 3) { bn = true; break; }
+            }
+            var kind = roomKind(grid, x, y, sec, bn);
+            var sh = ROOM_TINT[kind];
+            if (sh) { ctx.fillStyle = sh; ctx.fillRect(px, py, TILE, TILE); }
+            /* 密室门洞：24×24 门槛贴图（只有密室门这一种"门"有语义，别的格不当门画） */
+            if (M9 && typeof M9.isSecretRoomDoor === 'function' && M9.isSecretRoomDoor(x, y)) {
+              var dsp = this._hasSprites() ? Game.Core.Sprites.get((pf === 1 ? 't1' : 't' + pf) + '_door') : null;
+              if (dsp) ctx.drawImage(dsp, px, py, TILE, TILE);
+            }
+            /* 纯装饰层：不占格、不阻挡、不参与寻路，只画在可见格 */
+            if (!fovOn || Game.fov.isVisible(x, y)) {
+              var amb = this._ambientAt(grid, x, y, pf);
+              if (amb) {
+                var asp = this._hasSprites() ? Game.Core.Sprites.get(amb) : null;
+                if (asp) ctx.drawImage(asp, px, py, TILE, TILE);
+              }
             }
           } else if (t === 2) {
             /* P1-1：下行楼梯贴图；缺失回退紫台色块 */

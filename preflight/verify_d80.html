@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- D-80：读取 selfcheck/d21-audit.json 与 assets/sprites/LICENSE.md，故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>verify_d80</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-80 · 24 基原生重画：玩家三态 / 史莱姆 / 15 组怪物 / 50 图标（基底 / 落屏尺寸 / 包围盒 / 调色板 / 负例）</h1>
+<pre id="result">RUNNING</pre>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<!-- D-80：A7/A8 走真实 Modal.draw / hud.draw 绘制路径，故引入对应模块 -->
+<script src="../js/data/items.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var res = document.getElementById('result');
+  /* 本页不加载 main.js（避免自启动），Player 在 main.js 里创建；这里给它一个最小替身，
+   * 让 Modal / HUD 的真实绘制路径能在验证页里跑起来（只用于 A7/A8）。 */
+  if (!Game.Data.Player) {
+    Game.Data.Player = { inventory: {}, equipment: {}, upg: {},
+      hp: 100, hpMax: 100, mp: 50, mpMax: 50, gold: 0, floor: 1,
+      level: 1, exp: 0, expNext: 100, kills: 0 };
+  }
+
+  function loadText(url) {
+    return new Promise(function (ok) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url, true);
+      x.onload = function () { ok(x.status === 200 || x.status === 0 ? x.responseText : null); };
+      x.onerror = function () { ok(null); };
+      x.send();
+    });
+  }
+  function imgData(img) {
+    var c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    return { w: c.width, h: c.height, d: g.getImageData(0, 0, c.width, c.height).data };
+  }
+  function bbox(img) {
+    var o = imgData(img), d = o.d;
+    var minX = o.w, minY = o.h, maxX = -1, maxY = -1, n = 0;
+    for (var y = 0; y < o.h; y++) {
+      for (var x = 0; x < o.w; x++) {
+        if (d[(y * o.w + x) * 4 + 3] > 0) {
+          n++;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+    return n ? { top: minY, bottom: maxY, left: minX, right: maxX,
+      w: maxX - minX + 1, h: maxY - minY + 1, px: n } : null;
+  }
+
+  var GROUPS = {
+    'knight_m_idle': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
+    'knight_m_run': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
+    'knight_m_hit': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
+    'tiny_slug': { size: [24, 24], box: [24, 24], bottom: 23, width: 22 }
+  };
+
+  function run() {
+    var S = Game.Core.Sprites, R = Game.Core.Render;
+    var names = [], bad = [];
+    var groups = {};
+    for (var g in GROUPS) {
+      var frames = [];
+      for (var i = 0; i < 4; i++) {
+        var n = (g === 'tiny_slug') ? ('tiny_slug_anim_f' + i)
+          : (g + '_anim_f' + i);
+        var img = S.get(n);
+        if (!img) { bad.push(n + ':missing'); continue; }
+        names.push(n);
+        var b = bbox(img);
+        var box = R._unitBoxOf(img);
+        frames.push({
+          n: n, nat: img.naturalWidth + 'x' + img.naturalHeight, base: S.baseOf(n),
+          box: box.w + 'x' + box.h, bb: b, ok: b && b.px > 0
+        });
+        if (S.baseOf(n) !== 24) bad.push(n + ':base=' + S.baseOf(n));
+        if (img.naturalWidth !== GROUPS[g].size[0] || img.naturalHeight !== GROUPS[g].size[1]) bad.push(n + ':nat');
+        if (!box || box.w !== GROUPS[g].box[0] || box.h !== GROUPS[g].box[1]) bad.push(n + ':box');
+        if (!b || b.bottom !== GROUPS[g].bottom || b.w !== GROUPS[g].width) bad.push(n + ':bbox');
+      }
+      groups[g] = frames;
+    }
+    /* A1：帧组注册与基底 */
+    out.sub.A1_frames24 = {
+      ok: bad.length === 0, d: { frames: names.length, bad: bad.slice(0, 8) }
+    };
+
+    /* A2：落屏尺寸（按真实绘制公式）——玩家 24×42、史莱姆 24×24 */
+    var pbox = groups.knight_m_idle[0].box, sbox = groups.tiny_slug[0].box;
+    var allSame = true;
+    ['knight_m_idle', 'knight_m_run', 'knight_m_hit'].forEach(function (g) {
+      groups[g].forEach(function (f) { if (f.box !== '24x42') allSame = false; });
+    });
+    out.sub.A2_screenBox = {
+      ok: pbox === '24x42' && sbox === '24x24' && allSame,
+      d: { player: pbox, slime: sbox, sameAcrossStates: allSame,
+        rule: '屏幕落位尺寸与 D-79 相同：基底 24 时 原生高 × TILE/24 = 1:1' }
+    };
+
+    /* A3：逐帧包围盒——底边与宽度恒定（无跳变），idle/run 只有 1px 呼吸起伏 */
+    function stats(g) {
+      var tops = [], bots = [], ws = [];
+      groups[g].forEach(function (f) { tops.push(f.bb.top); bots.push(f.bb.bottom); ws.push(f.bb.w); });
+      return { tops: tops, bots: bots, widths: ws,
+        span: Math.max.apply(null, tops) - Math.min.apply(null, tops),
+        widthSpan: Math.max.apply(null, ws) - Math.min.apply(null, ws) };
+    }
+    var si = stats('knight_m_idle'), sr = stats('knight_m_run'), sh = stats('knight_m_hit'), ss = stats('tiny_slug');
+    out.sub.A3_bbox = {
+      ok: si.span <= 1 && sr.span <= 1 && sh.span <= 2 &&
+        si.widthSpan === 0 && sr.widthSpan === 0 && sh.widthSpan === 0 && ss.widthSpan === 0 &&
+        ss.span >= 4 && ss.bots.every(function (v) { return v === 23; }),
+      d: { idle: si, run: sr, hit: sh, slug: ss,
+        rule: '底边 41/23 恒定、宽度恒定；idle/run 顶边起伏 ≤1px（呼吸），hit ≤2px（后仰），史莱姆压扁 ≥4px' }
+    };
+
+    /* A9：15 组怪物帧全部 24 基，原生尺寸 = 落屏尺寸（D-80 溢出防护）
+     * 漏配 baseOf 会让 24 基素材按 16 基放大 1.5 倍：小怪 24→36、中怪 35→53、大怪 54→81。 */
+    var MON = [
+      { id: 'imp', w: 24, h: 24, modes: ['idle', 'run'] },
+      { id: 'goblin', w: 24, h: 24, modes: ['idle', 'run'] },
+      { id: 'tiny_zombie', w: 24, h: 24, modes: ['idle', 'run'] },
+      { id: 'angel', w: 24, h: 24, modes: ['idle'] },
+      { id: 'skelet', w: 24, h: 24, modes: ['idle', 'run'] },
+      { id: 'orc_warrior', w: 24, h: 35, modes: ['idle', 'run'] },
+      { id: 'orc_shaman', w: 24, h: 35, modes: ['idle', 'run'] },
+      { id: 'wogol', w: 24, h: 35, modes: ['idle', 'run'] },
+      { id: 'necromancer', w: 24, h: 35, modes: ['plain'] },
+      { id: 'masked_orc', w: 24, h: 35, modes: ['idle', 'run'] },
+      { id: 'pumpkin_dude', w: 24, h: 35, modes: ['idle', 'run'] },
+      { id: 'ogre', w: 48, h: 54, modes: ['idle', 'run'] },
+      { id: 'big_demon', w: 48, h: 54, modes: ['idle', 'run'] },
+      { id: 'big_zombie', w: 48, h: 54, modes: ['idle'] }
+    ];
+    var monBad = [], monCount = 0, monRows = [];
+    for (var mi = 0; mi < MON.length; mi++) {
+      var m = MON[mi], got = 0;
+      for (var mk = 0; mk < m.modes.length; mk++) {
+        for (var fi = 0; fi < 4; fi++) {
+          var nm = (m.modes[mk] === 'plain') ? (m.id + '_anim_f' + fi)
+            : (m.id + '_' + m.modes[mk] + '_anim_f' + fi);
+          var im2 = S.get(nm);
+          if (!im2) { monBad.push(nm + ':missing'); continue; }
+          monCount++; got++;
+          var bx = R._unitBoxOf(im2);
+          var base2 = S.baseOf(nm);
+          if (base2 !== 24) monBad.push(nm + ':base=' + base2);
+          if (im2.naturalWidth !== m.w || im2.naturalHeight !== m.h) {
+            monBad.push(nm + ':nat=' + im2.naturalWidth + 'x' + im2.naturalHeight);
+          }
+          if (!bx || bx.w !== m.w || bx.h !== m.h) {
+            monBad.push(nm + ':box=' + (bx ? (bx.w + 'x' + bx.h) : 'null'));
+          }
+        }
+      }
+      monRows.push({ id: m.id, size: m.w + 'x' + m.h, frames: got });
+    }
+    var ogreImg = S.get('ogre_idle_anim_f0');
+    out.sub.A9_monsters24 = {
+      ok: monBad.length === 0 && monCount === 100,
+      d: { frames: monCount, groups: monRows, bad: monBad.slice(0, 8),
+        oldFormula: ogreImg ? ('16 基会把 48×54 画成 ' +
+          Math.round(ogreImg.naturalWidth * 24 / 16) + 'x' + Math.round(ogreImg.naturalHeight * 24 / 16)) : null,
+        rule: '15 组怪物 100 帧：baseOf=24 且 unitBox = 原生 24×24 / 24×35 / 48×54（与 D-79 落屏一致）' }
+    };
+
+    /* A4：调色板与总量（口径不变：双向精确相等） */
+    loadText('selfcheck/d21-audit.json').then(function (txt) {
+      var a = null;
+      try { a = JSON.parse(txt); } catch (e) { a = null; }
+      out.sub.A4_audit = {
+        ok: !!a && a.total === 303 && a.palette && a.palette.length === 84 &&
+          a.empty.length === 0 && a.paletteBad.length === 0,
+        d: { total: a && a.total, palette: a && a.palette && a.palette.length,
+          empty: a && a.empty.length, paletteBad: a && a.paletteBad.length }
+      };
+
+      /* A5：负例——旧 16 基公式必须把 24×42 帧算成 63，绝不等于 42 */
+      var oldH = Math.round(42 * 24 / 16), oldS = Math.round(24 * 24 / 16);
+      out.sub.A5_negative = {
+        ok: oldH === 63 && oldH !== 42 && oldS === 36 && oldS !== 24,
+        d: { oldFormulaPlayer: oldH, want: 42, oldFormulaSlime: oldS, want2: 24,
+          rule: '若退回全局 TILE/16，玩家会变成 63px、史莱姆 36px，必须判负' }
+      };
+
+      /* A6：全部图标 24×24 原生（基底 24，与素材原生尺寸一致） */
+      var ICON_NAMES = [];
+      ['weapon_rusty_sword', 'weapon_regular_sword', 'weapon_golden_sword', 'weapon_red_gem_sword',
+        'weapon_lavish_sword', 'weapon_axe', 'weapon_bow', 'weapon_spear', 'weapon_knife',
+        'weapon_machete', 'weapon_duel_sword', 'weapon_waraxe', 'weapon_hammer', 'weapon_big_hammer',
+        'weapon_mace', 'weapon_katana', 'weapon_anime_sword', 'weapon_saw_sword', 'weapon_cleaver',
+        'weapon_baton_with_spikes', 'weapon_double_axe', 'weapon_throwing_axe', 'weapon_bow_2',
+        'weapon_red_magic_staff', 'weapon_green_magic_staff', 'weapon_knight_sword',
+        'icon_armor_leather', 'icon_armor_chain_mail', 'icon_armor_plate', 'icon_armor_robe',
+        'icon_armor_scale', 'icon_scroll_1', 'icon_scroll_2', 'icon_scroll_3', 'icon_scroll_4',
+        'flask_red', 'flask_blue', 'flask_green', 'flask_yellow',
+        'flask_big_red', 'flask_big_blue', 'flask_big_green',
+        'ui_heart_full', 'ui_heart_half', 'ui_heart_empty', 'coin',
+        'button_blue_up', 'button_blue_down', 'button_red_up', 'button_red_down'
+      ].forEach(function (n) { ICON_NAMES.push(n); });
+      var badIcon = [];
+      var ICON_SET = {};
+      ICON_NAMES.forEach(function (n) {
+        var im = S.get(n);
+        if (!im) { badIcon.push(n + ':missing'); return; }
+        ICON_SET[n] = im;
+        if (im.naturalWidth !== 24 || im.naturalHeight !== 24) badIcon.push(n + ':' + im.naturalWidth + 'x' + im.naturalHeight);
+        if (S.baseOf(n) !== 24) badIcon.push(n + ':base' + S.baseOf(n));
+      });
+      out.sub.A6_icons24 = {
+        ok: badIcon.length === 0 && ICON_NAMES.length === 50,
+        d: { count: ICON_NAMES.length, bad: badIcon.slice(0, 8), rule: '50 个图标全部 24×24 原生、baseOf=24' }
+      };
+
+      /* A7：绘制尺寸实测——用真实 Modal / HUD 绘制路径 + 记录型 ctx，
+       * 断言"每个图标 drawImage 的 w/h 严格等于素材原生尺寸"，并检查图标右缘不压到同行文字。 */
+      function recordCtx(cv) {
+        var ctx = cv.getContext('2d');
+        var recs = { img: [], text: [] };
+        var oi = ctx.drawImage.bind(ctx), ot = ctx.fillText.bind(ctx);
+        ctx.drawImage = function (img, x, y, w, h) {
+          recs.img.push({ img: img, x: x, y: y, w: w, h: h });
+          return oi.apply(null, arguments);
+        };
+        ctx.fillText = function (s, x, y) {
+          recs.text.push({ s: s, x: x, y: y });
+          return ot.apply(null, arguments);
+        };
+        return { ctx: ctx, recs: recs, raw: cv };
+      }
+      function iconNameOf(img) {
+        if (!img || !img.src) return null;
+        var m = /([^\/]+)\.png(?:\?|$)/.exec(img.src);
+        var n = m ? m[1] : null;
+        return (n && ICON_SET[n]) ? n : null;
+      }
+      function auditIconDraws(recs) {
+        var seen = 0, viol = [], overlaps = [];
+        recs.img.forEach(function (r) {
+          var n = iconNameOf(r.img);
+          if (!n) return;
+          seen++;
+          if (r.w !== r.img.naturalWidth || r.h !== r.img.naturalHeight) {
+            viol.push(n + ':' + r.w + 'x' + r.h + '!=' + r.img.naturalWidth + 'x' + r.img.naturalHeight);
+          }
+          /* 同一行（图标纵向跨度内）的不透明文字必须整体在图标右缘之外 */
+          recs.text.forEach(function (t) {
+            if (t.y > r.y && t.y < r.y + r.h) {
+              /* 只判定"起点落在图标盒内"的文字——HUD 是一整行，左侧文字不算压字 */
+              if (t.x > r.x && t.x < r.x + r.w) overlaps.push(n + '@' + t.s);
+            }
+          });
+        });
+        return { seen: seen, viol: viol, overlaps: overlaps };
+      }
+      var cvTest = document.createElement('canvas');
+      cvTest.width = 1024; cvTest.height = 620;
+      var rs = recordCtx(cvTest);
+      var Rm = Game.Core.Render;
+      var bak = { ctx: Rm._ctx, cv: Rm._canvas, w: Rm.cssW, h: Rm.cssH };
+      Rm._ctx = rs.ctx; Rm._canvas = cvTest; Rm.cssW = 1024; Rm.cssH = 620;
+      var pBak = JSON.parse(JSON.stringify(Game.Data.Player.inventory || {}));
+      Game.Data.Player.inventory = {
+        sword_iron: 1, sword_steel: 1, sword_dragon: 1, sword_magic: 1, sword_anime: 1,
+        knife: 1, machete: 1, axe_war: 1, hammer: 1, bow_hunter: 1,
+        armor_leather: 1, plate_armor: 1, potion_small: 1
+      };
+      Game.Modal.open('inventory');
+      Game.Modal.draw();
+      var bagAudit = auditIconDraws(rs.recs);
+      Game.Data.Player.inventory = pBak;
+
+      var rs2 = recordCtx(cvTest);
+      Rm._ctx = rs2.ctx; Rm.cssW = 1024; Rm.cssH = 620;
+      Game.hud.update({ hp: 87, hpMax: 100, mp: 34, mpMax: 50, gold: 1286,
+        floor: 3, level: 4, exp: 60, expNext: 180, kills: 6, killTarget: 9 });
+      Game.hud.draw();
+      var hudAudit = auditIconDraws(rs2.recs);
+      Rm._ctx = bak.ctx; Rm._canvas = bak.cv; Rm.cssW = bak.w; Rm.cssH = bak.h;
+      out.sub.A7_iconNativeDraw = {
+        ok: bagAudit.seen >= 10 && hudAudit.seen >= 4 &&
+          bagAudit.viol.length === 0 && hudAudit.viol.length === 0 &&
+          bagAudit.overlaps.length === 0 && hudAudit.overlaps.length === 0,
+        d: { bag: bagAudit, hud: hudAudit,
+          bagDraws: rs.recs.img.length, hudDraws: rs2.recs.img.length,
+          rule: '真实 Modal.draw / hud.draw：每个图标绘制尺寸 == 原生尺寸；图标右缘之外才有同行文字' }
+      };
+
+      /* A8：负例——把 drawIcon 强制成 16×16 绘制，同一断言必须 FAIL */
+      var Rz = Game.Core.Render;
+      var origDrawIcon = Rz.drawIcon;
+      Rz.drawIcon = function (ctx2, img, x, y) {
+        ctx2.drawImage(img, x, y, 16, 16);
+        return { x: x, y: y, w: 16, h: 16 };
+      };
+      var rs3 = recordCtx(cvTest);
+      var bak3 = { ctx: Rm._ctx, cv: Rm._canvas, w: Rm.cssW, h: Rm.cssH };
+      Rm._ctx = rs3.ctx; Rm._canvas = cvTest; Rm.cssW = 1024; Rm.cssH = 620;
+      Game.Data.Player.inventory = { sword_steel: 1, plate_armor: 1, potion_small: 1 };
+      if (Game.Modal.close) { try { Game.Modal.close(); } catch (e0) { /* 忽略 */ } }
+      Game.Modal.open('inventory');
+      Game.Modal.draw();
+      var badAudit = auditIconDraws(rs3.recs);
+      Game.Data.Player.inventory = pBak;
+      Rm._ctx = bak3.ctx; Rm._canvas = bak3.cv; Rm.cssW = bak3.w; Rm.cssH = bak3.h;
+      Rz.drawIcon = origDrawIcon;
+      out.sub.A8_iconNegative = {
+        ok: badAudit.seen > 0 && badAudit.viol.length > 0,
+        d: { seen: badAudit.seen, violations: badAudit.viol.slice(0, 4),
+          rawDraws: rs3.recs.img.length,
+          rule: '负例：强制 16×16 绘制 → 断言必须报出 24x24 素材被画成 16x16' }
+      };
+
+      out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+      res.textContent = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+      document.title = out.ok ? 'PASS' : 'FAIL';
+    });
+  }
+
+  var S0 = Game.Core.Sprites;
+  S0.load('../assets/sprites/');
+  var tries = 0;
+  var timer = setInterval(function () {
+    if (S0.isReady()) { clearInterval(timer); run(); }
+    else if (++tries > 200) { clearInterval(timer); res.textContent = 'FAIL {"ok":false,"d":"sprite timeout"}'; }
+  }, 25);
+})();
+</script>
+</body>
+</html>

@@ -112,10 +112,10 @@
     });
 
     var BASE = readJson('selfcheck/page-baseline.json');
-    rec('B2_pageBaseline', !!BASE && BASE.count === 111 && BASE.count === BASE.pages.length &&
+    rec('B2_pageBaseline', !!BASE && BASE.count === 113 && BASE.count === BASE.pages.length &&
       BASE.pages.indexOf('verify_d73') >= 0 && BASE.pages.indexOf('verify_d72') >= 0 &&
-      BASE.pages.indexOf('verify_d78') >= 0, {
-      rule: 'page-baseline.json：count=111（D-78 新增 verify_d78）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78',
+      BASE.pages.indexOf('verify_d78') >= 0 && BASE.pages.indexOf('verify_d79') >= 0, {
+      rule: 'page-baseline.json：count=113（D-80 新增 verify_d80）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79',
       count: BASE ? BASE.count : null, len: BASE && BASE.pages ? BASE.pages.length : null,
       hasD73: BASE && BASE.pages ? BASE.pages.indexOf('verify_d73') >= 0 : false
     });
@@ -131,12 +131,12 @@
 
     var docs = {
       README: {
-        must: ['验证页 111 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
-        no: ['验证页 100 个']
+        must: ['验证页 113 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
+        no: ['验证页 100 个', '验证页 111 个']
       },
       RUN: {
-        must: ['当前 111', 'TOTAL=111', 'GUARD=OK expected=111', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
-        no: ['当前 100', 'TOTAL=100']
+        must: ['当前 113', 'TOTAL=113', 'GUARD=OK expected=113', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
+        no: ['当前 100', 'TOTAL=100', 'TOTAL=111']
       },
       DEMO: {
         must: ['24/50（48%）', '断牙', '碾压', 'd74/04-explore-elite.png', 'd74/06-elite-loot.png'],
@@ -155,7 +155,7 @@
         no: []
       },
       ACC: {
-        must: ['已知不足（7 条）', '已退休口径（4 条）', '24/50（48%）', '111', 'F3 霜噬'],
+        must: ['已知不足（7 条）', '已退休口径（4 条）', '24/50（48%）', '113', 'F3 霜噬'],
         no: []
       }
     };

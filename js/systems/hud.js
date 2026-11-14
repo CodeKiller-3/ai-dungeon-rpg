@@ -15,7 +15,11 @@
   'use strict';
   var Game = window.Game = window.Game || {};
 
-  var BAR_H = 22;              /* 顶部条带高度（任务卡：约 22px，不遮挡地图操作区） */
+  /* D-80 裁定 B：图标一律 24×24 原生 1:1，顶栏从 22 抬到 28 容纳（窄屏 26）。
+   * CUR_BAR_H 是"本次绘制"的条带高，drawBar/drawText 等按它垂直居中，避免写死 15/6。 */
+  var BAR_H = 28;              /* 顶部条带高度（24px 图标 + 上下各 2px 留白） */
+  var NARROW_BAR_H = 26;       /* 窄屏：24px 图标 + 上下各 1px */
+  var CUR_BAR_H = BAR_H;
   var visible = true;
   var last = null;             /* 最近一次 stats 快照 */
   var kills = 0;               /* 本层击杀数（自维护） */
@@ -61,15 +65,17 @@
       return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', narrow ? 60 : 74);
     }
     var HEART_HP = 20;
-    var hw = narrow ? 11 : 15;
-    var hh = narrow ? 10 : 14;
+    /* D-80：心形也是 24×24 原生图标，全尺寸下按原生尺寸排；窄屏直接走短条
+     * （既有逻辑在放不下时也回退短条，这里只是把"窄屏"提前走同一条降级路径，
+     *   避免 24 素材被缩到 11×10 的非整数缩放）。 */
+    var icon = 24;
+    if (narrow) return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', 60);
     var gap = 2;
-    var barH = narrow ? 18 : BAR_H;
-    var hy = Math.floor((barH - hh) / 2);
+    var hy = Math.max(0, Math.floor((CUR_BAR_H - icon) / 2));
     var hpMaxN = (typeof hpMax === 'number' && hpMax > 0) ? hpMax : 0;
     var hpV = (typeof hp === 'number') ? Math.max(0, hp) : 0;
     var count = hpMaxN > 0 ? Math.max(1, Math.ceil(hpMaxN / HEART_HP)) : 1;
-    var totalW = count * hw + (count - 1) * gap;
+    var totalW = count * icon + (count - 1) * gap;
     /* 数字宽（窄窗口省略） */
     var numW = 0;
     if (!narrow) {
@@ -78,14 +84,15 @@
     }
     /* 放不下 → 降级：省数字；仍放不下 → 回退短条 */
     if (typeof maxW === 'number' && x + totalW + numW > maxW) {
-      if (narrow) return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', 60);
       if (x + totalW > maxW) return drawBar(ctx, x, 'HP', hp, hpMax, '#4ade80', '#22131a', 74);
       numW = 0;
     }
     for (var i = 0; i < count; i++) {
       var rem = hpV - i * HEART_HP;
       var img = (rem >= HEART_HP) ? full : ((rem >= HEART_HP / 2) ? half : empty);
-      ctx.drawImage(img, x + i * (hw + gap), hy, hw, hh);
+      var R1 = Game.Core && Game.Core.Render;
+      if (R1 && R1.drawIcon) R1.drawIcon(ctx, img, x + i * (icon + gap), hy);
+      else ctx.drawImage(img, x + i * (icon + gap), hy, icon, icon);
     }
     var nx = x + totalW + 2;
     if (numW > 0) {
@@ -93,43 +100,47 @@
       ctx.font = '11px monospace';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(fmt(hpV) + '/' + fmt(hpMaxN), nx, 15);
+      ctx.fillText(fmt(hpV) + '/' + fmt(hpMaxN), nx, Math.round(CUR_BAR_H / 2) + 4);
       nx += numW;
     }
     return nx;
   }
 
-  /* P1-2：MP 短条 + flask_blue 图标（14×14）；图标缺失回退纯短条 */
+  /* P1-2 / D-80：MP 短条 + flask_blue 图标（24×24 原生 1:1）；图标缺失回退纯短条 */
   function drawMpBar(ctx, x, mp, mpMax, narrow) {
     var icon = sprite('flask_blue');
     if (!icon) return drawBar(ctx, x, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
-    var iw = 14, ih = 14;
-    var iy = narrow ? Math.floor((18 - ih) / 2) : 5;
-    ctx.drawImage(icon, x, iy, iw, ih);
-    return drawBar(ctx, x + iw + 3, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 48 : 56);
+    var iw = 24, ih = 24;
+    var iy = Math.max(0, Math.floor((CUR_BAR_H - ih) / 2));
+    var R1 = Game.Core && Game.Core.Render;
+    if (R1 && R1.drawIcon) R1.drawIcon(ctx, icon, x, iy);
+    else ctx.drawImage(icon, x, iy, iw, ih);
+    return drawBar(ctx, x + iw + 3, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 44 : 56);
   }
 
-  /* P1-2：金币文字 + coin 图标（9×10）；图标缺失回退纯文字 */
+  /* D-79：金币文字 + coin 图标（D-80 起 24×24 原生 1:1）；图标缺失回退纯文字 */
   function drawGold(ctx, x, gold, narrow, maxW) {
     var icon = sprite('coin');
     var label = (narrow ? '金 ' : '金币 ') + fmt(gold);
     if (!icon) return drawText(ctx, x, label, '#ffcf6e', maxW);
-    var iw = 9, ih = 10;
-    var iy = narrow ? Math.floor((18 - ih) / 2) : 5;
+    var iw = 24, ih = 24;
+    var iy = Math.max(0, Math.floor((CUR_BAR_H - ih) / 2));
     ctx.font = '11px monospace';
     var textW = ctx.measureText(label).width;
     /* 图标+文字放不下 → 回退纯文字（drawText 自带 maxW 判定） */
     if (typeof maxW === 'number' && x + iw + 3 + textW > maxW) {
       return drawText(ctx, x, label, '#ffcf6e', maxW);
     }
-    ctx.drawImage(icon, x, iy, iw, ih);
+    var R1 = Game.Core && Game.Core.Render;
+    if (R1 && R1.drawIcon) R1.drawIcon(ctx, icon, x, iy);
+    else ctx.drawImage(icon, x, iy, iw, ih);
     return drawText(ctx, x + iw + 3, label, '#ffcf6e', maxW);
   }
 
   /* 短条：底 + 填充 + 边框 + 居中文字（HP/MP） */
   function drawBar(ctx, x, label, v, vmax, color, bg, w) {
-    var y = 6;
     var h = 10;
+    var y = Math.max(2, Math.round((CUR_BAR_H - h) / 2));
     ctx.fillStyle = bg;
     ctx.fillRect(x, y, w, h);
     var ratio = (typeof v === 'number' && typeof vmax === 'number' && vmax > 0)
@@ -159,7 +170,7 @@
     ctx.textBaseline = 'alphabetic';
     var w = ctx.measureText(str).width;
     if (typeof maxW === 'number' && x + w > maxW) return null;
-    ctx.fillText(str, x, 15);
+    ctx.fillText(str, x, Math.round(CUR_BAR_H / 2) + 4);
     return x + w + 14;
   }
 
@@ -203,7 +214,7 @@
   /* ── D-55：任务指引小条 ────────────────────────────────────────
    * 画在右侧边缘、纵向约 45% 处：不压顶部血条、不压底部提示/战斗提示。
    * 纯展示层：数据只来自 NpcQuest.guidance()（BFS），本模块不做任何寻路。 */
-  function barHeight(narrow) { return narrow ? 18 : BAR_H; }
+  function barHeight(narrow) { return narrow ? NARROW_BAR_H : BAR_H; }
 
   /* 纯函数：给定视口与文案返回小条矩形（验证页 F 组直接调用） */
   function guideBox(W, H, narrow, g, measure) {
@@ -297,7 +308,8 @@
       /* M9-5：使用 CSS 宽度（DPR 适配后 cv.width 为物理像素） */
       var W = (R && typeof R.cssW === 'number') ? R.cssW : cv.clientWidth || cv.width;
       var narrow = (R && typeof R._isNarrow === 'function') ? R._isNarrow() : false;
-      var barH = narrow ? 18 : BAR_H;
+      var barH = barHeight(narrow);
+      CUR_BAR_H = barH;
       var s = last || {};
 
       /* 底板 + 底边分隔线 */

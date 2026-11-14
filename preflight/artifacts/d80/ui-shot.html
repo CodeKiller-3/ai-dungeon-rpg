@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-80 UI 截图台（背包 / 商店 / HUD）</title>
+<style>
+  html, body { margin:0; padding:0; background:#0b0c12; overflow:hidden; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<pre id="result" style="position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9"></pre>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/main.js"></script>
+<script>
+/* D-80 截图台：用真实渲染路径（Render.init → hud.draw / Modal.open+draw）截图，
+ * 不复制任何绘制代码，所以截图证明的就是线上版式。
+ * 用法：ui-shot.html?mode=bag|shop|hud */
+(function () {
+  'use strict';
+  var log = [];
+  window.addEventListener('error', function (e) {
+    log.push('ERR ' + (e.message || '') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno);
+    document.getElementById('result').textContent = log.join('\n');
+  });
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  var mode = q.mode || 'bag';
+  /* headless 的 --window-size 会包含窗口边框且改不动 innerWidth，这里用查询参数把逻辑视口钉死，
+   * 保证 "320 窄屏" 截到的就是真正的 320×568 布局，而不是被裁切的大画布。 */
+  if (q.w) {
+    Object.defineProperty(window, 'innerWidth', { value: +q.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: +q.h || 568, configurable: true });
+  }
+  var R = Game.Core.Render, P = Game.Data.Player, M = Game.Modal;
+  var cv = document.getElementById('game');
+  R.init(cv);
+
+  /* 30 个图标各取一个代表物品 id（ITEM_ICONS 映射不变，这里只做展示用种子） */
+  P.inventory = {
+    sword_bone: 1, sword_iron: 1, sword_steel: 1, sword_dragon: 1, sword_magic: 1,
+    sword_anime: 1, sword_knight: 1, knife: 1, machete: 1, axe_war: 1,
+    axe_double: 1, hammer: 1, spear: 1, bow_hunter: 1, bow_elite: 1,
+    staff_fire: 1, armor_leather: 1, chain_mail: 1, plate_armor: 1, robe_mage: 1,
+    armor_scale: 1, scroll_upgrade: 1, scroll_upgrade_2: 1, scroll_upgrade_3: 1, scroll_upgrade_4: 1,
+    potion_small: 2, potion_large: 1, potion_mana: 1, potion_xl: 1
+  };
+  P.equipment = { weapon: 'sword_steel', armor: 'plate_armor' };
+  P.upg = { sword_steel: 2 };
+  P.hp = 87; P.hpMax = 100; P.mp = 34; P.mpMax = 50; P.gold = 1286;
+  P.floor = 3; P.level = 4; P.exp = 60; P.expNext = 180; P.kills = 6;
+  try { Game.Systems.Inventory.recalcEquip(); } catch (e) { /* 忽略 */ }
+  try {
+    Game.Systems.Map.getFloor = function () { return 3; };
+    Game.Systems.Map.getEnemies = function () { return []; };
+    Game.Systems.AI.getPatrols = function () { return []; };
+  } catch (e) { /* 忽略 */ }
+
+  function paintBg() {
+    var c = R._ctx, W = R.cssW, H = R.cssH;
+    c.fillStyle = '#10121a';
+    c.fillRect(0, 0, W, H);
+    /* 用 24×24 地块铺一层真实底色，证明 HUD/图标在游戏底色上依然清楚 */
+    var tile = Game.Core.Sprites.get('t3_floor_1') || Game.Core.Sprites.get('floor_1');
+    if (tile) {
+      for (var y = 0; y < H + 24; y += 24) {
+        for (var x = 0; x < W + 24; x += 24) {
+          if (((x / 24) + (y / 24)) % 3 === 0 && Game.Core.Sprites.get('t3_wall_mid')) {
+            c.drawImage(Game.Core.Sprites.get('t3_wall_mid'), x, y, 24, 24);
+          } else {
+            c.drawImage(tile, x, y, 24, 24);
+          }
+        }
+      }
+    }
+  }
+
+  Game.Core.Sprites.load('../../../assets/sprites/');
+  window.addEventListener('resize', function () { R.resize(); render(); });
+  var t0 = Date.now();
+  function render() {
+    try {
+      paintBg();
+      if (mode !== 'hud') {
+        M.open(mode === 'shop' ? 'shop' : 'inventory');
+        M.draw();
+      }
+      Game.hud.update({ hp: P.hp, hpMax: P.hpMax, mp: P.mp, mpMax: P.mpMax, gold: P.gold,
+        floor: 3, level: P.level, exp: P.exp, expNext: P.expNext,
+        kills: 6, killTarget: 9 });
+      Game.hud.draw();
+      document.getElementById('result').textContent = '';
+    } catch (e) {
+      log.push('THROW ' + (e && e.message ? e.message : e));
+      document.getElementById('result').textContent = log.join('\n');
+    }
+    document.title = log.length ? 'ERR' : 'READY';
+  }
+  (function wait() {
+    if (!Game.Core.Sprites.isReady() && Date.now() - t0 < 12000) { setTimeout(wait, 40); return; }
+    /* headless 下 window.innerWidth 在首帧可能还是默认值，画布会按错的尺寸铺开；
+     * 这里等一拍再 resize 一次，让画布严格等于目标视口，然后重绘。 */
+    setTimeout(function () { R.resize(); render(); }, 400);
+  })();
+})();
+</script>
+</body>
+</html>

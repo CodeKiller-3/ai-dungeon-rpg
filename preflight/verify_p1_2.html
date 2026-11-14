@@ -140,8 +140,8 @@
       ok = ok && sub.t9_idem;
       try { M.close(); } catch (e) { /* 降级 */ }
 
-      /* t7_narrow：模拟窄窗 cssW=320（hpMax=190 → 10 颗心缩至 11×10 省略数字），
-       * 所有 drawImage 目标 x+w ≤ 320，无横向溢出 */
+      /* t7_narrow：模拟窄窗 cssW=320。D-80 起图标一律原生尺寸，窄屏不再把心形压到 11×10，
+       * 而是整段回退到 HP 短条（既有降级路径）；断言=无横向溢出 + 无任何非原生尺寸图标。 */
       var savedW = R.cssW, savedH = R.cssH;
       R.cssW = 320; R.cssH = 568;
       rec = [];
@@ -149,15 +149,19 @@
       try {
         H.update({ hp: 190, hpMax: 190, mp: 50, mpMax: 50, gold: 123456, floor: 3, kills: 7, killTarget: 9, level: 10, exp: 60, expNext: 600 });
         H.draw();
-        var hn = 0, overflow = false, smallHearts = true;
+        var hn = 0, overflow = false, scaled = [];
         for (var ri = 0; ri < rec.length; ri++) {
-          if (rec[ri].n.indexOf('ui_heart_') === 0) {
-            hn++;
-            if (rec[ri].w !== 11 || rec[ri].h !== 10) smallHearts = false;
+          if (rec[ri].n.indexOf('ui_heart_') === 0) hn++;
+          if (rec[ri].n.indexOf('ui_heart_') === 0 || rec[ri].n === 'coin' || rec[ri].n.indexOf('flask_') === 0) {
+            var nm = S.get(rec[ri].n);
+            if (nm && (rec[ri].w !== nm.naturalWidth || rec[ri].h !== nm.naturalHeight)) {
+              scaled.push(rec[ri].n + ':' + rec[ri].w + 'x' + rec[ri].h);
+            }
           }
           if (rec[ri].x + rec[ri].w > 320 + 0.01) overflow = true;
         }
-        narrowOk = narrowOk && !overflow && (hn === 10) && smallHearts;
+        narrowOk = narrowOk && !overflow && (hn === 0) && scaled.length === 0;
+        sub.t7_narrowWhy = { hearts: hn, scaled: scaled.slice(0, 4), overflow: overflow };
       } catch (e) { narrowOk = false; }
       sub.t7_narrow = narrowOk;
       ok = ok && narrowOk;
