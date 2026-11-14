@@ -312,7 +312,7 @@
       };
     }
     var maxHp = (typeof d.maxHp === 'number') ? String(d.maxHp) : '?';
-    return { kind: '血量', rounds: null, text: '还差血量：死亡时 HP 0/' + maxHp + '，没能扛住最后一击' };
+    return { kind: '血量', rounds: null, text: '死亡时 HP 0/' + maxHp };
   }
 
   function endingLines(stats) {
@@ -875,7 +875,7 @@
       this.openGameOver();
     },
 
-    /* D-52：自适应名额是否真的还没用完（只有这时才提示"守夜人还能拉你一次"） */
+    /* D-52：自适应名额是否真的还没用完（只有这时才提示"应急协议还能拉你一次"） */
     canRescueNow: function () {
       var A = Game.Systems && Game.Systems.Adaptive;
       if (!A || typeof A.isEnabled !== 'function' || !A.isEnabled()) return false;

@@ -840,7 +840,7 @@
       if (kind === 'inventory') title = '背包';
       else if (kind === 'shop') title = '商店 · ' + (shopMode === 'buy' ? '购买' : '出售');
       else if (kind === 'settings') title = '设置';
-      else if (kind === 'gameover') title = '冒险结束';
+      else if (kind === 'gameover') title = '系统评估：未达标';
       else if (kind === 'npcquest') {
         var nd = (Game.Systems.NpcQuest && Game.Systems.NpcQuest.def) ? Game.Systems.NpcQuest.def(npcId) : null;
         title = (nd ? nd.name : '???') + ' · 任务';
