@@ -123,7 +123,7 @@ ai-dungeon-rpg/
 └── .gitignore
 ```
 
-**文档索引**：玩法与运行看本文件与 [docs/运行说明.md](docs/运行说明.md) → 演示走 [docs/演示脚本.md](docs/演示脚本.md) → 功能逐条对照看 [docs/功能点检表.md](docs/功能点检表.md) → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 过程报告（自检 / 修复 / 诊断 / 对标）看 `docs/process/` → 目录归位与 B2 取舍看 `docs/process/D-32-归档决定.md` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
+**文档索引**：玩法与运行看本文件与 [docs/运行说明.md](docs/运行说明.md) → 演示走 [docs/演示脚本.md](docs/演示脚本.md) → 功能逐条对照看 [docs/功能点检表.md](docs/功能点检表.md) → 发链接前看 [docs/上线步骤.md](docs/上线步骤.md) → 变更看 [CHANGELOG.md](CHANGELOG.md) → 规划与架构看 [PLAN.md](PLAN.md) → 历史任务卡看 `docs/tasks/` → 过程报告（自检 / 修复 / 诊断 / 对标）看 `docs/process/` → 目录归位与 B2 取舍看 `docs/process/D-32-归档决定.md` → 许可看 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) 与 `assets/sprites/LICENSE.md`。
 
 ## 组件来源声明（站在巨人的肩膀上）
 
