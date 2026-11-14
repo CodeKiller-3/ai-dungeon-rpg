@@ -45,7 +45,7 @@
     wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
     big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
     pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
-    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [350, 32, 15]
   };
   var SIGHT = { bat: 8, dragon: 8, angel: 8, orc_warrior: 7, wogol: 7, ogre: 7, ogre_boss: 7, zombie_king: 7 };
   /* d42 的固定 build（未改动，用于活值判据复算） */
@@ -82,7 +82,7 @@
     var denOk = den.enemyArea === 1 && Object.prototype.toString.call(den.patrolArea) === '[object Array]' &&
       den.patrolArea.join(',') === '1.5,1.5,1,1,1';
     rec('A1_onlyDragonDefAndPatrol', bad.length === 0 && sightBad.length === 0 && enOk && posOk && denOk, {
-      rule: '18 只怪的 hp/atk/def 里只有 dragon.def 允许变（8→15）；视距、enrage、Boss 位置、地图尺寸一律不动；密度只允许 patrolArea',
+      rule: '除 D-84 允许的 dragon.hp 350 / dragon.def 15 外，其余 53 项逐项不变；视距、enrage、Boss 位置、地图尺寸一律不动；密度只允许 patrolArea',
       bad: bad, sightBad: sightBad, enrageOk: enOk, bossPositions: bp, density: den,
       dragon: { hp: M.dragon.hp, atk: M.dragon.atk, def: M.dragon.def }
     });

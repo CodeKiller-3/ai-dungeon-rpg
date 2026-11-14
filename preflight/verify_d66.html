@@ -54,7 +54,7 @@
 
   /* D-66 定表：old → now */
   var HP = {
-    slime: [40, 40], bat: [30, 30], skeleton: [70, 70], dragon: [260, 260],
+    slime: [40, 40], bat: [30, 30], skeleton: [70, 70], dragon: [260, 350],
     goblin: [45, 45], tiny_zombie: [50, 50], orc_warrior: [85, 85], orc_shaman: [75, 75],
     wogol: [95, 70], ogre: [130, 68], imp: [60, 60],
     big_zombie: [240, 88], necromancer: [135, 100], masked_orc: [150, 98],
@@ -71,6 +71,11 @@
   };
   /* 实测入口 atk（D-66 的 50 局 M1-4500，来源 d66-rounds-after.json）；写死是为了页面自证 */
   var ENTRY_ATK = { 1: 11, 2: 16, 3: 23, 4: 33, 5: 39 };
+  /* D-84 时点：巨龙 hp 已 260→350（活值），但本页是 D-66 历史验收，
+   * B2/B3 的复算必须钉回 D-66 的 260 血，否则回合数/比值会被新血条拖红。
+   * 只钉巨龙一只——全局 pinMonsterHpLegacy() 会把另外 9 只也改回旧值，
+   * 而 A1 的断言列正是活值 now（见 lib/monster_hp_legacy.js）。 */
+  var D66_DRAGON = { id: 'dragon', name: '地牢巨龙', hp: 260, atk: 32, def: 8 };
 
   try {
     /* A1：hp 全表逐项一致 */
@@ -80,7 +85,8 @@
       if (M[id].hp !== HP[id][1]) badHp.push(id + '=' + M[id].hp + '≠' + HP[id][1]);
     }
     rec('A1_hpTableExact', badHp.length === 0,
-      badHp.length ? badHp.join('; ') : '18 只怪 hp 与新表一致（改 9 只：' +
+      badHp.length ? badHp.join('; ') : '18 只怪 hp 与新表一致（改动 ' +
+        Object.keys(HP).filter(function (k) { return HP[k][0] !== HP[k][1]; }).length + ' 只：' +
         Object.keys(HP).filter(function (k) { return HP[k][0] !== HP[k][1]; }).join(',') + '）');
 
     /* A2：atk/def/exp 未被改动（单变量） */
@@ -110,7 +116,8 @@
     /* B2：Boss 击杀 ≤10（含狂暴 def 抬升） */
     var bosses = MAPS.bosses, badB = [], brows = [];
     for (var b = 0; b < bosses.length; b++) {
-      var bd = M[bosses[b].id], br = kill(bd.hp, ENTRY_ATK[bosses[b].floor], bd.def, bd.enrage);
+      var bd = (bosses[b].id === 'dragon') ? D66_DRAGON : M[bosses[b].id];
+      var br = kill(bd.hp, ENTRY_ATK[bosses[b].floor], bd.def, bd.enrage);
       brows.push('F' + bosses[b].floor + ' ' + bd.name + '= ' + br + '回合');
       if (br > 10) badB.push(bd.id + '=' + br);
     }
@@ -120,7 +127,7 @@
     var BUILD = { 2: { atk: 20.125, def: 13, hp: 130 }, 4: { atk: 36.85, def: 20, hp: 170 }, 5: { atk: 44.1, def: 26, hp: 190 } };
     var gate = [], badG = [], ratios = {};
     for (var q = 0; q < bosses.length; q++) {
-      var bf = bosses[q].floor, bm = M[bosses[q].id], bp = BUILD[bf];
+      var bf = bosses[q].floor, bm = (bosses[q].id === 'dragon') ? D66_DRAGON : M[bosses[q].id], bp = BUILD[bf];
       var pd = Math.max(1, Math.round(bp.atk * bp.atk / (bp.atk + bm.def)));
       var bdm = Math.max(1, Math.round(bm.atk * bm.atk / (bm.atk + bp.def)));
       var kk = Math.ceil(bm.hp / pd), ss = Math.ceil(bp.hp / bdm), ra = Math.round((kk / ss) * 1000) / 1000;

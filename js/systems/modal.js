@@ -37,7 +37,7 @@
   var data = [];
   var sel = 0;
   var shopMode = 'buy';
-  var page = 0;        /* M8-4：quests 三页签（0=任务 / 1=怪物 / 2=物品），open 时重置 */
+  var page = 0;        /* M8-4：quests 页签（0=任务 / 1=怪物 / 2=物品；D-85 起 3=系统），open 时重置 */
   var qScroll = 0;     /* P2-3b：图鉴（quests page1/2）滚动窗口起点；其他页恒为 0（行为不变） */
   var rect = null;       /* 最近一帧面板矩形 {x,y,w,h}，点击命中用 */
   var onKey = null, onClick = null;
@@ -151,9 +151,214 @@
     return out;
   }
 
+  /* ---------- D-85（C-7）：M 面板第 4 页「系统」 ----------
+   * buildSystemRows(width) 纯只读：只读 Game.Data.Player / Game.Data.* 与
+   * Battle.dragonDread()，不改玩家状态、不写存档、不消耗随机数。
+   * 返回字符串数组（每行一条），三档排版：
+   *   全宽（w ≥ 520 或宽度未知）→ 最多 12 行（龙战 12 / 非龙战 11）
+   *   中屏 420 ≤ w < 520        → 去掉三个分区表头，第 2/3/10 行压缩
+   *   窄屏 w < 420              → 固定 6 行，第 6 行顶替（龙威 / 估算） */
+  function sysNum(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : (d || 0); }
+
+  function sysMMSS(ms) {
+    var t = Math.max(0, Math.floor(sysNum(ms, 0) / 1000));
+    var m = Math.floor(t / 60), s = t % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* 龙威行（§1.5）——只读 dragonDread()，不在这里重写分段常量 */
+  function sysDreadLine() {
+    var B = Game.Systems && Game.Systems.Battle;
+    if (!B || typeof B.dragonDread !== 'function') return null;
+    var d = null;
+    try { d = B.dragonDread(); } catch (e) { return null; }
+    if (!d || typeof d.tier !== 'number') return null;
+    var round = sysNum(d.round, 0), bonus = sysNum(d.bonus, 0), tier = d.tier;
+    var val;
+    if (tier <= 0) val = '未启动（第 9 回合开始）';
+    else if (tier === 1) val = '+' + bonus + '（第 1/3 段，' + Math.max(0, 13 - round) + ' 回合后升档）';
+    else if (tier === 2) val = '+' + bonus + '（第 2/3 段，' + Math.max(0, 17 - round) + ' 回合后升档）';
+    else val = '+' + bonus + '（第 3/3 段，已到顶）';
+    return '龙威 ' + val;
+  }
+
+  /* 「下一突破」——两段累加都用 Battle.expToNext，不写死 2450 之外的第二个常量 */
+  function sysBreakthroughLine() {
+    var P = Game.Data.Player || {};
+    var B = Game.Systems && Game.Systems.Battle;
+    var lv = sysNum(P.level, 1);
+    if (lv >= 11) {
+      var G = Game.Data.GROWTH;
+      var ms = (G && G.milestones && G.milestones[11]) || null;
+      if (!ms) return null;
+      return '已突破：攻击 +' + sysNum(ms.atk, 0) + ' · 防御 +' + sysNum(ms.def, 0) +
+        ' · 生命 +' + sysNum(ms.maxHp, 0);
+    }
+    if (!B || typeof B.expToNext !== 'function') return null;
+    var need = 0, have = sysNum(P.exp, 0), i;
+    for (i = 1; i <= 10; i++) need += sysNum(B.expToNext(i), 0);
+    for (i = 1; i < lv; i++) have += sysNum(B.expToNext(i), 0);
+    if (have >= need) return '下一突破：Lv.11 可突破';
+    return '下一突破：Lv.11 还差 ' + (need - have) + ' 经验';
+  }
+
+  /* 武器共鸣——基础取 ITEMS[id].effect.atk，有效值走 Inventory.atkOf（唯一口径） */
+  function sysWeaponLine() {
+    var P = Game.Data.Player || {};
+    var IT = Game.Data.ITEMS || {};
+    var id = P.equipment && P.equipment.weapon;
+    if (!id || !IT[id]) return null;
+    var I = Game.Systems && Game.Systems.Inventory;
+    var base = sysNum(IT[id].effect && IT[id].effect.atk, 0);
+    var eff = (I && typeof I.atkOf === 'function') ? sysNum(I.atkOf(id, sysNum(P.level, 1)), base) : base;
+    return '武器共鸣：' + IT[id].name + ' 攻击 ' + eff + '（基础 ' + base + ' + 等级 ' + (eff - base) + '）';
+  }
+
+  /* 档案：精英刀 owned/5 · 图鉴 known/18 · 任务 done/12 */
+  function sysArchiveParts() {
+    var D = Game.Data || {};
+    var P = D.Player || {};
+    var IT = D.ITEMS || {};
+    var M = D.MONSTERS || {};
+    var Q = D.QUESTS || [];
+    var inv = P.inventory || {};
+    var eq = P.equipment || {};
+    var owned = 0, k;
+    for (k in IT) {
+      if (!Object.prototype.hasOwnProperty.call(IT, k)) continue;
+      if (IT[k].elite === true && IT[k].type === 'weapon' &&
+          (sysNum(inv[k], 0) > 0 || eq.weapon === k)) owned++;
+    }
+    var Bst = Game.Systems && Game.Systems.Bestiary;
+    var known = 0;
+    for (k in M) {
+      if (!Object.prototype.hasOwnProperty.call(M, k)) continue;
+      if (Bst && typeof Bst.getMonsterCount === 'function' && sysNum(Bst.getMonsterCount(k), 0) > 0) known++;
+    }
+    var Qs = Game.Systems && Game.Systems.Quest;
+    var done = 0;
+    for (k = 0; k < Q.length; k++) {
+      if (Qs && typeof Qs.isDone === 'function' && Qs.isDone(Q[k].id)) done++;
+    }
+    return { owned: owned, known: known, done: done };
+  }
+
+  /* 环境：主题取 themes 数组；Boss 按 bosses 的 floor 匹配 */
+  function sysEnvParts() {
+    var D = Game.Data || {};
+    var P = D.Player || {};
+    var MAPS = D.MAPS || {};
+    var M = D.MONSTERS || {};
+    var floor = Math.max(1, sysNum(P.floor, 1));
+    var theme = '未知';
+    if (MAPS.themes && MAPS.themes[floor - 1] && MAPS.themes[floor - 1].name) {
+      theme = MAPS.themes[floor - 1].name;
+    }
+    var boss = '无首领';
+    var list = MAPS.bosses || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].floor === floor) {
+        var md = M[list[i].id];
+        boss = md && md.name ? md.name : list[i].id;
+        break;
+      }
+    }
+    return { floor: floor, theme: theme, boss: boss };
+  }
+
+  /* 窄屏第 6 行的估算：本层权重最高的普通怪 / 玩家每击有效伤害 */
+  function sysEstimateLine() {
+    var D = Game.Data || {};
+    var P = D.Player || {};
+    var MAPS = D.MAPS || {};
+    var M = D.MONSTERS || {};
+    var floor = Math.max(1, sysNum(P.floor, 1));
+    var table = (MAPS.enemyTable && MAPS.enemyTable[floor - 1]) || null;
+    if (!table || !table.length) return null;
+    var best = table[0];
+    for (var i = 1; i < table.length; i++) {
+      if (sysNum(table[i].rate, 0) > sysNum(best.rate, 0)) best = table[i];
+    }
+    var md = M[best.id];
+    if (!md) return null;
+    var per = Math.max(1, sysNum(P.atk, 1) - sysNum(md.def, 0));
+    var rounds = Math.max(1, Math.ceil(sysNum(md.hp, 1) / per));
+    return '约' + rounds + '回合/只（估算）';
+  }
+
+  function buildSystemRows(width) {
+    var P = Game.Data.Player || {};
+    var B = Game.Systems && Game.Systems.Battle;
+    var lv = sysNum(P.level, 1);
+    var exp = sysNum(P.exp, 0);
+    var atk = sysNum(P.atk, 0), def = sysNum(P.def, 0);
+    var hp = sysNum(P.hp, 0), maxHp = sysNum(P.maxHp, 0);
+    var gold = sysNum(P.gold, 0), floor = Math.max(1, sysNum(P.floor, 1));
+    var expNext = (B && typeof B.expToNext === 'function') ? sysNum(B.expToNext(lv), 0) : 0;
+
+    var S = Game.Core && Game.Core.Main;
+    var st = (S && typeof S.getRunStats === 'function') ? S.getRunStats(true) : null;
+    var known = !!(st && st.known !== false);
+    var killed = known ? sysNum(st.kills, 0) : 0;
+    var turns = known ? sysNum(st.turns, 0) : 0;
+    var potions = known ? sysNum(st.potions, 0) : 0;
+    var rescues = known ? sysNum(st.rescues, 0) : 0;
+    var maxLevel = known ? sysNum(st.maxLevel, lv) : lv;
+    var floorReached = known ? sysNum(st.floorReached, floor) : floor;
+    var elapsed = (S && typeof S.getElapsedMs === 'function') ? S.getElapsedMs() : 0;
+
+    var gr = (S && typeof S.getRunGrowth === 'function') ? S.getRunGrowth() : null;
+    var arch = sysArchiveParts();
+    var env = sysEnvParts();
+    var dread = sysDreadLine();
+    var w = (typeof width === 'number' && isFinite(width) && width > 0) ? width : 0;
+
+    /* 窄屏：固定 6 行，第 6 行顶替 */
+    if (w && w < 420) {
+      var out6 = [];
+      out6.push('Lv.' + lv + ' 经验 ' + exp + '/' + expNext);
+      out6.push('攻' + atk + ' 防' + def + ' 血' + hp + '/' + maxHp + ' 金' + gold + ' F' + floor);
+      out6.push('击杀' + killed + ' 回合' + turns + ' 药水' + potions + ' 救援' + rescues + '/2');
+      out6.push('最高Lv' + maxLevel + ' 最深F' + floorReached + ' ' + sysMMSS(elapsed));
+      var wl = sysWeaponLine();
+      out6.push(wl ? wl : '档案 ' + arch.owned + '/5 ' + arch.known + '/18 ' + arch.done + '/12');
+      var est = sysEstimateLine();
+      out6.push(dread ? dread : (est ? est : '本层无普通怪'));
+      return out6;
+    }
+
+    /* 中屏：去掉三个分区表头，压缩第 2/3/10 行 */
+    var mid = !!(w && w < 520);
+    var rows = [];
+    if (!mid) rows.push('【宿主】');
+    rows.push(mid ? ('Lv.' + lv + ' 经验 ' + exp + '/' + expNext)
+      : ('系统 · Lv.' + lv + ' · 经验 ' + exp + '/' + expNext));
+    rows.push(mid ? ('攻' + atk + ' 防' + def + ' 血' + hp + '/' + maxHp + ' 金' + gold + ' F' + floor)
+      : ('攻击 ' + atk + ' · 防御 ' + def + ' · 生命 ' + hp + '/' + maxHp + ' · 金币 ' + gold + ' · 第 ' + floor + ' 层'));
+    if (!mid) rows.push('【本局】');
+    if (known) rows.push('击杀 ' + killed + ' · 回合 ' + turns + ' · 药水 ' + potions + ' · 救援 ' + rescues + '/2');
+    if (known) rows.push('最高等级 ' + maxLevel + ' · 最深层 ' + floorReached + ' · 用时 ' + sysMMSS(elapsed));
+    if (gr) {
+      var delta = sysNum(gr.delta, sysNum(gr.atk, atk) - sysNum(gr.startAtk, atk));
+      rows.push('本局成长：攻击 ' + sysNum(gr.startAtk, atk) + ' → ' + sysNum(gr.atk, atk) +
+        '（' + (delta >= 0 ? '+' + delta : String(delta)) + '）');
+    }
+    var brk = sysBreakthroughLine();
+    if (brk) rows.push(brk);
+    var wl2 = sysWeaponLine();
+    if (wl2) rows.push(wl2);
+    if (!mid) rows.push('【档案】精英刀 ' + arch.owned + '/5 · 图鉴 ' + arch.known + '/18 · 任务 ' + arch.done + '/12');
+    else rows.push('档案 ' + arch.owned + '/5 ' + arch.known + '/18 ' + arch.done + '/12');
+    rows.push('【环境】第 ' + env.floor + ' 层 · ' + env.theme + ' · Boss ' + env.boss);
+    if (dread) rows.push(dread);
+    return rows;
+  }
+
   Game.Modal = {
     /* D-28：供验证页断言"背包上下文传强化等级 / 商店图鉴走基础值"的只读入口 */
     _itemDesc: function (item, plus) { return itemDesc(item, plus); },
+    /* D-85：第 4 页「系统」的只读行快照（验证页直接断言，不依赖画布像素） */
+    _systemRows: function (width) { return buildSystemRows(width); },
     open: function (k, stats) {
       if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover' && k !== 'npcquest') return;
       /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
@@ -210,9 +415,15 @@
         if (kind === 'inventory') data = Game.Systems.Inventory.list();
         else if (kind === 'shop') data = (shopMode === 'buy') ? Game.Systems.Shop.getStock() : Game.Systems.Inventory.list();
         else if (kind === 'quests') {
-          /* M8-4：三页数据源——任务页保持 getActive（行为不变）；怪物/物品页枚举 Data 全量 */
+          /* M8-4：三页数据源——任务页保持 getActive（行为不变）；怪物/物品页枚举 Data 全量
+           * D-85：第 4 页「系统」是只读快照（buildSystemRows），不参与选中/消耗逻辑 */
           if (page === 1) data = collectEntries(Game.Data.MONSTERS);
           else if (page === 2) data = collectEntries(Game.Data.ITEMS);
+          else if (page === 3) {
+            var sysRows = buildSystemRows(cssSize().w);
+            data = [];
+            for (var si = 0; si < sysRows.length; si++) data.push({ text: sysRows[si], sys: true });
+          }
           else data = Game.Systems.Quest.getActive();
         }
         /* D-47：NPC 任务面板——行文本来自 NpcQuest.panel（四态 + 操作提示） */
@@ -338,9 +549,9 @@
       this._refresh();
     },
 
-    /* M8-4：quests 页签切换（环形 0→1→2→0；← 反向），切页后选中行归零 */
+    /* M8-4：quests 页签切换（环形 0→1→2→3→0；← 反向），切页后选中行归零 */
     _setPage: function (p) {
-      page = ((p % 3) + 3) % 3;
+      page = ((p % 4) + 4) % 4;
       sel = 0;
       qScroll = 0; /* P2-3b：切页重置滚动窗口，避免停在上次中间位置 */
       this._refresh();
@@ -846,8 +1057,8 @@
         title = (nd ? nd.name : '???') + ' · 任务';
       }
       if (kind === 'quests') {
-        /* M8-4：三页签标题（任务/怪物/物品，当前页高亮加粗） */
-        var tabs = ['任务', '怪物', '物品'];
+        /* M8-4：三页签标题（任务/怪物/物品，当前页高亮加粗）；D-85：第 4 页「系统」 */
+        var tabs = ['任务', '怪物', '物品', '系统'];
         for (var ti = 0; ti < tabs.length; ti++) {
           c.fillStyle = (ti === page) ? '#ffcf6e' : '#8a8aa0';
           c.font = (ti === page) ? 'bold 18px monospace' : '15px monospace';
@@ -950,7 +1161,7 @@
         c.font = '14px monospace';
         var emptyMsg = '（空）';
         if (kind === 'inventory') emptyMsg = '背包空空如也';
-        else if (kind === 'quests') emptyMsg = '暂无任务';
+        else if (kind === 'quests') emptyMsg = (page === 3) ? '暂无数据' : '暂无任务';
         /* 居中：估算文字宽度后水平居中（灰字）；D-29 双栏时居中于左列表 */
         c.textAlign = 'center';
         c.fillText(emptyMsg, px + listW / 2, py + HEADER_H + 20);
@@ -1212,6 +1423,8 @@
         var price = (shopMode === 'buy' ? (item ? item.price : 0) : (item ? item.sell : 0)) + ' 金币';
         return name + '   ' + itemDesc(item) + '   ' + price;
       } else if (kind === 'quests') {
+        /* D-85：第 4 页「系统」的行文本在构建时已定稿（只读快照） */
+        if (page === 3) return entry.text || '';
         /* M8-4：page 0 任务页（行格式与改造前完全一致，行为不变） */
         if (page === 0) {
           var q = entry.q;

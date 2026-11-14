@@ -57,7 +57,7 @@
     wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
     big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
     pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
-    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [350, 32, 15]
   };
   var FLOOR_MON = [
     ['slime', 'bat', 'goblin', 'tiny_zombie'],
@@ -156,7 +156,7 @@
       if (em && (em.exp !== 0 || em.gold[0] !== 0 || em.gold[1] !== 0 || em.drops.length !== 0)) econBad.push(em.id);
     }
     rec('A1_eliteData', missing.length === 0 && enumBad.length === 0 && baseBad.length === 0 && econBad.length === 0, {
-      rule: '5 只精英用 defineProperty 挂成不可枚举；MONSTERS 可枚举条目仍 18；18 只怪 hp/atk/def 逐项不变；精英 exp/gold/drops 全 0（经济零增量）',
+      rule: '5 只精英用 defineProperty 挂成不可枚举；MONSTERS 可枚举条目仍 18；除 D-84 的 dragon.hp 350 外 18 只怪 hp/atk/def 逐项不变；精英 exp/gold/drops 全 0（经济零增量）',
       missing: missing, enumBad: enumBad, baseBad: baseBad, econBad: econBad,
       stats: ELITE_IDS.map(function (k) { var m = M[k]; return k + '=' + m.hp + '/' + m.atk + '/' + m.def; })
     });

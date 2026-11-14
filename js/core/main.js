@@ -38,6 +38,10 @@
    * 因此旧档 equipment.weapon 为 null 时不会凭空补发（不新增字段、不改存档键名）。
    * 发完立刻 recalcEquip，保证"装备栏"与"atk"从第一帧起一致（L1：10 → 11）。 */
   var START_WEAPON = 'knife';
+  /* D-85（C-7 第 7 行）：本局成长起点——只读内存，不入档。
+   * 只在 giveStartingGear() 执行后记录（新档/重开）；读档不调用 → 保持 null，
+   * 面板据此隐藏该行，不用 statsAt(1) 反推假起点。 */
+  var runGrowth = null;
   function giveStartingGear() {
     player.equipment = { weapon: START_WEAPON, armor: null };
     if (Game.Systems && Game.Systems.Inventory && typeof Game.Systems.Inventory.recalcEquip === 'function') {
@@ -46,6 +50,7 @@
       /* Inventory 未加载（极简验证页场景）：按 L1 基础值 + 匕首 1 点手算 */
       player.atk = 10 + (Game.Data.ITEMS[START_WEAPON].effect.atk || 0);
     }
+    runGrowth = { startAtk: player.atk, startLevel: player.level };
   }
 
   /* UI 状态（背包/商店/任务） */
@@ -676,6 +681,7 @@
         Game.Systems.NpcQuest.init();
       }
       resetPlayer();
+      runGrowth = null; /* D-85：未走新档路径（读档）时保持空，面板第 7 行隐藏 */
       /* 读档：有存档则恢复进度；D-27 起手武器只发给"真正的新档"，旧档读入不补发 */
       var loaded = Game.Systems.Save.load();
       if (!loaded) giveStartingGear();
@@ -750,6 +756,12 @@
     /* M9-5：本局用时（ms），供死亡结算战绩 */
     getElapsedMs: function () {
       return performance.now() - runStart;
+    },
+
+    /* D-85：本局成长快照（只读）——没有起点记录（读档/旧档）时返回 null */
+    getRunGrowth: function () {
+      if (!runGrowth || !player) return null;
+      return { startAtk: runGrowth.startAtk, atk: player.atk, delta: player.atk - runGrowth.startAtk };
     },
 
     /* M8-5：通关写本地排行榜——entry 全部取自现有状态（不新增数值系统）

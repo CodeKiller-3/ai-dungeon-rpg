@@ -51,8 +51,9 @@
   }
   var IDS = ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'];
   var NAMES = ['断牙', '裂颅', '霜噬', '守夜', '烬牙'];
-  var ATK = [8, 12, 16, 16, 22];
-  var HP = [0, 0, 0, 10, 10];
+  /* D-84：五把刀改为低基础 + 随等级成长（L10 有效 12/17/22/24/25） */
+  var ATK = [3, 6, 9, 11, 12];
+  var HP = [0, 0, 0, 25, 0];
   var SHOP_MAX = [5, 8, 16, 12, 16];  /* 各层商店最强武器 atk（F3 含 600g 的 sword_dragon_epic=16+10） */
   var BASE_ATK = 10;                  /* 1 级裸装攻击（起手匕首 atk1 → 面板 11） */
   var PANEL = ATK.map(function (a) { return BASE_ATK + a; });
@@ -60,7 +61,7 @@
 
   try {
     Map.generate();
-    /* ── A1：五把刀、不可枚举、逐层不减（atk 与 hp 都不倒挂）──────── */
+    /* ── A1：五把刀、不可枚举、L10 有效攻击严格递增 ───────────────── */
     var miss = [], bad = [], mono = [];
     for (var i = 0; i < IDS.length; i++) {
       var it = IT[IDS[i]];
@@ -69,26 +70,27 @@
         it.name !== NAMES[i] || it.price !== 0 || it.sell !== 0) bad.push(IDS[i]);
     }
     if (Object.keys(IT).length !== 48) bad.push('可枚举物品数=' + Object.keys(IT).length);
-    for (var j = 1; j < ATK.length; j++) {
-      if (ATK[j] < ATK[j - 1] || HP[j] < HP[j - 1]) mono.push('倒挂@F' + (j + 1));
-      if (ATK[j] === ATK[j - 1] && HP[j] === HP[j - 1]) mono.push('无增长@F' + (j + 1));
+    var eff10 = IDS.map(function (id) { return Inv.atkOf(id, 10); });
+    for (var j = 1; j < eff10.length; j++) {
+      if (eff10[j] <= eff10[j - 1]) mono.push('L10 未严格递增@F' + (j + 1));
     }
     rec('A1_monotonic', miss.length === 0 && bad.length === 0 && mono.length === 0, {
-      rule: '五层各一把、不可枚举（可枚举仍 48 条）、price/sell=0；atk 与 maxHp 逐层都不下降且每层总强度严格上升',
+      rule: '五层各一把、不可枚举（可枚举仍 48 条）、price/sell=0；L10 有效攻击严格递增（12<17<22<24<25）',
       missing: miss, bad: bad, mono: mono,
       table: IDS.map(function (id, k) {
-        return NAMES[k] + ' ' + ATK[k] + (HP[k] ? '+hp' + HP[k] : '') + '（面板 ' + PANEL[k] + '）';
+        return NAMES[k] + ' ' + ATK[k] + (HP[k] ? '+hp' + HP[k] : '') + '（L10 ' + eff10[k] + '）';
       })
     });
 
-    /* ── A2：最大一跳在 F4→F5，且 F5 明显最强 ─────────────────────── */
-    var maxInc = Math.max.apply(null, INC), maxIdx = INC.indexOf(maxInc);
-    var shapeOk = maxIdx === 3 && inc3Ok() && ATK[4] - ATK[3] >= 2 && HP[4] >= HP[3];
-    function inc3Ok() { return INC[3] >= 2; }
+    /* ── A2：形状判据——L10 有效攻击递增，且相邻增量不是平行线 ───── */
+    var dInc = [1, 2, 3, 4].map(function (i) { return eff10[i] - eff10[i - 1]; });
+    var distinct = {};
+    dInc.forEach(function (v) { distinct[v] = 1; });
+    var incKinds = Object.keys(distinct).length;
+    var shapeOk = eff10[4] > eff10[3] && incKinds >= 3;
     rec('A2_curveShape', shapeOk, {
-      rule: '面板攻击逐层增量里最大的一跳必须是 F4→F5；F5 攻击比 F4 至少高 2、生命上限不低于 F4（不倒挂）',
-      panel: PANEL, inc: INC, maxInc: maxInc, maxIndex: maxIdx,
-      f5vsF4: { atk: ATK[4] - ATK[3], hp: HP[4] - HP[3] }
+      rule: 'D-84 时点：L10 有效攻击严格递增；相邻增量 [+5,+5,+2,+1] 至少 3 种不同取值（五把刀不是平行线）',
+      panel: PANEL, l10: eff10, inc: dInc, incKinds: incKinds
     });
 
     /* ── A3：商店买不到 ───────────────────────────────────────────── */
@@ -152,13 +154,14 @@
         if (s.item.type === 'weapon') maxStock = Math.max(maxStock, s.item.effect.atk || 0);
       });
       var cur = Math.max(maxStock, SHOP_MAX[f5 - 1]);
-      if (ATK[f5 - 1] < cur) weak.push('F' + f5 + ':' + ATK[f5 - 1] + '<shop' + cur);
-      if (ATK[f5 - 1] > cur + 6) tooFar.push('F' + f5 + ':' + ATK[f5 - 1] + '>>shop' + cur);
+      var eff5 = Inv.atkOf(IDS[f5 - 1], 10);
+      if (eff5 < cur) weak.push('F' + f5 + ':' + eff5 + '<shop' + cur);
+      if (eff5 > cur + 6) tooFar.push('F' + f5 + ':' + eff5 + '>>shop' + cur);
     }
     rec('A6_notBelowShop', weak.length === 0, {
-      rule: '五把刀 atk 全部不低于同层商店最强武器（8>5 / 12>8 / 16=16 / 16>12 / 22>16）；F3 与 600g 稀有龙牙剑同攻（该货 F3 阶段买不起，见 D-71 实测收入）',
+      rule: 'D-84 时点：五把刀 L10 有效攻击不低于同层商店最强（12/17/22/24/25 vs 5/8/16/12/16）',
       weak: weak, tooFar: tooFar,
-      compare: IDS.map(function (id, k2) { return NAMES[k2] + ' ' + ATK[k2] + ' vs shop ' + SHOP_MAX[k2]; })
+      compare: IDS.map(function (id, k2) { return NAMES[k2] + ' ' + Inv.atkOf(id, 10) + ' vs shop ' + SHOP_MAX[k2]; })
     });
 
     /* ── A7：存读档 + 不可出售 ─────────────────────────────────────── */

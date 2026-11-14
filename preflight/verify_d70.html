@@ -71,7 +71,7 @@
     wogol: [70, 17, 7], ogre: [68, 20, 9], imp: [60, 12, 4],
     big_zombie: [88, 26, 10], necromancer: [100, 24, 6], masked_orc: [98, 23, 8],
     pumpkin_dude: [98, 22, 7], angel: [135, 28, 5],
-    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [260, 32, 15]
+    ogre_boss: [100, 12, 8], zombie_king: [210, 24, 12], dragon: [350, 32, 15]
   };
   var GROWTH_FROZEN = {
     1: [10, 5, 100], 2: [11, 6, 110], 3: [12, 7, 120], 4: [13, 8, 130], 5: [14, 9, 140],
@@ -118,7 +118,7 @@
         !lootOk || D.ELITE.enabled !== true) badElite.push('ELITE');
     if (MP.sizes.join('|') !== '25,19|29,21|33,23|37,25|41,27') badElite.push('sizes');
     rec('A1_numbersFrozen', badMon.length === 0 && badGrow.length === 0 && badElite.length === 0, {
-      rule: '18 只怪 hp/atk/def、成长曲线 L1–L10、经验阈值（D-84 r3：仅 L10→L11=200，其余 15×lv/60×lv）、精英配置、5 层地图尺寸全部与基线一致',
+      rule: '除 D-84 的 dragon.hp 350 外，18 只怪 hp/atk/def、成长曲线 L1–L10、经验阈值（D-84 r3：仅 L10→L11=200，其余 15×lv/60×lv）、精英配置、5 层地图尺寸全部与基线一致',
       badMon: badMon, badGrow: badGrow, badElite: badElite
     });
 

@@ -87,8 +87,8 @@
     var IT = Game.Data.ITEMS;
     var IDS = ['elite_fang_1', 'elite_axe_2', 'elite_blade_3', 'elite_edge_4', 'elite_fang_5'];
     var NAMES = ['断牙', '裂颅', '霜噬', '守夜', '烬牙'];
-    var ATK = [8, 12, 16, 16, 22];
-    var HP = [0, 0, 0, 10, 10];
+    var ATK = [3, 6, 9, 11, 12];
+    var HP = [0, 0, 0, 25, 0];
     var badIt = [];
     for (var i = 0; i < IDS.length; i++) {
       var it = IT[IDS[i]];
@@ -105,17 +105,17 @@
       J.tierOf(5, 100) === 'normal' && J.isCrushKill(2, 'bat') === true &&
       J.isCrushKill(2, 'elite_goblin') === false && J.isCrushKill(2, 'dragon') === false);
     rec('B1_codeValues', badIt.length === 0 && lootOk && juiceOk && Object.keys(IT).length === 48, {
-      rule: '五把刀 8/12/16/16/22（F4/F5 +10 血）、loot 顺序一致、可枚举物品 48 条、tierOf/isCrushKill 语义正确',
+      rule: '基础 3/6/9/11/12（L10 有效 12/17/22/24/25）、守夜 +25 血、烬牙无 maxHp；loot 顺序一致、可枚举物品 48 条、tierOf/isCrushKill 语义正确',
       bad: badIt, lootOk: lootOk, juiceOk: juiceOk,
       enumItems: Object.keys(IT).length,
       panel: ATK.map(function (a) { return 10 + a; })
     });
 
     var BASE = readJson('selfcheck/page-baseline.json');
-    rec('B2_pageBaseline', !!BASE && BASE.count === 113 && BASE.count === BASE.pages.length &&
+    rec('B2_pageBaseline', !!BASE && BASE.count === 115 && BASE.count === BASE.pages.length &&
       BASE.pages.indexOf('verify_d73') >= 0 && BASE.pages.indexOf('verify_d72') >= 0 &&
       BASE.pages.indexOf('verify_d78') >= 0 && BASE.pages.indexOf('verify_d79') >= 0, {
-      rule: 'page-baseline.json：count=113（D-80 新增 verify_d80）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79',
+      rule: 'page-baseline.json：count=115（M3-A 新增 verify_d85）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79',
       count: BASE ? BASE.count : null, len: BASE && BASE.pages ? BASE.pages.length : null,
       hasD73: BASE && BASE.pages ? BASE.pages.indexOf('verify_d73') >= 0 : false
     });
@@ -131,32 +131,32 @@
 
     var docs = {
       README: {
-        must: ['验证页 113 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
-        no: ['验证页 100 个', '验证页 111 个']
+        must: ['验证页 115 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
+        no: ['验证页 113 个', '验证页 111 个', '验证页 100 个']
       },
       RUN: {
-        must: ['当前 113', 'TOTAL=113', 'GUARD=OK expected=113', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
-        no: ['当前 100', 'TOTAL=100', 'TOTAL=111']
+        must: ['当前 115', 'TOTAL=115', 'GUARD=OK expected=115', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
+        no: ['当前 113', 'TOTAL=113', 'TOTAL=111', 'TOTAL=100']
       },
       DEMO: {
-        must: ['24/50（48%）', '断牙', '碾压', 'd74/04-explore-elite.png', 'd74/06-elite-loot.png'],
-        no: ['14/50']
+        must: ['3/50（6%）', '断牙', '面板 11 → 13', 'd74/04-explore-elite.png', 'd74/06-elite-loot.png'],
+        no: ['24/50（48%）', '14/50']
       },
       CHK: {
         must: ['共 29 条（R01–R29）', 'R26', 'R27', 'R28', 'R29'],
         no: ['共 25 条']
       },
       TALK: {
-        must: ['24 局（48%）', '断牙', '烬牙', '碾压'],
-        no: ['14/50']
+        must: ['3 局（6%）', '断牙', '烬牙', '碾压'],
+        no: ['24 局（48%）', '14/50']
       },
       BAL: {
-        must: ['## 二十二', '24/50（48%）', '8 / 12 / 16 / 16 / 22', '18 / 22 / 26 / 26 / 32', '5 / 9 / 9'],
+        must: ['## 二十三', '3/50（6%）', '3 / 6 / 9 / 11 / 12', '13 / 16 / 19 / 21 / 22', '12 / 17 / 22 / 24 / 25'],
         no: []
       },
       ACC: {
-        must: ['已知不足（7 条）', '已退休口径（4 条）', '24/50（48%）', '113', 'F3 霜噬'],
-        no: []
+        must: ['已知不足（7 条）', '已退休口径（4 条）', '3/50（6%）', '115', 'F3 霜噬'],
+        no: ['24/50（48%）']
       }
     };
     var txt = { README: README, RUN: RUN, DEMO: DEMO, CHK: CHK, TALK: TALK, BAL: BAL, ACC: ACC };
@@ -174,10 +174,10 @@
       bad: docBad, rows: docRows
     });
 
-    var demoLineOk = has(DEMO, '面板 11 → 18') && has(DEMO, 'crush 碾压档') && has(DEMO, '断牙');
+    var demoLineOk = has(DEMO, '面板 11 → 13') && has(DEMO, 'crush 碾压档') && has(DEMO, '断牙');
     rec('C2_demoCrushLine', demoLineOk, {
-      rule: '演示脚本必须写出"F1 精英 → 断牙（面板 11→18）→ S08 碾压档"这条爽感线',
-      s03: has(DEMO, '面板 11 → 18'), s08: has(DEMO, 'crush 碾压档')
+      rule: '演示脚本必须写出"F1 精英 → 断牙（面板 11→13）→ S08 碾压档"这条爽感线',
+      s03: has(DEMO, '面板 11 → 13'), s08: has(DEMO, 'crush 碾压档')
     });
   } catch (e) {
     out.ok = false;

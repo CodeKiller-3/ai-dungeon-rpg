@@ -135,14 +135,16 @@
         pressKey('Tab');
         var p2 = Modal.getPage() === 2;
         pressKey('Tab');
-        var pWrap = Modal.getPage() === 0; /* 环形 */
+        var p3 = Modal.getPage() === 3; /* D-85：第 4 页「系统」 */
+        pressKey('Tab');
+        var pWrap = Modal.getPage() === 0; /* 环形 0→1→2→3→0 */
         pressKey('ArrowRight');
         var pR = Modal.getPage() === 1;
         pressKey('ArrowLeft');
         var pL = Modal.getPage() === 0;
         pressKey('ArrowLeft');
-        var pLW = Modal.getPage() === 2; /* 向左环形 */
-        sub.t6_pages = p0 && p1 && p2 && pWrap && pR && pL && pLW;
+        var pLW = Modal.getPage() === 3; /* 向左环形 */
+        sub.t6_pages = p0 && p1 && p2 && p3 && pWrap && pR && pL && pLW;
 
         /* 7. 怪物页：未击杀（dragon）显示名称+??? 且不含数值；已击杀（slime）显示 HP/ATK/DEF+击杀数 */
         Modal._setPage(1);
