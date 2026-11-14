@@ -254,8 +254,7 @@
       { label: '4', act: 'skill:fireball', name: '火球', line: 0, codes: ['Digit4', 'Numpad4'] },
       { label: '5', act: 'skill:dash', name: '冲刺', line: 1, codes: ['Digit5', 'Numpad5'] },
       { label: '6', act: 'skill:shield', name: '护盾', line: 1, codes: ['Digit6', 'Numpad6'] },
-      { label: '7', act: 'item', name: '用药', line: 1, codes: ['Digit7', 'Numpad7'] },
-      { label: 'F', act: 'fx', name: '战斗特效：关 / 低 / 高', line: 1, codes: ['KeyF'] }
+      { label: '7', act: 'item', name: '用药', line: 1, codes: ['Digit7', 'Numpad7'] }
     ]
   };
 
@@ -270,7 +269,7 @@
   }
 
   /* D-20：引导页正文——三块：探索/面板、战斗、机制须知。
-   * 机制须知只写代码里确实存在的条目（F 三档已并入战斗键行）。
+   * 机制须知只写代码里确实存在的条目（D-78 起特效硬性常开，F 键不再出现在任何键行）。
    * D-25：补一条「怎么装备」——文案逐字对齐背包面板的真实提示（↑↓ 选择 / Enter 使用/装备）
    * 与行尾数值格式（攻击+N / 防御+N，见 modal.js itemDesc）；不写任何"起手有武器"之类当前不成立的话。 */
   function guideRows() {
@@ -1336,7 +1335,7 @@
         ctx.textAlign = 'center';
         ctx.fillStyle = '#9bbbf4';
         ctx.font = '13px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药   F 特效', CX, H - 30);
+        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药', CX, H - 30);
         ctx.restore();
       }
       /* S3-4：战斗视觉反馈（伤害飘字），绘制于战斗内容之上、HUD 之下 */
@@ -1627,7 +1626,7 @@
     /* M9-5：首次引导覆盖层——半透明遮罩 + 目标/去向说明 + 按键说明。
      * D-14：改为 Enter 或点击确认按钮关闭（不再任意键）；补目标与去向；可经 H 重看。
      * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
-     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾、7 用药、F 特效），不杜撰。
+     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾、7 用药），不杜撰。D-78 起 F 键已解绑。
      * D-20：整块按键与机制文案改由 KEYMAP / guideRows 生成，与实际映射同源。 */
     drawGuide: function () {
       var ctx = this._ctx;

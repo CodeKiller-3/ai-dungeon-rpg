@@ -52,24 +52,21 @@
   var ui = { list: [], sel: 0, shopMode: 'buy' };
 
   /* ---------- D-48：首屏设置（只放既有开关） ----------
-   * 三项全部对应已存在的运行时能力，不新造玩法配置：
-   *   fx    → Game.Fx 的 off/low/high（D-16，战斗内 F 同源）
-   *   muted → Game.Systems.Audio 静音开关（M9-4，K 键同源）
-   *   zoom  → Render 自适应缩放的显式档位（2026-11 自适应缩放）
-   * 持久化到一个独立键，不碰存档键 ai_dungeon_rpg_save_v1。 */
+   * D-78：特效改为硬性常开，设置页不再提供「打击感」行；
+   * 旧设置里的 fx=off/low 读入后一律忽略，applySettings 固定把 Game.Fx 拉到 high。
+   * 保留：muted → Audio 静音（M9-4，K 键同源）；zoom → Render 自适应缩放的显式档位。
+   * 持久化仍是一个独立键，不碰存档键 ai_dungeon_rpg_save_v1。 */
   var SETTINGS_KEY = 'aiDungeon_settings_v1';
-  var FX_LEVELS = ['off', 'low', 'high'];
   var ZOOM_LEVELS = ['auto', '1', '1.25', '1.5'];
-  var FX_LABEL = { off: '关', low: '低', high: '高' };
   var ZOOM_LABEL = { auto: '自动（自适应）', '1': '100%', '1.25': '125%', '1.5': '150%' };
-  var settings = { fx: 'low', muted: false, zoom: 'auto', adaptive: true, guide: true };
+  var settings = { muted: false, zoom: 'auto', adaptive: true, guide: true };
 
   function loadSettings() {
     try {
       var raw = localStorage.getItem(SETTINGS_KEY);
       if (!raw) return;
       var d = JSON.parse(raw);
-      if (d && FX_LEVELS.indexOf(d.fx) >= 0) settings.fx = d.fx;
+      /* D-78：d.fx 不再读取——旧档的 off/low 不会让特效消失 */
       if (d) settings.muted = !!d.muted;
       if (d && ZOOM_LEVELS.indexOf(d.zoom) >= 0) settings.zoom = d.zoom;
       if (d) settings.adaptive = (d.adaptive === undefined) ? true : !!d.adaptive;
@@ -81,7 +78,8 @@
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* 降级 */ }
   }
   function applySettings() {
-    if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel(settings.fx);
+    /* D-78：特效硬性常开——无论旧设置写了什么，这里都固定最高档 */
+    if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel('high');
     var A = Game.Systems && Game.Systems.Audio;
     if (A && settings.muted && typeof A.setMuted === 'function') A.setMuted(true);
     var R = Game.Core && Game.Core.Render;
@@ -992,13 +990,12 @@
     /* 纯函数：由 index.html 的 __AI_DUNGEON_MENU__ + skip 参数共同决定（验证页可直接断言） */
     shouldShowMenu: shouldShowMenu,
 
-    /* 当前设置快照（只读副本；验证页断言三项且无第四项） */
-    getSettings: function () { return { fx: settings.fx, muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive, guide: settings.guide }; },
+    /* 当前设置快照（只读副本；D-78 起不含 fx——特效硬性常开） */
+    getSettings: function () { return { muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive, guide: settings.guide }; },
 
-    /* 设置项列表：三项既有开关（D-48 的断言口径不变） */
+    /* 设置项列表：D-78 删掉「打击感」行，只剩既有开关（音效 / 画面缩放） */
     _settingsSpec: function () {
       return [
-        { id: 'fx', label: '打击感', value: FX_LABEL[settings.fx] || '低' },
         { id: 'muted', label: '音效', value: settings.muted ? '关' : '开' },
         { id: 'zoom', label: '画面缩放', value: ZOOM_LABEL[settings.zoom] || '自动（自适应）' }
       ];
@@ -1019,11 +1016,9 @@
 
     /* 单项设置：即时生效 + 立即持久化；非法值返回 false 且不改状态 */
     setSetting: function (id, value) {
-      if (id === 'fx') {
-        if (FX_LEVELS.indexOf(value) < 0) return false;
-        settings.fx = value;
-        if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel(value);
-      } else if (id === 'muted') {
+      /* D-78：fx 已从设置页移除；旧调用方传 fx 一律拒绝（也不会降档） */
+      if (id === 'fx') return false;
+      if (id === 'muted') {
         settings.muted = !!value;
         var A = Game.Systems && Game.Systems.Audio;
         if (A && typeof A.setMuted === 'function') A.setMuted(settings.muted);
@@ -1050,10 +1045,7 @@
     /* 键盘左右/Enter 的循环切换（方向 +1 / -1） */
     cycleSetting: function (id, dir) {
       var d = (dir < 0) ? -1 : 1;
-      if (id === 'fx') {
-        var i = FX_LEVELS.indexOf(settings.fx);
-        return this.setSetting('fx', FX_LEVELS[(i + d + FX_LEVELS.length) % FX_LEVELS.length]);
-      }
+      if (id === 'fx') return false;   /* D-78：设置页已无此项 */
       if (id === 'muted') return this.setSetting('muted', !settings.muted);
       if (id === 'zoom') {
         var z = ZOOM_LEVELS.indexOf(settings.zoom);
@@ -1225,7 +1217,9 @@
         var setRows = this._settingsRows();
         if (up) { delete k['ArrowUp']; delete k['KeyW']; menu.settingsSel = Math.max(0, menu.settingsSel - 1); return; }
         if (down) { delete k['ArrowDown']; delete k['KeyS']; menu.settingsSel = Math.min(setRows.length - 1, menu.settingsSel + 1); return; }
-        var ids = ['fx', 'muted', 'zoom', 'adaptive', 'clearSave'];
+        /* D-78：行 id 直接取 _settingsRows()，不再手写第二份列表——
+         * 旧写法在删掉「打击感」行后会把光标位置和动作行错开一格。 */
+        var ids = setRows.map(function (r) { return r.id; });
         var curId = ids[menu.settingsSel];
         /* D-51：清除存档 = 动作行，Enter（或右方向）弹出二次确认；无档时只提示 */
         if (curId === 'clearSave') {
@@ -1383,7 +1377,7 @@
         var rows = this._settingsRows();
         if (up) { delete k['ArrowUp']; delete k['KeyW']; pause.settingsSel = Math.max(0, pause.settingsSel - 1); return; }
         if (down) { delete k['ArrowDown']; delete k['KeyS']; pause.settingsSel = Math.min(rows.length - 1, pause.settingsSel + 1); return; }
-        var id = rows[pause.settingsSel] ? rows[pause.settingsSel].id : 'fx';
+        var id = rows[pause.settingsSel] ? rows[pause.settingsSel].id : '';
         if (id === 'clearSave') {
           if (enter || right) {
             delete k['Enter']; delete k['NumpadEnter']; delete k['ArrowRight']; delete k['KeyD'];
@@ -1647,15 +1641,7 @@
     _updateBattle: function () {
       var k = Game.Core.Input.getState();
       var B = Game.Systems.Battle;
-      /* F：三档特效强度切换（关→低→高），入口可达且不改任何战斗数值 */
-      if (k['KeyF']) {
-        delete k['KeyF'];
-        if (Game.Fx && typeof Game.Fx.cycle === 'function') {
-          Game.Fx.cycle();
-          Game.Core.EventBus.emit('ui:notice', { msg: '战斗特效：' + Game.Fx.label() + '（F 切换）' });
-        }
-        return;
-      }
+      /* D-78：F 键不再切换特效（特效硬性常开），此键留空，未绑定新功能 */
       var cmd = null;
       if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; cmd = 'attack'; }
       else if (k['Digit2'] || k['Numpad2']) { delete k['Digit2']; delete k['Numpad2']; cmd = 'defend'; }

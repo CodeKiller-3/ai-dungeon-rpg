@@ -56,7 +56,7 @@
 | 1 / 2 / 3 | 战斗中：攻击 / 防御 / 逃跑 |
 | 4 / 5 / 6 | 战斗中：火球 / 冲刺 / 护盾（消耗 MP，按回合冷却） |
 | **7** | **战斗中：用药**（喝血瓶/魔法药，占一回合，怪物照常反击） |
-| F | 战斗中：切换战斗特效（关 / 低 / 高） |
+| — | 战斗特效硬性常开（最高档），设置页与 F 键均不再提供特效开关 |
 | B / E / M / T | 背包 / 商店 / 任务·图鉴（Tab 或 ←→ 切页）/ NPC 对话 |
 | **L** | **Q-learning 寻宝鼠演示**（AI 学习，Esc 返回） |
 | **K** | **一键静音**（音效+BGM 全部静音，再按恢复） |
@@ -71,7 +71,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 207 张、验证页 110 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 207 张、验证页 111 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -109,7 +109,7 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 207 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 110 个 headless 验证页（M1 至今）
+├── preflight/            # 111 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图：preflight/artifacts/d74/ 为 D-74 对外图 10 张（含 1920×1080）；d73/ 9 张、d61/ 8 张为历史；shots_resize/ 12 张响应式；D-35 8× 对照
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明

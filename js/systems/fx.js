@@ -1,22 +1,21 @@
 /* js/systems/fx.js — D-16 战斗最小特效（程序化，零新素材）
  * 目标：用极低成本补"打击感"，不引入任何图片/音频资源，不改渲染管线。
- * 三档强度：off / low / high，默认 low（连打不累；high 留给"手更重"的偏好）。
- * 手段：顿帧 50~90ms、震屏 2~4px、受击挤退、命中局部闪白、程序化斩击弧、技能元素色。
- * 光敏安全：不做 strobe / 高频闪烁；闪白只覆盖受击方块局部，单次 ≤120ms，一次命中只闪一次；
- *           系统 prefers-reduced-motion: reduce → 有效档位直接降为 off（不震屏/不闪白/不顿帧）。
+ * D-78：特效改为游戏硬性要求——固定最高档（high），不提供 off / low 退路；
+ *       设置页不再有开关，F 键不再切换，旧设置里的 fx=off/low 由 main.js 忽略并强制 high。
+ *       setLevel / cycle 仅保留为兼容空操作（恒返回 high），任何调用都降不了档。
+ * 手段：顿帧 80ms、震屏 4px、受击挤退、命中局部闪白、程序化斩击弧、技能元素色。
+ * 光敏安全：不做 strobe / 高频闪烁；闪白只覆盖受击方块局部，单次 ≤120ms，一次命中只闪一次。
  * 明确不做：每回合鼓点重音、长拖尾、为怪物新画帧动画。
  * 接口：hit / shakeOffset / knockOffset / flashOf / drawSlashes / clockNow / update / setLevel */
 (function () {
   'use strict';
   var Game = window.Game = window.Game || {};
 
-  var LEVELS = ['off', 'low', 'high'];
+  var LEVELS = ['off', 'low', 'high'];   /* 历史档位名，仅用于兼容旧调用方 */
   var LABEL = { off: '关', low: '低', high: '高' };
 
-  /* 档位参数（全部落在卡面硬指标内：顿帧 50~90ms、震屏 2~4px、闪白单次 ≤120ms） */
+  /* 唯一档位：high（全部落在卡面硬指标内：顿帧 50~90ms、震屏 2~4px、闪白单次 ≤120ms） */
   var PRESET = {
-    off: { hitStop: 0, shake: 0, knock: 0, flash: 0, flashMs: 0, slash: 0 },
-    low: { hitStop: 50, shake: 2, knock: 5, flash: 0.40, flashMs: 90, slash: 0.75 },
     high: { hitStop: 80, shake: 4, knock: 9, flash: 0.60, flashMs: 110, slash: 1 }
   };
 
@@ -27,8 +26,7 @@
     shield: '#7dffb0'
   };
 
-  var level = 'low';      /* 默认档：有打击感但不吵；说明见 docs/tasks/D-16-battle-ui.md */
-  var reduced = null;     /* null=未探测；true=系统要求减少动态 */
+  var level = 'high';     /* D-78：硬性常开，唯一档位 */
   var freezeLeft = 0;     /* 顿帧剩余（ms）：只冻结"特效/动作时钟"，不冻结战斗结算与输入 */
   var clockShift = 0;     /* 顿帧累计偏移；clockNow = 真实时间 - clockShift */
   var lastReal = null;
@@ -48,42 +46,25 @@
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
-  function detectReduced() {
-    try {
-      if (typeof window !== 'undefined' && window.matchMedia) {
-        return !!window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      }
-    } catch (e) { /* 降级：视为不要求减少动态 */ }
-    return false;
-  }
-
-  function isReduced() {
-    if (reduced === null) reduced = detectReduced();
-    return !!reduced;
-  }
-
-  function effective() { return isReduced() ? 'off' : level; }
-  function preset() { return PRESET[effective()] || PRESET.off; }
+  /* D-78：不再读取 prefers-reduced-motion 降档，特效是硬性常开。
+   * 保留 isReduced 查询接口只为兼容旧验证页，恒返回 false。 */
+  function isReduced() { return false; }
+  function effective() { return 'high'; }
+  function preset() { return PRESET.high; }
   /* 特效时钟：顿帧期间不前进，让动作板/斩击弧真正"定住" */
   function fxNow() { return realNow() - clockShift; }
 
   Game.Fx = {
     LEVELS: LEVELS,
 
-    getLevel: function () { return level; },
-    effectiveLevel: function () { return effective(); },
-    label: function () { return LABEL[effective()] || LABEL.off; },
-    setLevel: function (l) {
-      level = (LEVELS.indexOf(l) >= 0) ? l : 'low';
-      return effective();
-    },
-    /* 循环切换：关 → 低 → 高 → 关（战斗内按 F 触发，设置弹窗有文字入口） */
-    cycle: function () {
-      var i = LEVELS.indexOf(level);
-      level = LEVELS[(i + 1) % LEVELS.length];
-      return effective();
-    },
-    _setPrefersReduced: function (v) { reduced = !!v; return effective(); },
+    getLevel: function () { return 'high'; },
+    effectiveLevel: function () { return 'high'; },
+    label: function () { return LABEL.high; },
+    /* D-78：兼容空操作——无论传什么（含旧设置里的 off/low）都固定 high */
+    setLevel: function () { level = 'high'; return 'high'; },
+    /* 循环切换已废弃（F 键不再绑定）；保留函数只为旧调用方不报错 */
+    cycle: function () { level = 'high'; return 'high'; },
+    _setPrefersReduced: function () { return 'high'; },
     _setClock: function (fn) { _clock = (typeof fn === 'function') ? fn : null; lastReal = null; },
     now: realNow,
     clockNow: fxNow,

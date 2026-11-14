@@ -1,6 +1,8 @@
 /* js/systems/juice.js — D-70 爽感表现层：把"我变强了"画出来
  * 只画，不算：本模块不写任何数值、不掷随机数、不改战斗顺序。
- * 四件事（全部受 Game.Fx 的 off/low/high 档位控制，off 时一个像素都不画）：
+ * D-78：特效硬性常开（恒 high），不再有 off 静默分支；三张结果卡从右上角改到屏幕中心，
+ *       跟随目标类（伤害飘字/冲击圈）仍贴在怪物/玩家身上，不跟着搬。
+ * 四件事（全部固定最高档）：
  *   1) 精英之证卡片：打赢精英当场看到"攻击 34 → 36（+2）/ 累计 +2"；
  *   2) 升级卡片：一次升级/连升，列出攻击/防御/生命上限的前后值；
  *   3) 伤害分级：tierOf() 给出 normal / heavy / crush 三档（绘制在 feedback.js）；
@@ -8,7 +10,7 @@
  * 确定性：不调用 Math.random（同种子跑局与 D-69 逐局一致），不新增外部素材，
  * 只用 canvas 的 fillRect / strokeRect / arc / fillText。
  * 预算：卡片最多 3 张、冲击圈最多 4 个；每帧新增 canvas 调用 < 60 次，且与地图尺寸无关。
- * 接口：tierOf / isCrushKill / levelUp / eliteReward / crushKill / update / draw / _peek / _reset */
+ * 接口：tierOf / isCrushKill / levelUp / eliteReward / crushKill / update / draw / _peek / _layout / _reset */
 (function () {
   'use strict';
   var Game = window.Game = window.Game || {};
@@ -18,9 +20,13 @@
   var MAX_BURSTS = 4;     /* 同屏最多 4 圈冲击线 */
   var CARD_W = 252;       /* 卡片宽（px） */
   var CARD_GAP = 8;
-  var CARD_TOP = 34;      /* 顶部 HUD 条带（0–22）之下 */
   var FADE = 320;         /* 末尾淡出 ms */
-  var SLIDE = 160;        /* 入场滑入 ms */
+  var SLIDE = 160;        /* 入场淡入 ms */
+
+  /* D-78：战斗场景的"安全中带"——敌方血条 212~232、我方血条 414~434，
+   * 卡片只在这两条之间居中，绝不压住血条；探索场景直接用屏幕正中心。 */
+  var BAND_TOP = 236;
+  var BAND_BOTTOM = 410;
 
   var COLORS = {
     level: '#7dffb0',     /* 升级：绿色 */
@@ -37,13 +43,12 @@
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   }
 
-  /* 当前有效档位：prefers-reduced-motion 时 Fx 会自己降成 off */
+  /* 当前有效档位：D-78 起恒为 high（硬性常开），保留查询供 _peek/验证页 */
   function fxLevel() {
     var Fx = Game.Fx;
     if (Fx && typeof Fx.effectiveLevel === 'function') return Fx.effectiveLevel();
-    return 'off';
+    return 'high';
   }
-  function enabled() { return fxLevel() !== 'off'; }
 
   /* ── 伤害分级（纯函数，不改任何伤害值）─────────────────────────
    * normal：普通命中
@@ -71,7 +76,6 @@
   }
 
   function pushCard(kind, title, rows, accent, life) {
-    if (!enabled()) return null;
     var t = nowMs();
     var card = {
       kind: kind, title: title, rows: rows || [], accent: accent || COLORS.level,
@@ -83,7 +87,6 @@
   }
 
   function pushBurst(x, y, color, life, rays) {
-    if (!enabled()) return null;
     bursts.push({
       x: x, y: y, color: color, rays: (typeof rays === 'number') ? rays : 8,
       bornAt: nowMs(), life: life || 420
@@ -105,6 +108,58 @@
     return !!(Game.Core && Game.Core.Main && Game.Core.Main._scene === 'battle');
   }
 
+  /* D-78：卡片版式（纯函数，验证页可直接测三档分辨率）
+   * - 全局结果卡一律水平居中（逻辑坐标 W/2，不做像素硬编码）；
+   * - 探索：垂直屏幕正中；
+   * - 战斗：垂直居中在敌方血条（212~232）与己方血条（414~434）之间的安全带 236~410，
+   *   短视口（960×540）下自动下移，绝不压住两条血条与底部操作区；
+   * - 同屏多张时从新到旧装入安全带，装不下的旧卡本帧不画（新卡优先，不靠缩字号）。 */
+  function cardWidth(W) {
+    return Math.max(160, Math.min(CARD_W, Math.round(W - 24)));
+  }
+  function cardHeight(c) { return 34 + c.rows.length * 16 + 6; }
+
+  function layout(W, H) {
+    var cw = cardWidth(W);
+    var battle = inBattle();
+    var top = battle ? BAND_TOP : 30;
+    var bottom = battle ? BAND_BOTTOM : H - 28;
+    var avail = Math.max(0, bottom - top);
+    var picked = [];
+    var used = 0;
+    var i, h, need;
+    for (i = cards.length - 1; i >= 0; i--) {
+      h = cardHeight(cards[i]);
+      need = h + (picked.length ? CARD_GAP : 0);
+      if (picked.length && used + need > avail) continue;
+      picked.push(cards[i]);
+      used += need;
+      if (used > avail) break;
+    }
+    picked.reverse();
+    var total = used;
+    var startY;
+    if (battle) {
+      startY = (top + bottom) / 2 - total / 2;
+      if (startY < top) startY = top;
+      if (startY + total > bottom) startY = Math.max(top, bottom - total);
+    } else {
+      startY = H / 2 - total / 2;
+    }
+    var out = [];
+    var y = startY;
+    for (i = 0; i < picked.length; i++) {
+      h = cardHeight(picked[i]);
+      out.push({ card: picked[i], x: Math.round((W - cw) / 2), y: Math.round(y), w: cw, h: h });
+      y += h + CARD_GAP;
+    }
+    return {
+      W: W, H: H, cardW: cw, centerX: W / 2,
+      top: top, bottom: bottom, total: total, startY: startY,
+      cards: out
+    };
+  }
+
   /* 行："攻击   18 → 20  (+2)" */
   function deltaRow(label, from, to) {
     if (typeof from !== 'number' || typeof to !== 'number') return null;
@@ -118,7 +173,6 @@
 
     /* 升级：info 由 battle.js#checkLevelUp 传入升级前/后的真实面板值 */
     levelUp: function (info) {
-      if (!enabled()) return null;
       var o = info || {};
       var rows = [];
       var r1 = deltaRow('攻击', o.atkFrom, o.atkTo);
@@ -140,7 +194,6 @@
 
     /* 精英之证：info = { from, to, gain, total }，数值全部来自 main.js#grantEliteReward */
     eliteReward: function (info) {
-      if (!enabled()) return null;
       var o = info || {};
       var rows = [];
       if (o.item) {
@@ -162,7 +215,6 @@
 
     /* 碾压击杀：info = { rounds, name } */
     crushKill: function (info) {
-      if (!enabled()) return null;
       var o = info || {};
       var rows = [];
       if (o.name) rows.push('目标：' + o.name);
@@ -189,7 +241,6 @@
 
     /* 绘制（在主场景之后、底部提示条之前）。返回本帧新增的 canvas 调用数，供验证页断言 */
     draw: function () {
-      if (!enabled()) return 0;
       var R = Game.Core && Game.Core.Render;
       var ctx = R && R._ctx;
       if (!ctx) return 0;
@@ -199,7 +250,6 @@
       if (!W || !H) return 0;
       var t = nowMs();
       var ops = 0;
-      var hi = fxLevel() === 'high';   /* high 档多一圈外描边，low 保持轻量 */
       var i, k;
 
       /* 冲击圈：固定角度，无随机 */
@@ -228,34 +278,33 @@
         ctx.restore();
       }
 
-      /* 卡片：右上角向下排列 */
-      var y = CARD_TOP;
-      for (i = 0; i < cards.length; i++) {
-        var c = cards[i];
+      /* 卡片：屏幕水平居中；探索垂直居中，战斗落在两条血条之间的安全带 */
+      var lay = layout(W, H);
+      for (i = 0; i < lay.cards.length; i++) {
+        var slot = lay.cards[i];
+        var c = slot.card;
         var age = t - c.bornAt;
         if (age < 0) continue;
         if (age >= c.life) continue;
         var alpha = (age > c.life - FADE) ? Math.max(0, (c.life - age) / FADE) : 1;
-        var slide = (age < SLIDE) ? (1 - age / SLIDE) * 24 : 0;
-        var ch = 34 + c.rows.length * 16 + 6;
-        var x = Math.round(W - CARD_W - 12 + slide);
-        var yy = Math.round(y);
+        var slide = (age < SLIDE) ? (1 - age / SLIDE) * 6 : 0;
+        var ch = slot.h;
+        var x = slot.x;
+        var yy = Math.round(slot.y + slide);
         ctx.save();
         ctx.globalAlpha = 0.88 * alpha;
         ctx.fillStyle = '#06060c';
-        ctx.fillRect(x, yy, CARD_W, ch);
+        ctx.fillRect(x, yy, slot.w, ch);
         ops++;
         ctx.globalAlpha = alpha;
         ctx.strokeStyle = c.accent;
         ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, yy + 0.5, CARD_W - 1, ch - 1);
+        ctx.strokeRect(x + 0.5, yy + 0.5, slot.w - 1, ch - 1);
         ops++;
-        if (hi) {
-          ctx.globalAlpha = 0.35 * alpha;
-          ctx.strokeRect(x - 3.5, yy - 3.5, CARD_W + 6, ch + 6);
-          ctx.globalAlpha = alpha;
-          ops++;
-        }
+        ctx.globalAlpha = 0.35 * alpha;
+        ctx.strokeRect(x - 3.5, yy - 3.5, slot.w + 6, ch + 6);
+        ctx.globalAlpha = alpha;
+        ops++;
         ctx.fillStyle = c.accent;
         ctx.fillRect(x, yy, 3, ch);
         ops++;
@@ -271,7 +320,6 @@
           ops++;
         }
         ctx.restore();
-        y += ch + CARD_GAP;
       }
       return ops;
     },
@@ -286,6 +334,8 @@
         rows: cards.map(function (c) { return c.rows.slice(); })
       };
     },
+    /* D-78：版式纯函数快照（不读 canvas，验证页可直接喂三档分辨率） */
+    _layout: layout,
     _setClock: function (ms) { clock = (typeof ms === 'number') ? ms : null; },
     _reset: function () { cards = []; bursts = []; }
   };

@@ -18,6 +18,7 @@
 </head>
 <body>
 <h1>D-51 · 暂停真停 / 战斗时间轴挂起 / 返回主菜单保进度 / 单 rAF / 清档二次确认 / 旧档 / 数值零改动（A–G）</h1>
+<p style="color:#e0b050;">D-78 时点声明：设置页删掉「打击感」行，「清除存档」由第 5 行上移到第 4 行（索引 3）；确认流程与删除结果判据未变。</p>
 <pre id="result">RUNNING</pre>
 <h2>暂停 3 秒计数器</h2>
 <div id="detail"></div>
@@ -252,7 +253,9 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
       while (st.page !== 'root' && guard++ < 10) { press('Escape'); st = M.getMenuState(); }
       menuSel(3); press('Enter');
       if (M.getMenuState().page !== 'settings') return false;
-      settingsSel(4); press('Enter');
+      /* D-78 时点声明：设置页删掉「打击感」行后，「清除存档」由第 5 行上移到第 4 行
+       * （索引 3）。这是行号随版式变化，不是放宽：确认页/删除结果仍逐项断言。 */
+      settingsSel(3); press('Enter');
       return M.getMenuState().page === 'confirmClear';
     }
     S.save();
@@ -269,7 +272,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var eCont = M._menuSpec().items[1];
     var eOk = eHad && ePrompt && eAfterFirst === true && eCancelPage === 'settings' && eAfterCancel === true &&
       eAgain && eAfterSecond === false && eCont.enabled === false && eCont.note === '暂无存档' &&
-      (M.getMenuState().settingsSel === 4);
+      (M.getMenuState().settingsSel === 3);
     /* 损坏档也能清 */
     try { localStorage.setItem(KEY, '{broken json'); } catch (e2) { }
     var eCorruptHas = S.has();

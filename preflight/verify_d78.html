@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d78</title>
+</head>
+<body>
+<p id="d78-note" style="color:#e0b050;">D-78 验证页：特效居中 + 特效硬性常开。只改表现层；数值/怪物/地图/存档键未动。</p>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640" style="position:fixed;left:-9999px"></canvas>
+<!-- D-78 验证页：
+     A) 硬性常开：off/low/high 请求全部折算 high；旧设置 fx=off 被强制视为最高档；
+        设置页无「打击感」行；F 键已解绑；特效源码零 Math.random。
+     B) 居中版式：1024×640 / 960×540 / 480×800 三档，探索垂直居中、战斗落在两条血条之间，
+        全部水平居中且不裁切、不压血条。
+     C) 跟随类：伤害飘字/斩击弧用逻辑坐标（cssW/cssH），不再用 cv.width 物理像素。
+     D) 绘制预算：空闲 0 次；三卡 + 冲击圈 ≤60 次/帧；两档分辨率实测值。
+     E) 四策略：B1-2500 / G2-4500 / S1-2500 / M1-6000 与 D-77 逐局指纹完全一致。
+     F) 交付物：page-baseline 111、D-78 文档存在。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-78', ok: true, sub: {} };
+  var M = Game.Core.Main, R = Game.Core.Render, Fx = Game.Fx;
+  var J = Game.Systems.Juice, Fb = Game.Feedback, B = Game.Systems.Battle;
+  var P = Game.Data.Player;
+  var SET_KEY = 'aiDungeon_settings_v1';
+
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function readText(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+
+  var START = Date.now();
+  try {
+    M.init(); M.closeGuide();
+
+    /* ═══ A) 硬性常开 ═══════════════════════════════════════════ */
+    var collapsed = [];
+    ['off', 'low', 'high'].forEach(function (lv) {
+      Fx.setLevel(lv);
+      collapsed.push(Fx.effectiveLevel() + '/' + Fx.getLevel());
+    });
+    Fx.setLevel('high');
+    rec('A1_levelCollapsed', collapsed.every(function (s) { return s === 'high/high'; }) &&
+      Fx.label() === '高', {
+      rule: 'D-78：off / low / high 三种请求的有效档与存储档都必须 fixed 为 high',
+      requested: ['off', 'low', 'high'], got: collapsed, label: Fx.label()
+    });
+
+    try { localStorage.setItem(SET_KEY, JSON.stringify({ fx: 'off', muted: false, zoom: 'auto' })); } catch (e) { }
+    M.init({ menu: true, skipMenu: true });
+    var legacySettings = M.getSettings();
+    var legacyFx = Fx.effectiveLevel();
+    rec('A2_legacyStorageForcedHigh', legacyFx === 'high' && legacySettings.fx === undefined &&
+      legacySettings.muted === false && legacySettings.zoom === 'auto', {
+      rule: '旧设置 {"fx":"off"} 读入后仍必须是最档 high；getSettings 不再暴露 fx 字段',
+      effective: legacyFx, settings: legacySettings
+    });
+
+    var spec = M._settingsSpec();
+    var rows = M._settingsRows();
+    var specIds = spec.map(function (s) { return s.id; }).join(',');
+    var rowIds = rows.map(function (r) { return r.id; }).join(',');
+    rec('A3_settingsHasNoFxRow', specIds === 'muted,zoom' && rowIds === 'muted,zoom,adaptive,clearSave,guide' &&
+      M.setSetting('fx', 'off') === false && M.cycleSetting('fx', 1) === false, {
+      rule: '设置页（含暂停页）无「打击感」行；setSetting/cycleSetting 对 fx 一律拒绝',
+      spec: specIds, rows: rowIds
+    });
+
+    /* F 键：不再触发 cycle。直接调 _updateBattle，桩掉 cycle 计数 */
+    var cycleCalls = 0, origCycle = Fx.cycle;
+    Fx.cycle = function () { cycleCalls++; return 'high'; };
+    M._scene = 'battle';
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }));
+    try { M._updateBattle(); } catch (e) { /* 无战斗态也不应因 F 崩 */ }
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyF', bubbles: true }));
+    Fx.cycle = origCycle;
+    M._scene = 'explore';
+    var battleKeys = R.KEYMAP.battle.map(function (r) { return r.act; }).join(',');
+    rec('A4_fKeyUnbound', cycleCalls === 0 && battleKeys.indexOf('fx') < 0 &&
+      R.guideLines().join('\n').indexOf('F 战斗特效') < 0, {
+      rule: 'D-78：F 键不再切换特效（留空，未绑定新功能）；战斗键表与引导页都没有 F 特效',
+      cycleCalls: cycleCalls, battleActs: battleKeys
+    });
+
+    var fxSrc = readText('../js/systems/fx.js');
+    var juiceSrc = readText('../js/systems/juice.js');
+    var fbSrc = readText('../js/systems/feedback.js');
+    var rndBad = [fxSrc, juiceSrc, fbSrc].filter(function (s) { return s.indexOf('Math.random(') >= 0; });
+    rec('A5_zeroRandomInFx', rndBad.length === 0 && fxSrc.length > 1000 && juiceSrc.length > 1000,
+      '特效三文件源码 Math.random( 出现次数：' + rndBad.length, { files: ['fx.js', 'juice.js', 'feedback.js'] });
+
+    /* ═══ B) 居中版式（三档分辨率）═══════════════════════════════ */
+    function buildThreeCards() {
+      J._reset();
+      M._scene = 'explore';
+      J.levelUp({ from: 1, to: 2, levels: 1, atkFrom: 11, atkTo: 12, defFrom: 5, defTo: 6, hpFrom: 100, hpTo: 110 });
+      J.eliteReward({ from: 32, to: 34, gain: 2, total: 2 });
+      M._scene = 'battle';
+      J.crushKill({ rounds: 1, name: '史莱姆' });
+    }
+    function checkExplore(W, H) {
+      M._scene = 'explore';
+      var lay = J._layout(W, H);
+      var bad = [];
+      lay.cards.forEach(function (c) {
+        if (c.x < 0 || c.x + c.w > W) bad.push('x越界 ' + c.x + '+' + c.w);
+        if (c.y < 0 || c.y + c.h > H) bad.push('y越界 ' + c.y + '+' + c.h);
+        if (Math.abs(c.x + c.w / 2 - W / 2) > 0.5) bad.push('未水平居中 ' + (c.x + c.w / 2));
+      });
+      var totalH = lay.cards.reduce(function (a, c) { return a + c.h; }, 0) +
+        Math.max(0, lay.cards.length - 1) * 8;
+      var mid = lay.cards.length ? (lay.cards[0].y + lay.cards[lay.cards.length - 1].y +
+        lay.cards[lay.cards.length - 1].h) / 2 : H / 2;
+      if (Math.abs(mid - H / 2) > 0.5) bad.push('未垂直居中 ' + mid);
+      return { W: W, H: H, n: lay.cards.length, cardW: lay.cardW, x: lay.cards[0] && lay.cards[0].x,
+        y0: lay.cards[0] && lay.cards[0].y, y1: lay.cards.length && (lay.cards[lay.cards.length - 1].y +
+        lay.cards[lay.cards.length - 1].h), totalH: totalH, centerX: lay.centerX, bad: bad };
+    }
+    function checkBattle(W, H) {
+      M._scene = 'battle';
+      var lay = J._layout(W, H);
+      var bad = [];
+      lay.cards.forEach(function (c) {
+        if (c.x < 0 || c.x + c.w > W) bad.push('x越界 ' + c.x + '+' + c.w);
+        if (c.y < 236) bad.push('压敌方血条 ' + c.y);
+        if (c.y + c.h > 410) bad.push('压我方血条 ' + (c.y + c.h));
+        if (Math.abs(c.x + c.w / 2 - W / 2) > 0.5) bad.push('未水平居中 ' + (c.x + c.w / 2));
+      });
+      return { W: W, H: H, n: lay.cards.length, cardW: lay.cardW,
+        rects: lay.cards.map(function (c) { return [c.x, c.y, c.w, c.h]; }),
+        band: [236, 410], bad: bad };
+    }
+    var sizes = [[1024, 640], [960, 540], [480, 800]];
+    buildThreeCards();
+    var ex = [], bt = [], exBad = [], btBad = [];
+    sizes.forEach(function (s) {
+      var e = checkExplore(s[0], s[1]);
+      if (e.bad.length) exBad.push(e);
+      ex.push(e);
+      var b = checkBattle(s[0], s[1]);
+      if (b.bad.length) btBad.push(b);
+      bt.push(b);
+    });
+    M._scene = 'explore';
+    rec('B1_exploreCentered', exBad.length === 0 && ex.every(function (e) { return e.n === 3; }), {
+      rule: '探索：三张结果卡水平居中、整块垂直屏幕正中、三档分辨率都不裁切',
+      measured: ex, bad: exBad
+    });
+    rec('B2_battleSafeCenter', btBad.length === 0 && bt.every(function (b) { return b.n >= 1; }), {
+      rule: '战斗：卡片水平居中并落在敌方血条(212~232)与己方血条(414~434)之间的安全带 236~410；' +
+        '三张装不下时由新到旧取舍（不缩字号）',
+      measured: bt, bad: btBad
+    });
+    rec('B3_notPixelHardcoded', ex.every(function (e) {
+      return Math.abs(e.centerX - e.W / 2) < 1e-9 && Math.abs(e.x - Math.round((e.W - e.cardW) / 2)) <= 1;
+    }), {
+      rule: '锚点由逻辑视口 W/H 计算（_layout 纯函数），没有写死 1024/1280 等像素值',
+      centers: ex.map(function (e) { return e.centerX; })
+    });
+
+    /* ═══ C) 跟随类坐标（逻辑坐标，不跟去中心）═══════════════════ */
+    var stubRender = {
+      cssW: 960, cssH: 540,
+      _canvas: { width: 1920, height: 1080 },
+      _ctx: null
+    };
+    var realRender = Game.Core.Render;
+    Game.Core.Render = stubRender;
+    var captured = null, realSpawn = Fb.spawn;
+    Fb.spawn = function (o) { captured = o; return realSpawn.call(Fb, o); };
+    P.hp = 100; P.maxHp = 100; P.level = 1; P.atk = 11; P.def = 5;
+    B.start('slime');
+    B.playerAction('attack');
+    Fb.spawn = realSpawn;
+    B.abort();
+    Game.Core.Render = realRender;
+    rec('C1_damageTextAtLogicalCenter', !!captured && captured.x === 480 && captured.y === 135, {
+      rule: '1920×1080 画布（cssW=960）下，怪物伤害飘字锚点必须是逻辑中心 (480,135)，' +
+        '不是物理像素 (960,135)',
+      captured: captured && { x: captured.x, y: captured.y, text: captured.text },
+      expected: { x: 480, y: 135 }
+    });
+
+    var bSrc = readText('../js/systems/battle.js');
+    var oldPhys = /cv\.width\s*\/\s*2/.test(bSrc);
+    var usesCss = bSrc.indexOf('R.cssW') >= 0 && bSrc.indexOf('R.cssH') >= 0;
+    rec('C2_followAnchorsFromCss', usesCss && !oldPhys, {
+      rule: 'battle.js 的 monsterPos/playerPos 读 Render.cssW/cssH；源码中不再出现 cv.width/2',
+      usesCss: usesCss, oldPhysicalHalfWidth: oldPhys
+    });
+
+    /* ═══ D) 绘制预算 ════════════════════════════════════════════ */
+    function measureOps(W, H) {
+      M._scene = 'battle';
+      Game.Core.Render = { cssW: W, cssH: H, _ctx: fakeCtx(), _applyDpr: function () {} };
+      J._reset();
+      J.levelUp({ from: 6, to: 7, levels: 1, atkFrom: 15, atkTo: 17, defFrom: 10, defTo: 11, hpFrom: 150, hpTo: 160 });
+      J.eliteReward({ from: 30, to: 32, gain: 2, total: 4 });
+      J.crushKill({ rounds: 2, name: '哥布林' });
+      var ops = J.draw();
+      Game.Core.Render = realRender;
+      return { W: W, H: H, ops: ops, cards: J._peek().cards, bursts: J._peek().bursts };
+    }
+    function fakeCtx() {
+      var n = { ops: 0 };
+      function f() { n.ops++; }
+      var c = { _n: n, save: f, restore: f, beginPath: f, closePath: f, arc: f, moveTo: f,
+        lineTo: f, stroke: f, fill: f, fillRect: f, strokeRect: f, fillText: f, strokeText: f,
+        setTransform: f, clearRect: f, createRadialGradient: function () { return { addColorStop: f }; },
+        measureText: function () { return { width: 100 }; } };
+      return c;
+    }
+    var opSmall = measureOps(960, 540);
+    var opMid = measureOps(1024, 640);
+    M._scene = 'explore';
+    J._reset();
+    M._scene = 'battle';
+    Game.Core.Render = { cssW: 1024, cssH: 640, _ctx: fakeCtx(), _applyDpr: function () {} };
+    var opsIdle = J.draw();
+    Game.Core.Render = realRender;
+    rec('D1_drawBudget', opsIdle === 0 && opSmall.ops > 0 && opSmall.ops <= 60 &&
+      opMid.ops > 0 && opMid.ops <= 60, {
+      rule: '空闲 0 次；三卡 + 冲击圈同时存在时 ≤60 次 canvas 调用/帧（硬上限不放宽）',
+      idle: opsIdle, at960x540: opSmall.ops, at1024x640: opMid.ops,
+      detail: { small: opSmall, mid: opMid }
+    });
+
+    /* 全特效栈（飘字 + 斩击弧 + 卡片）一帧调用数：用假 ctx 实测 */
+    function fullStackOps(W, H) {
+      var ctx = fakeCtx();
+      Game.Core.Render = { cssW: W, cssH: H, _ctx: ctx, _ctxReady: true, _applyDpr: function () {} };
+      M._scene = 'battle';
+      J._reset();
+      J.levelUp({ from: 6, to: 7, levels: 1, atkFrom: 15, atkTo: 17, defFrom: 10, defTo: 11, hpFrom: 150, hpTo: 160 });
+      J.crushKill({ rounds: 1, name: '史莱姆' });
+      Fb._clear();
+      Fb.spawn({ x: W / 2, y: 135, text: '-26', tier: 'crush', who: 'monster', color: '#ffc14d', size: 26, life: 760 });
+      Fb.spawn({ x: W / 2, y: 135, text: '-9', tier: 'normal', who: 'monster', color: '#ffffff', size: 18, life: 620 });
+      Fb.draw();
+      Fx._reset();
+      Fx.hit({ who: 'monster', slash: { x: W / 2, y: 135, r: 40 } });
+      Fx.drawSlashes(ctx);
+      var feedbackOps = ctx._n.ops;
+      var juiceOps = J.draw();
+      Game.Core.Render = realRender;
+      return { W: W, H: H, juice: juiceOps, feedback: feedbackOps, total: juiceOps + feedbackOps };
+    }
+    var fSmall = fullStackOps(960, 540);
+    var fMid = fullStackOps(1024, 640);
+    rec('D2_fullStackPerFrame', fSmall.total > 0 && fMid.total > 0 && fMid.total <= 120, {
+      rule: '常开后一帧的表现层调用数实测（Juice 卡片/冲击圈 + Feedback 飘字/碾压环 + 斩击弧）',
+      at960x540: fSmall, at1024x640: fMid
+    });
+
+    /* ═══ E) 四策略逐局一致 ══════════════════════════════════════ */
+    function fp(run) {
+      return [run.seed, run.outcome, run.floor, run.maxFloor, run.hp, run.gold,
+        run.level, run.kills, run.actions, run.battleTurns].join('|');
+    }
+    var pairs = [
+      ['b1', 'd78-b1-2500.json', 'd77-b1-2500.json', 2500],
+      ['g2', 'd78-g2-4500.json', 'd77-g2-4500.json', 4500],
+      ['s1', 'd78-s1-2500.json', 'd77-s1-2500.json', 2500],
+      ['m1', 'd78-m1-6000.json', 'd77-m1-6000.json', 6000]
+    ];
+    var eBad = [], eDetail = {};
+    pairs.forEach(function (p) {
+      var a = readJson('selfcheck/' + p[1]);
+      var b = readJson('selfcheck/' + p[2]);
+      if (!a || !b) { eBad.push(p[0] + ': 缺 JSON'); return; }
+      var ra = a.runs[p[0]] || [], rb = b.runs[p[0]] || [];
+      var map = {};
+      rb.forEach(function (r) { map[r.seed] = r; });
+      var mis = 0;
+      ra.forEach(function (r) {
+        var o = map[r.seed];
+        if (!o || fp(r) !== fp(o)) mis++;
+      });
+      eDetail[p[0]] = { n: ra.length, mismatches: mis, fx: a.env && a.env.fx, maxActions: a.env && a.env.maxActions };
+      if (ra.length !== 50 || mis !== 0 || (a.env && a.env.fx !== 'high') ||
+        (a.env && a.env.maxActions !== p[3])) eBad.push(p[0] + ': n=' + ra.length + ' mis=' + mis);
+    });
+    rec('E1_fourStrategiesIdentical', eBad.length === 0, {
+      rule: 'B1-2500 / G2-4500 / S1-2500 / M1-6000 各 50 局，逐局指纹与 D-77 完全一致；' +
+        'D-78 跑局 env.fx 必须是 high',
+      runs: eDetail, bad: eBad
+    });
+
+    /* ═══ F) 交付物 ══════════════════════════════════════════════ */
+    var pb = readJson('selfcheck/page-baseline.json');
+    rec('F1_page_baseline', !!pb && pb.count === 111 && pb.pages.indexOf('verify_d78') >= 0, {
+      rule: 'page-baseline.json 计数 110→111，且已登记 verify_d78',
+      count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d78') >= 0
+    });
+    var doc = readText('../docs/特效居中-D-78.md');
+    rec('F2_doc_present', doc.length > 500, {
+      rule: 'docs/特效居中-D-78.md 已交付（含审计表 / 三档实测 / 四问回答）',
+      bytes: doc.length
+    });
+
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String(e && (e.stack || e.message) || e);
+    out.ok = false;
+  }
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  var pre = document.getElementById('result');
+  if (!pre) { pre = document.createElement('pre'); pre.id = 'result'; document.body.appendChild(pre); }
+  pre.textContent = txt;
+  var rowsHtml = '';
+  Object.keys(out.sub).forEach(function (k) {
+    var v = out.sub[k];
+    rowsHtml += '<tr><td>' + k + '</td><td>' + (v.ok ? 'PASS' : 'FAIL') + '</td><td>' +
+      (typeof v.d === 'string' ? v.d : JSON.stringify(v.d)) + '</td></tr>';
+  });
+  var tb = document.createElement('table');
+  tb.style.cssText = 'border-collapse:collapse;margin-top:8px;font:12px/1.5 Consolas,monospace';
+  tb.innerHTML = '<tr><th>断言</th><th>结果</th><th>证据</th></tr>' + rowsHtml;
+  document.body.appendChild(tb);
+})();
+</script>
+</body>
+</html>

@@ -12,6 +12,7 @@
 </head>
 <body>
 <h1>D-20 · 按键表 ↔ 代码映射 / 六处机制 / 术语冻结 / 感叹号口径 / 未实现文案</h1>
+<p style="color:#e0b050;">D-78 时点声明：特效硬性常开，F 键解绑并从战斗键表/引导页删除；原 B1（F 三档）随功能下线，机制清单由 7 条变 6 条。</p>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
 <script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
@@ -315,8 +316,10 @@
     rec('A4_exploreKeysReplay', eBad.length === 0,
       '逐键回放：' + eDetail.join('；') + (eBad.length ? '；不符 ' + eBad.join(',') : ''));
 
-    /* 图例：引导页必须同时出现探索与战斗两张表（D-19 后只写 1/2/3 即为过期） */
-    var hasAll = ['1 攻击', '2 防御', '3 逃跑', '4 火球', '5 冲刺', '6 护盾', '7 用药', 'F 战斗特效',
+    /* 图例：引导页必须同时出现探索与战斗两张表（D-19 后只写 1/2/3 即为过期）
+     * D-78 时点声明：特效改为硬性常开，F 键与「F 战斗特效」文案一并删除；
+     * 本行去掉该项，其余键位仍逐项要求。 */
+    var hasAll = ['1 攻击', '2 防御', '3 逃跑', '4 火球', '5 冲刺', '6 护盾', '7 用药',
       '↑↓←→ / WASD 移动', 'H 重看引导', 'E 商店', 'Esc 关闭面板', 'Enter 确认'].every(function (t) {
       return guideText.indexOf(t) >= 0;
     });
@@ -324,11 +327,10 @@
       '引导页正文共 ' + lines.length + ' 行，含探索/战斗两张表与 Esc/Enter：' +
       (hasAll ? '齐备' : '缺项'));
 
-    /* ══ B. 六处机制：文案有 + 代码有 ═══════════════════════════ */
+    /* ══ B. 机制：文案有 + 代码有 ═══════════════════════════════
+     * D-78 时点声明：原 B1（F 三档特效）随硬性常开一起删除，清单由 7 条变 6 条；
+     * B0 仍按"清单全绿"判定，不写死条数。 */
     var MECHS = [
-      { id: 'B1_fxThreeLevels', text: 'F 战斗特效：关 / 低 / 高',
-        file: 'js/systems/fx.js', re: /LEVELS\s*=\s*\['off',\s*'low',\s*'high'\]/,
-        why: '三档档位表 off/low/high' },
       { id: 'B2_trapRevealOnStep', text: '陷阱：踩中才现形',
         file: 'js/systems/map.js', re: /if\s*\(!tr\s*\|\|\s*tr\.seen\)\s*return\s*null;[\s\S]{0,400}?tr\.seen\s*=\s*true;/,
         why: '未踩到不结算，踩中后 seen=true 永久显现' },

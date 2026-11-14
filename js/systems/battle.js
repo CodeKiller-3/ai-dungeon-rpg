@@ -179,20 +179,32 @@
   }
 
   /* S3-4：战斗反馈坐标——取自 render.js drawBattle 现有绘制位置，反馈层不重算地图
-   * 怪物 sprite：左上角 (cv.width/2 - 45, 90)，尺寸 90x90，中心 y = 135
-   * 玩家 sprite：左上角 (cv.width/2 - 45, cv.height - 190)，尺寸 90x90，中心 y = cv.height - 145 */
+   * D-78：改用逻辑坐标（Render.cssW/cssH）而不是 cv.width/cv.height 物理像素。
+   *   旧写法在 scale=2（1920×1080）时把飘字/斩击弧画到逻辑 x=960（中心应为 480），
+   *   玩家受击数字甚至落到屏幕外；改为与 drawBattle 同一口径。
+   * 怪物 sprite：左上角 (W/2 - 45, 90)，尺寸 90x90，中心 y = 135
+   * 玩家 sprite：左上角 (W/2 - 45, H - 190)，尺寸 90x90，中心 y = H - 145 */
   function battleCanvas() {
     return (Game.Core && Game.Core.Render && Game.Core.Render._canvas) || document.getElementById('game');
   }
-  function monsterPos() {
+  function battleSize() {
+    var R = Game.Core && Game.Core.Render;
     var cv = battleCanvas();
-    var cx = cv ? cv.width / 2 : 200;
+    var w = (R && typeof R.cssW === 'number' && R.cssW > 0) ? R.cssW
+      : ((cv && cv.clientWidth) || (cv && cv.width) || 200);
+    var h = (R && typeof R.cssH === 'number' && R.cssH > 0) ? R.cssH
+      : ((cv && cv.clientHeight) || (cv && cv.height) || 380);
+    return { w: w, h: h };
+  }
+  function monsterPos() {
+    var sz = battleSize();
+    var cx = sz.w / 2;
     return { x: cx - 45, y: 90, w: 90, h: 90, cx: cx, cy: 135 };
   }
   function playerPos() {
-    var cv = battleCanvas();
-    var cx = cv ? cv.width / 2 : 200;
-    var top = cv ? cv.height - 190 : 290;
+    var sz = battleSize();
+    var cx = sz.w / 2;
+    var top = sz.h - 190;
     return { x: cx - 45, y: top, w: 90, h: 90, cx: cx, cy: top + 45 };
   }
 

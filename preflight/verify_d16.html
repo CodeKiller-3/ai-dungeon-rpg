@@ -14,6 +14,7 @@
 </head>
 <body>
 <h1>D-16 · 时间轴分段 / 输入缓冲 / 三档特效 / 中段信息带 / 性能</h1>
+<p style="color:#e0b050;">D-78 时点声明：特效改为硬性常开（恒 high），D 组由"三档可区分 / reduced-motion 降档"改为"忽略 off/low 与降档请求"；顿帧/震屏/闪白上限判据未变。</p>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
 <script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
@@ -169,24 +170,24 @@
       '解锁后命中 ' + hit0 + '→' + hitAfter + '（+1，非 0 非 2）缓冲已清=' + bufCleared +
       ' 回合 ' + turn0 + '→' + turn1);
 
-    /* ══ d) 三档强度 + prefers-reduced-motion ═══════════════════ */
+    /* ══ d) 强度 + prefers-reduced-motion ═══════════════════════
+     * D-78 时点声明：D-78 起特效改为硬性常开（恒 high），off/low 与 reduced-motion
+     * 降档都不复存在。本组由"三档强度"改为"唯一高档 + 忽略降档请求"，
+     * 判据仍然逐项具体（档位值/顿帧/震屏/闪白/命中返回值），不是放宽。 */
     var fxT = 0;
     Fx._setClock(function () { return fxT; });
     Fx._reset();
-    /* D-35 夹具固定（不是放宽断言）：D1~D3 测的是"低/高三档预设本身"，
-     * 不应被宿主系统的 prefers-reduced-motion 污染。headless Edge 在本机
-     * 报告 reduce=true 时三档会被整体降为 off，D2/D3 会假失败。
-     * D4 仍显式 _setPrefersReduced(true) 验证降档行为，判定强度不变。 */
     Fx._setPrefersReduced(false);
 
-    Fx.setLevel('off');
+    Fx.setLevel('off');   /* D-78：请求关档应被忽略 */
     var offHit = Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });
     var stOff = Fx._state();
     var offShake = Fx.shakeOffset();
     var offFlash = Fx.flashOf('monster');
-    rec('D1_offHasNoShakeNoFlash', offHit === false && !stOff.frozen && !stOff.shake &&
-      stOff.flashes === 0 && stOff.slashes === 0 && offShake.x === 0 && offShake.y === 0 && !offFlash,
-      '关档：hit=' + offHit + ' 震屏=' + stOff.shake + ' 闪白=' + stOff.flashes +
+    rec('D1_hardOnIgnoresOffRequest', offHit === true && stOff.level === 'high' && stOff.effective === 'high' &&
+      stOff.preset.hitStop === 80 && stOff.flashes === 1 && !!offFlash &&
+      (offShake.x !== 0 || offShake.y !== 0),
+      '请求 off → 有效=' + stOff.effective + ' hit=' + offHit + ' 闪白=' + stOff.flashes +
       ' 顿帧=' + stOff.freezeLeft + ' 偏移=' + offShake.x + ',' + offShake.y);
 
     function sampleShake() {
@@ -200,13 +201,11 @@
     }
 
     Fx._reset(); fxT = 0;
-    Fx.setLevel('low');
+    Fx.setLevel('low');   /* D-78：请求低档也应被忽略 */
     Fx.hit({ who: 'monster', slash: { x: 100, y: 100, r: 40 } });
     var lowSt = Fx._state();
     var lowFreeze = lowSt.freezeLeft;
-    var lowFlash = Fx.flashOf('monster');
     var lowShake = sampleShake();
-    var lowFlashMs = lowSt.preset.flashMs;
 
     Fx._reset(); fxT = 0;
     Fx.setLevel('high');
@@ -216,14 +215,15 @@
     var hiShake = sampleShake();
     var hiFlashMs = hiSt.preset.flashMs;
 
-    rec('D2_lowHighDistinguishable', lowShake >= 1 && hiShake > lowShake && hiFreeze > lowFreeze,
-      '震屏峰值 低=' + lowShake + 'px 高=' + hiShake + 'px；顿帧 低=' + lowFreeze + 'ms 高=' + hiFreeze + 'ms' +
-      '；闪白 低=' + lowFlashMs + 'ms 高=' + hiFlashMs + 'ms');
-    rec('D3_presetWithinSpec', lowFreeze >= 50 && lowFreeze <= 90 && hiFreeze >= 50 && hiFreeze <= 90 &&
-      lowSt.preset.shake >= 2 && hiSt.preset.shake <= 4 && lowFlashMs <= 120 && hiFlashMs <= 120 && !!lowFlash,
-      '顿帧 50~90ms、震屏 2~4px、闪白单次 ≤120ms 全部满足');
+    rec('D2_singlePresetNoLowHighSplit', lowSt.effective === 'high' && hiSt.effective === 'high' &&
+      lowFreeze === hiFreeze && lowShake === hiShake && lowShake >= 2 && hiShake <= 4,
+      '请求 low/high 均折算 high：顿帧 低=' + lowFreeze + '/高=' + hiFreeze +
+      'ms；震屏峰值 低=' + lowShake + '/高=' + hiShake + 'px');
+    rec('D3_presetWithinSpec', hiFreeze >= 50 && hiFreeze <= 90 &&
+      hiSt.preset.shake >= 2 && hiSt.preset.shake <= 4 && hiFlashMs <= 120 && !!Fx.flashOf('monster'),
+      '顿帧 ' + hiFreeze + 'ms、震屏 ' + hiSt.preset.shake + 'px、闪白单次 ≤120ms 全部满足');
 
-    /* prefers-reduced-motion：高档 + 系统要求减少动态 → 自动降为关 */
+    /* prefers-reduced-motion：D-78 起不再降档（硬性常开），但闪白仍 ≤120ms */
     Fx._setPrefersReduced(true);
     Fx.setLevel('high');
     Fx._reset(); fxT = 0;
@@ -232,8 +232,8 @@
     var redSt = Fx._state();
     var redShake = Fx.shakeOffset();
     Fx._setPrefersReduced(false);
-    rec('D4_reducedMotionAutoDowngrade', redEff === 'off' && redHit === false && !redSt.frozen &&
-      !redSt.shake && redShake.x === 0 && redShake.y === 0,
+    rec('D4_reducedMotionNoDowngrade', redEff === 'high' && redHit === true && redSt.frozen &&
+      (redShake.x !== 0 || redShake.y !== 0) && redSt.preset.flashMs <= 120,
       'reduce 下请求=high 有效=' + redEff + ' hit=' + redHit + ' 偏移=' + redShake.x + ',' + redShake.y);
 
     /* 光敏安全：不做高频闪烁——闪白单次上限与"一次命中只闪一次" */

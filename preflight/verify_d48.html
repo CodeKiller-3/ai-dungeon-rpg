@@ -18,6 +18,7 @@
 </head>
 <body>
 <h1>D-48 · 首屏菜单 / 继续游戏 / 键盘导航 / 说明↔源码 / 设置 / 单 rAF / 旧档 / 回归（A–H）</h1>
+<p style="color:#e0b050;">D-78 时点声明：设置页删掉「打击感」行，E 组由三项变两项，并新增"fx 设置被拒绝 / 旧设置 fx=off 强制 high"两条判据。</p>
 <pre id="result">RUNNING</pre>
 <h2>说明页逐条 ↔ 源码</h2>
 <div id="detail"></div>
@@ -239,32 +240,40 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
       ids: idsNow, bad: dBad, fakeMissing: entryMissing(fake), fakeRejected: fakeRejected
     });
 
-    /* ── E：设置只含既有三项，改动即时生效并可持久化 ── */
+    /* ── E：设置只含既有开关，改动即时生效并可持久化 ──
+     * D-78 时点声明：特效改为硬性常开，设置页删掉「打击感」行，因此本组由三项变两项；
+     * 新增两条同强度判据：setSetting('fx',*) 必须被拒绝、旧设置的 fx=off 不得降档。 */
     var spec = M._settingsSpec();
     var specIds = spec.map(function (s) { return s.id; }).join(',');
-    var fxBad = M.setSetting('fx', 'ultra') === false && M.getSettings().fx === 'low';
-    var fxOk = M.setSetting('fx', 'high') === true && Game.Fx.getLevel() === 'high' && stored().fx === 'high';
+    var st0 = stored();
+    var fxRemoved = M.setSetting('fx', 'high') === false && M.setSetting('fx', 'off') === false &&
+      M.getSettings().fx === undefined && Game.Fx.effectiveLevel() === 'high' &&
+      (!st0 || st0.fx === undefined);
     var mutOk = M.setSetting('muted', true) === true && Game.Systems.Audio.isMuted() === true && stored().muted === true;
     var zoomOk = M.setSetting('zoom', '1.5') === true && R.scale === 1.5 && stored().zoom === '1.5';
     var zoomBack = M.setSetting('zoom', 'auto') === true && R.getScaleMode() === 'auto' && stored().zoom === 'auto';
     /* 留一组非默认值给"重载后仍生效"用 */
     M.setSetting('zoom', '1.25');
-    rec('E_settings', spec.length === 3 && specIds === 'fx,muted,zoom' && fxBad && fxOk && mutOk && zoomOk && zoomBack, {
-      rule: '设置页仅打击感 / 音效 / 画面缩放三项；非法值拒绝；三项均即时生效且写入 localStorage',
-      items: spec, fxBad: fxBad, fxOk: fxOk, mutedOk: mutOk, zoomOk: zoomOk, zoomBack: zoomBack, stored: stored()
+    rec('E_settings', spec.length === 2 && specIds === 'muted,zoom' && fxRemoved && mutOk && zoomOk && zoomBack, {
+      rule: 'D-78：设置页仅音效 / 画面缩放两项；fx 设置项已删除且 setSetting(fx) 一律拒绝；两项即时生效并写入 localStorage',
+      items: spec, fxRemoved: fxRemoved, mutedOk: mutOk, zoomOk: zoomOk, zoomBack: zoomBack, stored: stored()
     });
 
-    /* ── 持久化 + skip 真正落点：重载 init（菜单开启 + skip） ── */
-    M.setSetting('fx', 'high'); M.setSetting('muted', true); M.setSetting('zoom', '1.25');
+    /* ── 持久化 + skip 真正落点：重载 init（菜单开启 + skip） ──
+     * D-78：先写入一份"旧设置"（fx=off），验证读档后被强制视为最高档。 */
+    try {
+      localStorage.setItem(SET_KEY, JSON.stringify({ fx: 'off', muted: true, zoom: '1.25' }));
+    } catch (e) { }
     M.init({ menu: true, skipMenu: true });
     var reloaded = M.getSettings();
-    var skipBootOk = M._scene === 'explore' && reloaded.fx === 'high' && reloaded.muted === true && reloaded.zoom === '1.25';
+    var skipBootOk = M._scene === 'explore' && reloaded.muted === true && reloaded.zoom === '1.25' &&
+      reloaded.fx === undefined && Game.Fx.effectiveLevel() === 'high';
     rec('E2_reload_and_skip', skipBootOk, {
-      rule: '带 skipMenu 启动直接进入 explore；上一轮设置（high / 静音 / 125%）在 init 时被读回',
-      scene: M._scene, settings: reloaded
+      rule: 'D-78：带 skipMenu 启动直接进入 explore；旧设置 fx=off 被强制折算为 high；音效/125% 被读回',
+      scene: M._scene, settings: reloaded, fxEffective: Game.Fx.effectiveLevel()
     });
     /* 恢复默认，避免影响后续断言 */
-    M.setSetting('fx', 'low'); M.setSetting('muted', false); M.setSetting('zoom', 'auto');
+    M.setSetting('muted', false); M.setSetting('zoom', 'auto');
 
     /* ── G：旧档读入正常、存档键未变（v1 形状：无 saveVersion / map / upg / npcQuests） ── */
     try { localStorage.removeItem(KEY); } catch (e) { }
