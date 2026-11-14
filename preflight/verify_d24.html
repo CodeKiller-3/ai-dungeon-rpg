@@ -98,13 +98,21 @@
   function equipEvidenceOk(s) {
     return s.tries > 0 && s.ok === s.tries && s.ok >= 20 && s.hadBetterW === 0 && s.hadBetterA === 0;
   }
+  /* M1（D-84）：武器比较改用有效攻击 Inventory.atkOf（基础 + 等级成长）；
+   * 仍按 effect.atk 基础值比会把 25 攻的烬牙判成"不如 16 攻龙牙剑"，产生假阳性残留。 */
   function bestInBag(inv, type, curId, field) {
-    var best = null, bestV = (curId && IT[curId]) ? (IT[curId].effect[field] || 0) : 0;
+    function val(id) {
+      var d = IT[id];
+      if (!d) return 0;
+      if (type === 'weapon') return I.atkOf ? I.atkOf(id, P.level) : ((d.effect && d.effect.atk) || 0);
+      return (d.effect && d.effect[field]) || 0;
+    }
+    var best = null, bestV = curId ? val(curId) : 0;
     for (var id in inv) {
       if (!Object.prototype.hasOwnProperty.call(inv, id) || !(inv[id] > 0)) continue;
       var d = IT[id];
       if (!d || d.type !== type || !d.effect) continue;
-      var v = d.effect[field] || 0;
+      var v = val(id);
       if (v > bestV) { bestV = v; best = id; }
     }
     return best;

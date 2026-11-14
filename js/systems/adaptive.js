@@ -80,13 +80,21 @@
     return false;
   }
 
+  /* M1（D-84）：武器强弱只看有效攻击（基础 + 等级成长），不再看 effect.atk 基础值。
+   * 否则玩家拿着 25 攻的烬牙会被 13 攻的救援剑替换 —— 这是让玩家变弱的真 bug。 */
+  function curWeaponAtk(p) {
+    var cur = p.equipment && p.equipment.weapon ? items()[p.equipment.weapon] : null;
+    if (!cur) return 0;
+    var I = Game.Systems.Inventory;
+    if (I && typeof I.atkOf === 'function') return I.atkOf(cur.id, p.level);
+    return (cur.effect && cur.effect.atk) || 0;
+  }
+
   function equipGear(p) {
     var I = Game.Systems.Inventory;
     if (p.inventory[GEAR_ID]) p.inventory[GEAR_ID] += 1;
     else p.inventory[GEAR_ID] = 1;
-    var cur = p.equipment && p.equipment.weapon ? items()[p.equipment.weapon] : null;
-    var curAtk = (cur && cur.effect && cur.effect.atk) || 0;
-    if (!cur || curAtk < GEAR_ATK) {
+    if (curWeaponAtk(p) < GEAR_ATK) {
       p.equipment = p.equipment || {};
       p.equipment.weapon = GEAR_ID;
       if (I && typeof I.recalcEquip === 'function') I.recalcEquip();
@@ -106,8 +114,7 @@
     }
     /* 三级：救援装备。只在 1–4 层、未发过、当前武器确实更差时发；
      * F5 的可买到最好档已是 atk16（= 现有最强档），没有"之间"的档位，改发补给。 */
-    var cur = p.equipment && p.equipment.weapon ? items()[p.equipment.weapon] : null;
-    var curAtk = (cur && cur.effect && cur.effect.atk) || 0;
+    var curAtk = curWeaponAtk(p);
     if (floor <= 4 && !s.gearGranted && curAtk < GEAR_ATK) {
       equipGear(p);
       s.gearGranted = true;

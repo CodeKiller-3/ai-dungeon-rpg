@@ -22,8 +22,28 @@
     return b + (b ? Math.ceil(b * n * 0.1) : 0);
   }
 
+  /* M1（D-84 C-3）：精英刀的有效攻击——基础值 + 升到 L 时按 growth 分段累加。
+   * 公式：atk = round(base + Σ_{k=2..level} rate(k))，rate(k) 取覆盖 k 的那一段 [from,to,rate]。
+   * 这是全仓库唯一口径：recalcEquip 与 main.js#grantEliteReward 都只调这里，不再看 effect.atk。 */
+  function atkOf(id, level) {
+    var it = Game.Data.ITEMS[id];
+    if (!it) return 0;
+    var lv = (typeof level === 'number' && level >= 1) ? Math.floor(level) : 1;
+    var sum = (it.effect && it.effect.atk) || 0;
+    var g = it.growth;
+    if (g && g.length) {
+      for (var k = 2; k <= lv; k++) {
+        for (var i = 0; i < g.length; i++) {
+          if (k >= g[i][0] && k <= g[i][1]) { sum += g[i][2]; break; }
+        }
+      }
+    }
+    return Math.round(sum);
+  }
+
   Game.Systems.Inventory = {
     effValue: effValue,
+    atkOf: atkOf,
     /* 使用消耗品（P2-2：新增 effect.mp 回蓝分支，与 hp 同构；满 MP 时拒绝使用蓝瓶）
      * S-03：scroll:true 的卷轴走 upgrade()，不消耗血量逻辑 */
     use: function (id) {
@@ -89,9 +109,13 @@
     upgrade: function () {
       var p = Game.Data.Player;
       if (!p.upg) p.upg = {};
-      var w = p.equipment.weapon ? Game.Data.ITEMS[p.equipment.weapon] : null;
+      var w0 = p.equipment.weapon ? Game.Data.ITEMS[p.equipment.weapon] : null;
       var a = p.equipment.armor ? Game.Data.ITEMS[p.equipment.armor] : null;
-      if (!w && !a) return { ok: false, msg: '需先装备武器或护甲' };
+      if (!w0 && !a) return { ok: false, msg: '需先装备武器或护甲' };
+      /* M1（D-84 C-3）：精英刀随等级成长，不吃强化卷轴；卷轴落不到别的装备时必须给可读原因，
+       * 由 use() 原样返回 → modal._report → ui:notice 显示，不静默失效也不新增 UI。 */
+      var w = (w0 && !w0.elite) ? w0 : null;
+      if (!w && !a) return { ok: false, msg: '系统武器无法强化：它随你等级成长' };
       var wlv = w ? (p.upg[w.id] || 0) : 99;
       var alv = a ? (p.upg[a.id] || 0) : 99;
       var target = (w && (!a || wlv <= alv)) ? w : a;
@@ -123,10 +147,12 @@
       var a = p.equipment.armor ? Game.Data.ITEMS[p.equipment.armor] : null;
       var wN = w ? Math.min(Math.max(p.upg[w.id] || 0, 0), 5) : 0;
       var aN = a ? Math.min(Math.max(p.upg[a.id] || 0, 0), 5) : 0;
-      var wAtk = (w && w.effect.atk) ? w.effect.atk : 0;
+      var wAtk = w ? atkOf(w.id, lv) : 0;
       var aDef = (a && a.effect.def) ? a.effect.def : 0;
+      /* M1：武器攻走 atkOf（基础 + 等级成长）；强化等级只对商店武器生效（精英刀被 upgrade 排除），
+       * 仍保留 effValue 以维持 D-28 的 +10%/级口径。bonus.def 是刀的副加成（霜噬 +3）。 */
       p.atk = baseAtk + effValue(wAtk, wN) + (typeof p.eliteAtk === 'number' ? p.eliteAtk : 0);
-      p.def = baseDef + effValue(aDef, aN);
+      p.def = baseDef + effValue(aDef, aN) + ((w && w.bonus && w.bonus.def) ? w.bonus.def : 0);
       p.maxHp = baseMaxHp +
         (w && w.effect.maxHp ? w.effect.maxHp : 0) +
         (a && a.effect.maxHp ? a.effect.maxHp : 0);

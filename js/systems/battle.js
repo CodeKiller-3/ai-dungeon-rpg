@@ -96,6 +96,10 @@
   }
   function expToNext(level) {
     var lv = (typeof level === 'number' && level >= 1) ? level : 1;
+    /* D-84 r3：最后一格（L10→L11）由成长表覆写为 200；其余等级仍走 base×level。
+     * 数值来源只留在 GROWTH.lastStep，battle 只读不复制。 */
+    var G0 = Game.Data.GROWTH;
+    if (G0 && G0.lastStep && typeof G0.lastStep[lv] === 'number') return G0.lastStep[lv];
     return expBase(lv) * lv;
   }
 
@@ -156,8 +160,29 @@
     return ups;
   }
 
-  /* M8-2：怪物当前生效的 atk/def——狂暴时取 state.enrageAtk/enrageDef，否则取原始值（不写回 data） */
-  function monsterAtk() { return state && state.enraged ? state.enrageAtk : state.monster.atk; }
+  /* M8-2：怪物当前生效的 atk/def——狂暴时取 state.enrageAtk/enrageDef，否则取原始值（不写回 data）
+   * D-84 r5：巨龙「龙威」——第 9 回合起按段累加攻击；狂暴时先加 bonus 再 ×atkMul，
+   * 与「狂暴是对当前攻击的乘数」语义一致。只有 monsters.js 里带 dread 的怪（仅巨龙）受影响。 */
+  function dreadBonus(m, r) {
+    var d = m && m.dread;
+    if (!d || !(r >= d.start)) return 0;
+    var sum = 0;
+    for (var i = 0; i < d.tiers.length; i++) {
+      var t = d.tiers[i];
+      if (r >= t[0]) sum += t[2] * (Math.min(r, t[1]) - t[0] + 1);
+    }
+    return sum;
+  }
+  function monsterAtk() {
+    if (!state) return 0;
+    var m = state.monster;
+    var b = dreadBonus(m, state.roundNo);
+    if (state.enraged) {
+      if (m.dread) return Math.round((m.atk + b) * m.enrage.atkMul);
+      return state.enrageAtk;
+    }
+    return m.atk + b;
+  }
   function monsterDef() { return state && state.enraged ? state.enrageDef : state.monster.def; }
 
   /* M8-2：狂暴触发判定——受击后血量 ≤ maxHp×hpPct 且未狂暴时进入二阶段（单次触发） */
@@ -301,7 +326,13 @@
   function settleWin() {
     var p = Game.Data.Player;
     var m = state.monster;
-    p.exp += m.exp;
+    /* M1（D-84 C-4）：击杀经验吃武器 bonus.expPct（断牙 +10%、烬牙 +15%），缺省 0。
+     * 只作用于击杀经验；任务经验、精英 0 经验、expToNext 全部不变。 */
+    var wId = p.equipment && p.equipment.weapon;
+    var wIt = wId ? Game.Data.ITEMS[wId] : null;
+    var expPct = (wIt && wIt.bonus && typeof wIt.bonus.expPct === 'number') ? wIt.bonus.expPct / 100 : 0;
+    var expGain = Math.round(m.exp * (1 + expPct));
+    p.exp += expGain;
     checkLevelUp(); /* M8-6：exp 累加后统一走升级检查（幂等） */
     var gold = roll(m.gold[0], m.gold[1]);
     p.gold += gold;
@@ -337,7 +368,7 @@
       var dit = (Game.Data.ITEMS) ? Game.Data.ITEMS[drops[di]] : null;
       dropNames.push((dit && dit.name) ? dit.name : drops[di]);
     }
-    logPush('胜利！经验 +' + m.exp + ' 金币 +' + gold);
+    logPush('胜利！经验 +' + expGain + ' 金币 +' + gold);
     if (dropNames.length === 1) logPush('获得：' + dropNames[0]);
     else if (dropNames.length > 1) logPush('获得 ' + dropNames.length + ' 件：' + dropNames.join('、'));
     if (Game.Systems.Quest) Game.Systems.Quest.progress('gold', gold);
@@ -347,7 +378,7 @@
     state.dyingAt = performance.now();
     state.dyingMs = DYING_MS;
     spawnDeathParticles();
-    pendingWin = { result: 'win', monsterId: m.id, exp: m.exp, gold: gold, drops: drops };
+    pendingWin = { result: 'win', monsterId: m.id, exp: expGain, gold: gold, drops: drops };
     /* D-70：碾压击杀表现——1–2 回合解决普通怪时给一张区别于苦战的卡片。
      * rounds 直接读本场已发生的回合数（roundNo 在回合起拍时 +1，击杀那一击也算）；
      * Boss/精英由 Juice.isCrushKill 自行排除。纯展示，不改结算与掉落。 */
@@ -626,7 +657,7 @@
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
       state = {
-        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage },
+        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage, dread: def.dread },
         log: ['遭遇 ' + def.name + '，战斗开始'],
         turn: 0,
         defending: false,

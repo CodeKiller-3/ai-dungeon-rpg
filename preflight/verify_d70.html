@@ -107,7 +107,10 @@
     for (var lv = 1; lv <= 10; lv++) {
       var g = D.GROWTH.statsAt(lv), f = GROWTH_FROZEN[lv];
       if (g.atk !== f[0] || g.def !== f[1] || g.maxHp !== f[2]) badGrow.push('L' + lv + '=' + g.atk + '/' + g.def + '/' + g.maxHp);
-      if (D.GROWTH.expToNext(lv) !== (lv < 5 ? 15 * lv : 60 * lv)) badGrow.push('expL' + lv);
+      /* D-84 r3：L10→L11 覆写 200；其余 9 格仍是 15×lv / 60×lv。 */
+      var wantExp = (lv < 5 ? 15 * lv : 60 * lv);
+      if (lv === 10) wantExp = 200;
+      if (D.GROWTH.expToNext(lv) !== wantExp) badGrow.push('expL' + lv);
     }
     var lootOk = Array.isArray(D.ELITE && D.ELITE.loot) && D.ELITE.loot.length === 5 &&
       D.ELITE.loot.every(function (lid) { return !!D.ITEMS[lid]; });
@@ -115,7 +118,7 @@
         !lootOk || D.ELITE.enabled !== true) badElite.push('ELITE');
     if (MP.sizes.join('|') !== '25,19|29,21|33,23|37,25|41,27') badElite.push('sizes');
     rec('A1_numbersFrozen', badMon.length === 0 && badGrow.length === 0 && badElite.length === 0, {
-      rule: '18 只怪 hp/atk/def、成长曲线 L1–L10、经验阈值、精英配置、5 层地图尺寸全部与 D-69 一字不差',
+      rule: '18 只怪 hp/atk/def、成长曲线 L1–L10、经验阈值（D-84 r3：仅 L10→L11=200，其余 15×lv/60×lv）、精英配置、5 层地图尺寸全部与基线一致',
       badMon: badMon, badGrow: badGrow, badElite: badElite
     });
 

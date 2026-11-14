@@ -66,7 +66,7 @@
     var led = readJson('selfcheck/current-run.json');
     var myRun = PM.runIdFromSearch(location.search);
     out.loaded = script.length > 0 && !!st && !!baseline && !!led;
-    out.note = '基线 113 页（含本页 verify_d22；D-46 起 86→87，…，D-78 起 110→111，D-79 起 111→112，D-80 起 112→113）';
+    out.note = '基线 114 页（含本页 verify_d22；D-46 起 86→87，…，D-79 起 111→112，D-80 起 112→113，D-84 起 113→114）';
 
     var pages = (baseline && baseline.pages) || [];
     var cases = (st && st.cases) || [];

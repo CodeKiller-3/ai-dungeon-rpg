@@ -76,7 +76,9 @@
       return (x.responseText || '');
     } catch (e) { return ''; }
   }
-  /* 独立实现一遍"按档位累加"，用来对照表里的 statsAt（不是抄它的写法） */
+  /* 独立实现一遍"按档位累加"，用来对照表里的 statsAt（不是抄它的写法）。
+   * M1（D-84）：L11 里程碑（满级觉醒）也属于"按等级累加"的一部分，独立累加器必须同样计入，
+   * 否则 A2 会在 L11/L12 误报——这是判据实现失准，不是 statsAt 放宽。 */
   function expectAt(cfg, lv) {
     var s = { atk: cfg.base.atk, def: cfg.base.def, maxHp: cfg.base.maxHp };
     for (var i = 2; i <= lv; i++) {
@@ -84,6 +86,8 @@
         var g = cfg.tiers[t];
         if (i >= g.from && i <= g.to) { s.atk += g.atk; s.def += g.def; s.maxHp += g.maxHp; break; }
       }
+      var ms = cfg.milestones && cfg.milestones[i];
+      if (ms) { s.atk += ms.atk || 0; s.def += ms.def || 0; s.maxHp += ms.maxHp || 0; }
     }
     return s;
   }
@@ -128,10 +132,12 @@
       var need = B.expToNext(lv);
       expSeq.push(need);
       var want = (lv < 5 ? 15 : 60) * lv;
+      if (lv === 10) want = 200; /* D-84 r3：只改最后一格 L10→L11 600→200 */
       if (need !== want) expOk = false;
     }
     rec('A4_expBaseUnchanged', expOk,
-      'L1–L10 需要经验 = [' + expSeq.join(',') + ']（D-41 分段：L1–4 基数 15、L5+ 基数 60，未改）');
+      'L1–L10 需要经验 = [' + expSeq.join(',') + ']（D-41 分段：L1–4 基数 15、L5+ 基数 60；' +
+      'D-84 r3 仅把最后一格 L10→L11 覆写为 200，其余 9 格未改）');
 
     var l8old = LG.statsAt(8);
     rec('A5_legacyCurveDiffers', l8old.atk === 17 && l8old.def === 12 && l8old.maxHp === 170 &&
@@ -185,9 +191,10 @@
     var cum = 0, cumAt = {};
     for (lv = 1; lv <= 12; lv++) { cumAt[lv] = cum; cum += B.expToNext(lv); }
     cumAt[13] = cum;
-    rec('D1_levelThresholds', cumAt[11] === 2850 && cumAt[12] === 3510 && cumAt[13] === 4230,
+    rec('D1_levelThresholds', cumAt[11] === 2450 && cumAt[12] === 3850 && cumAt[13] === 4570,
       '累计经验：到 L10=' + cumAt[10] + '、L11=' + cumAt[11] + '、L12=' + cumAt[12] +
-      '、L13=' + cumAt[13] + '（D-64 实测全图经验约 3193 → 上限 L11，见 docs/升级曲线-D-65.md）');
+      '、L13=' + cumAt[13] + '（D-84 r3/r4/r5：L10→L11=200、L11→L12=1400，' +
+      'L12 累计 3850 超出含 expPct 的经验池上界约 3600，L12 封死、L11 为毕业档）');
   } catch (e) {
     out.ok = false;
     out.err = String((e && (e.stack || e.message)) || e);

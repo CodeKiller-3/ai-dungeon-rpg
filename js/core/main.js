@@ -521,16 +521,24 @@
     }
 
     if (Inv && typeof Inv.add === 'function') Inv.add(lootId, 1);
+    /* M1（D-84 C-5）：比较与文案都用**有效攻击**（基础 + 等级成长），不再看 effect.atk 基础值。
+     * 口径唯一来自 Inventory.atkOf；未加载时按基础值兜底，保证极端情况下不抛错。 */
+    var lvNow = (typeof player.level === 'number' && player.level >= 1) ? player.level : 1;
+    var atkOfFn = (Inv && typeof Inv.atkOf === 'function') ? Inv.atkOf : function (id) {
+      var it0 = Game.Data.ITEMS[id];
+      return (it0 && it0.effect && it0.effect.atk) || 0;
+    };
     var curId = player.equipment.weapon;
-    var curAtk = (curId && Game.Data.ITEMS[curId] && Game.Data.ITEMS[curId].effect)
-      ? (Game.Data.ITEMS[curId].effect.atk || 0) : 0;
-    var atk = item.effect.atk || 0;
+    var curAtk = curId ? atkOfFn(curId, lvNow) : 0;
+    var baseAtk = (item.effect && item.effect.atk) || 0;
+    var atk = atkOfFn(lootId, lvNow);
     var equipped = atk > curAtk;
     if (equipped && Inv && typeof Inv.equip === 'function') Inv.equip(lootId);
     else if (Inv && typeof Inv.recalcEquip === 'function') Inv.recalcEquip();
 
     Game.Core.EventBus.emit('ui:notice', {
       msg: '精英战利品【' + item.name + '】攻击 ' + atk +
+        '（基础 ' + baseAtk + ' + 等级 ' + lvNow + ' 成长）' +
         (equipped ? '（面板 ' + before + ' → ' + player.atk + '，已装备）' : '（已放入背包）')
     });
     /* D-70 卡片通道：写明"拿到了哪把刀 + 面板前后值"；off 档 Juice 自己跳过 */

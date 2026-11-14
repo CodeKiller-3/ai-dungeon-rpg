@@ -83,15 +83,18 @@
    *      因此是真正的 drop-only；不消耗随机数，不改进货/掉落/价格表。
    * 用 defineProperty 挂成「不可枚举」：ITEMS 的可枚举条目仍是 48 条，
    * 历史验证页（物品计数 / 商店货架 / 交易契约）全部不受影响。
-   * 属性口径：严格递增，且每一把都高于"同层商店最强武器"（5/8/12/12/16），
-   *          保证玩家拿到时一定比手里/店里同层的刀更好，不会被 betterEquipIndex 丢弃。
+   * M1（D-84 C-1）：effect.atk 改为**基础值**，随等级按 growth 分段成长（唯一口径见 Inventory.atkOf）；
+   *   growth 每段 [from, to, rate]：升到 L 时累加 L 所属段的 rate（L1 只有基础值）。
+   *   五把刀形状不同：早熟 1.6→0.5 / 阶梯 1.0→2.5→0.7 / 线性 1.4 / 晚熟 1.0→2.2 / 断点 1.2→3.0。
+   * 收到时的有效攻击（玩家在该层拿到刀的实际等级）：8/11/17/21/26，
+   *   仍全部高于"同层商店最强武器"（5/8/12/12/16），拿到就是升级。
    * price/sell = 0：不参与买卖，避免"打出来卖钱"变成经济外挂。 */
   var ELITE_WEAPONS = {
-    elite_fang_1: { id: 'elite_fang_1', name: '断牙', type: 'weapon', elite: true, effect: { atk: 8 }, price: 0, sell: 0 },
-    elite_axe_2: { id: 'elite_axe_2', name: '裂颅', type: 'weapon', elite: true, effect: { atk: 12 }, price: 0, sell: 0 },
-    elite_blade_3: { id: 'elite_blade_3', name: '霜噬', type: 'weapon', elite: true, effect: { atk: 16 }, price: 0, sell: 0 },
-    elite_edge_4: { id: 'elite_edge_4', name: '守夜', type: 'weapon', elite: true, effect: { atk: 16, maxHp: 10 }, price: 0, sell: 0 },
-    elite_fang_5: { id: 'elite_fang_5', name: '烬牙', type: 'weapon', elite: true, effect: { atk: 22, maxHp: 10 }, price: 0, sell: 0 }
+    elite_fang_1: { id: 'elite_fang_1', name: '断牙', type: 'weapon', elite: true, effect: { atk: 3 }, growth: [[1, 5, 1.6], [6, 99, 0.5]], bonus: { expPct: 10 }, price: 0, sell: 0 },
+    elite_axe_2: { id: 'elite_axe_2', name: '裂颅', type: 'weapon', elite: true, effect: { atk: 6 }, growth: [[1, 6, 1.0], [7, 8, 2.5], [9, 99, 0.7]], price: 0, sell: 0 },
+    elite_blade_3: { id: 'elite_blade_3', name: '霜噬', type: 'weapon', elite: true, effect: { atk: 9 }, growth: [[1, 99, 1.4]], bonus: { def: 3 }, price: 0, sell: 0 },
+    elite_edge_4: { id: 'elite_edge_4', name: '守夜', type: 'weapon', elite: true, effect: { atk: 11, maxHp: 25 }, growth: [[1, 7, 1.0], [8, 99, 2.2]], price: 0, sell: 0 },
+    elite_fang_5: { id: 'elite_fang_5', name: '烬牙', type: 'weapon', elite: true, effect: { atk: 12 }, growth: [[1, 9, 1.2], [10, 99, 3.0]], bonus: { expPct: 15 }, price: 0, sell: 0 }
   };
   for (var ew in ELITE_WEAPONS) {
     if (!Object.prototype.hasOwnProperty.call(ELITE_WEAPONS, ew)) continue;

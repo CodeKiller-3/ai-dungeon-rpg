@@ -30,6 +30,10 @@
     var curve = {
       base: cfg.base,
       tiers: cfg.tiers,
+      /* M1（D-84 C-2）：满级觉醒——某一级除当级档位外再叠一次突破增益。
+       * 只有主曲线有；LEGACY 不传该字段，因此历史基线页拿不到任何突破。 */
+      milestones: cfg.milestones || null,
+      lastStep: cfg.lastStep || null,
       expBase: cfg.expBase,
       tierAt: function (lv) {
         for (var i = 0; i < cfg.tiers.length; i++) {
@@ -44,11 +48,20 @@
         for (var i = 2; i <= lv; i++) {
           var t = curve.tierAt(i);
           if (t) { s.atk += t.atk; s.def += t.def; s.maxHp += t.maxHp; s.maxMp += (t.maxMp || 0); }
+          var ms = curve.milestones && curve.milestones[i];
+          if (ms) {
+            s.atk += ms.atk || 0; s.def += ms.def || 0;
+            s.maxHp += ms.maxHp || 0; s.maxMp += ms.maxMp || 0;
+          }
         }
         return s;
       },
       expToNext: function (level) {
         var lv = (typeof level === 'number' && level >= 1) ? Math.floor(level) : 1;
+        /* D-84 r3/r4/r5：只改最后两格——L10→L11 600→200（满级觉醒在 F5 尾段稳定触发）、
+         * L11→L12 660→1400（累计到 L12 = 3850 > 含 expPct 的经验池上界约 3600，L12 封死）。
+         * 其余等级仍按 base×level，全图经验池与升级曲线前 9 格一个字未动。 */
+        if (cfg.lastStep && typeof cfg.lastStep[lv] === 'number') return cfg.lastStep[lv];
         var b = (lv < cfg.expBase.split) ? cfg.expBase.early : cfg.expBase.late;
         return b * lv;
       }
@@ -61,8 +74,13 @@
     tiers: [
       { from: 2, to: 6, atk: 1, def: 1, maxHp: 10, maxMp: 0 },
       { from: 7, to: 8, atk: 2, def: 1, maxHp: 10, maxMp: 0 },
-      { from: 9, to: 99, atk: 3, def: 3, maxHp: 10, maxMp: 0 }
+      { from: 9, to: 10, atk: 3, def: 3, maxHp: 10, maxMp: 0 },
+      { from: 11, to: 99, atk: 3, def: 3, maxHp: 10, maxMp: 0 }
     ],
+    /* M1：L10 与现状一致（25/18/190），突破落在 L11——满级觉醒 +9/+4/+20 → 37/25/220。
+     * 时点理由：F4 出层已实测到 L10，放 L10 等于把高潮埋进 F4（见下发卡 §4.3）。 */
+    milestones: { 11: { atk: 9, def: 4, maxHp: 20 } },
+    lastStep: { 10: 200, 11: 1400 },
     expBase: { early: 15, late: 60, split: 5 }
   });
 

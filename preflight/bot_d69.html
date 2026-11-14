@@ -117,7 +117,7 @@
     rec.battles = ((r.d44 && r.d44.battles) || []).map(function (b) {
       return { floor: b.floor, id: b.monsterId, n: b.rRounds, nAll: b.nRounds, res: b.result,
         dealt: b.dealt, taken: b.taken, mhp: b.maxHp, pot: b.potionUses,
-        at: b.at, floorAt: b.floorAt, atk: b.atk, def: b.def,
+        at: b.at, floorAt: b.floorAt, atk: b.atk, def: b.def, lv: b.lv,
         endHpPct: (b.end && b.end.maxHp) ? Math.round(b.end.hp / b.end.maxHp * 1000) / 10 : null };
     });
     return rec;

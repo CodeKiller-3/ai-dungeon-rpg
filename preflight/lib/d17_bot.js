@@ -69,6 +69,19 @@
 
   /* ── 只读工具 ────────────────────────────────────────────────── */
   function items() { return (Game.Data && Game.Data.ITEMS) || {}; }
+  /* M1（D-84）：装备强弱唯一口径 = Inventory.atkOf（基础 + 等级成长）。
+   * 刀面数字是基础值，实际战力是有效攻击；按基础值排序会把 25 攻的烬牙换成 16 攻的龙牙剑，
+   * 既不真人也不合法。所有"换装 / 商店比较 / 卖杂物"统一走这里，不再读 effect.atk。 */
+  function itemAtk(id, lv) {
+    var I = Game.Systems && Game.Systems.Inventory;
+    if (I && typeof I.atkOf === 'function') return I.atkOf(id, lv);
+    var d = items()[id];
+    return (d && d.effect && d.effect.atk) || 0;
+  }
+  function curWeaponAtk() {
+    var P = Game.Data.Player;
+    return (P.equipment && P.equipment.weapon) ? itemAtk(P.equipment.weapon, P.level) : 0;
+  }
   /* D-69：层内精英是独立实体层（不进 Map.getEnemies）。寻路/遭遇判定要把它
    * 当成"会触发的怪"，否则 B1 会规划直接穿过它、把必经战误记成遭遇战。
    * 只影响测量台的寻路口径，不改任何游戏数值。 */
@@ -97,9 +110,8 @@
       if (!d || !d.effect) continue;
       var gain = 0;
       if (d.type === 'weapon') {
-        var curAtk = 0;
-        if (P.equipment.weapon && items()[P.equipment.weapon]) curAtk = items()[P.equipment.weapon].effect.atk || 0;
-        gain = (d.effect.atk || 0) - curAtk;
+        var curAtk = curWeaponAtk();
+        gain = itemAtk(d.id, P.level) - curAtk;
       } else if (d.type === 'armor') {
         var curDef = 0;
         if (P.equipment.armor && items()[P.equipment.armor]) curDef = items()[P.equipment.armor].effect.def || 0;
@@ -111,7 +123,7 @@
   }
   function equipScore() {
     var P = Game.Data.Player, it = items(), s = 0;
-    if (P.equipment.weapon && it[P.equipment.weapon]) s += (it[P.equipment.weapon].effect.atk || 0);
+    if (P.equipment.weapon) s += itemAtk(P.equipment.weapon, P.level);
     if (P.equipment.armor && it[P.equipment.armor]) s += (it[P.equipment.armor].effect.def || 0);
     return s;
   }
@@ -644,8 +656,7 @@
         if (!d || d.price > P.gold) continue;
         var worth = false;
         if (d.type === 'weapon') {
-          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
-          worth = !ownedCount(d.id) && (d.effect.atk || 0) > ca;
+          worth = !ownedCount(d.id) && itemAtk(d.id, P.level) > curWeaponAtk();
         } else if (d.type === 'armor') {
           var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
           worth = !ownedCount(d.id) && (d.effect.def || 0) > cd;
@@ -951,7 +962,7 @@
     var a0 = P.equipment.armor, ia = a0 ? it[a0] : null;
     var s = {
       floor: P.floor, gold: P.gold, potions: hpPotionCount(),
-      weaponId: w0 || null, weaponAtk: iw ? (iw.effect.atk || 0) : 0,
+      weaponId: w0 || null, weaponAtk: w0 ? itemAtk(w0, P.level) : 0,
       armorId: a0 || null, armorDef: ia ? (ia.effect.def || 0) : 0,
       stock: [], bought: [], boughtWeapon: false, boughtArmor: false,
       reason: null, goldAfter: null, potionsAfter: null
@@ -966,7 +977,7 @@
         def: d.effect ? (d.effect.def || 0) : 0,
         heal: d.effect ? (d.effect.hp || 0) : 0,
         owned: ownedCount(d.id), affordable: d.price <= P.gold,
-        weaponUp: d.type === 'weapon' && d.effect && (d.effect.atk || 0) > s.weaponAtk,
+        weaponUp: d.type === 'weapon' && itemAtk(d.id, P.level) > s.weaponAtk,
         armorUp: d.type === 'armor' && d.effect && (d.effect.def || 0) > s.armorDef
       });
     }
@@ -992,14 +1003,14 @@
   }
   function b1JunkIndex() {
     var P = Game.Data.Player, it = items(), list = Game.Systems.Inventory.list();
-    var wAtk = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
+    var wAtk = curWeaponAtk();
     var aDef = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
     for (var i = 0; i < list.length; i++) {
       var d = it[list[i].id];
       if (!d) continue;
       if (d.scroll) return i;
       if (d.type === 'weapon' && P.equipment.weapon !== d.id) {
-        if ((d.effect.atk || 0) <= wAtk && !(d.effect.maxHp > 0)) return i;
+        if (itemAtk(d.id, P.level) <= wAtk && !(d.effect.maxHp > 0)) return i;
       } else if (d.type === 'armor' && P.equipment.armor !== d.id) {
         if ((d.effect.def || 0) <= aDef && !(d.effect.maxHp > 0)) return i;
       }
@@ -1067,8 +1078,7 @@
         if (e.price > P.gold || ownedCount(e.id)) continue;
         var gain = 0;
         if (e.type === 'weapon') {
-          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
-          gain = (e.effect.atk || 0) - ca;
+          gain = itemAtk(e.id, P.level) - curWeaponAtk();
         } else {
           var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
           gain = (e.effect.def || 0) - cd;
@@ -1302,7 +1312,7 @@
       /* D-68：给每场战斗补"发生在这一层的第几个探索动作"的时间戳（纯观测，
        * 不参与任何决策、不消耗随机数）。floorAt/该层 rec.floors[].actions 即层内进度，
        * 用于把一层切成"进层 / 层中 / 出层"三桶。 */
-      at: rec.actions, floorAt: rec.floorActions, atk: P.atk, def: P.def,
+      at: rec.actions, floorAt: rec.floorActions, atk: P.atk, def: P.def, lv: P.level,
       start: { hp: P.hp, maxHp: P.maxHp, mp: P.mp, level: P.level, gold: P.gold, potions: hpPotionCount() },
       detail: P.floor === 5 || !!(Game.Data.MONSTERS[e.monsterId] && Game.Data.MONSTERS[e.monsterId].boss),
       rounds: [], dealt: 0, taken: 0, potionUses: 0, nRounds: 0, rRounds: 0, lastTurn: 0
@@ -1477,7 +1487,7 @@
 
   /* ── D-18 商店：真实按键 E 进店，↑↓ 选行 + Enter 购买（绝不直接调 Shop.buy） ──
    * 判断口径只用游戏已有的数值，不新造评分公式：
-   *   · 装备：type=weapon 比 effect.atk、type=armor 比 effect.def，严格高于当前装备才买
+   *   · 装备：type=weapon 比有效攻击 Inventory.atkOf、type=armor 比 effect.def，严格高于当前装备才买
    *     （与背包换装 betterEquipIndex 完全同一口径）；
    *   · 药水：effect.hp>0 的消耗品，金币够且身上回血药少于 POTION_CAP 瓶才补，
    *     同价位内挑回复量最高的（真人也会选更划算的那瓶）。 */
@@ -1502,8 +1512,7 @@
         if (d.price > P.gold) continue;
         var gain = 0;
         if (d.type === 'weapon') {
-          var ca = (P.equipment.weapon && it[P.equipment.weapon]) ? (it[P.equipment.weapon].effect.atk || 0) : 0;
-          gain = (d.effect.atk || 0) - ca;
+          gain = itemAtk(d.id, P.level) - curWeaponAtk();
         } else {
           var cd = (P.equipment.armor && it[P.equipment.armor]) ? (it[P.equipment.armor].effect.def || 0) : 0;
           gain = (d.effect.def || 0) - cd;
