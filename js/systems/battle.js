@@ -185,6 +185,25 @@
   }
   function monsterDef() { return state && state.enraged ? state.enrageDef : state.monster.def; }
 
+  /* M3-A：龙威只读快照——日志、验证页统一从这里取值，不在别处复制分段常量。
+   * 返回 null（非龙战）；否则 { round, bonus, tier, perRound }。
+   * tier：0=未启动 / 1=第 1 段 / 2=第 2 段 / 3=第 3 段，按 dread.tiers 顺序推导；不写 state、不写 Player。 */
+  function dragonDread() {
+    if (!state || !state.monster || !state.monster.dread) return null;
+    var d = state.monster.dread;
+    var r = state.roundNo | 0;
+    var tier = 0, perRound = 0;
+    for (var i = 0; i < d.tiers.length; i++) {
+      if (r >= d.tiers[i][0]) { tier = i + 1; perRound = d.tiers[i][2]; }
+    }
+    return { round: r, bonus: dreadBonus(state.monster, r), tier: tier, perRound: perRound };
+  }
+  /* M3-A：伤害行后缀；只在龙威已生效（bonus>0）时追加，读 dragonDread() 不重算公式 */
+  function dreadSuffix() {
+    var d = dragonDread();
+    return (d && d.bonus > 0) ? '（龙威 +' + d.bonus + '）' : '';
+  }
+
   /* M8-2：狂暴触发判定——受击后血量 ≤ maxHp×hpPct 且未狂暴时进入二阶段（单次触发） */
   function tryEnrage() {
     if (state.enraged) return;
@@ -424,7 +443,7 @@
       logHp('absorb', 'shield', absorbed, { monsterId: m.id });
       logPush('护盾抵挡了 ' + absorbed + ' 点伤害' + (state.shieldValue <= 0 ? '（护盾破碎）' : ''));
     }
-    logPush(dmg > 0 ? m.name + ' 攻击了你，造成 ' + dmg + ' 伤害' : m.name + ' 的攻击被护盾完全抵挡');
+    logPush(dmg > 0 ? m.name + ' 攻击了你，造成 ' + dmg + ' 伤害' + dreadSuffix() : m.name + ' 的攻击被护盾完全抵挡');
     Game.Core.EventBus.emit('audio:play', { sfx: 'hit' });
     if (p.hp <= 0) {
       /* D-50：一次原地复活（仅 F5、仅本层第 1 次死亡、需定档形态）。见 systems/adaptive.js。
@@ -654,6 +673,9 @@
     /* D-16：时间轴参数（只读；验证页据此断言预算） */
     timeline: function () { return { seg1: TL.seg1, lock: TL.lock, total: TL.total }; },
 
+    /* M3-A：龙威只读读接口（日志/UI/验证页唯一取数口） */
+    dragonDread: dragonDread,
+
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
       state = {
@@ -668,6 +690,7 @@
         /* D-16：分段表现状态机 */
         phase: 'idle',   /* idle=可输入 / player=玩家段 / monster=怪物段 / dead=消散中 */
         roundNo: 1,      /* 当前回合号（1 起） */
+        dreadTier: 0,    /* M3-A：已播报到的龙威档位（0=未启动），只在上升时播报 */
         pending: null,   /* { due } 待播放的怪物段 */
         buffered: null,  /* 输入锁期间缓冲的一条指令 */
         lockUntil: 0,
@@ -707,6 +730,20 @@
       }
       /* D-16：回合起拍——登记时间轴（顺序/时长断言读 turnRec 与 events） */
       state.roundNo = (state.turn | 0) + 1;
+      /* M3-A：龙威换档播报——只在档位上升时播一条，进战斗日志（不发 ui:notice）。
+       * 位置在回合起拍之后、玩家行动结算之前：玩家总在吃到新档第一下之前看到。
+       * 读档/复活/防御/喝药都不会重播同一档（dreadTier 随本场 state 存活，start 置 0）。 */
+      var dd = dragonDread();
+      if (dd && dd.tier > (state.dreadTier | 0)) {
+        state.dreadTier = dd.tier;
+        if (dd.tier === 1) {
+          logPush('系统：龙威启动，此后每回合攻击 +' + dd.perRound + '，拖得越久越疼（第 1 段）。');
+        } else if (dd.tier === 2) {
+          logPush('系统：龙威升档，此后每回合攻击 +' + dd.perRound + '（当前 +' + dd.bonus + '，第 2 段）。');
+        } else if (dd.tier === 3) {
+          logPush('系统：龙威终档，此后每回合攻击 +' + dd.perRound + '（当前 +' + dd.bonus + '，第 3 段）。');
+        }
+      }
       state.phase = 'player';
       state.lockUntil = t0 + TL.lock;
       state.turnRec = {

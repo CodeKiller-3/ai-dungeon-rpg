@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d85</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<!-- M3-A / D-85 验证页：龙威可见性（W1～W10）
+     W1 三条换档提示各出现 1 次；W2 第 8 回合及之前无龙威；W3 tier/bonus 阶梯；
+     W4 伤害行后缀与 dragonDread().bonus 同源；W5 护盾全挡不加、吐息那击仍带；
+     W6 不走 ui:notice；W7 日志仍 ≤6 行；W8 不加按键、无感叹号；
+     W9 非龙战为 null；W10 只读。
+     只加载逻辑模块，不启动主循环；每回合用 tick 把怪物段冲掉，保证日志按回合归属。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, Inv = Game.Systems.Inventory,
+      P = Game.Data.Player, MON = Game.Data.MONSTERS;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+
+  /* 与 battle.js 的 dreadBonus 独立复算（用于交叉校验读接口，不是第二份实现来源） */
+  function staticBonus(r) {
+    var d = MON.dragon.dread, sum = 0;
+    if (!d || r < d.start) return 0;
+    for (var i = 0; i < d.tiers.length; i++) {
+      var t = d.tiers[i];
+      if (r >= t[0]) sum += t[2] * (Math.min(r, t[1]) - t[0] + 1);
+    }
+    return sum;
+  }
+
+  /* 日志采集：直接在本场 state.log 上挂 push 钩子，逐条捕获（日志窗口仍只有 6 行，
+   * 内容会大量重复，靠快照差分无法区分"同文案的新行"）。 */
+  var sink = [];
+  function hookLog(st) {
+    sink = [];
+    var orig = Array.prototype.push;
+    st.log.push = function () {
+      for (var i = 0; i < arguments.length; i++) sink.push(arguments[i]);
+      return orig.apply(this, arguments);
+    };
+  }
+  function countOf(list, s) {
+    var n = 0;
+    for (var i = 0; i < list.length; i++) if (list[i] === s) n++;
+    return n;
+  }
+
+  /* 起一场"打不死"的战斗：atk=1 保证怪活到指定回合，hp 极大保证玩家不死 */
+  function startFight(id) {
+    P.level = 1; P.exp = 0; P.upg = {}; P.inventory = {};
+    P.equipment = { weapon: null, armor: null };
+    Inv.recalcEquip();
+    P.atk = 1;
+    P.hp = 99999; P.maxHp = 99999; P.mp = 999; P.maxMp = 999;
+    B.start(id);
+    hookLog(B.getState());
+    return B.getState();
+  }
+
+  var MAXLOG = 0;
+  function playRounds(id, rounds, per) {
+    startFight(id);
+    var maxLog = 0;
+    for (var r = 1; r <= rounds; r++) {
+      var st0 = B.getState();
+      if (!st0) break;
+      var mark = sink.length;
+      B.playerAction('attack');
+      B.tick(B._now() + 100000);      /* 冲掉本回合怪物段，日志按回合归属 */
+      var st = B.getState();
+      if (!st) break;
+      maxLog = Math.max(maxLog, st.log.length);
+      if (per) per(r, sink.slice(mark), st);
+    }
+    MAXLOG = Math.max(MAXLOG, maxLog);
+    return { acc: sink.slice(), maxLog: maxLog };
+  }
+
+  var S1 = '系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。';
+  var S2 = '系统：龙威升档，此后每回合攻击 +3（当前 +7，第 2 段）。';
+  var S3 = '系统：龙威终档，此后每回合攻击 +6（当前 +22，第 3 段）。';
+
+  try {
+    Game.Core.Input.bind();
+    M.init();
+    M.closeGuide();
+
+    var dname = MON.dragon.name;
+
+    /* ══ W2 第 8 回合及之前：无龙威 ═══════════════════════════ */
+    var f8 = playRounds('dragon', 8);
+    var d8 = B.dragonDread();
+    var w2 = d8 && d8.round === 8 && d8.tier === 0 && d8.bonus === 0 &&
+      f8.acc.filter(function (l) { return l.indexOf('龙威') >= 0; }).length === 0;
+    rec('W2_beforeRound9', w2,
+      'r8: tier=' + (d8 && d8.tier) + ' bonus=' + (d8 && d8.bonus) +
+      '；前 8 回合日志含"龙威"行数=' + f8.acc.filter(function (l) { return l.indexOf('龙威') >= 0; }).length);
+
+    /* ══ W1/W3/W4 打到第 21 回合 ═════════════════════════════ */
+    var ddByRound = {}, badSuffix = [], badBonus = [], suffixRows = 0;
+    var f21 = playRounds('dragon', 21, function (r, add, st) {
+      var dd = B.dragonDread();
+      ddByRound[r] = dd;
+      if (dd.bonus !== staticBonus(r)) badBonus.push('r' + r + ' bonus=' + dd.bonus + ' 期望 ' + staticBonus(r));
+      var want = (r >= 9) ? '（龙威 +' + dd.bonus + '）' : '';
+      for (var i = 0; i < add.length; i++) {
+        var ln = add[i];
+        if (ln.indexOf(dname + ' 攻击了你，造成 ') === 0) {
+          suffixRows++;
+          var lineOk = (want === '') ? (ln.indexOf('龙威') < 0) : (ln.slice(-want.length) === want);
+          if (!lineOk) badSuffix.push('r' + r + '："' + ln + '" 期望后缀 "' + want + '"');
+        }
+      }
+    });
+    var c1 = countOf(f21.acc, S1), c2 = countOf(f21.acc, S2), c3 = countOf(f21.acc, S3);
+    rec('W1_threeTierLines', c1 === 1 && c2 === 1 && c3 === 1,
+      '第 1/2/3 段提示出现次数 = ' + c1 + '/' + c2 + '/' + c3 + '（各须 =1）');
+
+    var tiers = { 9: [1, 1], 13: [2, 7], 17: [3, 22], 21: [3, 46] };
+    var w3bad = [];
+    Object.keys(tiers).forEach(function (k) {
+      var dd = ddByRound[+k];
+      if (!dd) { w3bad.push('r' + k + ' 无快照'); return; }
+      if (dd.tier !== tiers[k][0] || dd.bonus !== tiers[k][1]) {
+        w3bad.push('r' + k + '=' + dd.tier + '/' + dd.bonus + ' 期望 ' + tiers[k][0] + '/' + tiers[k][1]);
+      }
+    });
+    rec('W3_tierStairs', w3bad.length === 0,
+      w3bad.length ? w3bad.join('; ') : 'r9=1/+1、r13=2/+7、r17=3/+22、r21=3/+46（tier/bonus）');
+
+    rec('W4_damageSuffix', badSuffix.length === 0 && suffixRows >= 12 && badBonus.length === 0,
+      '带伤害的龙攻击行 ' + suffixRows + ' 条全部与 dragonDread().bonus 同源' +
+      '；acc=' + f21.acc.length + ' 行，含"攻击了你"共 ' +
+      f21.acc.filter(function (l) { return l.indexOf('攻击了你') >= 0; }).length + ' 行' +
+      (badSuffix.length ? '；错：' + badSuffix.slice(0, 3).join(' | ') : '') +
+      (badBonus.length ? '；bonus 漂移：' + badBonus.slice(0, 3).join(' | ') : ''));
+
+    /* ══ W5 护盾全挡不加后缀 / 吐息那击仍带 ═══════════════════ */
+    startFight('dragon');
+    for (var a = 1; a <= 8; a++) { B.playerAction('attack'); B.tick(B._now() + 100000); }
+    var pre5 = sink.length;
+    B.getState().shieldValue = 99999;
+    B.playerAction('attack');
+    B.tick(B._now() + 100000);
+    var add5 = sink.slice(pre5);
+    var blockLine = add5.filter(function (l) { return l.indexOf('被护盾完全抵挡') >= 0; })[0] || '';
+    var w5a = blockLine === dname + ' 的攻击被护盾完全抵挡';
+
+    var rndSave = Math.random;
+    var pre5b = sink.length;
+    Math.random = function () { return 0; };   /* 强制走吐息分支 */
+    try {
+      var st5 = B.getState();
+      st5.enraged = true;
+      st5.enrageAtk = Math.round(st5.monster.atk * st5.monster.enrage.atkMul);
+      st5.enrageDef = Math.round(st5.monster.def * st5.monster.enrage.defMul);
+      st5.shieldValue = 0;
+      B.playerAction('attack');
+      B.tick(B._now() + 100000);
+    } finally {
+      Math.random = rndSave;
+    }
+    var add5b = sink.slice(pre5b);
+    var breathLine = add5b.filter(function (l) { return l.indexOf('喷出') >= 0; })[0] || '';
+    var dmg5b = add5b.filter(function (l) { return l.indexOf(dname + ' 攻击了你，造成 ') === 0; })[0] || '';
+    var dd5 = B.dragonDread();
+    var want5 = '（龙威 +' + dd5.bonus + '）';
+    rec('W5_shieldAndBreath', w5a && breathLine.indexOf('喷出') >= 0 &&
+      dmg5b.slice(-want5.length) === want5 && blockLine.indexOf('龙威') < 0,
+      '全挡行="' + blockLine + '"；吐息行="' + breathLine + '"；吐息伤害行="' + dmg5b + '"（期望后缀 ' + want5 + '）');
+
+    /* ══ W6 通道隔离：提示条历史里没有"龙威" ═══════════════════ */
+    var hist = (Game.Notice && typeof Game.Notice._historyTexts === 'function')
+      ? Game.Notice._historyTexts() : [];
+    var w6bad = hist.filter(function (t) { return String(t).indexOf('龙威') >= 0; });
+    rec('W6_notNotice', w6bad.length === 0,
+      'Notice 历史 ' + hist.length + ' 条，含"龙威"=' + w6bad.length + '（须 0）');
+
+    /* ══ W7 日志上限仍是 6 行 ═════════════════════════════════ */
+    rec('W7_logCap6', f8.maxLog <= 6 && f21.maxLog <= 6 && MAXLOG <= 6,
+      '单场峰值行数：r8 场 ' + f8.maxLog + '、r21 场 ' + f21.maxLog + '（上限 6，不新增显示行）');
+
+    /* ══ W8 不加按键、无感叹号 ════════════════════════════════ */
+    var w8str = [S1, S2, S3].concat(f21.acc.filter(function (l) { return l.indexOf('龙威') >= 0; }));
+    var bang = w8str.filter(function (s) { return s.indexOf('！') >= 0; });
+    rec('W8_noKeysNoBang', M.HELP.length === 8 && bang.length === 0,
+      'HELP=' + M.HELP.length + ' 条（须 8）；龙威相关 ' + w8str.length + ' 行中含"！"=' + bang.length);
+
+    /* ══ W9 非龙战：读接口为 null、日志无龙威 ═════════════════ */
+    var nonBad = [];
+    ['slime', 'elite_angel'].forEach(function (id) {
+      var seen = [];
+      var res = playRounds(id, 12, function (r, add, st) {
+        seen.push(B.dragonDread());
+        add.forEach(function (l) { if (l.indexOf('龙威') >= 0) nonBad.push(id + ' r' + r + '：' + l); });
+      });
+      seen.forEach(function (v, i) { if (v !== null) nonBad.push(id + ' r' + (i + 1) + ' dragonDread≠null'); });
+    });
+    rec('W9_nonDragon', nonBad.length === 0,
+      '史莱姆/精英天使各 12 回合：dragonDread() 全 null、日志无"龙威"' +
+      (nonBad.length ? '；错：' + nonBad.slice(0, 3).join(' | ') : ''));
+
+    /* ══ W10 只读：调用前后面板与龙三围不变 ═══════════════════ */
+    startFight('dragon');
+    for (var q = 1; q <= 9; q++) { B.playerAction('attack'); B.tick(B._now() + 100000); }
+    function snapP() {
+      return [P.level, P.exp, P.hp, P.maxHp, P.mp, P.maxMp, P.atk, P.def, P.gold].join(',');
+    }
+    function snapM(st) {
+      return [st.monster.hp, st.monster.atk, st.monster.def].join(',');
+    }
+    var p0 = snapP(), stw = B.getState(), m0 = snapM(stw);
+    var reads = [];
+    for (var t = 0; t < 5; t++) reads.push(JSON.stringify(B.dragonDread()));
+    rec('W10_readOnly', p0 === snapP() && m0 === snapM(B.getState()) &&
+      reads.length === 5 && reads[0] === reads[4],
+      'Player=' + p0 + '；龙=' + m0 + '；连续 5 次读取一致 ' + (reads[0] === reads[4]) +
+      '，快照 ' + reads[0]);
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+  }
+
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  var pre = document.createElement('pre');
+  pre.id = 'result';
+  pre.textContent = text;
+  document.body.appendChild(pre);
+  document.title = out.ok ? 'D85_DONE' : 'D85_FAIL';
+})();
+</script>
+</body>
+</html>
