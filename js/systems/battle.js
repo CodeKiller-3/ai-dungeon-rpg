@@ -299,8 +299,10 @@
       state.lastAction = { by: 'player', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      /* 美学整改 A1：飘字锚点从精灵中心（m.cy）移到头顶上方 22px，
+       * 数字不再压在怪物脸上；主体轮廓始终完整可见。 */
       Game.Feedback.spawn({
-        x: m.cx, y: m.cy, text: '-' + dmg, tier: tier, who: 'monster',
+        x: m.cx, y: m.y - 22, text: '-' + dmg, tier: tier, who: 'monster',
         color: heavy ? '#ffc14d' : '#ffffff',
         size: heavy ? 26 : 18, life: heavy ? 760 : 620
       });
@@ -319,8 +321,10 @@
       state.lastAction = { by: 'monster', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
+      /* 美学整改 A1：玩家头顶被血条（414~434）占满，飘字改锚在精灵右侧外沿（cx+70），
+       * 同样不进剪影；"-XX" 三/四字宽约 43px，与精灵右边缘留 ≥20px 间隙。 */
       Game.Feedback.spawn({
-        x: p.cx, y: p.cy, text: '-' + dmg, tier: tier, who: 'player',
+        x: p.cx + 70, y: p.y + 30, text: '-' + dmg, tier: tier, who: 'player',
         color: heavy ? '#ff8a3d' : '#ff5555',
         size: heavy ? 24 : 18
       });

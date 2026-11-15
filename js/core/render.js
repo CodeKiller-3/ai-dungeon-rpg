@@ -103,6 +103,38 @@
     return w;
   }
 
+  /* 美学整改 A1：命中闪白按精灵 alpha 裁剪。
+   * 旧实现用 90×90 的 fillRect 直接盖在战斗精灵上，史莱姆这种 90 格里只占 40 格的
+   * 剪影会被整块方片罩住——命中瞬间主体消失。这里改为：把精灵画进离屏画布 →
+   * source-atop 填色（只吃到不透明像素）→ 按原位置/原尺寸贴回。
+   * 离屏按 dpr×scale 的设备像素分辨率合成，贴回时 1:1 落在同像素网格上，不引入额外插值。
+   * 素材缺失（naturalWidth=0）返回 false，调用方保留纯色兜底。 */
+  var tintCv = null, tintCtx = null;
+  function tintSprite(ctx, img, cx, bottom, targetH, color, alpha) {
+    if (!ctx || !img || !(alpha > 0.01)) return false;
+    var nw = img.naturalWidth || 0, nh = img.naturalHeight || 0;
+    if (nw <= 0 || nh <= 0) return false;
+    var w = Math.max(2, Math.round(nw * targetH / nh));
+    var R = Game.Core && Game.Core.Render;
+    var k = ((R && R.dpr) || 1) * ((R && R.scale) || 1);
+    var ow = Math.max(1, Math.round(w * k)), oh = Math.max(1, Math.round(targetH * k));
+    if (!tintCv) { tintCv = document.createElement('canvas'); tintCtx = tintCv.getContext('2d'); }
+    if (!tintCtx) return false;
+    if (tintCv.width !== ow || tintCv.height !== oh) { tintCv.width = ow; tintCv.height = oh; }
+    tintCtx.setTransform(1, 0, 0, 1, 0, 0);
+    tintCtx.clearRect(0, 0, ow, oh);
+    tintCtx.imageSmoothingEnabled = false;
+    tintCtx.drawImage(img, 0, 0, ow, oh);
+    tintCtx.globalCompositeOperation = 'source-atop';
+    tintCtx.globalAlpha = Math.min(1, alpha);
+    tintCtx.fillStyle = color;
+    tintCtx.fillRect(0, 0, ow, oh);
+    tintCtx.globalAlpha = 1;
+    tintCtx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(tintCv, cx - Math.floor(w / 2), bottom - targetH, w, targetH);
+    return true;
+  }
+
   /* D-35：地图层尺寸口径——素材原生像素高 × (TILE/16)，脚底锚定格底。
    * 旧实现把玩家/怪物/装饰一律压进一格（玩家 21px、大图 21px、常规帧 22px），
    * 比例完全失真：史莱姆实测 17.9px，反而比独眼酋长 15.2px 还高。
@@ -218,8 +250,7 @@
   }
 
   /* D-16：状态 chips（狂暴/护盾/防御）——随战斗变化的中段信息 */
-  function battleChips(ctx, cx, y, state) {
-    var list = [];
+  function battleChips(ctx, cx, y, state) {    var list = [];
     if (state.enraged) list.push({ t: '⚡狂暴', c: '#ff7b6b' });
     if (state.shieldValue > 0) list.push({ t: '护盾 ' + state.shieldValue, c: '#7dffb0' });
     if (state.defending) list.push({ t: '防御中', c: '#9bbbf4' });
@@ -246,6 +277,73 @@
       x += list[i].w + gap;
     }
     ctx.restore();
+  }
+
+  /* 美学整改 A2：战斗背景按层换景——用现成 24×24 地块铺出"地点"，五层各自可辨。
+   * 版式（逻辑像素）：上带 0~192（敌方站台，8 行整，怪物脚底 180 之后收边）/
+   * 中带 192~432 纯色（D-16 的 y240~400 条带完全落在纯色区内，像素断言口径不变）/
+   * 下带 432~H（我方脚下地面）。地块按 24×24 原生 1:1 绘制，不缩放、不新增素材；
+   * 底色与压暗量只影响观感，不碰任何数值。
+   * 离屏缓存按 层/视口/k 作废，每帧只 1 次 blit（D-16 每帧 drawImage 预算不变）。 */
+  var BATTLE_BG = [
+    { base: '#161626', mix: 0.55 }, /* F1 地牢：冷灰 */
+    { base: '#1d1710', mix: 0.50 }, /* F2 兽人营地：土黄 */
+    { base: '#211010', mix: 0.46 }, /* F3 龙巢前哨：焦黑熔岩 */
+    { base: '#0c1a26', mix: 0.52 }, /* F4 冰霜墓穴：冰蓝 */
+    { base: '#170e21', mix: 0.48 }  /* F5 恶魔深渊：暗紫 */
+  ];
+  var bgCache = { cv: null, ctx: null, floor: 0, W: 0, H: 0, k: 0 };
+
+  function drawBattleBackdrop(ctx, W, H, floorNo) {
+    var f = (floorNo >= 1 && floorNo <= 5) ? floorNo : 1;
+    var R = Game.Core && Game.Core.Render;
+    var k = ((R && R.dpr) || 1) * ((R && R.scale) || 1);
+    var bg = BATTLE_BG[f - 1];
+    var canTile = !!(Game.Core.Sprites && typeof Game.Core.Sprites.isReady === 'function' &&
+      Game.Core.Sprites.isReady());
+    if (!bgCache.cv) {
+      bgCache.cv = document.createElement('canvas');
+      bgCache.ctx = bgCache.cv.getContext('2d');
+    }
+    var c = bgCache.ctx;
+    if (!c) return;
+    if (bgCache.floor !== f || bgCache.W !== W || bgCache.H !== H || bgCache.k !== k) {
+      bgCache.cv.width = Math.max(1, Math.round(W * k));
+      bgCache.cv.height = Math.max(1, Math.round(H * k));
+      c.setTransform(k, 0, 0, k, 0, 0);
+      c.imageSmoothingEnabled = false;
+      c.globalAlpha = 1;
+      c.globalCompositeOperation = 'source-over';
+      c.fillStyle = bg.base;
+      c.fillRect(0, 0, W, H);
+      var cols = Math.ceil(W / TILE), tx, ty, t1, t2;
+      if (canTile) {
+        /* 上带：敌方站台（8 行，脚底 180 之后收边） */
+        for (ty = 0; ty < 8; ty++) {
+          for (tx = 0; tx < cols; tx++) {
+            t1 = Game.Core.Sprites.get(floorVariantName(tx, ty, f));
+            if (t1) c.drawImage(t1, tx * TILE, ty * TILE, TILE, TILE);
+          }
+        }
+        c.fillStyle = 'rgba(6,6,14,' + bg.mix.toFixed(2) + ')';
+        c.fillRect(0, 0, W, 192);
+        /* 下带：我方脚下地面（从 432 起整行铺） */
+        for (ty = 0; ty < Math.ceil((H - 432) / TILE); ty++) {
+          for (tx = 0; tx < cols; tx++) {
+            t2 = Game.Core.Sprites.get(floorVariantName(tx, 18 + ty, f));
+            if (t2) c.drawImage(t2, tx * TILE, 432 + ty * TILE, TILE, TILE);
+          }
+        }
+        c.fillStyle = 'rgba(6,6,14,' + (bg.mix * 0.7).toFixed(2) + ')';
+        c.fillRect(0, 432, W, H - 432);
+      }
+      /* 两条 1px 分界：台面 / 舞台 / 地面，三段读得出来 */
+      c.fillStyle = 'rgba(255,255,255,0.06)';
+      c.fillRect(0, 192, W, 1);
+      c.fillRect(0, 432, W, 1);
+      bgCache.floor = f; bgCache.W = W; bgCache.H = H; bgCache.k = k;
+    }
+    ctx.drawImage(bgCache.cv, 0, 0, W, H);
   }
 
   /* P2-1：怪物视觉映射集中表——id → { idle, run } 帧组名（10 种怪物全覆盖）。
@@ -1094,9 +1192,16 @@
           if (t === 0) {
             /* P1-1：墙贴图（顶行 wall_top_* / 墙身 wall_left|mid|right）；素材缺失回退砖纹色块
              * D-79：按楼层主题取 t{n}_ 前缀，24×24 原生 1:1 绘制 */
-            var wsp = this._wallSprite(grid, x, y, pf);
+            var wspName = this._wallSpriteName(grid, x, y, pf);
+            var wsp = this._hasSprites() ? Game.Core.Sprites.get(wspName) : null;
             if (wsp) {
               ctx.drawImage(wsp, px, py, TILE, TILE);
+              /* 美学整改 A3：墙身 ×0.55、墙顶 ×0.60（等效叠黑 0.45 / 0.40）。
+               * 原素材五层里有四层的墙顶比地板更亮——最亮的水平面成了不可走的墙。
+               * 压暗后地板恒为画面最亮的水平面；只改绘制，不动任何素材文件与地图数据。 */
+              ctx.fillStyle = (wspName.indexOf('wall_top') >= 0)
+                ? 'rgba(0,0,0,0.40)' : 'rgba(0,0,0,0.45)';
+              ctx.fillRect(px, py, TILE, TILE);
             } else {
               /* 墙：砖纹 */
               ctx.fillStyle = '#3a2e5c';
@@ -1314,8 +1419,8 @@
       var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
       var CX = W / 2;
 
-      ctx.fillStyle = '#0f0f1f';
-      ctx.fillRect(0, 0, W, H);
+      /* 美学整改 A2：战斗背景按层换景（离屏缓存，见 drawBattleBackdrop） */
+      drawBattleBackdrop(ctx, W, H, (typeof p.floor === 'number' ? p.floor : 1));
 
       /* ===== 敌方 ===== */
       var ex = CX - 45;
@@ -1361,12 +1466,15 @@
           mW = 90;
         }
       }
-      /* D-16：命中局部闪白（≤120ms，单次命中只闪一次；Fx 关档时无） */
+      /* D-16：命中局部闪白（≤120ms，单次命中只闪一次；Fx 关档时无）
+       * 美学整改 A1：改为按精灵 alpha 着色，命中瞬间主体轮廓仍在；无素材时才退回整块方片 */
       if (!dying && Fx && typeof Fx.flashOf === 'function') {
         var fl = Fx.flashOf('monster');
         if (fl && fl.alpha > 0.01) {
-          ctx.fillStyle = 'rgba(255,255,255,' + fl.alpha.toFixed(3) + ')';
-          ctx.fillRect(CX - mW / 2, ey + 90 - 90 * bossScale, mW, 90 * bossScale);
+          if (sp2 && !tintSprite(ctx, sp2, ex + 45, ey + 90, 90 * bossScale, '#ffffff', fl.alpha)) {
+            ctx.fillStyle = 'rgba(255,255,255,' + fl.alpha.toFixed(3) + ')';
+            ctx.fillRect(CX - mW / 2, ey + 90 - 90 * bossScale, mW, 90 * bossScale);
+          }
         }
       }
       ctx.restore();
@@ -1448,17 +1556,23 @@
       if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
+      var pW = 90;
       if (psp) {
-        drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
+        pW = drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
       } else {
         ctx.fillStyle = '#ffcf6e';
         ctx.fillRect(px, py, 90, 90);
       }
+      /* 美学整改 A1：受击闪红同样按 alpha 着色，不再用 90×90 方块盖住骑士 */
       if (Fx && typeof Fx.flashOf === 'function') {
         var fp = Fx.flashOf('player');
         if (fp && fp.alpha > 0.01) {
-          ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
-          ctx.fillRect(px, py, 90, 90);
+          if (psp) {
+            tintSprite(ctx, psp, px + 45, py + 90, 90, '#ff5a5a', fp.alpha);
+          } else {
+            ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
+            ctx.fillRect(px, py, pW, 90);
+          }
         }
       }
       ctx.restore();

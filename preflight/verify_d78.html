@@ -230,12 +230,16 @@
     Fb.spawn = realSpawn;
     B.abort();
     Game.Core.Render = realRender;
-    rec('C1_damageTextAtLogicalCenter', !!captured && captured.x === 480 && captured.y === 135, {
-      rule: '1920×1080 画布（cssW=960）下，怪物伤害飘字锚点必须是逻辑中心 (480,135)，' +
-        '不是物理像素 (960,135)',
-      captured: captured && { x: captured.x, y: captured.y, text: captured.text },
-      expected: { x: 480, y: 135 }
-    });
+    /* 美学整改 A1：飘字锚点由"怪物中心"上移到"头顶上方 22px"（怪物精灵顶 y=90）。
+     * 本项仍守"逻辑坐标而非物理像素"，并额外钉死"锚点必须在精灵顶之上、不压剪影"。 */
+    var headY = 90 - 22;
+    rec('C1_damageTextAtLogicalCenter', !!captured && captured.x === 480 && captured.y === headY,
+      {
+        rule: '1920×1080 画布（cssW=960）下，怪物伤害飘字锚点必须是逻辑 x=480、y=怪物精灵顶上方 22px（' +
+          headY + '），不是物理像素 (960,135)，也不许落回精灵轮廓内（y≥90）',
+        captured: captured && { x: captured.x, y: captured.y, text: captured.text },
+        expected: { x: 480, y: headY }
+      });
 
     var bSrc = readText('../js/systems/battle.js');
     var oldPhys = /cv\.width\s*\/\s*2/.test(bSrc);

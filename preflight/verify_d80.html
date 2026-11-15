@@ -73,7 +73,10 @@
     'knight_m_idle': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
     'knight_m_run': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
     'knight_m_hit': { size: [24, 42], box: [24, 42], bottom: 41, width: 20 },
-    'tiny_slug': { size: [24, 24], box: [24, 24], bottom: 23, width: 22 }
+    /* 美学整改 A4：史莱姆四帧右侧那块实心 #222 切图残留已清除，
+     * bbox 右边界从 x=23 收到 x=22（宽度 22→21），底边仍 23、左边界仍 2。
+     * 这里只是把期望值改成"清框后的真实素材"，判定条件（四帧同宽同底）没有放宽。 */
+    'tiny_slug': { size: [24, 24], box: [24, 24], bottom: 23, width: 21 }
   };
 
   function run() {

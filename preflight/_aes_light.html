@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>A 墙地亮度实测</title></head>
+<body>
+<pre id="result">PENDING</pre>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script>
+(function () {
+  'use strict';
+  var OUT = { protocol: 'A3-brightness', ok: false, method: '', floors: [], rule: '' };
+  var pre = document.getElementById('result');
+  function done() { pre.textContent = JSON.stringify(OUT); }
+
+  var WALL_BODY_A = 0.45;   /* render.js：墙身叠黑 0.45 → ×0.55 */
+  var WALL_TOP_A = 0.40;    /* render.js：墙顶叠黑 0.40 → ×0.60 */
+
+  var cv = document.createElement('canvas');
+  cv.width = 24; cv.height = 24;
+  var ctx = cv.getContext('2d');
+
+  /* NTSC 权重，仅统计不透明像素（alpha>0），与评估报告 §2.2 同口径 */
+  function luminance(img) {
+    var w = img.naturalWidth, h = img.naturalHeight;
+    cv.width = w; cv.height = h;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    var d = ctx.getImageData(0, 0, w, h).data;
+    var sum = 0, n = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      n++;
+    }
+    return n ? sum / n : 0;
+  }
+
+  /* "改后"= 同一张图叠一层纯黑（alpha 见上），与 render.js 的绘制顺序完全一致 */
+  function luminanceDim(img, alpha) {
+    var w = img.naturalWidth, h = img.naturalHeight;
+    cv.width = w; cv.height = h;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    ctx.fillStyle = 'rgba(0,0,0,' + alpha + ')';
+    ctx.fillRect(0, 0, w, h);
+    var d = ctx.getImageData(0, 0, w, h).data;
+    var sum = 0, n = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      n++;
+    }
+    return n ? sum / n : 0;
+  }
+
+  function avg(list, alpha) {
+    var s = 0, n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var img = Game.Core.Sprites.get(list[i]);
+      if (!img || !img.naturalWidth) continue;
+      s += (alpha === null ? luminance(img) : luminanceDim(img, alpha));
+      n++;
+    }
+    return n ? { v: s / n, n: n } : { v: 0, n: 0 };
+  }
+  function r1(x) { return Math.round(x * 10) / 10; }
+
+  function run() {
+    var S = Game.Core.Sprites;
+    if (!S.isReady()) { setTimeout(run, 60); return; }
+    var bad = [];
+    for (var f = 1; f <= 5; f++) {
+      var p = (f === 1) ? '' : ('t' + f + '_');
+      var floors = [], i;
+      for (i = 1; i <= 8; i++) floors.push((f === 1 ? 'floor_' : 't' + f + '_floor_') + i);
+      var body = [p + 'wall_left', p + 'wall_mid', p + 'wall_right'];
+      var top = [p + 'wall_top_left', p + 'wall_top_mid', p + 'wall_top_right'];
+      var fb = avg(floors, null);
+      var bb = avg(body, null), ba = avg(body, WALL_BODY_A);
+      var tb = avg(top, null), ta = avg(top, WALL_TOP_A);
+      if (fb.n !== 8 || bb.n !== 3 || tb.n !== 3) bad.push('f' + f + ' 缺图');
+      OUT.floors.push({
+        no: f, nFloor: fb.n, nWall: bb.n, nTop: tb.n,
+        floorL: r1(fb.v),
+        wallBefore: r1(bb.v), wallAfter: r1(ba.v),
+        topBefore: r1(tb.v), topAfter: r1(ta.v),
+        gapWallBefore: r1(fb.v - bb.v), gapWallAfter: r1(fb.v - ba.v),
+        gapTopBefore: r1(fb.v - tb.v), gapTopAfter: r1(fb.v - ta.v),
+        floorIsBrightestAfter: fb.v > ba.v && fb.v > ta.v,
+        floorIsBrightestBefore: fb.v > bb.v && fb.v > tb.v
+      });
+    }
+    OUT.bad = bad;
+    OUT.ok = bad.length === 0 && OUT.floors.every(function (x) {
+      return x.floorIsBrightestAfter && x.gapWallAfter >= 15 && x.gapTopAfter >= 15;
+    });
+    OUT.rule = '同口径：0.299R+0.587G+0.114B，仅 alpha>0 像素；改前=原素材，' +
+      '改后=素材后叠纯黑（墙身 0.45 / 墙顶 0.40，与 render.js 同序同参）；' +
+      '合格线：每层地板亮度必须同时高于墙身与墙顶，且地−墙 ≥15';
+    OUT.method = 'preflight/_aes_light.html（真实素材解码 + 真实叠加）';
+    done();
+  }
+
+  var load = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return load.call(this, '../assets/sprites/'); };
+  Game.Core.Sprites.load();
+  run();
+})();
+</script>
+</body>
+</html>

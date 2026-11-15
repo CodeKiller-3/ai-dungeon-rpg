@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>美学整改 A shot</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- 美学整改（第一拨）实拍复现页：?view=explore-f1..5 | battle-f1..5 | hit-f1
+     - 与主游戏加载同一批脚本与同一顺序；只把状态推进到要拍的那一帧，之后停 rAF。
+     - 像素全部由游戏真实渲染循环绘制：不合成、不补画、不改字。
+     - hit-f1：真实 Battle.playerAction('attack') 命中瞬间，并把 Fx/Battle 时钟钉在同一刻，
+       使闪白与飘字停在该帧（对照"修复前 90×90 方块盖住主体"）。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = String(location.search || '');
+  var view = (q.match(/view=(explore-f[1-5]|battle-f[1-5]|hit-f1)/) || [])[1] || 'battle-f1';
+  var M = Game.Core.Main;
+  var P = Game.Data.Player;
+  var Map = Game.Systems.Map;
+  var B = Game.Systems.Battle;
+
+  /* headless 下 rAF 不驱动，底部 FPS 恒为 0；只隐去 "FPS=… | " 一段 */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__aesFpsPatched) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__aesFpsPatched = true;
+  })();
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if ((Game.Core.Sprites && Game.Core.Sprites.isReady()) || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame;
+    var left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+
+  /* 真实 BFS：出生点 → 下行梯，返回不含起点的路径 */
+  function planPath(tx, ty) {
+    var dirs = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+    function walkable(x, y) { return Map.tileAt(x, y) !== 0; }
+    var start = { x: P.x, y: P.y };
+    var seen = {}, prev = {}, qq = [start], qi = 0;
+    seen[start.x + ',' + start.y] = 1;
+    while (qi < qq.length) {
+      var c = qq[qi++];
+      if (c.x === tx && c.y === ty) {
+        var path = [], cur = c;
+        while (!(cur.x === start.x && cur.y === start.y)) {
+          path.push(cur);
+          cur = prev[cur.x + ',' + cur.y];
+        }
+        return path.reverse();
+      }
+      for (var i = 0; i < dirs.length; i++) {
+        var nx = c.x + dirs[i][0], ny = c.y + dirs[i][1];
+        var key = nx + ',' + ny;
+        if (seen[key] || !walkable(nx, ny)) continue;
+        seen[key] = 1;
+        prev[key] = { x: c.x, y: c.y };
+        qq.push({ x: nx, y: ny });
+      }
+    }
+    return [];
+  }
+
+  var MON = { 1: 'slime', 2: 'orc_warrior', 3: 'wogol', 4: 'big_zombie', 5: 'angel' };
+
+  function enterFloor(n) {
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init({ menu: false });
+    Map.setFloor(n);
+    P.floor = n;
+    var sp = Map.getSpawn();
+    P.x = sp.x; P.y = sp.y;
+    P.level = 1; P.exp = 0; P.gold = 20;
+    Game.Systems.Inventory.recalcEquip();
+    P.hp = P.maxHp; P.mp = P.maxMp;
+    return sp;
+  }
+
+  try {
+    var m = view.match(/^(explore|battle|hit)-f([1-5])$/);
+    var kind = m ? m[1] : 'battle';
+    var floorNo = m ? parseInt(m[2], 10) : 1;
+
+    if (kind === 'explore') {
+      enterFloor(floorNo);
+      /* 沿真实 BFS 走到下行梯，走 45% 路程后停：视野记忆已累积出房间与走廊 */
+      var g = Map.getGrid(), st = null;
+      for (var y = 0; y < g.length && !st; y++) {
+        for (var x = 0; x < g[y].length; x++) {
+          if (g[y][x] === 2) { st = { x: x, y: y }; break; }
+        }
+      }
+      var path = st ? planPath(st.x, st.y) : [];
+      var fs = Game.fov.RADIUS || 5;
+      var blocked = function (x, y) { return Map.tileAt(x, y) === 0; };
+      Game.fov.update(P.x, P.y, fs, blocked);
+      var upto = path.length ? Math.max(1, Math.floor(path.length * 0.45)) : 0;
+      for (var i = 0; i < upto; i++) {
+        P.x = path[i].x; P.y = path[i].y;
+        Game.fov.update(P.x, P.y, fs, blocked);
+      }
+      if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+        Game.Core.Render.invalidateStatic();
+      }
+      if (M._scene !== 'explore') M.switchScene('explore');
+      waitSprites(function () {
+        if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+          Game.Core.Render.invalidateStatic();
+        }
+        M.start();
+        stopAfterFrames(6);
+      });
+      return;
+    }
+
+    enterFloor(floorNo);
+    B.start(MON[floorNo]);
+    M.switchScene('battle');
+    M.start();
+
+    if (kind === 'hit') {
+      waitSprites(function () {
+        setTimeout(function () {
+          /* 把 Fx 与战斗时间轴同时钉在命中那一刻：闪白 alpha 最大、飘字尚未位移 */
+          var t0 = performance.now();
+          Game.Fx._setClock(function () { return t0; });
+          B._setClock(function () { return t0; });
+          Game.Feedback.update = function () { };
+          B.playerAction('attack');
+          setTimeout(function () { stopAfterFrames(3); }, 120);
+        }, 300);
+      });
+      return;
+    }
+
+    /* 普通战斗静帧：不触发命中，保持待机一帧 */
+    waitSprites(function () { stopAfterFrames(4); });
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>
