@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d87</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<!-- D-87 验证页：M 面板第 4 页「系统」从数据表改成仪表盘后，契约不许变。
+     S1 文本行契约（12/11/10/9/6 与龙威行逐字不变）
+     S2 四页签与容量（Tab 环形 4 页；1024×640=12 / 400=9 / 300=6；不加按键）
+     S3 只读（Player/Battle 快照前后一致；绘制不掷随机数）
+     S4 成长账本口径（本级经验条 / 突破条与 sysModel 同源；当前格与下一格指向正确）
+     S5 武器共鸣口径（基础 + 等级成长两段；不随等级成长的武器如实为 0）
+     S6 图标 24×24 原生 1:1（任何非整数缩放判负）
+     S7 几何（所有条带/图元落在内容框内、整数像素、不越界）
+     S8 负例（把 atkOf 改成不成长 → S5 的"有等级成长"断言必须判负） -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, Inv = Game.Systems.Inventory,
+      P = Game.Data.Player, IT = Game.Data.ITEMS, Mdl = Game.Modal;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function rows(w) { return Mdl._systemRows(w); }
+  function resetP(level, weapon) {
+    P.level = level; P.exp = 0; P.eliteAtk = 0; P.upg = {}; P.inventory = {};
+    P.equipment = { weapon: weapon || null, armor: null };
+    Inv.recalcEquip();
+    P.hp = P.maxHp; P.mp = P.maxMp;
+    P.gold = 268; P.floor = 2;
+  }
+  function allInts(list) {
+    var bad = [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (!r) continue;
+      ['x', 'y', 'w', 'h'].forEach(function (k) {
+        if (typeof r[k] !== 'number' || !isFinite(r[k]) || Math.round(r[k]) !== r[k]) {
+          bad.push((r.id || 'rect') + '.' + k + '=' + r[k]);
+        }
+      });
+    }
+    return bad;
+  }
+  function inside(r, box) {
+    return r && r.x >= box.x && r.y >= box.y &&
+      r.x + r.w <= box.x + box.w + 0.001 && r.y + r.h <= box.y + box.h + 0.001;
+  }
+
+  try {
+    Game.Core.Input.bind();
+    M.init();
+    M.closeGuide();
+
+    /* ══ S1 文本行契约：档位与龙威行逐字不变 ═══════════════════ */
+    B.abort();
+    M.restart();
+    resetP(5, 'sword_iron');
+    P.hp = 100; P.maxHp = 140;
+    B.start('dragon');
+    var f12 = rows(900), m10 = rows(480), n6 = rows(320);
+    var f12last = f12[f12.length - 1];
+    B.abort();
+    B.start('slime');
+    var f11 = rows(900), m9 = rows(480);
+    B.abort();
+    rec('S1_rowsContract',
+      f12.length === 12 && f11.length === 11 && m10.length === 10 && m9.length === 9 &&
+      f12last === '龙威 未启动（第 9 回合开始）' && n6.length === 6 &&
+      /^龙威 /.test(n6[5]) && f12[0] === '【宿主】' && f11[0] === '【宿主】' &&
+      m10[0].indexOf('Lv.5 经验 ') === 0 && m9[0].indexOf('Lv.5 经验 ') === 0,
+      '全宽 龙/非龙=' + f12.length + '/' + f11.length + '，中屏=' + m10.length + '/' + m9.length +
+      '，窄屏=' + n6.length + '；龙战末行="' + f12last + '"；窄屏第 6 行="' + n6[5] + '"');
+
+    /* ══ S2 四页签 / 容量 / 不加按键 ═══════════════════════════ */
+    Mdl.open('quests');
+    Mdl._setPage(3);
+    var p3 = Mdl.getPage();
+    Mdl._setPage(4);
+    var p0 = Mdl.getPage();
+    Mdl._setPage(-1);
+    var pBack = Mdl.getPage();
+    Mdl._setPage(7);
+    var pWrap = Mdl.getPage();
+    var L640 = Mdl._layout();
+    /* _layout 只认当前数据；用临时改变视口高测容量：1024×640=12 / 400=9 / 300=6 */
+    var R = Game.Core.Render;
+    var oldW = R.cssW, oldH = R.cssH;
+    function capAt(h) {
+      R.cssH = h;
+      var L = Mdl._layout();
+      return L.visibleRows;
+    }
+    var c640 = capAt(640), c400 = capAt(400), c300 = capAt(300);
+    R.cssW = oldW; R.cssH = oldH;
+    Mdl.close();
+    rec('S2_pagesAndCapacity',
+      p3 === 3 && p0 === 0 && pBack === 3 && pWrap === 3 &&
+      c640 === 12 && c400 === 9 && c300 === 6 && M.HELP.length === 8,
+      '3→4 回到 ' + p0 + '；3→-1 →' + pBack + '；3→7 →' + pWrap +
+      '（四页环）；容量 640/400/300 = ' + c640 + '/' + c400 + '/' + c300 + '；HELP=' + M.HELP.length);
+
+    /* ══ S3 只读：绘制前后 Player/Battle 不变、不掷随机数 ═══════ */
+    B.abort();
+    M.restart();
+    resetP(5, 'elite_fang_5');
+    P.exp = 24; P.hp = 100;
+    B.start('dragon');
+    for (var r9 = 0; r9 < 8; r9++) { B.playerAction('attack'); B.tick(B._now() + 100000); }
+    function snap() {
+      var st = B.getState();
+      return JSON.stringify([P.level, P.exp, P.atk, P.def, P.hp, P.maxHp, P.gold, P.floor,
+        P.equipment, P.upg, P.inventory, P.eliteAtk,
+        st ? [st.roundNo, st.monster.hp, st.monster.atk, st.monster.def, st.shieldValue] : null]);
+    }
+    var s0 = snap();
+    var rnd = 0, origRnd = Math.random;
+    Math.random = function () { rnd++; return origRnd(); };
+    var mets = [];
+    try {
+      mets.push(Mdl._sysMetrics(1024, 640));
+      mets.push(Mdl._sysMetrics(480, 640));
+      mets.push(Mdl._sysMetrics(320, 568));
+    } finally { Math.random = origRnd; }
+    var s1 = snap();
+    rec('S3_readOnly', s0 === s1 && rnd === 0,
+      'Player+Battle 快照前后一致=' + (s0 === s1) + '；绘制期间 Math.random 调用 ' + rnd + ' 次（须 0）；' +
+      '三档 metrics=' + mets.map(function (m) { return m.variant + ':' + m.rows + '行'; }).join(' '));
+
+    /* ══ S4 成长账本：本级条 / 突破条与数据同源 ═════════════════ */
+    var M5 = Mdl._systemModel();
+    var expNext = B.expToNext(5);
+    var ePct = Math.min(1, P.exp / expNext);
+    var mFull = Mdl._sysMetrics(1024, 640);
+    var eb = mFull.expBar, bb = mFull.brkBar, tk = mFull.track;
+    var wantOn = Math.round(10 * ePct);
+    var cellNow = tk.cells.filter(function (x) { return x.now; })[0];
+    var cellNext = tk.cells.filter(function (x) { return x.next; })[0];
+    var brkRatio = M5.brk && M5.brk.need > 0 ? M5.brk.have / M5.brk.need : 1;
+    /* 负例：把经验改成 0，条必须归零（证明条不是画死的） */
+    var saveExp = P.exp; P.exp = 0;
+    var mZero = Mdl._sysMetrics(1024, 640);
+    var zeroFill = mZero.expBar.on;
+    P.exp = saveExp;
+    var cond = {
+      expNext: M5.expNext === expNext,
+      segs: eb.n === 10,
+      on: eb.on === wantOn,
+      brk: Math.abs(bb.ratio - brkRatio) < 1e-9,
+      cells: tk.cells.length === 11,
+      now: !!cellNow && cellNow.lv === P.level,
+      next: !!cellNext && cellNext.lv === P.level + 1,
+      zero: zeroFill === 0,
+      remain: M5.remain === Math.max(0, expNext - P.exp)
+    };
+    var condBad = Object.keys(cond).filter(function (k) { return !cond[k]; });
+    rec('S4_growthLedger', condBad.length === 0,
+      'expNext=' + expNext + '；本级条 10 段亮 ' + eb.on + '（=round(10×' + ePct.toFixed(3) + ')）；' +
+      '突破条 ratio=' + bb.ratio + '（数据 ' + brkRatio + '）；当前格 Lv.' + (cellNow && cellNow.lv) +
+      '、下一格 Lv.' + (cellNext && cellNext.lv) + '；经验归零负例亮段=' + zeroFill +
+      (condBad.length ? '；未通过：' + condBad.join(',') : '') +
+      '；详细=' + JSON.stringify(cond));
+
+    /* ══ S5 武器共鸣：基础 / 等级成长两段 ═══════════════════════ */
+    var Mw = Mdl._systemModel();
+    var wb = Mdl._sysMetrics(1024, 640).weaponBar;
+    var base = IT.elite_fang_5.effect.atk;                 /* 12 */
+    var eff = Inv.atkOf('elite_fang_5', P.level);          /* 17 @Lv.5 */
+    var wantBaseW = Math.round(wb.w * (base / eff));
+    var eliteOk = Mw.weapon && Mw.weapon.base === base && Mw.weapon.eff === eff &&
+      Mw.weapon.gain === eff - base && wb.baseW === wantBaseW && wb.gainW === wb.w - wantBaseW &&
+      wb.gainW > 0 && rows(900).indexOf('武器共鸣：烬牙 攻击 ' + eff + '（基础 ' + base + ' + 等级 ' + (eff - base) + '）') >= 0;
+    resetP(5, 'sword_iron');
+    P.hp = P.maxHp;
+    B.abort(); B.start('slime');
+    var Ms = Mdl._systemModel();
+    var ws = Mdl._sysMetrics(1024, 640).weaponBar;
+    var shopOk = Ms.weapon && Ms.weapon.base === 3 && Ms.weapon.eff === 3 &&
+      Ms.weapon.gain === 0 && ws.gainW === 0 && ws.baseW === ws.w;
+    rec('S5_weaponResonance', eliteOk && shopOk,
+      '烬牙 Lv.5：基础 ' + base + ' + 等级 ' + (eff - base) + ' = ' + eff +
+      '（金段 ' + wb.gainW + '/' + wb.w + 'px）；铁剑：基础/有效 ' + Ms.weapon.base + '/' + Ms.weapon.eff +
+      '，成长段 ' + ws.gainW + 'px（不随等级成长）');
+
+    /* ══ S6 图标 24×24 原生 1:1（异步：真实 Image 的 naturalWidth 才能证明不缩放） ══
+     * 放到最后的异步段执行，结果写入 rec('S6_iconNative') 后再统一出裁决行。 */
+
+    /* ══ S7 几何：条带/图元全部在内容框内、整数像素 ═══════════ */
+    resetP(5, 'elite_fang_5'); P.hp = P.maxHp;
+    B.abort(); B.start('dragon');
+    var sizes = [[1024, 640], [480, 640], [320, 568], [800, 600], [1024, 400], [480, 400], [320, 300]];
+    var geoBad = [], geoRows = [];
+    sizes.forEach(function (s) {
+      var L = Mdl._sysMetrics(s[0], s[1]);
+      var all = [];
+      Object.keys(L.bands).forEach(function (k) { all.push(L.bands[k]); });
+      all.push(L.expBar, L.brkBar, L.weaponBar, L.icon);
+      if (L.archBars) all = all.concat(L.archBars);
+      if (L.chips) all = all.concat(L.chips);
+      if (L.dreadPips) all.push(L.dreadPips);
+      all.forEach(function (r) {
+        if (!inside(r, L.content)) geoBad.push(s.join('×') + ':' + JSON.stringify(r) + ' 越界');
+      });
+      var ints = allInts(all);
+      if (ints.length) geoBad.push(s.join('×') + ' 非整数：' + ints.join(','));
+      geoRows.push(s.join('×') + ' ' + L.variant + ' 行=' + L.rows + ' 内容高=' + L.content.h);
+    });
+    rec('S7_geometry', geoBad.length === 0,
+      geoBad.length ? geoBad.slice(0, 4).join(' | ') : geoRows.join('；'));
+
+    /* ══ S8 负例：atkOf 不再成长 → S5 的"有成长段"必须判负 ═══ */
+    resetP(5, 'elite_fang_5'); P.hp = P.maxHp;
+    B.abort(); B.start('dragon');
+    var origAtkOf = Inv.atkOf;
+    var negOk = false;
+    try {
+      Inv.atkOf = function (id, lv) {
+        var it = IT[id];
+        return (it && it.effect && it.effect.atk) ? it.effect.atk : 0;
+      };
+      var Mn = Mdl._systemModel();
+      var wn = Mdl._sysMetrics(1024, 640).weaponBar;
+      negOk = (wn.gainW === 0) && (Mn.weapon.gain === 0);
+    } finally { Inv.atkOf = origAtkOf; }
+    var restored = Mdl._sysMetrics(1024, 640).weaponBar.gainW > 0;
+    rec('S8_negativeNoGrowth', negOk && restored,
+      '把 atkOf 钉成基础值后 金段=' + (negOk ? 0 : '非 0') + '（S5 会判负）；还原后金段>0=' + restored);
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+  }
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    var pre = document.createElement('pre');
+    pre.id = 'result';
+    pre.textContent = text;
+    document.body.appendChild(pre);
+    document.title = out.ok ? 'D87_DONE' : 'D87_FAIL';
+  }
+
+  /* S6 异步：用真实 Image（naturalWidth/naturalHeight 可读）走同一条
+   * itemIcon → Render.drawIcon 路径。24×24 与 32×24 两张都必须原样落屏。 */
+  try {
+    resetP(5, 'elite_fang_5'); P.hp = P.maxHp;
+    B.abort(); B.start('dragon');
+    var SP = Game.Core.Sprites, origGet = SP.get;
+    var imgs = { i24: new Image(), i32: new Image() };
+    var left = 2, failed = null;
+    var SVG24 = 'data:image/svg+xml,' + encodeURIComponent(
+      "<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><rect width='24' height='24' fill='#ffcf6e'/></svg>");
+    var SVG32 = 'data:image/svg+xml,' + encodeURIComponent(
+      "<svg xmlns='http://www.w3.org/2000/svg' width='32' height='24'><rect width='32' height='24' fill='#7fd1ff'/></svg>");
+    function afterLoad() {
+      if (failed) {
+        rec('S6_iconNative', false, '测试图加载失败：' + failed);
+        finish();
+        return;
+      }
+      var mi, miN, mi32;
+      try {
+        SP.get = function () { return imgs.i24; };
+        mi = Mdl._sysMetrics(1024, 640).icon;
+        miN = Mdl._sysMetrics(320, 568).icon;
+        SP.get = function () { return imgs.i32; };
+        mi32 = Mdl._sysMetrics(1024, 640).icon;
+      } finally { SP.get = origGet; }
+      var iconOk = !!mi && !!mi.native && mi.w === 24 && mi.h === 24 &&
+        mi.w === mi.native.w && mi.h === mi.native.h &&
+        !!miN && miN.w === 24 && miN.h === 24 &&
+        !!mi32 && mi32.w === 32 && mi32.h === 24 &&
+        mi32.w === mi32.native.w && mi32.h === mi32.native.h;
+      rec('S6_iconNative', iconOk,
+        '24×24 素材落屏 ' + (mi && (mi.w + '×' + mi.h)) + '（原生 ' +
+        (mi && mi.native && (mi.native.w + '×' + mi.native.h)) + '）；窄屏 ' +
+        (miN && (miN.w + '×' + miN.h)) + '；32×24 素材落屏 ' +
+        (mi32 && (mi32.w + '×' + mi32.h)) + '（原生 ' +
+        (mi32 && mi32.native && (mi32.native.w + '×' + mi32.native.h)) + '）——均为 1:1，缩放会立刻不等');
+      finish();
+    }
+    function one() { left--; if (left === 0) afterLoad(); }
+    imgs.i24.onload = one;
+    imgs.i32.onload = one;
+    imgs.i24.onerror = function () { failed = '24×24'; left = 0; afterLoad(); };
+    imgs.i32.onerror = function () { failed = '32×24'; left = 0; afterLoad(); };
+    imgs.i24.src = SVG24;
+    imgs.i32.src = SVG32;
+    setTimeout(function () {
+      if (document.getElementById('result')) return;
+      if (left > 0) { failed = failed || '超时'; left = 0; afterLoad(); }
+    }, 3000);
+  } catch (e2) {
+    out.ok = false;
+    out.err = String((e2 && (e2.stack || e2.message)) || e2);
+    finish();
+  }
+})();
+</script>
+</body>
+</html>

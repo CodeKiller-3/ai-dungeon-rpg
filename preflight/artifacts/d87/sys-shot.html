@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-87 系统屏实拍台</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<pre id="err"></pre>
+<!-- D-87 系统屏实拍：与主游戏同序加载，真实渲染循环出图（不合成、不补画）。
+     用法：?view=full|mid|narrow&battle=dragon|mob&weapon=elite|iron
+     整页逻辑视口由 ?w=&h= 钉死（headless 的 --window-size 含边框，不能直接当 innerWidth）。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script>
+/* ?old=1 时加载改动前的 modal.js（git HEAD 副本），用同一份状态渲染"改版前"对照图。
+   只在实拍页生效，不改动线上文件。 */
+(function () {
+  var old = /[?&]old=1\b/.test(location.search);
+  document.write('<script src="' + (old ? '_modal_before.js' : '../../../js/systems/modal.js') + '"><\/script>');
+})();
+</script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  if (q.w) {
+    Object.defineProperty(window, 'innerWidth', { value: +q.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: +q.h || 640, configurable: true });
+  }
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d87fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d87fps = true;
+  })();
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame, left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+
+  try {
+    localStorage.setItem('aiDungeon_guided', '1');
+    /* 线上只会在探索场景叠弹窗（render.js 的 _drawModal 只在 drawExplore 末尾调用）。
+     * 这张实拍要的是"战斗背景 + 系统屏"，所以仅在实拍页把 drawBattle 包一层，
+     * 在它之后调用同一个 Game.Modal.draw()——面板本身仍是线上代码，未做任何合成/补画。 */
+    var _drawBattle = Game.Core.Render.drawBattle;
+    Game.Core.Render.drawBattle = function () {
+      var r = _drawBattle.apply(this, arguments);
+      try { Game.Modal.draw(); } catch (e) { }
+      return r;
+    };
+
+    M.init({ menu: false });
+    Map.setFloor(2);
+    P.floor = 2;
+    var sp = Map.getSpawn();
+    P.x = sp.x; P.y = sp.y;
+    /* 固定演示状态：Lv.5 / 经验 24/300 / 金币 268 / 生命 100/140 / F2 */
+    P.level = 5;
+    P.exp = 24;
+    P.gold = 268;
+    P.equipment = { weapon: q.weapon === 'iron' ? 'sword_iron' : 'elite_fang_5', armor: null };
+    P.upg = {};
+    Game.Systems.Inventory.recalcEquip();
+    P.hp = Math.min(100, P.maxHp);
+    P.mp = P.maxMp;
+
+    B.start(q.battle === 'mob' ? 'orc_warrior' : 'dragon');
+    M.switchScene('battle');
+    Game.Core.Render.resize();
+    /* 演示时钟钉在 00:08：改版前后对照时，唯一变量是版式而不是秒表 */
+    M.getElapsedMs = function () { return 8000; };
+    Game.Modal.open('quests');
+    Game.Modal._setPage(3);
+    stopAfterFrames(60);
+    M.start();
+    /* 手动跑一帧：syncHud 把"最高等级/最深层"顶到当前值，再让旧版重建文本行，
+       这样改版前后两张图的数据完全一致（新版本来就在绘制时取快照）。 */
+    try { M.loop(performance.now()); Game.Modal._refresh(); } catch (e) { }
+    document.title = 'READY';
+  } catch (e) {
+    document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+    document.title = 'ERR';
+  }
+})();
+</script>
+</body>
+</html>

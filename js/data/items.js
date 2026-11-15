@@ -211,6 +211,23 @@
     scroll_upgrade_4: 'icon_scroll_4'
   };
 
+  /* D-87：五把精英刀的图标——复用既有 24×24 武器素材，挂成**不可枚举**，
+   * 保证「48 件物品 48 条显式映射」的计数与枚举面不变（与 sword_rescue 同一做法）。
+   * 只为 M 面板第 4 页「武器共鸣」提供 1:1 原生图标，不改任何数值。 */
+  var ELITE_ICONS = {
+    elite_fang_1: 'weapon_knife',
+    elite_axe_2: 'weapon_double_axe',
+    elite_blade_3: 'weapon_duel_sword',
+    elite_edge_4: 'weapon_knight_sword',
+    elite_fang_5: 'weapon_red_gem_sword'
+  };
+  for (var ei in ELITE_ICONS) {
+    if (!Object.prototype.hasOwnProperty.call(ELITE_ICONS, ei)) continue;
+    Object.defineProperty(Game.Data.ITEM_ICONS, ei, {
+      value: ELITE_ICONS[ei], enumerable: false, configurable: true, writable: false
+    });
+  }
+
   /* D-49：救援专属装备——只由 Adaptive 在"第二次死亡"时发放。
    * 关键约束：不进商店 / 宝箱 / 怪物掉落三张表，也不改变 ITEMS 的可枚举统计
    * （D-45 对 Σprice / Σsell / FNV 有硬断言），因此用不可枚举属性挂到 ITEMS 上，

@@ -166,24 +166,34 @@
     return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
   }
 
-  /* 龙威行（§1.5）——只读 dragonDread()，不在这里重写分段常量 */
-  function sysDreadLine() {
+  /* 龙威（§1.5）——只读 dragonDread()，分段常量不在这里重写。
+   * D-87：拆成 parts + 文本行，画布仪表盘与文本行共用同一份快照（不产生第二套口径）。 */
+  function sysDreadParts() {
     var B = Game.Systems && Game.Systems.Battle;
     if (!B || typeof B.dragonDread !== 'function') return null;
     var d = null;
     try { d = B.dragonDread(); } catch (e) { return null; }
     if (!d || typeof d.tier !== 'number') return null;
-    var round = sysNum(d.round, 0), bonus = sysNum(d.bonus, 0), tier = d.tier;
+    var tier = d.tier, round = sysNum(d.round, 0), bonus = sysNum(d.bonus, 0);
+    var next = (tier <= 0) ? 9 : (tier === 1 ? 13 : (tier === 2 ? 17 : 0));
+    return {
+      tier: tier, round: round, bonus: bonus,
+      nextRound: next, left: next ? Math.max(0, next - round) : 0
+    };
+  }
+  function sysDreadLine(parts) {
+    var p = parts || sysDreadParts();
+    if (!p) return null;
     var val;
-    if (tier <= 0) val = '未启动（第 9 回合开始）';
-    else if (tier === 1) val = '+' + bonus + '（第 1/3 段，' + Math.max(0, 13 - round) + ' 回合后升档）';
-    else if (tier === 2) val = '+' + bonus + '（第 2/3 段，' + Math.max(0, 17 - round) + ' 回合后升档）';
-    else val = '+' + bonus + '（第 3/3 段，已到顶）';
+    if (p.tier <= 0) val = '未启动（第 9 回合开始）';
+    else if (p.tier === 1) val = '+' + p.bonus + '（第 1/3 段，' + Math.max(0, 13 - p.round) + ' 回合后升档）';
+    else if (p.tier === 2) val = '+' + p.bonus + '（第 2/3 段，' + Math.max(0, 17 - p.round) + ' 回合后升档）';
+    else val = '+' + p.bonus + '（第 3/3 段，已到顶）';
     return '龙威 ' + val;
   }
 
   /* 「下一突破」——两段累加都用 Battle.expToNext，不写死 2450 之外的第二个常量 */
-  function sysBreakthroughLine() {
+  function sysBreakthroughParts() {
     var P = Game.Data.Player || {};
     var B = Game.Systems && Game.Systems.Battle;
     var lv = sysNum(P.level, 1);
@@ -191,27 +201,51 @@
       var G = Game.Data.GROWTH;
       var ms = (G && G.milestones && G.milestones[11]) || null;
       if (!ms) return null;
-      return '已突破：攻击 +' + sysNum(ms.atk, 0) + ' · 防御 +' + sysNum(ms.def, 0) +
-        ' · 生命 +' + sysNum(ms.maxHp, 0);
+      return { kind: 'done', ms: ms };
     }
     if (!B || typeof B.expToNext !== 'function') return null;
     var need = 0, have = sysNum(P.exp, 0), i;
     for (i = 1; i <= 10; i++) need += sysNum(B.expToNext(i), 0);
     for (i = 1; i < lv; i++) have += sysNum(B.expToNext(i), 0);
-    if (have >= need) return '下一突破：Lv.11 可突破';
-    return '下一突破：Lv.11 还差 ' + (need - have) + ' 经验';
+    return {
+      kind: (have >= need) ? 'ready' : 'next',
+      need: need, have: Math.min(have, need), remain: Math.max(0, need - have)
+    };
+  }
+  function sysBreakthroughLine(parts) {
+    var p = parts || sysBreakthroughParts();
+    if (!p) return null;
+    if (p.kind === 'done') {
+      var ms = p.ms;
+      return '已突破：攻击 +' + sysNum(ms.atk, 0) + ' · 防御 +' + sysNum(ms.def, 0) +
+        ' · 生命 +' + sysNum(ms.maxHp, 0);
+    }
+    if (p.kind === 'ready') return '下一突破：Lv.11 可突破';
+    return '下一突破：Lv.11 还差 ' + p.remain + ' 经验';
   }
 
-  /* 武器共鸣——基础取 ITEMS[id].effect.atk，有效值走 Inventory.atkOf（唯一口径） */
-  function sysWeaponLine() {
+  /* 武器共鸣——基础取 ITEMS[id].effect.atk，有效值走 Inventory.atkOf（唯一口径）。
+   * D-87：gain = 有效值 − 基础值，就是"等级在放大它"的那一段；gain=0 的武器如实显示 0。 */
+  function sysWeaponParts() {
     var P = Game.Data.Player || {};
     var IT = Game.Data.ITEMS || {};
     var id = P.equipment && P.equipment.weapon;
     if (!id || !IT[id]) return null;
     var I = Game.Systems && Game.Systems.Inventory;
+    var lv = sysNum(P.level, 1);
     var base = sysNum(IT[id].effect && IT[id].effect.atk, 0);
-    var eff = (I && typeof I.atkOf === 'function') ? sysNum(I.atkOf(id, sysNum(P.level, 1)), base) : base;
-    return '武器共鸣：' + IT[id].name + ' 攻击 ' + eff + '（基础 ' + base + ' + 等级 ' + (eff - base) + '）';
+    var eff = (I && typeof I.atkOf === 'function') ? sysNum(I.atkOf(id, lv), base) : base;
+    var upg = sysNum(P.upg && P.upg[id], 0);
+    return {
+      id: id, name: IT[id].name || id, base: base, eff: eff,
+      gain: eff - base, plus: upg, level: lv,
+      growth: !!(IT[id].growth && IT[id].growth.length)
+    };
+  }
+  function sysWeaponLine(parts) {
+    var w = parts || sysWeaponParts();
+    if (!w) return null;
+    return '武器共鸣：' + w.name + ' 攻击 ' + w.eff + '（基础 ' + w.base + ' + 等级 ' + w.gain + '）';
   }
 
   /* 档案：精英刀 owned/5 · 图鉴 known/18 · 任务 done/12 */
@@ -286,7 +320,9 @@
     return '约' + rounds + '回合/只（估算）';
   }
 
-  function buildSystemRows(width) {
+  /* D-87：唯一的只读快照。文本行与画布仪表盘都只读这一份，画布上每个数字都能在
+   * 文本行里找到同一来源（不做第二套计算）。纯读取：不改 Player、不写存档、不掷随机数。 */
+  function sysModel() {
     var P = Game.Data.Player || {};
     var B = Game.Systems && Game.Systems.Battle;
     var lv = sysNum(P.level, 1);
@@ -308,9 +344,32 @@
     var elapsed = (S && typeof S.getElapsedMs === 'function') ? S.getElapsedMs() : 0;
 
     var gr = (S && typeof S.getRunGrowth === 'function') ? S.getRunGrowth() : null;
-    var arch = sysArchiveParts();
-    var env = sysEnvParts();
-    var dread = sysDreadLine();
+    var growth = null;
+    if (gr) {
+      var delta = sysNum(gr.delta, sysNum(gr.atk, atk) - sysNum(gr.startAtk, atk));
+      growth = { startAtk: sysNum(gr.startAtk, atk), atk: sysNum(gr.atk, atk), delta: delta };
+    }
+    return {
+      lv: lv, exp: exp, expNext: expNext, remain: Math.max(0, expNext - exp),
+      atk: atk, def: def, hp: hp, maxHp: maxHp,
+      gold: gold, floor: floor, known: known, killed: killed, turns: turns,
+      potions: potions, rescues: rescues, maxLevel: maxLevel, floorReached: floorReached,
+      elapsed: elapsed, growth: growth,
+      arch: sysArchiveParts(), env: sysEnvParts(),
+      dread: sysDreadParts(), dreadText: sysDreadLine(),
+      weapon: sysWeaponParts(), brk: sysBreakthroughParts(),
+      estimate: sysEstimateLine()
+    };
+  }
+
+  function buildSystemRows(width, model) {
+    var M = model || sysModel();
+    var lv = M.lv, exp = M.exp, expNext = M.expNext;
+    var atk = M.atk, def = M.def, hp = M.hp, maxHp = M.maxHp;
+    var gold = M.gold, floor = M.floor;
+    var known = M.known, killed = M.killed, turns = M.turns, potions = M.potions, rescues = M.rescues;
+    var maxLevel = M.maxLevel, floorReached = M.floorReached, elapsed = M.elapsed;
+    var gr = M.growth, arch = M.arch, env = M.env, dread = M.dreadText;
     var w = (typeof width === 'number' && isFinite(width) && width > 0) ? width : 0;
 
     /* 窄屏：固定 6 行，第 6 行顶替 */
@@ -320,9 +379,9 @@
       out6.push('攻' + atk + ' 防' + def + ' 血' + hp + '/' + maxHp + ' 金' + gold + ' F' + floor);
       out6.push('击杀' + killed + ' 回合' + turns + ' 药水' + potions + ' 救援' + rescues + '/2');
       out6.push('最高Lv' + maxLevel + ' 最深F' + floorReached + ' ' + sysMMSS(elapsed));
-      var wl = sysWeaponLine();
+      var wl = sysWeaponLine(M.weapon);
       out6.push(wl ? wl : '档案 ' + arch.owned + '/5 ' + arch.known + '/18 ' + arch.done + '/12');
-      var est = sysEstimateLine();
+      var est = M.estimate;
       out6.push(dread ? dread : (est ? est : '本层无普通怪'));
       return out6;
     }
@@ -343,9 +402,9 @@
       rows.push('本局成长：攻击 ' + sysNum(gr.startAtk, atk) + ' → ' + sysNum(gr.atk, atk) +
         '（' + (delta >= 0 ? '+' + delta : String(delta)) + '）');
     }
-    var brk = sysBreakthroughLine();
+    var brk = sysBreakthroughLine(M.brk);
     if (brk) rows.push(brk);
-    var wl2 = sysWeaponLine();
+    var wl2 = sysWeaponLine(M.weapon);
     if (wl2) rows.push(wl2);
     if (!mid) rows.push('【档案】精英刀 ' + arch.owned + '/5 · 图鉴 ' + arch.known + '/18 · 任务 ' + arch.done + '/12');
     else rows.push('档案 ' + arch.owned + '/5 ' + arch.known + '/18 ' + arch.done + '/12');
@@ -354,11 +413,414 @@
     return rows;
   }
 
+  /* ---------- D-87：第 4 页「系统」仪表盘 ----------
+   * 只画、不读状态的第二来源：所有数字来自 sysModel()（与文本行同一份快照）。
+   * 像素纪律：坐标/宽度一律取整，1px 边框落在 .5 偏移上；图标只走 Render.drawIcon（原生 1:1）。
+   * 版式三档与文本行同宽阈值（<420 窄 / <520 中 / 其余全宽），高度由面板行数决定，
+   * 容量不够时压缩条带与字号，不新增页、不改行数。 */
+  var SYS_C = {
+    label: '#8a8aa0', text: '#cfcfcf', gold: '#ffcf6e', goldDim: '#6b5a2e',
+    cyan: '#7fd1ff', blue: '#9bbbf4', green: '#4ade80', dim: '#5f6578',
+    trackBg: '#1c1c33', trackEdge: '#3a3a5c', cellFill: '#2a2a44',
+    base: '#4a5060', chipBg: '#1b1b30', name: '#e8e2d0'
+  };
+
+  function sr(v) { return Math.round(v); }
+  function sysBox(c, x, y, w, h, fill) {
+    c.fillStyle = fill; c.fillRect(sr(x), sr(y), sr(w), sr(h));
+  }
+  function sysEdge(c, x, y, w, h, col) {
+    c.strokeStyle = col; c.lineWidth = 1;
+    c.strokeRect(sr(x) + 0.5, sr(y) + 0.5, sr(w) - 1, sr(h) - 1);
+  }
+  function sysTxt(c, s, x, y, font, col, align) {
+    c.font = font; c.fillStyle = col; c.textAlign = align || 'left';
+    c.fillText(String(s), sr(x), sr(y));
+    c.textAlign = 'left';
+    return c.measureText(String(s)).width;
+  }
+  /* 连续条：整数像素填充 + 1px 外框（ratio 0..1） */
+  function sysBar(c, x, y, w, h, ratio, col, bg, edgeCol) {
+    var W = Math.max(1, sr(w)), H = Math.max(2, sr(h));
+    sysBox(c, x, y, W, H, bg || SYS_C.trackBg);
+    var f = Math.round(W * Math.max(0, Math.min(1, ratio)));
+    if (f > 0) sysBox(c, x, y, f, H, col);
+    if (edgeCol) sysEdge(c, x, y, W, H, edgeCol);
+    return { x: sr(x), y: sr(y), w: W, h: H, fill: f };
+  }
+  /* 分段条：n 段等宽，每段间隔 1px（进度条用，刻度感来自间隔而非半透明） */
+  function sysSegBar(c, x, y, w, h, ratio, col, n) {
+    var W = Math.max(1, sr(w)), H = Math.max(2, sr(h));
+    var segs = Math.max(1, n | 0);
+    var sw = Math.max(1, Math.floor((W - (segs - 1)) / segs));
+    var on = Math.round(segs * Math.max(0, Math.min(1, ratio)));
+    for (var i = 0; i < segs; i++) {
+      sysBox(c, x + i * (sw + 1), y, sw, H, i < on ? col : SYS_C.trackBg);
+    }
+    return { x: sr(x), y: sr(y), w: W, h: H, seg: sw, on: on, n: segs };
+  }
+
+  /* 版式度量：返回条带矩形与所有可断言的图元（验证页与绘制共用同一份） */
+  function sysLayout(x, top, w, avail, narrow, mid, M) {
+    /* 版式不只按宽度：高度装不下全宽条带时逐级压缩（不改行数/容量，只压排版） */
+    var v = narrow ? 2 : (mid ? 1 : 0);
+    if (v === 0 && avail < 330) v = 1;
+    if (v === 1 && avail < 250) v = 2;
+    narrow = (v === 2); mid = (v === 1);
+    var spec = narrow
+      ? [['identity', 15], ['growth', 44], ['weapon', 42], ['run', 22], ['arch', 15], ['env', 15]]
+      : (mid
+        ? [['identity', 27], ['growth', 70], ['weapon', 58], ['run', 42], ['arch', 22], ['env', 17]]
+        : [['identity', 33], ['growth', 82], ['weapon', 68], ['run', 58], ['arch', 24], ['env', 19]]);
+    if (M && M.dreadText) spec.push(['dread', narrow ? 13 : (mid ? 17 : 19)]);
+    var sum = 0, i;
+    for (i = 0; i < spec.length; i++) sum += spec[i][1];
+    var n = spec.length;
+    /* 间距按剩余高度均分：先保证 sum + gap*(n-1) ≤ avail（不越界是硬线），再限制上限避免过散 */
+    var gap = (n > 1) ? Math.floor((avail - sum) / (n - 1)) : 0;
+    if (!isFinite(gap) || gap < 0) gap = 0;
+    if (gap > 12) gap = 12;
+    var used = sum + gap * (n - 1);
+    var y = top + Math.max(0, Math.floor((avail - used) / 2));
+    var bands = {};
+    for (i = 0; i < n; i++) {
+      bands[spec[i][0]] = { x: x, y: y, w: w, h: spec[i][1] };
+      y += spec[i][1] + gap;
+    }
+    return { x: x, top: top, w: w, avail: avail, gap: gap, bands: bands,
+      narrow: narrow, mid: mid, variant: narrow ? 'narrow' : (mid ? 'mid' : 'full') };
+  }
+
+  /* 宿主条：Lv + 四枚属性芯片（放不下就从右往左丢，绝不压字） */
+  function sysPaintIdentity(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var narrow = L.narrow, mid = L.mid;
+    sysTxt(c, narrow ? '宿主' : '宿 主', x, y + (narrow ? 11 : 15), '11px monospace', SYS_C.label);
+    var lx = x + (narrow ? 30 : 38);
+    var lvW = sysTxt(c, 'Lv.' + M.lv, lx, y + (narrow ? 13 : (mid ? 20 : 23)),
+      'bold ' + (narrow ? 14 : (mid ? 17 : 20)) + 'px monospace', SYS_C.gold);
+    var chips = narrow
+      ? [['攻', M.atk], ['防', M.def], ['金', M.gold]]
+      : [['攻', M.atk], ['防', M.def], ['血', M.hp + '/' + M.maxHp], ['金', M.gold]];
+    var fs = narrow ? '9px' : '10px';
+    var ch = narrow ? 13 : 16;
+    var right = x + w, made = [];
+    c.font = fs + ' monospace';
+    for (var i = chips.length - 1; i >= 0; i--) {
+      var s = chips[i][0] + ' ' + chips[i][1];
+      var tw = Math.round(c.measureText(s).width) + 10;
+      var bx = right - tw;
+      if (bx < lx + lvW + 6) break;               /* 放不下就停，不重叠 */
+      sysBox(c, bx, y + (narrow ? 0 : 1), tw, ch, SYS_C.chipBg);
+      sysEdge(c, bx, y + (narrow ? 0 : 1), tw, ch, SYS_C.trackEdge);
+      sysTxt(c, s, bx + 5, y + (narrow ? 10 : 13), fs + ' monospace', SYS_C.text);
+      made.push({ x: sr(bx), y: sr(y), w: tw, h: ch });
+      right = bx - 4;
+    }
+    L.chips = made.reverse();
+  }
+
+  /* 成长账本：等级格（我在哪 / 下一格）+ 本级经验条 + 突破条 */
+  function sysPaintGrowth(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var narrow = L.narrow, mid = L.mid;
+    var n = 11;
+    var remain = Math.max(0, M.expNext - M.exp);
+    sysTxt(c, '成长账本', x, y + (narrow ? 10 : 12), '11px monospace', SYS_C.label);
+    var head = narrow ? ('经验 ' + M.exp + '/' + M.expNext + ' · 差 ' + remain)
+      : ('经验 ' + M.exp + '/' + M.expNext + ' · 还差 ' + remain);
+    sysTxt(c, head, x + w, y + (narrow ? 10 : 12), '11px monospace',
+      SYS_C.blue, 'right');
+
+    /* 等级格：窄屏只开当前附近的 5 格窗口（左右用 … 标记还有格子） */
+    var ty = y + (narrow ? 14 : 18);
+    var th = narrow ? 11 : (mid ? 16 : 19);
+    var winFrom = 1, winTo = n;
+    if (narrow) { winFrom = Math.max(1, M.lv - 2); winTo = Math.min(n, winFrom + 4); winFrom = Math.max(1, winTo - 4); }
+    var total = winTo - winFrom + 1;
+    var gapC = narrow ? 2 : 3;
+    var markL = (narrow && winFrom > 1) ? 10 : 0;
+    var markR = (narrow && winTo < n) ? 10 : 0;
+    var cellW = Math.max(6, Math.floor((w - markL - markR - gapC * (total - 1)) / total));
+    var realW = cellW * total + gapC * (total - 1);
+    var cx0 = x + markL + Math.floor((w - markL - markR - realW) / 2);
+    if (markL) sysTxt(c, '‹', x + 1, ty + th - 2, '10px monospace', SYS_C.dim);
+    if (markR) sysTxt(c, '›', x + w - 6, ty + th - 2, '10px monospace', SYS_C.dim);
+    var cells = [];
+    for (var i = winFrom; i <= winTo; i++) {
+      var cxi = cx0 + (i - winFrom) * (cellW + gapC);
+      var isPast = i < M.lv, isNow = i === M.lv, isNext = i === M.lv + 1;
+      var fill = isNow ? SYS_C.gold : (isPast ? SYS_C.goldDim : (isNext ? SYS_C.cellFill : SYS_C.trackBg));
+      var edge = isNow ? SYS_C.gold : (isNext ? SYS_C.gold : SYS_C.trackEdge);
+      sysBox(c, cxi, ty, cellW, th, fill);
+      sysEdge(c, cxi, ty, cellW, th, edge);
+      var tc = isNow ? '#14142a' : (isNext ? SYS_C.gold : (isPast ? '#d8c58a' : SYS_C.dim));
+      sysTxt(c, i, cxi + cellW / 2, ty + th - Math.max(2, Math.floor((th - 9) / 2) + 1),
+        (th >= 16 ? '10px' : '9px') + ' monospace', tc, 'center');
+      cells.push({ lv: i, x: cxi, y: ty, w: cellW, h: th, now: isNow, next: isNext, past: isPast });
+    }
+    /* 当前格上方的指示三角 + 突破格（Lv.11）的顶标 */
+    var nowCell = null, nextCell = null, msCell = null;
+    for (i = 0; i < cells.length; i++) {
+      if (cells[i].now) nowCell = cells[i];
+      if (cells[i].next) nextCell = cells[i];
+      if (cells[i].lv === 11) msCell = cells[i];
+    }
+    if (nowCell) {
+      c.fillStyle = SYS_C.gold;
+      var tcx = sr(nowCell.x + nowCell.w / 2);
+      c.beginPath();
+      c.moveTo(tcx - 3, ty - 4); c.lineTo(tcx + 3, ty - 4); c.lineTo(tcx, ty - 1);
+      c.closePath(); c.fill();
+    }
+    if (msCell && !msCell.now) {
+      sysBox(c, msCell.x + Math.floor(msCell.w / 2) - 1, msCell.y - 3, 3, 2, SYS_C.gold);
+    }
+
+    /* 本级经验条 + 突破条 */
+    var by = ty + th + (narrow ? 3 : 5);
+    var bh = narrow ? 7 : (mid ? 8 : 9);
+    var labelW = narrow ? 0 : (mid ? 56 : 62);
+    var valW = narrow ? 0 : 72;
+    var barX = x + labelW;
+    var barW = Math.max(20, w - labelW - (narrow ? 0 : valW));
+    var ePct = M.expNext > 0 ? Math.min(1, M.exp / M.expNext) : 1;
+    if (!narrow) {
+      sysTxt(c, '本级', x, by + bh - 1, '10px monospace', SYS_C.label);
+    }
+    L.expBar = sysSegBar(c, barX, by, barW, bh, ePct, SYS_C.cyan, 10);
+    L.expBar.ratio = ePct;
+    if (!narrow) {
+      sysTxt(c, M.exp + '/' + M.expNext, x + w, by + bh - 1, '10px monospace', SYS_C.blue, 'right');
+    }
+    var brk = M.brk;
+    var bpt = 0, btxt = '';
+    if (brk && brk.kind === 'done') { bpt = 1; btxt = '已突破'; }
+    else if (brk && brk.kind === 'ready') { bpt = 1; btxt = 'Lv.11 可突破'; }
+    else if (brk && brk.need > 0) { bpt = brk.have / brk.need; btxt = '还差 ' + brk.remain; }
+    var by2 = by + bh + (narrow ? 3 : 4);
+    var bh2 = narrow ? 4 : 5;
+    if (!narrow) sysTxt(c, '突破 Lv.11', x, by2 + bh2, '10px monospace', SYS_C.label);
+    L.brkBar = sysBar(c, barX, by2, barW, bh2, bpt, '#8a7440', SYS_C.trackBg, SYS_C.trackEdge);
+    L.brkBar.ratio = bpt;
+    if (!narrow) sysTxt(c, btxt, x + w, by2 + bh2, '10px monospace', SYS_C.gold, 'right');
+    L.track = { x: cx0, y: ty, w: realW, h: th, cells: cells, winFrom: winFrom, winTo: winTo };
+    L.remain = remain;
+  }
+
+  /* 武器共鸣：图标 24×24 原生 + 基础/等级成长两段条（等级不放大时如实全灰） */
+  function sysPaintWeapon(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var narrow = L.narrow, mid = L.mid;
+    var wp = M.weapon;
+    var eff = wp ? wp.eff : 0;
+    /* 标题行：左「武器共鸣」，右「攻击 N」——两行分开放，避免右对齐文字互相压 */
+    sysTxt(c, '武器共鸣', x, y + (narrow ? 9 : 11), '10px monospace', SYS_C.label);
+    sysTxt(c, '攻击 ' + eff, x + w, y + (narrow ? 10 : 13),
+      'bold ' + (narrow ? 12 : (mid ? 14 : 16)) + 'px monospace', SYS_C.gold, 'right');
+
+    var icon = wp ? itemIcon(wp.id) : null;
+    var iy = y + (narrow ? 12 : (mid ? 13 : 15));
+    var Rr = Game.Core && Game.Core.Render;
+    /* 图标槽：24×24 深底 + 1px 框，让细长刀具也能读成"一件装备"；图标本身仍原生 1:1 */
+    sysBox(c, x - 1, iy - 1, 26, 26, '#232338');
+    sysEdge(c, x - 1, iy - 1, 26, 26, '#565f78');
+    if (icon && Rr && typeof Rr.drawIcon === 'function') {
+      L.icon = Rr.drawIcon(c, icon, x, iy);   /* 原生 24×24 1:1，不做任何缩放 */
+      L.icon.native = { w: icon.naturalWidth || 24, h: icon.naturalHeight || 24 };
+    } else {
+      L.icon = { x: sr(x), y: sr(iy), w: 24, h: 24, native: null };
+    }
+    var tx = x + 30;
+    var name = wp ? wp.name : '未装备';
+    sysTxt(c, name, tx, y + (narrow ? 22 : (mid ? 26 : 30)),
+      (narrow ? '11px' : (mid ? '12px' : '13px')) + ' monospace', SYS_C.name);
+
+    var gain = wp ? wp.gain : 0;
+    var base = wp ? wp.base : 0;
+    var by = y + (narrow ? 26 : (mid ? 39 : 42));
+    var bh = narrow ? 6 : (mid ? 7 : 9);
+    var barW = Math.max(20, w - 30);
+    var fw = 0;
+    if (eff > 0) fw = Math.round(barW * (base / eff));
+    sysBox(c, tx, by, barW, bh, SYS_C.trackBg);
+    if (fw > 0) sysBox(c, tx, by, fw, bh, SYS_C.base);
+    if (eff > fw) sysBox(c, tx + fw, by, barW - fw, bh, SYS_C.gold);
+    sysEdge(c, tx, by, barW, bh, SYS_C.trackEdge);
+    L.weaponBar = { x: sr(tx), y: sr(by), w: sr(barW), h: sr(bh), baseW: fw, gainW: sr(barW) - fw, ratio: eff > 0 ? base / eff : 0 };
+    var ly = by + bh + (narrow ? 7 : 9);
+    sysTxt(c, '基础 ' + base, tx, ly, (narrow ? '9px' : '10px') + ' monospace', '#9aa0ad');
+    var gtxt = (gain > 0) ? ('等级 +' + gain) : '不随等级成长';
+    sysTxt(c, gtxt, x + w, ly, (narrow ? '9px' : '10px') + ' monospace', gain > 0 ? SYS_C.gold : SYS_C.dim, 'right');
+    if (wp && wp.plus > 0 && !narrow) {
+      sysTxt(c, '强化 +' + wp.plus, tx + 62, ly, '10px monospace', SYS_C.cyan);
+    }
+  }
+
+  /* 本局 + 档案 + 环境 + 龙威 */
+  function sysPaintRun(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var narrow = L.narrow, mid = L.mid;
+    var fs = narrow ? '10px' : '11px';
+    if (narrow) {
+      sysTxt(c, '击杀' + M.killed + ' 回合' + M.turns + ' 药水' + M.potions + ' 救援' + M.rescues + '/2',
+        x, y + 9, fs + ' monospace', SYS_C.text);
+      sysTxt(c, '最高Lv' + M.maxLevel + ' 最深F' + M.floorReached + ' ' + sysMMSS(M.elapsed),
+        x, y + 20, fs + ' monospace', SYS_C.text);
+      return;
+    }
+    sysTxt(c, '本局', x, y + 11, '11px monospace', SYS_C.label);
+    if (mid) {
+      if (M.growth) {
+        var gd = (M.growth.delta >= 0 ? '+' + M.growth.delta : String(M.growth.delta));
+        sysTxt(c, '本局攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk + '（' + gd + '）',
+          x + w, y + 11, '11px monospace', SYS_C.green, 'right');
+      }
+    }
+    sysTxt(c, '击杀 ' + M.killed + ' · 回合 ' + M.turns + ' · 药水 ' + M.potions + ' · 救援 ' + M.rescues + '/2',
+      x, y + (mid ? 24 : 27), fs + ' monospace', SYS_C.text);
+    sysTxt(c, '最高等级 ' + M.maxLevel + ' · 最深层 ' + M.floorReached + ' · 用时 ' + sysMMSS(M.elapsed),
+      x, y + (mid ? 37 : 41), fs + ' monospace', SYS_C.text);
+    if (!mid) {
+      if (M.growth) {
+        var gd2 = (M.growth.delta >= 0 ? '+' + M.growth.delta : String(M.growth.delta));
+        sysTxt(c, '本局攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk,
+          x, y + 55, fs + ' monospace', SYS_C.text);
+        sysTxt(c, '（' + gd2 + '）', x + 96, y + 55, fs + ' monospace', SYS_C.green);
+      } else {
+        sysTxt(c, '本局成长：读档继续（无起点）', x, y + 55, fs + ' monospace', SYS_C.dim);
+      }
+    }
+  }
+
+  function sysPaintArch(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var narrow = L.narrow, mid = L.mid;
+    var a = M.arch;
+    if (narrow) {
+      sysTxt(c, '刀 ' + a.owned + '/5 · 鉴 ' + a.known + '/18 · 任 ' + a.done + '/12',
+        x, y + 10, '10px monospace', SYS_C.blue);
+      return;
+    }
+    var parts = [
+      ['精英刀', a.owned, 5], ['图鉴', a.known, 18], ['任务', a.done, 12]
+    ];
+    var colW = Math.floor((w - 2 * 10) / 3);
+    for (var i = 0; i < parts.length; i++) {
+      var px = x + i * (colW + 10);
+      sysTxt(c, parts[i][0] + ' ' + parts[i][1] + '/' + parts[i][2], px, y + (mid ? 10 : 11),
+        (mid ? '10px' : '11px') + ' monospace', SYS_C.label);
+      var bw = Math.max(10, colW - 4);
+      var ratio = parts[i][2] > 0 ? parts[i][1] / parts[i][2] : 0;
+      var bb = sysBar(c, px, y + (mid ? 13 : 15), bw, mid ? 4 : 5, ratio,
+        i === 0 ? SYS_C.gold : (i === 1 ? SYS_C.cyan : SYS_C.green), SYS_C.trackBg, SYS_C.trackEdge);
+      if (!L.archBars) L.archBars = [];
+      L.archBars.push(bb);
+    }
+  }
+
+  function sysPaintEnv(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var env = M.env;
+    var s = '第 ' + env.floor + ' 层 · ' + env.theme + ' · Boss ' + env.boss;
+    c.font = (L.narrow ? '10px' : '11px') + ' monospace';
+    sysTxt(c, '环境', x, y + (L.narrow ? 10 : 13), '10px monospace', SYS_C.label);
+    sysTxt(c, modalFit(c, s, Math.max(20, w - 34)), x + 30, y + (L.narrow ? 10 : 13),
+      (L.narrow ? '10px' : '11px') + ' monospace', SYS_C.text);
+  }
+
+  function sysPaintDread(c, r, M, L) {
+    var x = r.x, y = r.y, w = r.w;
+    var d = M.dread;
+    if (!d || !M.dreadText) return;
+    sysTxt(c, M.dreadText, x, y + (L.narrow ? 10 : 14),
+      (L.narrow ? '10px' : '11px') + ' monospace', d.tier > 0 ? '#ff9b6b' : SYS_C.dim);
+    /* 右端 3 格档位指示：已到的段点亮 */
+    var pw = 12, ph = 6, pg = 3;
+    var px0 = x + w - (pw * 3 + pg * 2);
+    for (var i = 1; i <= 3; i++) {
+      var on = d.tier >= i;
+      sysBox(c, px0 + (i - 1) * (pw + pg), y + (L.narrow ? 6 : 10), pw, ph,
+        on ? (i === 3 ? '#ff5a4a' : '#ff9b6b') : SYS_C.trackBg);
+      sysEdge(c, px0 + (i - 1) * (pw + pg), y + (L.narrow ? 6 : 10), pw, ph, SYS_C.trackEdge);
+    }
+    L.dreadPips = { x: sr(px0), y: sr(y), w: pw * 3 + pg * 2, h: ph, tier: d.tier };
+  }
+
+  /* 与 Render 无关的本地截断（绘制时字体已设好） */
+  function modalFit(c, text, maxW) {
+    var s = String(text);
+    if (c.measureText(s).width <= maxW) return s;
+    while (s.length > 0 && c.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s + '…';
+  }
+
+  /* 七块条带按 variant 逐块绘制——_drawSystem 与 _sysMetrics 共用这一条路径 */
+  function sysPaintAll(c, L, M) {
+    var b = L.bands;
+    if (b.identity) sysPaintIdentity(c, b.identity, M, L);
+    if (b.growth) sysPaintGrowth(c, b.growth, M, L);
+    if (b.weapon) sysPaintWeapon(c, b.weapon, M, L);
+    if (b.run) sysPaintRun(c, b.run, M, L);
+    if (b.arch) sysPaintArch(c, b.arch, M, L);
+    if (b.env) sysPaintEnv(c, b.env, M, L);
+    if (b.dread) sysPaintDread(c, b.dread, M, L);
+    return L;
+  }
+
   Game.Modal = {
     /* D-28：供验证页断言"背包上下文传强化等级 / 商店图鉴走基础值"的只读入口 */
     _itemDesc: function (item, plus) { return itemDesc(item, plus); },
     /* D-85：第 4 页「系统」的只读行快照（验证页直接断言，不依赖画布像素） */
     _systemRows: function (width) { return buildSystemRows(width); },
+    /* D-87：第 4 页的唯一只读快照（文本行与画布同源；验证页断言数值口径） */
+    _systemModel: function () { return sysModel(); },
+    /* D-87：第 4 页版式度量——用真实绘制路径画进 2×2 离屏画布，捕获每一块条带与图元矩形。
+     * 只读：不改 Player/存档，不消耗随机数；不产生任何屏幕输出。 */
+    _sysMetrics: function (cwIn, chIn) {
+      var sz = cssSize();
+      var cw = (typeof cwIn === 'number' && cwIn > 0) ? cwIn : sz.w;
+      var ch = (typeof chIn === 'number' && chIn > 0) ? chIn : sz.h;
+      var vr = visibleRowCount({ w: cw, h: ch });
+      var M = sysModel();
+      var rows = buildSystemRows(cw, M).length;
+      var shown = Math.min(rows, vr);
+      var W = panelWidth(cw, false);
+      var H = HEADER_H + shown * ROW_H + FOOTER_H;
+      var px = (cw - W) / 2, py = (ch - H) / 2;
+      var narrow = cw < 420, mid = !narrow && cw < 520;
+      var x = sr(px + (narrow ? 12 : 14));
+      var innerW = sr(W - (narrow ? 24 : 28));
+      var top = py + HEADER_H, bot = py + H - FOOTER_H;
+      var L = sysLayout(x, top, innerW, bot - top, narrow, mid, M);
+      var cv = null, c = null;
+      try {
+        cv = document.createElement('canvas');
+        cv.width = 2; cv.height = 2;
+        c = cv.getContext('2d');
+      } catch (e) { c = null; }
+      if (c) sysPaintAll(c, L, M);
+      L.panel = { x: px, y: py, w: W, h: H };
+      L.content = { x: x, y: top, w: innerW, h: bot - top };
+      L.rows = rows; L.shown = shown; L.visibleRows = vr;
+      L.model = M;
+      return L;
+    },
+    /* D-87：第 4 页绘制入口（由 draw 分流调用；只读） */
+    _drawSystem: function (c, px, py, w, h) {
+      var sz = cssSize();
+      var cw = sz.w;
+      var narrow = cw < 420, mid = !narrow && cw < 520;
+      var x = sr(px + (narrow ? 12 : 14));
+      var innerW = sr(w - (narrow ? 24 : 28));
+      var top = py + HEADER_H, bot = py + h - FOOTER_H;
+      var M = sysModel();
+      var L = sysLayout(x, top, innerW, bot - top, narrow, mid, M);
+      L.panel = { x: px, y: py, w: w, h: h };
+      L.content = { x: x, y: top, w: innerW, h: bot - top };
+      sysPaintAll(c, L, M);
+      return L;
+    },
     open: function (k, stats) {
       if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover' && k !== 'npcquest') return;
       /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
@@ -1100,6 +1562,11 @@
 
       /* 条目列表（窄屏单行超长时截断加省略号，避免 320 宽溢出） */
       c.font = '14px monospace';
+      /* D-87：第 4 页「系统」不再逐行铺字，改画仪表盘（同一份只读快照；行数据仍保留给
+       * 断言/滚动语义，容量与四页签不变）。其余页仍走原逐行路径，行为不动。 */
+      if (kind === 'quests' && page === 3) {
+        this._drawSystem(c, px, py, w, h);
+      } else {
       for (var i = 0; i < rows; i++) {
         var ry = py + HEADER_H + i * ROW_H;
         var entry = data[start + i]; /* P2-3b：按滚动窗口取行数据 */
@@ -1154,6 +1621,7 @@
           c.fillText(badge.text, rightEdge, ry + 20);
           c.textAlign = 'left';
         }
+      }
       }
       /* M9-5：空状态——居中灰字提示（背包/任务各自文案） */
       if (data.length === 0) {
