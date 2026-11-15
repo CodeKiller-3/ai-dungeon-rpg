@@ -112,12 +112,12 @@
     });
 
     var BASE = readJson('selfcheck/page-baseline.json');
-    rec('B2_pageBaseline', !!BASE && BASE.count === 121 && BASE.count === BASE.pages.length &&
+    rec('B2_pageBaseline', !!BASE && BASE.count === 122 && BASE.count === BASE.pages.length &&
       BASE.pages.indexOf('verify_d73') >= 0 && BASE.pages.indexOf('verify_d72') >= 0 &&
       BASE.pages.indexOf('verify_d78') >= 0 && BASE.pages.indexOf('verify_d79') >= 0 &&
       BASE.pages.indexOf('verify_d89') >= 0 && BASE.pages.indexOf('verify_d90') >= 0 &&
-      BASE.pages.indexOf('verify_d91') >= 0, {
-      rule: 'page-baseline.json：count=121（D-91 新增 verify_d91）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79 / verify_d89 / verify_d90 / verify_d91',
+      BASE.pages.indexOf('verify_d91') >= 0 && BASE.pages.indexOf('verify_d93') >= 0, {
+      rule: 'page-baseline.json：count=122（D-93 新增 verify_d93）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79 / verify_d89 / verify_d90 / verify_d91 / verify_d93',
       count: BASE ? BASE.count : null, len: BASE && BASE.pages ? BASE.pages.length : null,
       hasD73: BASE && BASE.pages ? BASE.pages.indexOf('verify_d73') >= 0 : false
     });
@@ -133,12 +133,12 @@
 
     var docs = {
       README: {
-        must: ['验证页 121 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
-        no: ['验证页 113 个', '验证页 111 个', '验证页 100 个']
+        must: ['验证页 122 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
+        no: ['验证页 121 个', '验证页 113 个', '验证页 111 个', '验证页 100 个']
       },
       RUN: {
-        must: ['当前 121', 'TOTAL=121', 'GUARD=OK expected=121', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
-        no: ['当前 113', 'TOTAL=113', 'TOTAL=111', 'TOTAL=100']
+        must: ['当前 122', 'TOTAL=122', 'GUARD=OK expected=122', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
+        no: ['当前 121', 'TOTAL=121', '当前 113', 'TOTAL=113', 'TOTAL=111', 'TOTAL=100']
       },
       DEMO: {
         must: ['3/50（6%）', '断牙', '面板 11 → 13', 'd74/04-explore-elite.png', 'd74/06-elite-loot.png'],

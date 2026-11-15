@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-93 首屏实拍</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-93 主菜单首屏复现页（_ artifacts 内部页，不登记 page-baseline.json）
+     ?save=0|1&sel=0..4&floor=1|3|5&level=1|5|9
+     视口即画布，按真实尺寸渲染，DSF=1 截屏。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = new URLSearchParams(location.search);
+  var saveOn = q.get('save') !== '0';
+  var hasSelArg = q.get('sel') !== null;
+  var sel = Math.max(0, Math.min(4, parseInt(q.get('sel'), 10) || 0));
+  var floor = Math.max(1, Math.min(5, parseInt(q.get('floor'), 10) || 3));
+  var level = Math.max(1, Math.min(20, parseInt(q.get('level'), 10) || 7));
+  var KEY = 'ai_dungeon_rpg_save_v1';
+  var M = Game.Core.Main;
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  function craft() {
+    return JSON.stringify({
+      saveVersion: 2, savedAt: '2026-11-16T10:00:00.000Z', floor: floor,
+      pos: { floor: floor, x: 2, y: 2 },
+      player: {
+        hp: 70, maxHp: 100, mp: 30, maxMp: 50, atk: 20, def: 8,
+        gold: 456, exp: 12, level: level,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null }, quests: {},
+        upg: {}, eliteAtk: 0, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: { monsters: {}, items: {} },
+      run: { known: true, floorReached: floor, kills: 12, maxLevel: level, turns: 88, potions: 3, rescues: 0, elapsedMs: 205000, win: false },
+      ending: null, map: null
+    });
+  }
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if (Game.Core.Sprites.isReady() || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame, left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.setItem('aiDungeon_guided', '1');
+    if (saveOn) localStorage.setItem(KEY, craft());
+    M.init({ menu: true });
+    if (saveOn) localStorage.setItem(KEY, craft());
+    if (Game.Notice && typeof Game.Notice._clear === 'function') Game.Notice._clear();
+    /* 选择态：只按方向键推进（不直接改 menu.sel），从当前默认焦点走到目标项 */
+    if (hasSelArg) {
+      var guard = 0;
+      while (M.getMenuState().sel !== sel && guard++ < 8) {
+        var code = (M.getMenuState().sel < sel) ? 'ArrowDown' : 'ArrowUp';
+        kd(code); M._updateMenu(10000); ku(code);
+      }
+    }
+    waitSprites(function () {
+      M.start();
+      stopAfterFrames(6);
+      setTimeout(function () { document.title = 'READY'; }, 120);
+    });
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>

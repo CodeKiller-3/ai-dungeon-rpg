@@ -1,0 +1,33 @@
+# D-93 全量回归记录（preflight/selfcheck/run-all.ps1）
+
+日期：2026-11-16
+基线：`page-baseline.json` count = 122（D-91 的 121 + 新增 verify_d93）
+
+## 收尾连续两轮全绿
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | MIXED | GUARD | 备注 |
+|---|---|---|---|---|---|---|---|
+| 第 10 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 连续第 1 轮 |
+| 第 11 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 连续第 2 轮 |
+
+元页面（verify_d05/06/07/08/09、verify_d60）读上一轮结果，所以改基线后前几轮会依次转绿：
+第 1 轮 d60 红（上一轮 121）→ 重建 `d22-selftest.json` → 第 2 轮 d05–d09/d60 红 →
+第 3 轮仅 d60 红 → 第 4 轮 d89 计时抖动 1 红 → 第 5 轮元页面 6 红 → 第 6 轮仅 d60 红 →
+第 7 轮 d90 计时抖动 1 红 → 第 8 轮元页面 6 红 → 第 9 轮仅 d60 红 → **第 10、11 轮连续全绿**。
+d89/d90 均为计时类断言，整轮并发时偶发抖动；单页复跑 PASS，产品代码未改。
+
+## 四策略逐局一致（50 局/策略 × 4 = 200 局）
+
+以 D-91 同参数基线（`d91-*.json`）逐局比对 15 个字段（seed + outcome/deathFloor/floor/maxFloor/
+steps/actions/battleTurns/level/maxLevel/kills/hp/gold/potions/rescue）：
+
+```
+b1: 50/50 games, 15 fields/game, diffs=0
+s1: 50/50 games, 15 fields/game, diffs=0
+g2: 50/50 games, 15 fields/game, diffs=0
+m1: 50/50 games, 15 fields/game, diffs=0
+TOTAL_DIFF=0
+```
+
+生成命令：`preflight/bot_d72.html?n=50&only=<b1|s1|g2|m1>&ma=<2500|2500|4500|6000>`
+结果：`preflight/selfcheck/d93-<strategy>-<ma>.json`；对照脚本：`preflight/artifacts/d93/compare_runs.py`

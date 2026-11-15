@@ -2597,58 +2597,371 @@
       else this._drawMenuRoot(st, W, H);
     },
 
+    /* ─────────────────────────────────────────────────────────────
+     * D-93：首屏「地牢门口静帧」——候选 A 的版式 + 候选 B 的门缝光。
+     * 只换绘制入口：main.js 的菜单分支（选中/确认/返回/Esc）一行未动；
+     * 楼层与等级在渲染层用只读的 Save.peek() 取，不写任何状态。
+     * 三档降级：W≥900 左右分栏 / 480≤W<900 上场景下菜单 / W<480 紧凑。
+     * 精灵整数倍：地砖·墙砖·门·火把 24→48（2×）、骑士 24×42→48×84（2×）、
+     * 锁链·蛛网·龙·酋长 1×；门缝光 2px 为纯绘制。
+     * ───────────────────────────────────────────────────────────── */
+
+    /* 首屏布局纯函数：绘制与验证页共用同一份坐标，杜绝"文档一套、绘制一套"。 */
+    _menuTextW: function (s, size) {
+      var w = 0;
+      for (var i = 0; i < (s || '').length; i++) {
+        w += (s.charCodeAt(i) > 0x2E80) ? size : (size * 0.6);  /* 全角 / 等宽西文 */
+      }
+      return Math.round(w);
+    },
+
+    _menuLayout: function (W, H, hasSave, floor, level) {
+      var T = 48;                       /* 24×2：地砖/墙砖/双扇门/火把 */
+      var tier = (W >= 900) ? 'wide' : ((W >= 480) ? 'mid' : 'narrow');
+      var lay, sc, m, p, rail;
+      if (tier === 'wide') {
+        var sy = Math.min(144, Math.max(96, H - 7 * T - 40));
+        var railH = Math.min(448, H - 112 - 40);
+        rail = { x: 616, y: 112, w: 360, h: railH };
+        sc = { x: 64, y: sy, cols: 10, rows: 7, doorCol: 4 };
+        var menuY = Math.max(210, Math.min(238, H - 5 * 42 - 60));
+        m = { x: 640, y: menuY, w: 312, rowH: 42, font: 18, label: 18, note: 12, detail: 11 };
+        lay = {
+          tier: tier, T: T, scene: sc, panel: rail,
+          title: { x: 648, smallY: 154, mainY: 186, subY: 208, small: 11, main: 24, sub: 12 },
+          rule: { x: 628, y: 128, w: 336 },
+          menu: m,
+          progress: { x: 648, pipY: rail.y + railH - 40, pip: 20, gap: 12,
+            /* 真实进度标签比 A 稿的目标标签长，终点符号右对齐到栏内边距（12px），避免与文字重叠 */
+            end: { name: 'dragon_idle_anim_f0', x: rail.x + rail.w - 72 - 12,
+              y: rail.y + railH - 40 - 46, k: 1 } }
+        };
+      } else if (tier === 'mid') {
+        sc = { x: 34, y: 104, cols: 9, rows: 5, doorCol: 3 };
+        var pipY = Math.max(sc.y + sc.rows * T + 12, H - 328);
+        p = { x: 20, y: pipY + 42, w: W - 40, h: 0 };
+        m = { x: p.x + 14, y: p.y + 30, w: p.w - 28, rowH: 38, font: 18, label: 18, note: 12, detail: 11 };
+        var avail = H - m.y - 24 - 18;
+        m.rowH = Math.max(26, Math.min(38, Math.floor(avail / 5)));
+        p.h = Math.min(246, H - p.y - 10);
+        lay = {
+          tier: tier, T: T, scene: sc, panel: p,
+          title: { x: 24, smallY: 40, mainY: 68, subY: 90, small: 10, main: 24, sub: 12 },
+          rule: { x: 30, y: p.y + 12, w: p.w - 20 },
+          menu: m,
+          progress: { x: 24, pipY: pipY, pip: 16, gap: 14,
+            end: { name: 'boss_demon', x: p.x + p.w - 32 - 12, y: pipY - 18, k: 1 } }
+        };
+      } else {
+        var rows = (H >= 600) ? 5 : 4;
+        sc = { x: 16, y: 88, cols: 6, rows: rows, doorCol: 2 };
+        var npipY = sc.y + rows * T + 24;
+        p = { x: 12, y: npipY + 44, w: W - 24, h: 0 };
+        m = { x: p.x + 12, y: p.y + 24, w: p.w - 24, rowH: 30, font: 14, label: 14, note: 10, detail: 0 };
+        var navail = H - m.y - 24 - 18;
+        m.rowH = Math.max(22, Math.min(30, Math.floor(navail / 5)));
+        p.h = H - p.y - 12;
+        lay = {
+          tier: tier, T: T, scene: sc, panel: p,
+          title: { x: 16, smallY: 28, mainY: 52, subY: 72, small: 10, main: 20, sub: 11 },
+          rule: { x: p.x + 12, y: p.y + 12, w: p.w - 24 },
+          menu: m,
+          progress: { x: 16, pipY: npipY, pip: 12, gap: 10,
+            end: { name: 'boss_demon', x: p.x + p.w - 32 - 10, y: npipY + 12 - 36, k: 1 } }
+        };
+      }
+      lay.door = { x: sc.x + sc.doorCol * T, y: sc.y, w: T * 2, h: T * 2 };
+      lay.shaft = { x: lay.door.x, y: sc.y + 2 * T, w: T * 2, h: T };
+      lay.steps = { x: lay.door.x, y: sc.y + 3 * T, w: T * 2 };
+      lay.knight = { x: lay.door.x - 56, bottom: lay.steps.y + 2 * T - 8, w: 48, h: 84 };
+      lay.torch = { x: sc.x + (tier === 'narrow' ? 4 : 52), y: sc.y + T - 4, size: 48 };
+      lay.chain = { x: sc.x + (tier === 'wide' ? 7 : 3) * T + 8, y: sc.y + T - 8 };
+      lay.web = { x: sc.x + T - 12, y: sc.y + T + 4 };
+      lay.hint = { x: m.x + 2, y: m.y + 5 * m.rowH + 20 };
+      lay.hasSave = !!hasSave;
+      /* 进度标签：有档写真实楼层/等级，无档写目标值；终点符号紧贴标签右缘（不越过面板内边距） */
+      var pr = lay.progress;
+      var f = (typeof floor === 'number' && floor >= 1) ? floor : 1;
+      var lv = (typeof level === 'number' && level >= 1) ? level : 1;
+      pr.label = hasSave ? ('第 ' + f + ' 层 · Lv.' + lv + ' → 第 5 层') : 'Lv.1 → 第 5 层';
+      pr.fontSize = (tier === 'narrow') ? 11 : 12;
+      pr.end.x = Math.min(pr.end.x, pr.x + this._menuTextW(pr.label, pr.fontSize) + 10);
+      return lay;
+    },
+
+    /* 门缝光：核心 2px，落在双扇门中缝上（x = 门中心 − 1，保证 2 像素整格对齐）。 */
+    _seamSpec: function (lay) {
+      var d = lay.door;
+      return { x: d.x + Math.floor(d.w / 2) - 1, y: d.y + 6, w: 2, h: d.h - 12, color: '#ffbf73' };
+    },
+
+    /* 进度模型：4 枚石钉 + 第 5 格终点符号；开局填 1 枚，第 5 层点亮终点。 */
+    _progressModel: function (floor) {
+      var f = (typeof floor === 'number' && floor >= 1) ? Math.floor(floor) : 1;
+      return { floor: f, total: 5, filled: Math.max(1, Math.min(4, f)), final: f >= 5 };
+    },
+
     _drawMenuRoot: function (st, W, H) {
+      var S = Game.Systems && Game.Systems.Save;
+      var raw = (S && typeof S.peek === 'function') ? S.peek() : null;
+      var floor = 1, level = 1;
+      if (raw) {
+        floor = (typeof raw.floor === 'number') ? raw.floor
+          : ((raw.pos && typeof raw.pos.floor === 'number') ? raw.pos.floor : 1);
+        level = (raw.player && typeof raw.player.level === 'number' && raw.player.level >= 1)
+          ? raw.player.level : 1;
+      }
+      var lay = this._menuLayout(W, H, !!raw, floor, level);
+      this._drawMenuScene(lay);
+      this._drawMenuPanel(lay, st, floor, level, !!raw);
+    },
+
+    /* 静帧：场景底板 / 墙砖地砖 / 双扇门 / 暗井 / 台阶 / 火把 / 骑士 / 门缝光。
+     * 验证页用桩 ctx（无 drawImage / 渐变）调用时不画场景，面板与文字仍照常输出。 */
+    _drawMenuScene: function (lay) {
       var ctx = this._ctx;
-      var cx = W / 2;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffcf6e';
-      ctx.font = 'bold 30px monospace';
-      ctx.fillText('地牢：我独自升级', cx, Math.max(88, H * 0.17));
-      ctx.fillStyle = '#9bbbf4';
-      ctx.font = '14px monospace';
-      ctx.fillText('往地牢更深处走 · 第 5 层击败地牢巨龙', cx, Math.max(114, H * 0.17) + 28);
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var sc = lay.scene, T = lay.T, d = lay.door;
+      ctx.fillStyle = '#0a0b12';
+      ctx.fillRect(0, 0, W, H);
 
-      var items = st.items || [];
-      var pw = Math.min(430, W - 60);
-      /* D-91：有进度详情时行高加大，详情画在选项下方一行（不与右侧说明冲突）。
-       * 行高只由"是否带详情"决定，五项标签与顺序保持不变。 */
-      var hasDetail = false;
-      for (var di = 0; di < items.length; di++) if (items[di].detail) hasDetail = true;
-      var itemH = hasDetail ? 52 : 44;
-      var listH = items.length * itemH;
-      var py = Math.max(170, H * 0.34 - listH / 2);
+      var can = typeof ctx.drawImage === 'function' &&
+        typeof ctx.createRadialGradient === 'function' &&
+        typeof ctx.createLinearGradient === 'function' &&
+        typeof ctx.ellipse === 'function' &&
+        typeof ctx.arc === 'function' &&
+        typeof ctx.save === 'function';
+      if (!can) return;
 
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i], y = py + i * itemH;
-        var on = (i === st.sel);
-        if (on) {
-          ctx.fillStyle = 'rgba(255,207,110,0.14)';
-          ctx.fillRect(cx - pw / 2, y, pw, itemH - 6);
-          ctx.strokeStyle = '#ffcf6e';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, itemH - 8);
-        }
-        ctx.textAlign = 'left';
-        ctx.fillStyle = it.enabled === false ? '#5a5f70' : (on ? '#ffcf6e' : '#cfcfcf');
-        ctx.font = (on ? 'bold ' : '') + '17px monospace';
-        ctx.fillText((on ? '▶ ' : '  ') + it.label, cx - pw / 2 + 24, y + 26);
-        if (it.note) {
-          ctx.textAlign = 'right';
-          ctx.fillStyle = it.note === '将覆盖现有存档' ? '#c98a6b' : '#7f8fa8';
-          ctx.font = '12px monospace';
-          ctx.fillText(it.note, cx + pw / 2 - 20, y + 26);
-        }
-        if (it.detail) {
-          ctx.textAlign = 'left';
-          ctx.fillStyle = on ? '#d8c79a' : '#8a94a8';
-          ctx.font = '12px monospace';
-          ctx.fillText('    ' + it.detail, cx - pw / 2 + 24, y + 44);
+      var S = Game.Core.Sprites;
+      function spr(name, x, y, k, alpha, fallback) {
+        var im = (S && typeof S.get === 'function') ? S.get(name) : null;
+        ctx.globalAlpha = (typeof alpha === 'number') ? alpha : 1;
+        if (im && im.naturalWidth) ctx.drawImage(im, x, y, im.naturalWidth * k, im.naturalHeight * k);
+        else if (fallback) { ctx.fillStyle = fallback; ctx.fillRect(x, y, 24 * k, 24 * k); }
+        ctx.globalAlpha = 1;
+      }
+
+      var bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#0a0b12');
+      bg.addColorStop(1, '#05060a');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.018)';
+      for (var gx = 0; gx < W; gx += 32) ctx.fillRect(gx, 0, 1, H);
+
+      /* 场景外框 */
+      ctx.fillStyle = '#030407';
+      ctx.fillRect(sc.x - 8, sc.y - 8, sc.cols * T + 16, sc.rows * T + 16);
+      ctx.strokeStyle = '#221e2a';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sc.x - 7.5, sc.y - 7.5, sc.cols * T + 16, sc.rows * T + 16);
+
+      /* 墙砖 / 地砖：门洞 2 格宽 × 3 格高留空 */
+      for (var ty = 0; ty < sc.rows; ty++) {
+        for (var tx = 0; tx < sc.cols; tx++) {
+          var x = sc.x + tx * T, y = sc.y + ty * T;
+          if ((tx === sc.doorCol || tx === sc.doorCol + 1) && ty <= 2) continue;
+          if (ty === 0) spr('wall_top_mid', x, y, 2, 1, '#1b1a22');
+          else if (ty === 1) spr('wall_mid', x, y, 2, 1, '#17161e');
+          else spr(floorVariantName(tx, ty, 1), x, y, 2, 1, '#141318');
         }
       }
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#7f8fa8';
-      ctx.font = '12px monospace';
-      ctx.fillText('↑↓ 选择 · Enter 确认', cx, H - 42);
+
+      /* 双扇门：t1_door 24×24 → 48×48，2×2 共 4 块 */
+      ctx.fillStyle = '#020204';
+      ctx.fillRect(d.x - 6, d.y - 6, d.w + 12, d.h + 12);
+      ctx.strokeStyle = 'rgba(255,180,100,0.20)';
+      ctx.strokeRect(d.x - 5.5, d.y - 5.5, d.w + 11, d.h + 11);
+      spr('t1_door', d.x, d.y, 2, 1, '#1a1410');
+      spr('t1_door', d.x + T, d.y, 2, 1, '#1a1410');
+      spr('t1_door', d.x, d.y + T, 2, 1, '#1a1410');
+      spr('t1_door', d.x + T, d.y + T, 2, 1, '#1a1410');
+
+      /* 暗井：门内一格黑底 + 两侧 2px 暖边 */
+      var sh = lay.shaft;
+      ctx.fillStyle = 'rgba(0,0,0,0.74)';
+      ctx.fillRect(sh.x, sh.y, sh.w, sh.h);
+      ctx.fillStyle = 'rgba(255,180,100,0.14)';
+      ctx.fillRect(sh.x, sh.y, 2, sh.h);
+      ctx.fillRect(sh.x + sh.w - 2, sh.y, 2, sh.h);
+
+      /* 向下的光柱（纯绘制渐变，不是新素材） */
+      var stp = lay.steps;
+      var sg = ctx.createLinearGradient(0, sh.y, 0, stp.y + T);
+      sg.addColorStop(0, 'rgba(255,170,90,0.12)');
+      sg.addColorStop(0.6, 'rgba(255,170,90,0.02)');
+      sg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(sh.x, sh.y, sh.w, T * 2);
+
+      /* 台阶：纯绘制 3 级，逐级左右各收 8px */
+      for (var si = 0; si < 3; si++) {
+        var inset = si * 8;
+        ctx.fillStyle = '#17130f';
+        ctx.fillRect(stp.x + inset, stp.y + si * 15, stp.w - inset * 2, 13);
+        ctx.fillStyle = 'rgba(255,190,110,' + (0.36 - si * 0.07) + ')';
+        ctx.fillRect(stp.x + inset, stp.y + si * 15, stp.w - inset * 2, 2);
+      }
+
+      /* 墙饰（1× 原生） */
+      spr('t1_dc_chain', lay.chain.x, lay.chain.y, 1, 0.75, 'rgba(120,120,140,0.25)');
+      spr('t1_dc_web', lay.web.x, lay.web.y, 1, 0.5, 'rgba(160,160,180,0.18)');
+
+      /* 火把：场景内唯一真实光源 */
+      spr('t1_dc_torch', lay.torch.x, lay.torch.y, 2, 1, '#3a2a12');
+      var lx = lay.torch.x + 24, ly = lay.torch.y + 20;
+      var glowR = (lay.tier === 'wide') ? 250 : (lay.tier === 'mid' ? 210 : 150);
+      function glow(cx2, cy2, r, rgb, a) {
+        var g = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r);
+        g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+        g.addColorStop(0.45, 'rgba(' + rgb + ',' + (a * 0.42) + ')');
+        g.addColorStop(1, 'rgba(' + rgb + ',0)');
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(cx2, cy2, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      glow(lx, ly, glowR, '255,150,62', 0.32);
+      glow(lx, ly, Math.round(glowR * 0.48), '255,214,140', 0.24);
+      glow(lx, ly - 18, 34, '255,238,190', 0.45);
+
+      /* 骑士 2×（24×42 → 48×84），站在楼梯左侧、面朝楼梯 */
+      var kn = lay.knight;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.50)';
+      ctx.beginPath();
+      ctx.ellipse(kn.x + 24, kn.bottom, 26, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      spr('knight_m_idle_anim_f0', kn.x, kn.bottom - 84, 2, 1, '#3a4a6a');
+      /* 受火光的一侧边光（纯绘制） */
+      var eg = ctx.createLinearGradient(kn.x, 0, kn.x + 10, 0);
+      eg.addColorStop(0, 'rgba(255,190,110,0.10)');
+      eg.addColorStop(1, 'rgba(255,190,110,0)');
+      ctx.fillStyle = eg;
+      ctx.fillRect(kn.x, kn.bottom - 84, 10, 84);
+
+      /* 门缝光：先给一圈暖晕，再把 2px 核心不透明地压在最上层（逐像素可验证） */
+      var seam = this._seamSpec(lay);
+      var seamCY = seam.y + seam.h / 2;
+      glow(seam.x + 1, seamCY, 90, '255,170,90', 0.22);
+      ctx.fillStyle = seam.color;
+      ctx.fillRect(seam.x, seam.y, seam.w, seam.h);
+    },
+
+    /* 右侧暗栏 / 窄屏下置菜单：标题、五项菜单、进度条、操作提示 */
+    _drawMenuPanel: function (lay, st, floor, level, hasSave) {
+      var ctx = this._ctx;
+      var p = lay.panel, m = lay.menu, ti = lay.title;
+      var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
+      var FONT_MONO = 'Consolas, "Courier New", monospace';
+
+      /* 暗栏用近实色 #07080e：对比度不依赖背后的地板亮度 */
+      ctx.fillStyle = '#07080e';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.strokeStyle = '#3a3340';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(p.x + 0.5, p.y + 0.5, p.w - 1, p.h - 1);
+      ctx.fillStyle = 'rgba(255,207,110,0.28)';
+      ctx.fillRect(lay.rule.x, lay.rule.y, lay.rule.w, 1);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#8a7a56';
+      ctx.font = ti.small + 'px ' + FONT_MONO;
+      ctx.fillText('DUNGEON / ENTRANCE', ti.x, ti.smallY);
+
+      ctx.fillStyle = '#ffcf6e';
+      ctx.font = 'bold ' + ti.main + 'px ' + FONT_CN;
+      ctx.fillText('地牢：我独自升级', ti.x, ti.mainY);
+
+      ctx.fillStyle = '#9aa0b4';
+      ctx.font = ti.sub + 'px ' + FONT_CN;
+      ctx.fillText('往地牢更深处走 · 第 5 层击败地牢巨龙', ti.x, ti.subY);
+
+      var items = st.items || [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i], y = m.y + i * m.rowH;
+        var on = (i === st.sel);
+        var hasD = !!it.detail && m.detail > 0;
+        var boxH = m.rowH - 4;
+        if (on) {
+          ctx.fillStyle = 'rgba(255,207,110,0.12)';
+          ctx.fillRect(m.x, y, m.w, boxH);
+          ctx.strokeStyle = 'rgba(255,207,110,0.75)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(m.x + 0.5, y + 0.5, m.w - 1, boxH - 1);
+          ctx.fillStyle = '#ffcf6e';
+          ctx.fillRect(m.x, y, 3, boxH);
+        }
+        var baseY = hasD ? y + Math.round(m.rowH * 0.5) : y + Math.round(m.rowH * 0.62);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = (it.enabled === false) ? '#7d8397' : (on ? '#ffcf6e' : '#cfcfcf');
+        ctx.font = (on ? 'bold ' : '') + m.label + 'px ' + FONT_CN;
+        ctx.fillText((on ? '▶ ' : '  ') + it.label, m.x + 18, baseY);
+        if (it.note) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = (it.note === '将覆盖现有存档') ? '#c98a6b' : '#838a9e';
+          ctx.font = m.note + 'px ' + FONT_MONO;
+          ctx.fillText(it.note, m.x + m.w - 16, baseY);
+        }
+        /* 行内进度详情：窄屏没有行高预算，舍去（真实楼层/等级由进度条承担） */
+        if (hasD) {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = on ? '#d8c79a' : '#9aa0b4';
+          ctx.font = m.detail + 'px ' + FONT_MONO;
+          ctx.fillText('    ' + it.detail, m.x + 18, y + Math.round(m.rowH * 0.82));
+        }
+      }
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#7f879c';
+      ctx.font = m.note + 'px ' + FONT_MONO;
+      ctx.fillText('↑↓ 选择 · Enter 确认', lay.hint.x, lay.hint.y);
+
+      this._drawMenuProgress(lay, floor, level, hasSave);
+    },
+
+    /* Lv.N → 第 5 层：4 枚石钉 + 第 5 格终点符号（龙 72×72 / 酋长 32×36，均 1×） */
+    _drawMenuProgress: function (lay, floor, level, hasSave) {
+      var ctx = this._ctx;
+      var pr = lay.progress, pm = this._progressModel(floor);
+      var S = Game.Core.Sprites;
+      var FONT_MONO = 'Consolas, "Courier New", monospace';
+      var label = pr.label || 'Lv.1 → 第 5 层';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#c9a35e';
+      ctx.font = pr.fontSize + 'px ' + FONT_MONO;
+      ctx.fillText(label, pr.x, pr.pipY - 8);
+
+      for (var i = 0; i < 4; i++) {
+        var x = pr.x + i * (pr.pip + pr.gap);
+        var lit = i < pm.filled;
+        ctx.fillStyle = lit ? '#ffcf6e' : 'rgba(255,207,110,0.10)';
+        ctx.fillRect(x, pr.pipY, pr.pip, pr.pip);
+        ctx.strokeStyle = lit ? '#ffcf6e' : '#a88a4e';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, pr.pipY + 0.5, pr.pip - 1, pr.pip - 1);
+        if (lit) {
+          var inset = Math.max(2, Math.round(pr.pip * 0.2));
+          ctx.fillStyle = '#fff0c0';
+          ctx.fillRect(x + inset, pr.pipY + inset, pr.pip - inset * 2, pr.pip - inset * 2);
+        }
+      }
+      var im = (S && typeof S.get === 'function') ? S.get(pr.end.name) : null;
+      if (im && im.naturalWidth && typeof ctx.drawImage === 'function') {
+        ctx.globalAlpha = pm.final ? 1 : 0.9;
+        ctx.drawImage(im, pr.end.x, pr.end.y, im.naturalWidth * pr.end.k, im.naturalHeight * pr.end.k);
+        ctx.globalAlpha = 1;
+      }
+      if (pm.final) {
+        ctx.fillStyle = '#ffcf6e';
+        ctx.font = 'bold 11px ' + FONT_MONO;
+        ctx.fillText('已抵达', pr.x, pr.pipY + pr.pip + 12);
+      }
+      ctx.textAlign = 'left';
     },
 
     _drawMenuHelp: function (st, W, H) {

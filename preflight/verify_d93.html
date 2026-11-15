@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-93 首屏地牢门口接入</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-93 · 首屏「地牢门口 + 门缝光」接入（A–G）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D93ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D93ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D93ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  var M = Game.Core.Main, R = Game.Core.Render, S = Game.Systems.Save, P = Game.Data.Player;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+  var T = 10000;
+
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+  function press(code) {
+    kd(code);
+    try { M._updateMenu(T); } catch (e) { window.__D93ERR.push('press ' + code + ': ' + ((e && e.message) || e)); }
+    ku(code);
+  }
+  function setSel(n) {
+    var guard = 0;
+    while (M.getMenuState().sel < n && guard++ < 10) press('ArrowDown');
+    while (M.getMenuState().sel > n && guard++ < 10) press('ArrowUp');
+    return M.getMenuState().sel;
+  }
+  function raw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function putRaw(s) { try { localStorage.setItem(KEY, s); } catch (e) { } }
+
+  function craft() {
+    return JSON.stringify({
+      saveVersion: 2, savedAt: '2026-11-16T10:00:00.000Z', floor: 3,
+      pos: { floor: 3, x: 2, y: 2 },
+      player: {
+        hp: 70, maxHp: 100, mp: 30, maxMp: 50, atk: 20, def: 8,
+        gold: 456, exp: 12, level: 7,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null }, quests: {},
+        upg: {}, eliteAtk: 0, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: { monsters: {}, items: {} },
+      run: { known: true, floorReached: 3, kills: 12, maxLevel: 7, turns: 88, potions: 3, rescues: 0, elapsedMs: 205000, win: false },
+      ending: null, map: null
+    });
+  }
+  function diffFields(a, b, path, acc) {
+    acc = acc || []; path = path || '';
+    if (a === b) return acc;
+    if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') {
+      acc.push(path || '(root)'); return acc;
+    }
+    var ka = Object.keys(a), kb = Object.keys(b);
+    for (var i = 0; i < ka.length; i++) if (kb.indexOf(ka[i]) < 0) acc.push(path + '.' + ka[i] + ' (missing)');
+    for (var j = 0; j < kb.length; j++) if (ka.indexOf(kb[j]) < 0) acc.push(path + '.' + kb[j] + ' (extra)');
+    for (var k = 0; k < ka.length; k++) {
+      if (kb.indexOf(ka[k]) >= 0) diffFields(a[ka[k]], b[ka[k]], path + '.' + ka[k], acc);
+    }
+    return acc;
+  }
+  function countKeys(o) {
+    if (!o || typeof o !== 'object') return 0;
+    var n = 0;
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) n += 1 + countKeys(o[k]);
+    return n;
+  }
+  function lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function lum(rgb) { return 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]); }
+  function contrast(a, b) {
+    var la = lum(a), lb = lum(b), hi = Math.max(la, lb), lo = Math.min(la, lb);
+    return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+  }
+  function hex(h) { h = h.replace('#', ''); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+
+  /* 整数倍断言：源尺寸 → 落屏尺寸，比例必须是整数 */
+  var NATIVE = { 't1_door': [24, 24], 'wall_top_mid': [24, 24], 'wall_mid': [24, 24],
+    'floor_1': [24, 24], 't1_dc_torch': [24, 24], 't1_dc_chain': [24, 24], 't1_dc_web': [24, 24],
+    'knight_m_idle_anim_f0': [24, 42], 'dragon_idle_anim_f0': [72, 72], 'boss_demon': [32, 36] };
+  function scaleRow(name, dw, dh) {
+    var n = NATIVE[name];
+    var kx = dw / n[0], ky = dh / n[1];
+    return { name: name, native: n.join('x'), drawn: dw + 'x' + dh,
+      kx: kx, ky: ky, integer: (kx % 1 === 0) && (ky % 1 === 0) };
+  }
+
+  try {
+    try {
+      localStorage.removeItem(KEY); localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { /* 存储禁用时后续断言如实失败 */ }
+
+    /* 无档默认焦点必须在"第一次 init"时取：init 末尾 booting 已放开，
+     * 之后再次 init 会在 Map.generate 的 floorChanged 里写档，无档态就不复存在。 */
+    M.init({ menu: true });
+    var fNoSaveSel = M.getMenuState().sel;
+
+    /* ══ A：三档布局坐标 + 整数缩放清单 ═════════════════════════ */
+    var h1 = R._menuLayout(1024, 640, true, 3, 7);
+    var h2 = R._menuLayout(500, 700, true, 3, 7);
+    var h3 = R._menuLayout(320, 640, true, 3, 7);
+    var scales = [
+      scaleRow('t1_door', 48, 48), scaleRow('wall_top_mid', 48, 48), scaleRow('wall_mid', 48, 48),
+      scaleRow('floor_1', 48, 48), scaleRow('t1_dc_torch', 48, 48),
+      scaleRow('t1_dc_chain', 24, 24), scaleRow('t1_dc_web', 24, 24),
+      scaleRow('knight_m_idle_anim_f0', h1.knight.w, h1.knight.h),
+      scaleRow('dragon_idle_anim_f0', 72, 72), scaleRow('boss_demon', 32, 36)
+    ];
+    var allInt = scales.every(function (r) { return r.integer; });
+    var aOk = h1.tier === 'wide' && h2.tier === 'mid' && h3.tier === 'narrow' &&
+      h1.T === 48 && h1.scene.x === 64 && h1.scene.y === 144 &&
+      h1.scene.cols === 10 && h1.scene.rows === 7 && h1.scene.doorCol === 4 &&
+      h1.door.x === 256 && h1.door.y === 144 && h1.door.w === 96 && h1.door.h === 96 &&
+      h1.knight.x === 200 && h1.knight.bottom === 376 &&
+      h1.torch.x === 116 && h1.torch.y === 188 && h1.torch.size === 48 &&
+      h1.panel.x === 616 && h1.panel.y === 112 && h1.panel.w === 360 && h1.panel.h === 448 &&
+      h1.menu.x === 640 && h1.menu.y === 238 && h1.menu.w === 312 && h1.menu.rowH === 42 &&
+      h1.progress.x === 648 && h1.progress.pipY === 520 && h1.progress.pip === 20 && h1.progress.gap === 12 &&
+      h2.scene.x === 34 && h2.scene.y === 104 && h2.scene.cols === 9 && h2.scene.rows === 5 &&
+      h2.door.x === 178 && h2.door.y === 104 &&
+      h2.knight.x === 122 && h2.knight.bottom === 336 &&
+      h2.torch.x === 86 && h2.torch.y === 148 &&
+      h2.panel.x === 20 && h2.panel.y === 414 && h2.panel.w === 460 && h2.panel.h === 246 &&
+      h2.menu.x === 34 && h2.menu.y === 444 && h2.menu.w === 432 && h2.menu.rowH === 38 &&
+      h2.progress.x === 24 && h2.progress.pipY === 372 && h2.progress.pip === 16 &&
+      h3.scene.x === 16 && h3.scene.y === 88 && h3.scene.cols === 6 && h3.scene.rows === 5 &&
+      h3.door.x === 112 && h3.door.y === 88 &&
+      h3.menu.x === 24 && h3.menu.y === 420 && h3.menu.w === 272 && h3.menu.rowH === 30 &&
+      h3.progress.pipY === 352 && h3.progress.pip === 12 &&
+      allInt;
+    rec('A_layout_and_integer_scale', aOk, {
+      rule: '1024/500/320 三档坐标按 A 稿落地；所有精灵整数倍（出现非整数倍即判负）',
+      tiers: [h1.tier, h2.tier, h3.tier], scales: scales, allInteger: allInt
+    });
+
+    /* ══ B：文字不重叠 / 不裁切（行高与栏宽降级规则） ═════════ */
+    function overlapProbe(lay, label) {
+      var m = lay.menu, p = lay.panel, pr = lay.progress;
+      var labelW = R._menuTextW(pr.label, pr.fontSize);
+      var needH = m.rowH;                       /* 5 行菜单 + 提示必须落在面板内 */
+      var bottom = m.y + 5 * m.rowH + 20;
+      var symW = (pr.end.name === 'dragon_idle_anim_f0') ? 72 : 32;
+      return {
+        tier: label,
+        menuInsidePanel: (m.x >= p.x) && (m.x + m.w <= p.x + p.w),
+        hintInsidePanel: bottom <= p.y + p.h,
+        labelNotUnderEnd: (pr.x + labelW + 10) <= (pr.end.x + 0.001),
+        endInsidePanel: (pr.end.x + symW) <= (p.x + p.w),
+        rowH: m.rowH, symW: symW, labelW: labelW,
+        ok: (m.x >= p.x) && (m.x + m.w <= p.x + p.w) && (bottom <= p.y + p.h) &&
+          ((pr.x + labelW + 10) <= (pr.end.x + 0.001)) && ((pr.end.x + symW) <= (p.x + p.w))
+      };
+    }
+    var b1 = overlapProbe(h1, '1024'), b2 = overlapProbe(h2, '500'), b3 = overlapProbe(h3, '320');
+    rec('B_text_no_overlap', b1.ok && b2.ok && b3.ok, {
+      rule: '菜单右缘不越面板、提示基线不越面板底、进度标签不压终点符号、终点不越面板右缘',
+      wide: b1, mid: b2, narrow: b3
+    });
+
+    /* ══ C：进度模型 + 真实楼层/等级标签 ═════════════════════════ */
+    var p1 = R._progressModel(1), p3 = R._progressModel(3), p4 = R._progressModel(4), p5 = R._progressModel(5);
+    var cLabels = {
+      none: R._menuLayout(1024, 640, false, 1, 1).progress.label,
+      save3: h1.progress.label
+    };
+    var cOk = p1.filled === 1 && !p1.final && p3.filled === 3 && !p3.final &&
+      p4.filled === 4 && !p4.final && p5.filled === 4 && p5.final &&
+      cLabels.none === 'Lv.1 → 第 5 层' &&
+      cLabels.save3 === '第 3 层 · Lv.7 → 第 5 层';
+    rec('C_progress_model', cOk, {
+      rule: '4 枚石钉按楼层点亮，第 5 层点亮终点；有档时标签写真实楼层/等级，无档写 Lv.1 → 第 5 层',
+      filled: [p1.filled, p3.filled, p4.filled, p5.filled], finalAt5: p5.final, labels: cLabels
+    });
+
+    /* ══ D：门缝光 spec——2px、整像素、落在门中缝 ══════════════ */
+    var seam1 = R._seamSpec(h1), seam2 = R._seamSpec(h2), seam3 = R._seamSpec(h3);
+    var dOk = seam1.w === 2 && seam1.x % 1 === 0 && seam1.y % 1 === 0 &&
+      seam1.color === '#ffbf73' && seam1.h === h1.door.h - 12 &&
+      seam1.x + 1 === h1.door.x + h1.door.w / 2 - 1 + 1 &&
+      (seam1.x === h1.door.x + 47) && seam2.x === h2.door.x + 47 && seam3.x === h3.door.x + 47;
+    rec('D_seam_spec', dOk, {
+      rule: '门缝光核心 2px、纯绘制 #ffbf73、x = 门中心 − 1（2 像素整格）。布局其它元素不动',
+      wide: seam1, mid: seam2, narrow: seam3
+    });
+
+    /* ══ E：真实绘制 + 逐像素证明（1024/500/320） ══════════════ */
+    putRaw(craft());
+    M.init({ menu: true });
+    putRaw(craft());
+    if (Game.Notice && Game.Notice._clear) Game.Notice._clear();
+
+    var cv = document.getElementById('game');
+    var ctx = cv.getContext('2d');
+    function drawAt(w, hgt) {
+      cv.width = w; cv.height = hgt;
+      cv.style.width = w + 'px'; cv.style.height = hgt + 'px';
+      R.dpr = 1; R.scale = 1; R.cssW = w; R.cssH = hgt;
+      R.drawMainMenu(M._menuSpec());
+      return ctx.getImageData(0, 0, w, hgt);
+    }
+    function seamRun(imgData, y, rgb) {
+      var d = imgData.data, run = null, best = null;
+      for (var x = 0; x < imgData.width; x++) {
+        var i = (y * imgData.width + x) * 4;
+        var hit = (d[i] === rgb[0] && d[i + 1] === rgb[1] && d[i + 2] === rgb[2]);
+        if (hit) {
+          if (!run) run = { x: x, n: 0 };
+          run.n++;
+        } else if (run) {
+          if (!best || run.n > best.n) best = run;
+          run = null;
+        }
+      }
+      if (run && (!best || run.n > best.n)) best = run;
+      return best;
+    }
+    var e1024 = drawAt(1024, 640), e500 = drawAt(500, 700), e320 = drawAt(320, 640);
+    var rgbSeam = hex('#ffbf73');
+    var r1 = seamRun(e1024, 190, rgbSeam), r2 = seamRun(e500, 150, rgbSeam), r3 = seamRun(e320, 130, rgbSeam);
+    var px = function (img, x, y) {
+      var i = (y * img.width + x) * 4;
+      return [img.data[i], img.data[i + 1], img.data[i + 2]];
+    };
+    var bg1 = px(e1024, 930, 470);
+    var contrastTable = {
+      'item #cfcfcf': contrast(hex('#cfcfcf'), bg1),
+      'selected #ffcf6e': contrast(hex('#ffcf6e'), bg1),
+      'disabled #7d8397': contrast(hex('#7d8397'), bg1),
+      'subtitle #9aa0b4': contrast(hex('#9aa0b4'), bg1),
+      'hint #7f879c': contrast(hex('#7f879c'), bg1),
+      'warn #c98a6b': contrast(hex('#c98a6b'), bg1),
+      'progress #c9a35e': contrast(hex('#c9a35e'), bg1)
+    };
+    var minContrast = Math.min.apply(null, Object.keys(contrastTable).map(function (k) { return contrastTable[k]; }));
+    var eOk = !!r1 && !!r2 && !!r3 && r1.n === 2 && r2.n === 2 && r3.n === 2 &&
+      r1.x === seam1.x && r2.x === seam2.x && r3.x === seam3.x &&
+      bg1[0] === 7 && bg1[1] === 8 && bg1[2] === 14 &&
+      minContrast >= 4.5 &&
+      window.__D93ERR.length === 0;
+    rec('E_pixels', eOk, {
+      rule: '截屏逐像素：门缝光核心恰好 2px #ffbf73；暗栏底色实采 #07080e；所有文字对比度 ≥ 4.5:1',
+      seam: { wide: r1, mid: r2, narrow: r3, expectX: [seam1.x, seam2.x, seam3.x] },
+      panelBg: bg1, contrast: contrastTable, minContrast: minContrast,
+      errors: window.__D93ERR.slice(0, 5)
+    });
+
+    /* ══ F：菜单逻辑未被这次改版碰坏（D-91 行为原样） ══════════ */
+    function fresh(withSave) {
+      try { localStorage.removeItem(KEY); localStorage.setItem('aiDungeon_guided', '1'); } catch (e) { }
+      if (withSave) putRaw(craft());
+      M.init({ menu: true });
+      if (withSave) putRaw(craft());
+    }
+    fresh(true);
+    var fSel = M.getMenuState().sel;
+    var fLabels = M._menuSpec().items.map(function (it) { return it.label; }).join('|');
+    setSel(0); press('Enter');
+    var fPage = M.getMenuState().page;
+    var fConfSel = M.getMenuState().confirmSel;
+    var fBefore = raw();
+    press('Enter');
+    var fAfter = raw();
+    var fDiff = diffFields(JSON.parse(fBefore), JSON.parse(fAfter), '', []);
+    var fOk = fNoSaveSel === 0 && fSel === 1 && fPage === 'confirmNew' && fConfSel === 0 &&
+      fLabels === '开始新游戏|继续游戏|玩法说明|设置|关于' &&
+      M.getMenuState().page === 'root' &&
+      fAfter === fBefore && fDiff.length === 0;
+    rec('F_menu_logic_unchanged', fOk, {
+      rule: '无档默认 sel=0、有档默认 sel=1；新游戏确认页默认 confirmSel=0（取消）；回车取消后存档原串与逐字段完全未变；五项标签与顺序不变',
+      noSaveSel: fNoSaveSel, saveSel: fSel, confirmPage: fPage, confirmSel: fConfSel,
+      backPage: M.getMenuState().page, rawBytes: fBefore ? fBefore.length : 0,
+      swKeys: fBefore ? countKeys(JSON.parse(fBefore)) : 0,
+      diffCount: fDiff.length, diffs: fDiff.slice(0, 8)
+    });
+
+    /* ══ G：main.js 菜单分支源码未动（与 D-91 的三个关键判据逐条比对） ══ */
+    var mainSrc = readText('../js/core/main.js') || '';
+    var gChecks = {
+      defaultFocus: mainSrc.indexOf('function menuDefaultSel() { return saveHas() ? 1 : 0; }') >= 0,
+      newConfirmCancelDefault: mainSrc.indexOf("menu.confirm = 'new';") >= 0 &&
+        mainSrc.indexOf('menu.confirmSel = 0;') >= 0,
+      enterOnlyActsOnSecond: mainSrc.indexOf('if (menu.confirmSel === 1) {') >= 0,
+      escBack: mainSrc.indexOf("if (menu.page === 'confirmNew') { menu.page = 'root'; menu.confirm = null; return; }") >= 0,
+      drawEntry: mainSrc.indexOf('Game.Core.Render.drawMainMenu(this._menuSpec());') >= 0
+    };
+    var gOk = true;
+    for (var gk in gChecks) if (!gChecks[gk]) gOk = false;
+    rec('G_main_menu_source', gOk, {
+      rule: '只换绘制入口：main.js 的默认焦点、覆盖确认默认取消、回车仅在第二项生效、Esc 返回五条源码判据全部在位',
+      checks: gChecks
+    });
+
+    out.ok = Object.keys(out.sub).every(function (x) { return out.sub[x].ok; });
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.getElementById('result').textContent = txt;
+    document.title = txt;
+  } catch (e) {
+    var bad = 'FAIL ' + JSON.stringify({ ok: false, error: String((e && e.stack) || e), errors: window.__D93ERR });
+    document.getElementById('result').textContent = bad;
+    document.title = bad;
+  }
+})();
+</script>
+</body>
+</html>

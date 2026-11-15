@@ -66,7 +66,7 @@
     var led = readJson('selfcheck/current-run.json');
     var myRun = PM.runIdFromSearch(location.search);
     out.loaded = script.length > 0 && !!st && !!baseline && !!led;
-    out.note = '基线 121 页（含本页 verify_d22；D-88 起 117→118，D-89 起 118→119，D-90 起 119→120，D-91 起 120→121，新增 verify_d91）';
+    out.note = '基线 122 页（含本页 verify_d22；D-88 起 117→118，D-89 起 118→119，D-90 起 119→120，D-91 起 120→121，D-93 起 121→122，新增 verify_d93）';
 
     var pages = (baseline && baseline.pages) || [];
     var cases = (st && st.cases) || [];
