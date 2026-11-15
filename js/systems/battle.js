@@ -309,6 +309,10 @@
     }
     fxHit('monster', dmg, { color: o.color, slash: o.slash !== false });
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
+      /* 第三拨 D-88：落点火花——从命中点朝"刀刃来向"反向溅开（向上 + 左右散）。 */
+      Game.Particles.spawn('impact', m.cx, m.cy, {
+        count: 11, angle: -0.95, spread: 1.05, color: o.color || '#ffe6a8'
+      });
       Game.Particles.spawn('spark', m.cx, m.cy, o.color ? { count: 6, color: o.color } : { count: 6 });
     }
   }
@@ -331,6 +335,10 @@
     }
     fxHit('player', dmg, {});
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
+      /* 玩家被反击：落点火花（D-88） */
+      Game.Particles.spawn('impact', p.cx, p.cy, {
+        count: 11, angle: 0.65, spread: 1.05, color: '#ffd0b0'
+      });
       Game.Particles.spawn('spark', p.cx, p.cy, { count: 5, color: '#ff8888' });
     }
   }

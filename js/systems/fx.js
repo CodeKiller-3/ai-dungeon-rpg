@@ -34,7 +34,8 @@
   var shake = null;                          /* { amp, ms, t0 } */
   var knock = { monster: null, player: null }; /* { px, ms, t0, dir } */
   var flashes = [];                          /* { who, alpha, ms, t0, color } */
-  var slashes = [];                          /* { x, y, r, a0, color, ms, t0, alpha } */
+  var slashes = [];                          /* { x, y, r, a0, dir, color, ms, t0, alpha } */
+  var rings = [];                            /* 第三拨 D-88：落点冲击环 { x, y, ms, t0, r0, r1, color } */
 
   var _clock = null;
 
@@ -92,9 +93,16 @@
       if (P.slash > 0 && o.slash) {
         slashes.push({
           x: o.slash.x, y: o.slash.y, r: o.slash.r || 40, a0: o.slash.a0 || -0.9,
-          color: o.slash.color || '#ffffff', ms: 200, t0: t, alpha: P.slash
+          dir: (o.slash.dir === 1 ? 1 : -1), color: o.slash.color || '#ffffff',
+          ms: 200, t0: t, alpha: P.slash
         });
         if (slashes.length > 4) slashes.shift();
+        /* 落点冲击环：和斩击同时起，180ms 扩到 44px 后消失（纯视觉，不参与计时） */
+        rings.push({
+          x: o.slash.x, y: o.slash.y, ms: 180, t0: t, r0: 6, r1: 44,
+          color: o.slash.color || '#ffffff'
+        });
+        if (rings.length > 4) rings.shift();
       }
       return true;
     },
@@ -119,6 +127,9 @@
       for (i = 0; i < slashes.length; i++) {
         if (real - clockShift - slashes[i].t0 >= slashes[i].ms) { slashes.splice(i, 1); i--; }
       }
+      for (i = 0; i < rings.length; i++) {
+        if (real - clockShift - rings[i].t0 >= rings[i].ms) { rings.splice(i, 1); i--; }
+      }
       for (i = 0; i < LEVELS.length; i++) {
         var k = knock[LEVELS[i]];
         if (k && real - clockShift - k.t0 >= k.ms) knock[LEVELS[i]] = null;
@@ -135,7 +146,7 @@
       return { x: Math.round(Math.sin(t * 0.09) * a), y: Math.round(Math.cos(t * 0.13) * a * 0.6) };
     },
 
-    /* 受击挤退偏移（px，沿 dir 方向随命中衰减） */
+    /* 受击位移偏移（px） */
     knockOffset: function (who) {
       var e = knock[who];
       if (!e) return 0;
@@ -159,22 +170,83 @@
       return best;
     },
 
-    /* 程序化斩击弧（1~2 段 arc，零素材） */
+    /* 程序化斩击弧 + 落点冲击环（零素材）
+     * 第三拨 D-88：由"一段细弧"升级成"方向斩击"——
+     *   外晕 / 主斩 / 白芯三层同轴弧，开口方向由 a0 与 dir 决定（玩家上挑、怪物下劈）；
+     *   另画一条沿开口方向的直切痕，静止帧也读得出"从哪边砍过来"；
+     *   落点先出一圈冲击环 + 十字星，180ms 内扩到 44px。
+     * 全部由 fx 时钟驱动，几何固定、无随机，不改变战斗时钟。 */
     drawSlashes: function (ctx) {
       if (!ctx) return;
       var t = fxNow();
-      for (var i = 0; i < slashes.length; i++) {
-        var s = slashes[i];
-        var k = (t - s.t0) / s.ms;
+      var i, s, k, fade, rot;
+      for (i = 0; i < slashes.length; i++) {
+        s = slashes[i];
+        k = (t - s.t0) / s.ms;
         if (k < 0 || k >= 1) continue;
+        fade = 1 - k;
+        rot = s.a0 + s.dir * (0.20 + k * 0.42);
+        var L = s.r * 1.45;
+        var Wd = s.r * 0.40;
+        var grow = 0.86 + k * 0.30;
         ctx.save();
-        ctx.globalAlpha = s.alpha * (1 - k);
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = 3 + 2 * (1 - k);
+        ctx.translate(s.x, s.y);
+        ctx.rotate(rot);
         ctx.lineCap = 'round';
+        /* 外晕：同形状放大放宽，只给方向感 */
+        ctx.globalAlpha = 0.28 * fade;
+        ctx.fillStyle = s.color;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, s.a0 + k * 0.6, s.a0 + 1.7 + k * 0.6);
+        ctx.moveTo(-L * grow, 6);
+        ctx.quadraticCurveTo(-L * 0.15 * grow, -Wd * 1.55 * grow, L * grow, -4);
+        ctx.quadraticCurveTo(L * 0.15 * grow, Wd * 0.55 * grow, -L * grow, 6);
+        ctx.closePath();
+        ctx.fill();
+        /* 主斩：两头尖、中间宽的白色月牙，一刀切过目标 */
+        ctx.globalAlpha = 0.92 * fade;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(-L * grow, 3);
+        ctx.quadraticCurveTo(-L * 0.15 * grow, -Wd * grow, L * grow, -2);
+        ctx.quadraticCurveTo(L * 0.15 * grow, Wd * 0.30 * grow, -L * grow, 3);
+        ctx.closePath();
+        ctx.fill();
+        /* 刀路上的一线暖色，避免纯白读成"白条" */
+        ctx.globalAlpha = 0.55 * fade;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-L * grow, 4);
+        ctx.quadraticCurveTo(-L * 0.15 * grow, -Wd * 0.95 * grow, L * grow, -1);
         ctx.stroke();
+        ctx.restore();
+      }
+      /* 落点冲击环画在斩击之后：环 + 白色十字星必须在最上层，静止帧就能看到"打点" */
+      for (i = 0; i < rings.length; i++) {
+        s = rings[i];
+        k = (t - s.t0) / s.ms;
+        if (k < 0 || k >= 1) continue;
+        var rr = s.r0 + (s.r1 - s.r0) * k;
+        var fadeR = 1 - k;
+        ctx.save();
+        ctx.globalAlpha = 0.70 * fadeR;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 1.5 + 2.5 * fadeR;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        if (k < 0.55) {
+          var arm = 20 * (1 - k / 0.55);
+          ctx.globalAlpha = 0.95 * (1 - k / 0.55);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(s.x - arm, s.y);
+          ctx.lineTo(s.x + arm, s.y);
+          ctx.moveTo(s.x, s.y - arm);
+          ctx.lineTo(s.x, s.y + arm);
+          ctx.stroke();
+        }
         ctx.restore();
       }
     },
@@ -185,14 +257,18 @@
     _reset: function () {
       freezeLeft = 0; clockShift = 0; lastReal = null;
       shake = null; knock = { monster: null, player: null };
-      flashes = []; slashes = [];
+      flashes = []; slashes = []; rings = [];
     },
     _state: function () {
       return {
         level: level, effective: effective(), reduced: isReduced(),
         preset: preset(),
         frozen: freezeLeft > 0, freezeLeft: freezeLeft,
-        shake: !!shake, flashes: flashes.length, slashes: slashes.length
+        shake: !!shake, flashes: flashes.length, slashes: slashes.length,
+        rings: rings.length,
+        slashDirs: slashes.map(function (s) { return s.dir; }),
+        slashAlpha: slashes.length ? slashes[0].alpha : 0,
+        ringPos: rings.length ? { x: rings[0].x, y: rings[0].y } : null
       };
     }
   };

@@ -30,6 +30,8 @@
   /* 各类型默认配置 */
   var CONFIGS = {
     spark: { life: 280, size: 3, color: '#ffcf6e', speed: 80, count: 6, gravity: 0 },
+    /* 第三拨 D-88：落点火花——有方向的短划线，比 spark 更快更密，只在命中点生成 */
+    impact: { life: 240, size: 3, color: '#ffe6a8', speed: 210, count: 8, gravity: 130 },
     puff:  { life: 500, size: 6, color: 'rgba(160,160,180,0.5)', speed: 20, count: 4, gravity: -10 },
     shard: { life: 600, size: 4, color: '#ea6668', speed: 110, count: 8, gravity: 200 },
     soul:  { life: 800, size: 5, color: '#9bbbf4', speed: 35, count: 3, gravity: -40 }
@@ -37,9 +39,29 @@
 
   function rnd(a, b) { return a + Math.random() * (b - a); }
 
-  /* 创建单颗粒子 */
-  function makeOne(kind, x, y, cfg) {
-    var angle = rnd(0, Math.PI * 2);
+  /* 创建单颗粒子。opts.angle/spread 给出"有方向的喷溅"，缺省仍是全向。
+   * 第三拨 D-88：impact 走"零随机数"分支——角度/速度/寿命只由序号推导，
+   * 绝不调用 Math.random，因此不会挤占战斗随机流（四策略逐局一致的硬线）。 */
+  function makeOne(kind, x, y, cfg, opts, idx, count) {
+    var o = opts || {};
+    if (kind === 'impact') {
+      var n = (typeof count === 'number' && count > 1) ? count : 1;
+      var u = n > 1 ? (idx / (n - 1)) * 2 - 1 : 0;
+      var base = (typeof o.angle === 'number') ? o.angle : 0;
+      var spr = (typeof o.spread === 'number' && o.spread >= 0) ? o.spread : 0.9;
+      var ang = base + u * spr;
+      var spd = cfg.speed * (0.55 + 0.45 * (1 - Math.abs(u)));
+      var q = ((idx * 37) % 11) / 11;
+      return {
+        kind: kind, x: x, y: y,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+        life: 0, maxLife: cfg.life * (0.8 + 0.4 * q),
+        size: cfg.size * (0.7 + 0.6 * q), color: cfg.color,
+        alpha: 1, rot: ang, vrot: 0, scale: 1
+      };
+    }
+    var spread = (typeof o.spread === 'number' && o.spread >= 0) ? o.spread : 0.9;
+    var angle = (typeof o.angle === 'number') ? o.angle + rnd(-spread, spread) : rnd(0, Math.PI * 2);
     var spd = rnd(cfg.speed * 0.4, cfg.speed);
     return {
       kind: kind,
@@ -68,7 +90,7 @@
       opts = opts || {};
       var count = opts.count || cfg.count;
       for (var i = 0; i < count; i++) {
-        var p = makeOne(kind, x, y, cfg);
+        var p = makeOne(kind, x, y, cfg, opts, i, count);
         if (opts.color) p.color = opts.color;
         if (opts.vx != null) p.vx = opts.vx;
         if (opts.vy != null) p.vy = opts.vy;
@@ -122,6 +144,19 @@
         if (p.kind === 'spark') {
           /* 火花：小方块 */
           c.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        } else if (p.kind === 'impact') {
+          /* 落点火花：沿速度方向的短划线 + 白芯，2~3 帧内读得出"从哪溅出来" */
+          var vx = p.vx, vy = p.vy;
+          var len = Math.sqrt(vx * vx + vy * vy) || 1;
+          var tx = vx / len, ty = vy / len;
+          c.strokeStyle = p.color;
+          c.lineWidth = Math.max(1.5, s * 0.8);
+          c.beginPath();
+          c.moveTo(p.x - tx * s * 2.6, p.y - ty * s * 2.6);
+          c.lineTo(p.x + tx * s * 1.0, p.y + ty * s * 1.0);
+          c.stroke();
+          c.fillStyle = '#fff6d8';
+          c.fillRect(p.x - 1, p.y - 1, 3, 3);
         } else if (p.kind === 'puff') {
           /* 烟雾：圆 */
           c.beginPath();

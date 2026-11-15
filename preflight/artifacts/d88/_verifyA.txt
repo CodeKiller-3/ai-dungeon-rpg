@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>PASS {"protocol":"D-88","ok":true,"sub":{"A0_api":{"ok":true,"d":{"scenes":["F1 石厅","F2 兽人营地","F3 熔岩裂谷","F4 冰霜墓穴","F5 深渊王座前厅"]}},"A1_litNotOnPlatform":{"ok":true,"d":{"rule":"每层 y&lt;192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y&gt;236 的两侧（x&lt;0.30W 或 x&gt;0.70W）","bad":[],"stats":[{"f":1,"label":"F1 石厅","horizon":176,"platMax":42,"platAt":{"x":500,"y":4},"litMax":206,"litAt":{"x":167,"y":264},"platMean":17,"litMean":17},{"f":2,"label":"F2 兽人营地","horizon":168,"platMax":38,"platAt":{"x":930,"y":0},"litMax":206,"litAt":{"x":169,"y":307},"platMean":16,"litMean":19},{"f":3,"label":"F3 熔岩裂谷","horizon":184,"platMax":36,"platAt":{"x":293,"y":154},"litMax":200,"litAt":{"x":119,"y":418},"platMean":11,"litMean":14},{"f":4,"label":"F4 冰霜墓穴","horizon":164,"platMax":68,"platAt":{"x":331,"y":12},"litMax":234,"litAt":{"x":143,"y":458},"platMean":22,"litMean":22},{"f":5,"label":"F5 深渊王座前厅","horizon":192,"platMax":59,"platAt":{"x":487,"y":24},"litMax":209,"litAt":{"x":855,"y":282},"platMean":11,"litMean":15}]}},"A2_enemyStandsDark":{"ok":true,"d":{"rule":"敌人落点区（CX±64, y60~190）平均亮度 &lt;50，峰值 &lt;115","bad":[]}},"A3_fiveDistinct":{"ok":true,"d":{"rule":"五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）","minDiff":117,"pairs":[{"a":1,"b":2,"diff":292},{"a":1,"b":3,"diff":117},{"a":1,"b":4,"diff":296},{"a":1,"b":5,"diff":128},{"a":2,"b":3,"diff":164},{"a":2,"b":4,"diff":464},{"a":2,"b":5,"diff":387},{"a":3,"b":4,"diff":393},{"a":3,"b":5,"diff":314},{"a":4,"b":5,"diff":446}]}},"A4_horizonDistinct":{"ok":true,"d":{"rule":"五层站台前沿高度各不相同","horizons":[176,168,184,164,192]}}},"metrics":["F1 石厅 站台max=42@500,4 光源max=206@167,264 站台均值=17 中下带均值=17","F2 兽人营地 站台max=38@930,0 光源max=206@169,307 站台均值=16 中下带均值=19","F3 熔岩裂谷 站台max=36@293,154 光源max=200@119,418 站台均值=11 中下带均值=14","F4 冰霜墓穴 站台max=68@331,12 光源max=234@143,458 站台均值=22 中下带均值=22","F5 深渊王座前厅 站台max=59@487,24 光源max=209@855,282 站台均值=11 中下带均值=15"]}</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-88 · 五层背景各自构图 + 最亮处不在敌方站台（A 段）</h1>
+<pre id="result">PASS {"protocol":"D-88","ok":true,"sub":{"A0_api":{"ok":true,"d":{"scenes":["F1 石厅","F2 兽人营地","F3 熔岩裂谷","F4 冰霜墓穴","F5 深渊王座前厅"]}},"A1_litNotOnPlatform":{"ok":true,"d":{"rule":"每层 y&lt;192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y&gt;236 的两侧（x&lt;0.30W 或 x&gt;0.70W）","bad":[],"stats":[{"f":1,"label":"F1 石厅","horizon":176,"platMax":42,"platAt":{"x":500,"y":4},"litMax":206,"litAt":{"x":167,"y":264},"platMean":17,"litMean":17},{"f":2,"label":"F2 兽人营地","horizon":168,"platMax":38,"platAt":{"x":930,"y":0},"litMax":206,"litAt":{"x":169,"y":307},"platMean":16,"litMean":19},{"f":3,"label":"F3 熔岩裂谷","horizon":184,"platMax":36,"platAt":{"x":293,"y":154},"litMax":200,"litAt":{"x":119,"y":418},"platMean":11,"litMean":14},{"f":4,"label":"F4 冰霜墓穴","horizon":164,"platMax":68,"platAt":{"x":331,"y":12},"litMax":234,"litAt":{"x":143,"y":458},"platMean":22,"litMean":22},{"f":5,"label":"F5 深渊王座前厅","horizon":192,"platMax":59,"platAt":{"x":487,"y":24},"litMax":209,"litAt":{"x":855,"y":282},"platMean":11,"litMean":15}]}},"A2_enemyStandsDark":{"ok":true,"d":{"rule":"敌人落点区（CX±64, y60~190）平均亮度 &lt;50，峰值 &lt;115","bad":[]}},"A3_fiveDistinct":{"ok":true,"d":{"rule":"五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）","minDiff":117,"pairs":[{"a":1,"b":2,"diff":292},{"a":1,"b":3,"diff":117},{"a":1,"b":4,"diff":296},{"a":1,"b":5,"diff":128},{"a":2,"b":3,"diff":164},{"a":2,"b":4,"diff":464},{"a":2,"b":5,"diff":387},{"a":3,"b":4,"diff":393},{"a":3,"b":5,"diff":314},{"a":4,"b":5,"diff":446}]}},"A4_horizonDistinct":{"ok":true,"d":{"rule":"五层站台前沿高度各不相同","horizons":[176,168,184,164,192]}}},"metrics":["F1 石厅 站台max=42@500,4 光源max=206@167,264 站台均值=17 中下带均值=17","F2 兽人营地 站台max=38@930,0 光源max=206@169,307 站台均值=16 中下带均值=19","F3 熔岩裂谷 站台max=36@293,154 光源max=200@119,418 站台均值=11 中下带均值=14","F4 冰霜墓穴 站台max=68@331,12 光源max=234@143,458 站台均值=22 中下带均值=22","F5 深渊王座前厅 站台max=59@487,24 光源max=209@855,282 站台均值=11 中下带均值=15"]}</pre>
+<canvas id="game" width="1024" height="640" style="width: 1024px; height: 640px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/config.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-88', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function lum(r, g, b) { return Math.round(r * 0.299 + g * 0.587 + b * 0.114); }
+
+  /* 逻辑视口钉在 1024×640（scale=1）：本页只裁决背景本身，不受窗口尺寸影响 */
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 640, configurable: true });
+  } catch (e) { /* 降级 */ }
+
+  var cv = document.getElementById('game');
+  var R = Game.Core.Render, S = Game.Core.Sprites;
+  var W = 1024, H = 640;
+
+  S.load('../assets/sprites/');
+
+  function boot() {
+    try {
+      R.init(cv);
+      R._animNow = function () { return 1234; };
+      R.resize(1);
+      var c = cv.getContext('2d');
+      var scenes = R._battleScene;
+      if (!scenes || scenes.length !== 5 || typeof R._battleBackdrop !== 'function') {
+        rec('A0_api', false, '缺少 _battleScene / _battleBackdrop');
+        finish();
+        return;
+      }
+      rec('A0_api', true, { scenes: scenes.map(function (s) { return s.label; }) });
+
+      var stats = [], sigs = [];
+      for (var f = 1; f <= 5; f++) {
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.fillStyle = '#000000';
+        c.fillRect(0, 0, W, H);
+        R._battleBackdrop(c, W, H, f);
+        var img = c.getImageData(0, 0, W, H).data;
+        var platMax = -1, platAt = null, litMax = -1, litAt = null;
+        var platSum = 0, platN = 0, litSum = 0, litN = 0;
+        /* 32×20 块均值签名，用于证明"五张不是同一套骨架" */
+        var BW = 32, BH = 32, COLS = W / BW, ROWS = H / BH;
+        var sig = [];
+        for (var by = 0; by < ROWS; by++) {
+          for (var bx = 0; bx < COLS; bx++) {
+            var sr = 0, sg = 0, sb = 0, sn = 0;
+            for (var y = by * BH; y < (by + 1) * BH; y++) {
+              var rowOff = y * W;
+              for (var x = bx * BW; x < (bx + 1) * BW; x++) {
+                var i = (rowOff + x) * 4;
+                var L = lum(img[i], img[i + 1], img[i + 2]);
+                sr += img[i]; sg += img[i + 1]; sb += img[i + 2]; sn++;
+                if (y < 192) { platSum += L; platN++; if (L > platMax) { platMax = L; platAt = { x: x, y: y }; } }
+                else { litSum += L; litN++; if (L > litMax) { litMax = L; litAt = { x: x, y: y }; } }
+              }
+            }
+            sig.push([Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)]);
+          }
+        }
+        sigs.push(sig);
+        stats.push({
+          f: f, label: scenes[f - 1].label, horizon: scenes[f - 1].horizon,
+          platMax: platMax, platAt: platAt, litMax: litMax, litAt: litAt,
+          platMean: Math.round(platSum / platN), litMean: Math.round(litSum / litN)
+        });
+      }
+
+      /* A1：敌方站台带（y<192）最亮 < 中下带最亮 - 60，且中下带最亮必须落在两侧（光源不在文字区 / 不在站台） */
+      var badA1 = [];
+      for (var i1 = 0; i1 < stats.length; i1++) {
+        var s1 = stats[i1];
+        var side = s1.litAt.x < W * 0.30 || s1.litAt.x > W * 0.70;
+        if (!(s1.platMax <= 115 && s1.litMax >= 170 && s1.litMax - s1.platMax >= 60 &&
+          s1.litAt.y > 236 && side)) badA1.push(s1);
+      }
+      rec('A1_litNotOnPlatform', badA1.length === 0, {
+        rule: '每层 y<192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y>236 的两侧（x<0.30W 或 x>0.70W）',
+        bad: badA1, stats: stats
+      });
+
+      /* A2：敌人站位（中心 ±64，y 60~190）的平均亮度低于中下带平均，且峰值低于光源 */
+      var badA2 = [];
+      for (var f2 = 1; f2 <= 5; f2++) {
+        var c2 = cv.getContext('2d');
+        c2.setTransform(1, 0, 0, 1, 0, 0);
+        c2.fillStyle = '#000000';
+        c2.fillRect(0, 0, W, H);
+        R._battleBackdrop(c2, W, H, f2);
+        var d2 = c2.getImageData(W / 2 - 64, 60, 128, 130).data;
+        var mx = 0, sum = 0, n = 0;
+        for (var k = 0; k < d2.length; k += 4) {
+          var L2 = lum(d2[k], d2[k + 1], d2[k + 2]);
+          if (L2 > mx) mx = L2;
+          sum += L2; n++;
+        }
+        var mean = Math.round(sum / n);
+        if (!(mean < 50 && mx < 115)) badA2.push({ f: f2, mean: mean, max: mx });
+      }
+      rec('A2_enemyStandsDark', badA2.length === 0, {
+        rule: '敌人落点区（CX±64, y60~190）平均亮度 <50，峰值 <115',
+        bad: badA2
+      });
+
+      /* A3：五张像素签名两两不同（32×32 块，任意通道差 >12 的块数 ≥24/640） */
+      var pairs = [], minDiff = 1e9;
+      for (var a = 0; a < 5; a++) {
+        for (var b = a + 1; b < 5; b++) {
+          var diff = 0;
+          for (var bi = 0; bi < sigs[a].length; bi++) {
+            var p = sigs[a][bi], q = sigs[b][bi];
+            if (Math.abs(p[0] - q[0]) > 12 || Math.abs(p[1] - q[1]) > 12 || Math.abs(p[2] - q[2]) > 12) diff++;
+          }
+          pairs.push({ a: a + 1, b: b + 1, diff: diff });
+          if (diff < minDiff) minDiff = diff;
+        }
+      }
+      rec('A3_fiveDistinct', minDiff >= 24, {
+        rule: '五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）',
+        minDiff: minDiff, pairs: pairs
+      });
+
+      /* A4：五条地平线（站台前沿）互不相同 */
+      var hs = scenes.map(function (s) { return s.horizon; });
+      var uniq = hs.filter(function (v, i2) { return hs.indexOf(v) === i2; });
+      rec('A4_horizonDistinct', uniq.length === 5, { rule: '五层站台前沿高度各不相同', horizons: hs });
+
+      out.metrics = stats.map(function (s) {
+        return s.label + ' 站台max=' + s.platMax + '@' + (s.platAt ? s.platAt.x + ',' + s.platAt.y : '-') +
+          ' 光源max=' + s.litMax + '@' + (s.litAt ? s.litAt.x + ',' + s.litAt.y : '-') +
+          ' 站台均值=' + s.platMean + ' 中下带均值=' + s.litMean;
+      });
+    } catch (e) {
+      out.err = String(e && (e.stack || e.message) || e);
+      out.ok = false;
+    }
+    finish();
+  }
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+    document.body.appendChild(document.createTextNode(text));
+  }
+
+  var t0 = Date.now();
+  (function poll() {
+    if (S.get('t1_floor_1') && S.get('t5_floor_1') && S.get('floor_1')) { boot(); return; }
+    if (Date.now() - t0 > 8000) { boot(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+
+
+PASS {"protocol":"D-88","ok":true,"sub":{"A0_api":{"ok":true,"d":{"scenes":["F1 石厅","F2 兽人营地","F3 熔岩裂谷","F4 冰霜墓穴","F5 深渊王座前厅"]}},"A1_litNotOnPlatform":{"ok":true,"d":{"rule":"每层 y&lt;192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y&gt;236 的两侧（x&lt;0.30W 或 x&gt;0.70W）","bad":[],"stats":[{"f":1,"label":"F1 石厅","horizon":176,"platMax":42,"platAt":{"x":500,"y":4},"litMax":206,"litAt":{"x":167,"y":264},"platMean":17,"litMean":17},{"f":2,"label":"F2 兽人营地","horizon":168,"platMax":38,"platAt":{"x":930,"y":0},"litMax":206,"litAt":{"x":169,"y":307},"platMean":16,"litMean":19},{"f":3,"label":"F3 熔岩裂谷","horizon":184,"platMax":36,"platAt":{"x":293,"y":154},"litMax":200,"litAt":{"x":119,"y":418},"platMean":11,"litMean":14},{"f":4,"label":"F4 冰霜墓穴","horizon":164,"platMax":68,"platAt":{"x":331,"y":12},"litMax":234,"litAt":{"x":143,"y":458},"platMean":22,"litMean":22},{"f":5,"label":"F5 深渊王座前厅","horizon":192,"platMax":59,"platAt":{"x":487,"y":24},"litMax":209,"litAt":{"x":855,"y":282},"platMean":11,"litMean":15}]}},"A2_enemyStandsDark":{"ok":true,"d":{"rule":"敌人落点区（CX±64, y60~190）平均亮度 &lt;50，峰值 &lt;115","bad":[]}},"A3_fiveDistinct":{"ok":true,"d":{"rule":"五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）","minDiff":117,"pairs":[{"a":1,"b":2,"diff":292},{"a":1,"b":3,"diff":117},{"a":1,"b":4,"diff":296},{"a":1,"b":5,"diff":128},{"a":2,"b":3,"diff":164},{"a":2,"b":4,"diff":464},{"a":2,"b":5,"diff":387},{"a":3,"b":4,"diff":393},{"a":3,"b":5,"diff":314},{"a":4,"b":5,"diff":446}]}},"A4_horizonDistinct":{"ok":true,"d":{"rule":"五层站台前沿高度各不相同","horizons":[176,168,184,164,192]}}},"metrics":["F1 石厅 站台max=42@500,4 光源max=206@167,264 站台均值=17 中下带均值=17","F2 兽人营地 站台max=38@930,0 光源max=206@169,307 站台均值=16 中下带均值=19","F3 熔岩裂谷 站台max=36@293,154 光源max=200@119,418 站台均值=11 中下带均值=14","F4 冰霜墓穴 站台max=68@331,12 光源max=234@143,458 站台均值=22 中下带均值=22","F5 深渊王座前厅 站台max=59@487,24 光源max=209@855,282 站台均值=11 中下带均值=15"]}</body></html>

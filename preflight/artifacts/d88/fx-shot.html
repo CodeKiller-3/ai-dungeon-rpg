@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-88 打击帧实拍台</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas><pre id="err"></pre>
+<!-- D-88 打击帧实拍：真实 Battle + Fx + Particles，时钟全部注入（t 为毫秒）。
+     ?mode=seq&t=40      玩家攻击后的第 t 毫秒（t0=0）
+     ?mode=counter&t=150 玩家被反击后的第 t 毫秒（怪物段在 110ms 触发）
+     与线上同一 drawBattle，不合成、不补画。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script>
+(function () {
+  var old = /[?&]old=1\b/.test(location.search);
+  if (old) {
+    document.write('<script src="_before_particles.js"><\/script>');
+    document.write('<script src="_before_fx.js"><\/script>');
+  }
+})();
+</script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script>
+(function () {
+  var old = /[?&]old=1\b/.test(location.search);
+  if (old) document.write('<script src="_before_battle.js"><\/script>');
+})();
+</script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  if (q.w) {
+    Object.defineProperty(window, 'innerWidth', { value: +q.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: +q.h || 640, configurable: true });
+  }
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+  var R = Game.Core.Render, Fx = Game.Fx, PT = Game.Particles;
+
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d88fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d88fps = true;
+  })();
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  var T = 0;
+  try {
+    M.init({ menu: false });
+    var floor = +(q.floor || 2);
+    Map.setFloor(floor);
+    P.floor = floor;
+    P.level = 5;
+    P.exp = 24;
+    P.gold = 268;
+    P.hp = 100;
+    P.maxHp = 140;
+    P.mp = 30;
+    P.maxMp = 30;
+    P.atk = 14;
+    P.def = 6;
+    B._setClock(function () { return T; });
+    Fx._setClock(function () { return T; });
+    Fx._reset();
+    PT.clear();
+    R._animNow = function () { return 1234; };
+    B.start(q.m || 'slime');
+    M.switchScene('battle');
+    R.resize();
+    if (Game.hud && Game.hud.update) {
+      Game.hud.update({
+        hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, status: []
+      });
+    }
+    var mode = q.mode || 'seq';
+    var at = isFinite(+q.t) ? +q.t : 40;
+    if (mode === 'counter') {
+      B.playerAction('attack');
+      T = 110;                 /* 怪物段到点 */
+      B.tick(110);
+      T = 110 + at;            /* at 为反击后的毫秒 */
+      PT.update(at);
+    } else {
+      B.playerAction('attack');
+      T = at;
+      PT.update(at);
+    }
+    R.drawBattle(B.getState());
+    window.__d88Ready = true;
+    document.title = 'READY ' + mode + ' ' + at;
+  } catch (e) {
+    document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+    document.title = 'ERR';
+  }
+
+  var rebuilt = false;
+  (function frame() {
+    try {
+      if (window.__d88Ready) {
+        if (!rebuilt && Game.Core.Sprites.get('t' + P.floor + '_floor_1') &&
+          Game.Core.Sprites.get('knight_m_idle_anim_f0')) {
+          var ff = P.floor;
+          P.floor = (ff === 1) ? 2 : 1;
+          R.drawBattle(B.getState());
+          P.floor = ff;
+          rebuilt = true;
+        }
+        R.drawBattle(B.getState());
+      }
+    } catch (e) { /* 降级 */ }
+    window.requestAnimationFrame(frame);
+  })();
+})();
+</script>
+</body>
+</html>

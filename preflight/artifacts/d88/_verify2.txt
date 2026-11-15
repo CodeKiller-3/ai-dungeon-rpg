@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>FAIL {"protocol":"D-88","ok":false,"sub":{"A0_api":{"ok":true,"d":{"scenes":["F1 石厅","F2 兽人营地","F3 熔岩裂谷","F4 冰霜墓穴","F5 深渊王座前厅"]}},"A1_litNotOnPlatform":{"ok":true,"d":{"rule":"每层 y&lt;192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y&gt;236 的两侧（x&lt;0.30W 或 x&gt;0.70W）","bad":[],"stats":[{"f":1,"label":"F1 石厅","horizon":176,"platMax":42,"platAt":{"x":500,"y":4},"litMax":206,"litAt":{"x":167,"y":264},"platMean":16,"litMean":10},{"f":2,"label":"F2 兽人营地","horizon":168,"platMax":38,"platAt":{"x":930,"y":0},"litMax":206,"litAt":{"x":169,"y":307},"platMean":16,"litMean":9},{"f":3,"label":"F3 熔岩裂谷","horizon":184,"platMax":36,"platAt":{"x":293,"y":154},"litMax":200,"litAt":{"x":119,"y":418},"platMean":11,"litMean":9},{"f":4,"label":"F4 冰霜墓穴","horizon":164,"platMax":68,"platAt":{"x":331,"y":12},"litMax":234,"litAt":{"x":143,"y":458},"platMean":22,"litMean":14},{"f":5,"label":"F5 深渊王座前厅","horizon":192,"platMax":59,"platAt":{"x":487,"y":24},"litMax":209,"litAt":{"x":855,"y":282},"platMean":11,"litMean":9}]}},"A2_enemyStandsDark":{"ok":true,"d":{"rule":"敌人落点区（CX±64, y60~190）平均亮度 &lt;50，峰值 &lt;115","bad":[]}},"A3_fiveDistinct":{"ok":true,"d":{"rule":"五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）","minDiff":93,"pairs":[{"a":1,"b":2,"diff":188},{"a":1,"b":3,"diff":114},{"a":1,"b":4,"diff":115},{"a":1,"b":5,"diff":128},{"a":2,"b":3,"diff":93},{"a":2,"b":4,"diff":458},{"a":2,"b":5,"diff":166},{"a":3,"b":4,"diff":201},{"a":3,"b":5,"diff":104},{"a":4,"b":5,"diff":251}]}},"A4_horizonDistinct":{"ok":true,"d":{"rule":"五层站台前沿高度各不相同","horizons":[176,168,184,164,192]}},"B1_eyePair":{"ok":false,"d":{"rule":"idle/attack/hurt 三态：每帧 2 个独立亮核（各 ≥10px）、水平间距 7~16px、落在头部区域","bad":[{"mode":"idle","clusters":2,"img":false},{"mode":"attack","clusters":2,"img":false},{"mode":"hurt","clusters":2,"img":false}],"cases":[{"mode":"idle","n":2,"sep":11},{"mode":"attack","n":2,"sep":11},{"mode":"hurt","n":2,"sep":11}]}},"B2_inBattle":{"ok":false,"d":{"rule":"真实 drawBattle 下龙眼为 2 个亮核；命中闪白 40ms 时仍保留 2 个亮核","idle":[],"flashed":[]}},"C1_playerSlash":{"ok":true,"d":{"rule":"玩家出手：≥1 道斩击 + 1 个落点环，方向 dir=-1（向上撩）","state":{"level":"high","effective":"high","reduced":false,"preset":{"hitStop":80,"shake":4,"knock":9,"flash":0.6,"flashMs":110,"slash":1},"frozen":true,"freezeLeft":80,"shake":true,"flashes":1,"slashes":1,"rings":1,"slashDirs":[-1],"slashAlpha":1}}},"C2_impactSparks":{"ok":true,"d":{"rule":"玩家命中生成 ≥8 粒有方向的 impact 火花（碎屑）","particles":15}},"C3_counterFx":{"ok":true,"d":{"rule":"怪物反击：dir=+1 的斩击 + 玩家闪白 + 再生成 ≥8 粒火花","state":{"level":"high","effective":"high","reduced":false,"preset":{"hitStop":80,"shake":4,"knock":9,"flash":0.6,"flashMs":110,"slash":1},"frozen":true,"freezeLeft":80,"shake":true,"flashes":2,"slashes":2,"rings":2,"slashDirs":[-1,1],"slashAlpha":1},"particles":30}},"C4_playerJolt":{"ok":false,"d":{"rule":"玩家受击位移走阻尼余弦：t≈1ms 外推 &gt;10px、t≈53ms 过零、t≈106ms 反向 &lt; -2px（顿挫而非线性后退）","samples":[0,0,0]}},"C5_battleClock":{"ok":true,"d":{"rule":"计划 100/150/180 与实测 monsterAt=100、unlockAt=150、endedAt=180 全部不变；出手与绘制不注册任何 setTimeout","plan":{"seg1":100,"lock":150,"total":180},"rec0":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":0,"endedAt":0,"presentMs":0,"lockMs":0,"planMs":180,"lockPlanMs":150},"at150":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":150,"endedAt":0,"presentMs":0,"lockMs":150,"planMs":180,"lockPlanMs":150},"at180":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":150,"endedAt":180,"presentMs":180,"lockMs":150,"planMs":180,"lockPlanMs":150},"setTimeoutCalls":0}},"D1_evidence":{"ok":true,"d":{"bad":[],"n":27}}},"metrics":["F1 石厅 站台max=42@500,4 光源max=206@167,264 站台均值=16 中下带均值=10","F2 兽人营地 站台max=38@930,0 光源max=206@169,307 站台均值=16 中下带均值=9","F3 熔岩裂谷 站台max=36@293,154 光源max=200@119,418 站台均值=11 中下带均值=9","F4 冰霜墓穴 站台max=68@331,12 光源max=234@143,458 站台均值=22 中下带均值=14","F5 深渊王座前厅 站台max=59@487,24 光源max=209@855,282 站台均值=11 中下带均值=9"]}</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-88 · 五层背景 / 龙眼身份符号 / 打击重量 / 取证文件（A–D 段）</h1>
+<pre id="result">FAIL {"protocol":"D-88","ok":false,"sub":{"A0_api":{"ok":true,"d":{"scenes":["F1 石厅","F2 兽人营地","F3 熔岩裂谷","F4 冰霜墓穴","F5 深渊王座前厅"]}},"A1_litNotOnPlatform":{"ok":true,"d":{"rule":"每层 y&lt;192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y&gt;236 的两侧（x&lt;0.30W 或 x&gt;0.70W）","bad":[],"stats":[{"f":1,"label":"F1 石厅","horizon":176,"platMax":42,"platAt":{"x":500,"y":4},"litMax":206,"litAt":{"x":167,"y":264},"platMean":16,"litMean":10},{"f":2,"label":"F2 兽人营地","horizon":168,"platMax":38,"platAt":{"x":930,"y":0},"litMax":206,"litAt":{"x":169,"y":307},"platMean":16,"litMean":9},{"f":3,"label":"F3 熔岩裂谷","horizon":184,"platMax":36,"platAt":{"x":293,"y":154},"litMax":200,"litAt":{"x":119,"y":418},"platMean":11,"litMean":9},{"f":4,"label":"F4 冰霜墓穴","horizon":164,"platMax":68,"platAt":{"x":331,"y":12},"litMax":234,"litAt":{"x":143,"y":458},"platMean":22,"litMean":14},{"f":5,"label":"F5 深渊王座前厅","horizon":192,"platMax":59,"platAt":{"x":487,"y":24},"litMax":209,"litAt":{"x":855,"y":282},"platMean":11,"litMean":9}]}},"A2_enemyStandsDark":{"ok":true,"d":{"rule":"敌人落点区（CX±64, y60~190）平均亮度 &lt;50，峰值 &lt;115","bad":[]}},"A3_fiveDistinct":{"ok":true,"d":{"rule":"五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）","minDiff":93,"pairs":[{"a":1,"b":2,"diff":188},{"a":1,"b":3,"diff":114},{"a":1,"b":4,"diff":115},{"a":1,"b":5,"diff":128},{"a":2,"b":3,"diff":93},{"a":2,"b":4,"diff":458},{"a":2,"b":5,"diff":166},{"a":3,"b":4,"diff":201},{"a":3,"b":5,"diff":104},{"a":4,"b":5,"diff":251}]}},"A4_horizonDistinct":{"ok":true,"d":{"rule":"五层站台前沿高度各不相同","horizons":[176,168,184,164,192]}},"B1_eyePair":{"ok":false,"d":{"rule":"idle/attack/hurt 三态：每帧 2 个独立亮核（各 ≥10px）、水平间距 7~16px、落在头部区域","bad":[{"mode":"idle","clusters":2,"img":false},{"mode":"attack","clusters":2,"img":false},{"mode":"hurt","clusters":2,"img":false}],"cases":[{"mode":"idle","n":2,"sep":11},{"mode":"attack","n":2,"sep":11},{"mode":"hurt","n":2,"sep":11}]}},"B2_inBattle":{"ok":false,"d":{"rule":"真实 drawBattle 下龙眼为 2 个亮核；命中闪白 40ms 时仍保留 2 个亮核","idle":[],"flashed":[]}},"C1_playerSlash":{"ok":true,"d":{"rule":"玩家出手：≥1 道斩击 + 1 个落点环，方向 dir=-1（向上撩）","state":{"level":"high","effective":"high","reduced":false,"preset":{"hitStop":80,"shake":4,"knock":9,"flash":0.6,"flashMs":110,"slash":1},"frozen":true,"freezeLeft":80,"shake":true,"flashes":1,"slashes":1,"rings":1,"slashDirs":[-1],"slashAlpha":1}}},"C2_impactSparks":{"ok":true,"d":{"rule":"玩家命中生成 ≥8 粒有方向的 impact 火花（碎屑）","particles":15}},"C3_counterFx":{"ok":true,"d":{"rule":"怪物反击：dir=+1 的斩击 + 玩家闪白 + 再生成 ≥8 粒火花","state":{"level":"high","effective":"high","reduced":false,"preset":{"hitStop":80,"shake":4,"knock":9,"flash":0.6,"flashMs":110,"slash":1},"frozen":true,"freezeLeft":80,"shake":true,"flashes":2,"slashes":2,"rings":2,"slashDirs":[-1,1],"slashAlpha":1},"particles":30}},"C4_playerJolt":{"ok":false,"d":{"rule":"玩家受击位移走阻尼余弦：t≈1ms 外推 &gt;10px、t≈53ms 过零、t≈106ms 反向 &lt; -2px（顿挫而非线性后退）","samples":[0,0,0]}},"C5_battleClock":{"ok":true,"d":{"rule":"计划 100/150/180 与实测 monsterAt=100、unlockAt=150、endedAt=180 全部不变；出手与绘制不注册任何 setTimeout","plan":{"seg1":100,"lock":150,"total":180},"rec0":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":0,"endedAt":0,"presentMs":0,"lockMs":0,"planMs":180,"lockPlanMs":150},"at150":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":150,"endedAt":0,"presentMs":0,"lockMs":150,"planMs":180,"lockPlanMs":150},"at180":{"startedAt":0,"playerAt":0,"monsterAt":100,"unlockAt":150,"endedAt":180,"presentMs":180,"lockMs":150,"planMs":180,"lockPlanMs":150},"setTimeoutCalls":0}},"D1_evidence":{"ok":true,"d":{"bad":[],"n":27}}},"metrics":["F1 石厅 站台max=42@500,4 光源max=206@167,264 站台均值=16 中下带均值=10","F2 兽人营地 站台max=38@930,0 光源max=206@169,307 站台均值=16 中下带均值=9","F3 熔岩裂谷 站台max=36@293,154 光源max=200@119,418 站台均值=11 中下带均值=9","F4 冰霜墓穴 站台max=68@331,12 光源max=234@143,458 站台均值=22 中下带均值=14","F5 深渊王座前厅 站台max=59@487,24 光源max=209@855,282 站台均值=11 中下带均值=9"]}</pre>
+<canvas id="game" width="1024" height="640" style="width: 1024px; height: 640px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-88', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function lum(r, g, b) { return Math.round(r * 0.299 + g * 0.587 + b * 0.114); }
+
+  /* 逻辑视口钉在 1024×640（scale=1）：本页所有像素裁决都在 1× 实显尺寸上做 */
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 640, configurable: true });
+  } catch (e) { /* 降级 */ }
+
+  var cv = document.getElementById('game');
+  var R = Game.Core.Render, S = Game.Core.Sprites, M = Game.Core.Main;
+  var B = Game.Systems.Battle, Fx = Game.Fx, PT = Game.Particles, P = Game.Data.Player;
+  var W = 1024, H = 640, c = null;
+  var EYE = [255, 208, 90];
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  /* ── 小工具：颜色聚类（4 邻接）── */
+  function clusters(data, w, h, rgb, tol) {
+    var hit = new Uint8Array(w * h), i, x, y;
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        i = (y * w + x) * 4;
+        if (Math.abs(data[i] - rgb[0]) <= tol && Math.abs(data[i + 1] - rgb[1]) <= tol &&
+          Math.abs(data[i + 2] - rgb[2]) <= tol && data[i + 3] > 200) hit[y * w + x] = 1;
+      }
+    }
+    var list = [], seen = new Uint8Array(w * h);
+    for (y = 0; y < h; y++) {
+      for (x = 0; x < w; x++) {
+        var id0 = y * w + x;
+        if (!hit[id0] || seen[id0]) continue;
+        var q = [id0], n = 0, sx = 0, sy = 0;
+        seen[id0] = 1;
+        while (q.length) {
+          var cur = q.pop(), cx0 = cur % w, cy0 = (cur - cx0) / w;
+          n++; sx += cx0; sy += cy0;
+          var nb = [cur - 1, cur + 1, cur - w, cur + w];
+          for (var k = 0; k < 4; k++) {
+            var z = nb[k];
+            if (z < 0 || z >= w * h || seen[z] || !hit[z]) continue;
+            if (k === 0 && cx0 === 0) continue;
+            if (k === 1 && cx0 === w - 1) continue;
+            seen[z] = 1; q.push(z);
+          }
+        }
+        list.push({ n: n, x: Math.round(sx / n), y: Math.round(sy / n) });
+      }
+    }
+    return list.filter(function (a) { return a.n >= 6; });
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      R._animNow = function () { return 1234; };
+      R.resize();
+      c = cv.getContext('2d');
+
+      /* ══ A：五层背景 ══════════════════════════════════════ */
+      var scenes = R._battleScene;
+      if (!scenes || scenes.length !== 5 || typeof R._battleBackdrop !== 'function') {
+        rec('A0_api', false, '缺少 _battleScene / _battleBackdrop');
+        return finish();
+      }
+      rec('A0_api', true, { scenes: scenes.map(function (s) { return s.label; }) });
+
+      var stats = [], sigs = [];
+      for (var f = 1; f <= 5; f++) {
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.fillStyle = '#000000';
+        c.fillRect(0, 0, W, H);
+        R._battleBackdrop(c, W, H, f);
+        var img = c.getImageData(0, 0, W, H).data;
+        var platMax = -1, platAt = null, litMax = -1, litAt = null;
+        var platSum = 0, platN = 0, litSum = 0, litN = 0;
+        var BW = 32, BH = 32, COLS = W / BW, ROWS = H / BH, sig = [];
+        for (var by = 0; by < ROWS; by++) {
+          for (var bx = 0; bx < COLS; bx++) {
+            var sr = 0, sg = 0, sb = 0, sn = 0;
+            for (var y = by * BH; y < (by + 1) * BH; y++) {
+              var rowOff = y * W;
+              for (var x = bx * BW; x < (bx + 1) * BW; x++) {
+                var i = (rowOff + x) * 4;
+                var L = lum(img[i], img[i + 1], img[i + 2]);
+                sr += img[i]; sg += img[i + 1]; sb += img[i + 2]; sn++;
+                if (y < 192) { platSum += L; platN++; if (L > platMax) { platMax = L; platAt = { x: x, y: y }; } }
+                else { litSum += L; litN++; if (L > litMax) { litMax = L; litAt = { x: x, y: y }; } }
+              }
+            }
+            sig.push([Math.round(sr / sn), Math.round(sg / sn), Math.round(sb / sn)]);
+          }
+        }
+        sigs.push(sig);
+        stats.push({
+          f: f, label: scenes[f - 1].label, horizon: scenes[f - 1].horizon,
+          platMax: platMax, platAt: platAt, litMax: litMax, litAt: litAt,
+          platMean: Math.round(platSum / platN), litMean: Math.round(litSum / litN)
+        });
+      }
+      var badA1 = [];
+      for (var i1 = 0; i1 < stats.length; i1++) {
+        var s1 = stats[i1];
+        var side = s1.litAt.x < W * 0.30 || s1.litAt.x > W * 0.70;
+        if (!(s1.platMax <= 115 && s1.litMax >= 170 && s1.litMax - s1.platMax >= 60 &&
+          s1.litAt.y > 236 && side)) badA1.push(s1);
+      }
+      rec('A1_litNotOnPlatform', badA1.length === 0, {
+        rule: '每层 y<192 最亮 ≤115；y≥192 最亮 ≥170 且比它高 ≥60；最亮点必须在 y>236 的两侧（x<0.30W 或 x>0.70W）',
+        bad: badA1, stats: stats
+      });
+
+      var badA2 = [];
+      for (var f2 = 1; f2 <= 5; f2++) {
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.fillStyle = '#000000';
+        c.fillRect(0, 0, W, H);
+        R._battleBackdrop(c, W, H, f2);
+        var d2 = c.getImageData(W / 2 - 64, 60, 128, 130).data;
+        var mx = 0, sum = 0, n = 0;
+        for (var k = 0; k < d2.length; k += 4) {
+          var L2 = lum(d2[k], d2[k + 1], d2[k + 2]);
+          if (L2 > mx) mx = L2;
+          sum += L2; n++;
+        }
+        var mean = Math.round(sum / n);
+        if (!(mean < 50 && mx < 115)) badA2.push({ f: f2, mean: mean, max: mx });
+      }
+      rec('A2_enemyStandsDark', badA2.length === 0, {
+        rule: '敌人落点区（CX±64, y60~190）平均亮度 <50，峰值 <115', bad: badA2
+      });
+
+      var pairs = [], minDiff = 1e9;
+      for (var a = 0; a < 5; a++) {
+        for (var b = a + 1; b < 5; b++) {
+          var diff = 0;
+          for (var bi = 0; bi < sigs[a].length; bi++) {
+            var p = sigs[a][bi], q2 = sigs[b][bi];
+            if (Math.abs(p[0] - q2[0]) > 12 || Math.abs(p[1] - q2[1]) > 12 || Math.abs(p[2] - q2[2]) > 12) diff++;
+          }
+          pairs.push({ a: a + 1, b: b + 1, diff: diff });
+          if (diff < minDiff) minDiff = diff;
+        }
+      }
+      rec('A3_fiveDistinct', minDiff >= 24, {
+        rule: '五层背景 32×32 块签名两两至少 24/640 块不同（不是换壁纸）',
+        minDiff: minDiff, pairs: pairs
+      });
+
+      var hs = scenes.map(function (s) { return s.horizon; });
+      var uniq = hs.filter(function (v, i2) { return hs.indexOf(v) === i2; });
+      rec('A4_horizonDistinct', uniq.length === 5, { rule: '五层站台前沿高度各不相同', horizons: hs });
+
+      out.metrics = stats.map(function (s) {
+        return s.label + ' 站台max=' + s.platMax + '@' + (s.platAt ? s.platAt.x + ',' + s.platAt.y : '-') +
+          ' 光源max=' + s.litMax + '@' + (s.litAt ? s.litAt.x + ',' + s.litAt.y : '-') +
+          ' 站台均值=' + s.platMean + ' 中下带均值=' + s.litMean;
+      });
+
+      /* ══ B：龙的身份符号（发光眼）═══════════════════════════ */
+      function drawEyesCase(mode) {
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.fillStyle = '#000000';
+        c.fillRect(0, 0, W, H);
+        var set = R.MONSTER_ANIM.dragon[mode] || 'dragon_idle';
+        var img = S.getFrame(set, 0);
+        var h = 108, w = Math.round(64 * h / 54);
+        var cx = W / 2, bottom = 300, x0 = cx - w / 2, top = bottom - h;
+        c.imageSmoothingEnabled = false;
+        if (img) c.drawImage(img, x0, top, w, h);
+        R._drawDragonEyes(c, cx, bottom, h, mode);
+        var data = c.getImageData(x0 - 20, top, w + 40, h + 10).data;
+        var cl = clusters(data, w + 40, h + 10, EYE, 6);
+        return { mode: mode, img: !!img, clusters: cl, box: { x0: x0 - 20, top: top, w: w + 40, h: h + 10 } };
+      }
+      var eyeCases = [drawEyesCase('idle'), drawEyesCase('attack'), drawEyesCase('hurt')];
+      var badB = [];
+      for (var ei = 0; ei < eyeCases.length; ei++) {
+        var ec = eyeCases[ei];
+        if (!ec.img || ec.clusters.length !== 2) { badB.push({ mode: ec.mode, clusters: ec.clusters.length, img: ec.img }); continue; }
+        var c0 = ec.clusters[0], c1 = ec.clusters[1];
+        var sep = Math.abs(c0.x - c1.x);
+        var eachOk = c0.n >= 10 && c1.n >= 10;
+        var posOk = c0.y > 6 && c0.y < 52 && c1.y > 6 && c1.y < 52 &&
+          Math.min(c0.x, c1.x) > 20 && Math.max(c0.x, c1.x) < ec.box.w - 20;
+        if (!(eachOk && sep >= 7 && sep <= 16 && posOk)) badB.push({
+          mode: ec.mode, sep: sep, n: [c0.n, c1.n], pos: [c0, c1]
+        });
+      }
+      rec('B1_eyePair', badB.length === 0, {
+        rule: 'idle/attack/hurt 三态：每帧 2 个独立亮核（各 ≥10px）、水平间距 7~16px、落在头部区域',
+        bad: badB, cases: eyeCases.map(function (e) {
+          return { mode: e.mode, n: e.clusters.length, sep: e.clusters.length === 2 ? Math.abs(e.clusters[0].x - e.clusters[1].x) : null };
+        })
+      });
+
+      /* B2：在真实 drawBattle 里睁眼（且闪白之后仍保留） */
+      var T2 = 0;
+      B._setClock(function () { return T2; });
+      Fx._setClock(function () { return T2; });
+      Fx._reset();
+      P.floor = 5; P.level = 5; P.hp = 100; P.maxHp = 140; P.atk = 14; P.def = 6;
+      B.start('dragon');
+      M.switchScene('battle');
+      R.resize();
+      if (Game.hud && Game.hud.update) {
+        Game.hud.update({
+          hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+          floor: 5, level: P.level, exp: P.exp, expNext: 60 * P.level, status: []
+        });
+      }
+      R.drawBattle(B.getState());
+      var bd = c.getImageData(W / 2 - 90, 56, 180, 150).data;
+      var cl1 = clusters(bd, 180, 150, EYE, 6);
+      Fx.hit('monster', 5, {});
+      T2 = 40;
+      R.drawBattle(B.getState());
+      var bd2 = c.getImageData(W / 2 - 90, 56, 180, 150).data;
+      var cl2 = clusters(bd2, 180, 150, EYE, 6);
+      rec('B2_inBattle', cl1.length === 2 && cl2.length === 2 && cl1[0].n + cl1[1].n >= 24,
+        { rule: '真实 drawBattle 下龙眼为 2 个亮核；命中闪白 40ms 时仍保留 2 个亮核',
+          idle: cl1, flashed: cl2 });
+
+      /* ══ C：打击重量（方向斩击 / 落点火花 / 受击顿挫）═══════ */
+      var T = 0;
+      Fx._reset();
+      PT.clear();
+      P.floor = 2; P.hp = 100; P.maxHp = 140; P.atk = 14; P.def = 6;
+      B.start('orc_warrior');
+      B._setClock(function () { return T; });
+      Fx._setClock(function () { return T; });
+      var origTimeout = window.setTimeout, toCalls = 0;
+      window.setTimeout = function () { toCalls++; return 0; };
+      T = 0;
+      B.playerAction('attack');
+      var st1 = Fx._state();
+      window.setTimeout = origTimeout;
+      var pc = PT.count();
+      rec('C1_playerSlash', st1.slashes >= 1 && st1.rings >= 1 && st1.slashDirs.indexOf(-1) >= 0,
+        { rule: '玩家出手：≥1 道斩击 + 1 个落点环，方向 dir=-1（向上撩）', state: st1 });
+
+      rec('C2_impactSparks', pc >= 8, {
+        rule: '玩家命中生成 ≥8 粒有方向的 impact 火花（碎屑）', particles: pc
+      });
+
+      T = 100;
+      B.tick(100);
+      var st2 = Fx._state();
+      var pc2 = PT.count();
+      rec('C3_counterFx', st2.slashes >= 2 && st2.slashDirs.indexOf(1) >= 0 && st2.flashes >= 1 && pc2 >= pc + 8,
+        { rule: '怪物反击：dir=+1 的斩击 + 玩家闪白 + 再生成 ≥8 粒火花', state: st2, particles: pc2 });
+
+      /* 顿挫曲线：0ms 推开 → ~53ms 过零 → ~106ms 反向回弹（非单调） */
+      T = 101; var k0 = Fx.knockOffset('player');
+      T = 153; var k1 = Fx.knockOffset('player');
+      T = 206; var k2 = Fx.knockOffset('player');
+      rec('C4_playerJolt', k0 > 10 && Math.abs(k1) < 2.5 && k2 < -2, {
+        rule: '玩家受击位移走阻尼余弦：t≈1ms 外推 >10px、t≈53ms 过零、t≈106ms 反向 < -2px（顿挫而非线性后退）',
+        samples: [Math.round(k0 * 100) / 100, Math.round(k1 * 100) / 100, Math.round(k2 * 100) / 100]
+      });
+
+      /* ══ 战斗时钟：效果不改节拍 ══════════════════════════ */
+      var tl = B.getTimeline();
+      T = 150; B.tick(150);
+      var tl150 = B.getTimeline();
+      T = 180; B.tick(180);
+      var tl180 = B.getTimeline();
+      rec('C5_battleClock', tl.plan.seg1 === 100 && tl.plan.lock === 150 && tl.plan.total === 180 &&
+        tl.rec.monsterAt === 100 && tl150.rec.unlockAt === 150 && tl150.rec.lockMs === 150 &&
+        tl180.rec.endedAt === 180 && tl180.rec.presentMs === 180 && tl180.phase === 'idle' && toCalls === 0,
+        {
+          rule: '计划 100/150/180 与实测 monsterAt=100、unlockAt=150、endedAt=180 全部不变；出手与绘制不注册任何 setTimeout',
+          plan: tl.plan, rec0: tl.rec, at150: tl150.rec, at180: tl180.rec, setTimeoutCalls: toCalls
+        });
+
+      /* ══ D：取证文件（不在本页的旧图也算，逐张现解）═════ */
+      var SHOTS = [
+        ['bg-f1.png', 1280, 800], ['bg-f2.png', 1280, 800], ['bg-f3.png', 1280, 800],
+        ['bg-f4.png', 1280, 800], ['bg-f5.png', 1280, 800],
+        ['bg-before-f1.png', 1280, 800], ['bg-before-f2.png', 1280, 800],
+        ['bg-before-f3.png', 1280, 800], ['bg-before-f4.png', 1280, 800],
+        ['bg-before-f5.png', 1280, 800],
+        ['bg-five-together.png', 1848, 834], ['bg-before-after.png', 990, 1670],
+        ['dragon-1x.png', 1024, 640], ['dragon-eyes-8x.png', 1280, 960],
+        ['dragon-eyes-before-after-8x.png', 2590, 1002],
+        ['hit-seq-000.png', 1280, 800], ['hit-seq-030.png', 1280, 800],
+        ['hit-seq-060.png', 1280, 800], ['hit-seq-090.png', 1280, 800],
+        ['hit-seq-120.png', 1280, 800], ['hit-seq-150.png', 1280, 800],
+        ['hit-seq-180.png', 1280, 800], ['hit-sequence-7frames.png', 2280, 768],
+        ['hit-player-counter.png', 1280, 800], ['hit-player-before-after.png', 1410, 458],
+        ['boss-vs-ogre-1x.png', 1552, 410], ['boss-vs-ogre-8x.png', 2718, 1030]
+      ];
+      var done = 0, badD = [], rows = [];
+      SHOTS.forEach(function (item) {
+        var img = new Image();
+        img.onload = function () {
+          rows.push({ f: item[0], w: img.naturalWidth, h: img.naturalHeight });
+          if (img.naturalWidth !== item[1] || img.naturalHeight !== item[2]) {
+            badD.push(item[0] + ' ' + img.naturalWidth + 'x' + img.naturalHeight);
+          }
+          if (++done === SHOTS.length) { rec('D1_evidence', badD.length === 0, { bad: badD, n: rows.length }); finish(); }
+        };
+        img.onerror = function () {
+          badD.push(item[0] + ' missing');
+          if (++done === SHOTS.length) { rec('D1_evidence', false, { bad: badD, n: rows.length }); finish(); }
+        };
+        img.src = 'artifacts/d88/' + item[0];
+      });
+    } catch (e) {
+      out.err = String(e && (e.stack || e.message) || e);
+      out.ok = false;
+      finish();
+    }
+  }
+
+  function finish() {
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+
+  var t0 = Date.now();
+  (function poll() {
+    if ((S.get('floor_1') && S.get('t5_floor_1') && S.get('dragon_idle_anim_f0')) || Date.now() - t0 > 8000) { boot(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+
+
+</body></html>

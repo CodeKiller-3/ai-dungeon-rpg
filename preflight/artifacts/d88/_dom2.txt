@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>READY F1</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640" style="width: 1024px; height: 640px;"></canvas>
+<pre id="err">PX 40,100=19/19/32/255 512,100=82/196/26/255 512,300=8/8/15/255 512,470=255/207/110/255 40,300=10/10/17/255</pre>
+<!-- D-88 五层背景实拍：与主游戏同序加载、真实 drawBattle 出图（不合成、不补画）。
+     用法：?f=1..5&m=怪物id[&old=1]
+     old=1 时把 render.js 换成改动前的 HEAD 副本（_render_before.js），
+     其余脚本/素材/状态完全一致，因此改前/改后是同状态对照。
+     逻辑视口由 ?w=&h= 钉死（headless 的 --window-size 含边框）。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script>
+(function () {
+  var old = /[?&]old=1\b/.test(location.search);
+  document.write('<script src="' + (old ? '_render_before.js' : '../../../js/core/render.js') + '"><\/script>');
+})();
+</script><script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  if (q.w) {
+    Object.defineProperty(window, 'innerWidth', { value: +q.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: +q.h || 640, configurable: true });
+  }
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+  var R = Game.Core.Render;
+
+  /* headless 不稳帧率：把 FPS 段从底部提示里去掉（与交付图口径一致） */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d88fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d88fps = true;
+  })();
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      var f = Math.max(1, Math.min(5, +(q.f || 1)));
+      Map.setFloor(f);
+      P.floor = f;
+      P.level = 5;
+      P.exp = 24;
+      P.gold = 268;
+      P.hp = 100;
+      P.maxHp = 140;
+      P.mp = 30;
+      P.maxMp = 30;
+      P.atk = 14;
+      P.def = 6;
+      B.start(q.m || 'slime');
+      M.switchScene('battle');
+      R.resize();
+      R._animNow = function () { return 1234; };
+      R.drawBattle(B.getState());
+      try {
+        var c2 = document.getElementById('game').getContext('2d');
+        var px = [];
+        var pts = [[40, 100], [512, 100], [512, 300], [512, 470], [40, 300]];
+        for (var i = 0; i < pts.length; i++) {
+          var d = c2.getImageData(pts[i][0], pts[i][1], 1, 1).data;
+          px.push(pts[i][0] + ',' + pts[i][1] + '=' + d[0] + '/' + d[1] + '/' + d[2] + '/' + d[3]);
+        }
+        document.getElementById('err').textContent = 'PX ' + px.join(' ');
+      } catch (e2) { document.getElementById('err').textContent = 'PXERR ' + e2.message; }
+      document.title = 'READY F' + f;
+    } catch (e) {
+      document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+      document.title = 'ERR';
+    }
+  }
+
+  var t0 = Date.now();
+  (function poll() {
+    if (Game.Core.Sprites.isReady() || Date.now() - t0 > 6000) { boot(); return; }
+    setTimeout(poll, 40);
+  })();
+})();
+</script>
+
+
+</body></html>

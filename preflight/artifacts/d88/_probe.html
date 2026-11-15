@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>probe</title>
+<style>html,body{margin:0;background:#101018;overflow:hidden}canvas{display:block}#log{position:fixed;left:8px;top:8px;color:#0f0;font:14px monospace;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas><pre id="log">boot</pre>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  var log = document.getElementById('log');
+  function say(s) { log.textContent += ' | ' + s; }
+  say('scripts-ok ' + (!!Game.Core.Render));
+  var R = Game.Core.Render;
+  var cv = document.getElementById('game');
+  try {
+    R.init(cv);
+    say('init ' + R.cssW + 'x' + R.cssH);
+    var c = cv.getContext('2d');
+    c.fillStyle = '#c33';
+    c.fillRect(0, 0, 200, 200);
+    say('rect-drawn');
+  } catch (e) { say('ERR ' + (e && e.message)); }
+})();
+</script>
+</body>
+</html>

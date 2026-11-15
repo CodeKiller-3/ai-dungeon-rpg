@@ -279,69 +279,514 @@
     ctx.restore();
   }
 
-  /* 美学整改 A2：战斗背景按层换景——用现成 24×24 地块铺出"地点"，五层各自可辨。
-   * 版式（逻辑像素）：上带 0~192（敌方站台，8 行整，怪物脚底 180 之后收边）/
-   * 中带 192~432 纯色（D-16 的 y240~400 条带完全落在纯色区内，像素断言口径不变）/
-   * 下带 432~H（我方脚下地面）。地块按 24×24 原生 1:1 绘制，不缩放、不新增素材；
-   * 底色与压暗量只影响观感，不碰任何数值。
-   * 离屏缓存按 层/视口/k 作废，每帧只 1 次 blit（D-16 每帧 drawImage 预算不变）。 */
-  var BATTLE_BG = [
-    { base: '#161626', mix: 0.55 }, /* F1 地牢：冷灰 */
-    { base: '#1d1710', mix: 0.50 }, /* F2 兽人营地：土黄 */
-    { base: '#211010', mix: 0.46 }, /* F3 龙巢前哨：焦黑熔岩 */
-    { base: '#0c1a26', mix: 0.52 }, /* F4 冰霜墓穴：冰蓝 */
-    { base: '#170e21', mix: 0.48 }  /* F5 恶魔深渊：暗紫 */
+  /* 第三拨 D-88：战斗背景——五层各自的"空间语义"，不再共用一套骨架。
+   * 旧实现（美学整改 A2）五层只是同一套「上砖带 0~192 / 中暗带 192~432 / 下砖带 432~H」
+   * 换底色，敌方站台又是全场最亮的一块，F2 棕甲融土黄、F3 红鳞融红、F5 暗红融暗紫。
+   * 现在每一层由四件事共同定义，任意两层不能只换颜色：
+   *   1) 地平线高度（站台前沿）：176 / 168 / 184 / 164 / 192，五层互不相同；
+   *   2) 地标剪影：石厅拱门 / 营地木栅栏+帐篷 / 裂谷崖壁+熔岩裂口 / 墓穴立柱+棺台 / 王座前厅尖拱+王座；
+   *   3) 光源位置：火把 / 篝火 / 熔岩 / 冷烛 / 火盆，一律只落中下带两侧，绝不进敌方站台带；
+   *   4) 地面材质：湿石板 / 踩实泥地 / 冷却黑曜石 / 霜石阶 / 黑曜石金脉，压暗量与色温各不相同。
+   * 硬约束（verify_d88 A 段逐像素裁决）：
+   *   - 背景最亮像素必须在中下带（y≥192）的两侧（x<0.30W 或 x>0.70W），
+   *     敌方站台带（y<192）最亮像素的亮度必须比它低 60 以上——怪站在更暗更冷的地面上；
+   *   - 五层像素签名两两不同；
+   *   - 仍然是离屏一次构建 + 每帧 1 次 blit，不新增每帧 drawImage，不碰任何数值与战斗时钟。 */
+  var BATTLE_SCENE = [
+    { key: 'stonehall', label: 'F1 石厅', horizon: 176 },
+    { key: 'camp', label: 'F2 兽人营地', horizon: 168 },
+    { key: 'rift', label: 'F3 熔岩裂谷', horizon: 184 },
+    { key: 'crypt', label: 'F4 冰霜墓穴', horizon: 164 },
+    { key: 'throne', label: 'F5 深渊王座前厅', horizon: 192 }
   ];
-  var bgCache = { cv: null, ctx: null, floor: 0, W: 0, H: 0, k: 0 };
+  var bgCache = { cv: null, ctx: null, floor: 0, W: 0, H: 0, k: 0, tile: -1 };
+
+  /* ── 背景绘制小工具（全部逻辑坐标、整数落点）────────────────── */
+  function bgRect(c, x, y, w, h, col) {
+    c.fillStyle = col;
+    c.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  }
+  function bgPoly(c, pts, col) {
+    c.fillStyle = col;
+    c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    for (var i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.closePath();
+    c.fill();
+  }
+  function bgLine(c, x1, y1, x2, y2, col, w) {
+    c.strokeStyle = col;
+    c.lineWidth = w || 1;
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.stroke();
+  }
+  function bgRgba(rgb, a) {
+    return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (Math.round(a * 100) / 100) + ')';
+  }
+  function bgGlow(c, x, y, r, rgb, a) {
+    var g = c.createRadialGradient(x, y, 0, x, y, Math.max(1, r));
+    g.addColorStop(0, bgRgba(rgb, a));
+    g.addColorStop(0.45, bgRgba(rgb, a * 0.45));
+    g.addColorStop(1, bgRgba(rgb, 0));
+    c.fillStyle = g;
+    c.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  function bgTiles(c, f, y0, rows, cols, tint) {
+    var S = Game.Core.Sprites;
+    for (var ty = 0; ty < rows; ty++) {
+      for (var tx = 0; tx < cols; tx++) {
+        var t = S.get(floorVariantName(tx, Math.round(y0 / TILE) + ty, f));
+        if (t) c.drawImage(t, tx * TILE, y0 + ty * TILE, TILE, TILE);
+      }
+    }
+    if (tint) bgRect(c, 0, y0, cols * TILE, rows * TILE, tint);
+  }
+  /* 多层火焰（外焰三瓣/内焰/焰心/火星），纯色多边形——像素风不引入渐变噪声 */
+  function bgFlame(c, x, y, s, warm) {    var o = warm === false
+      ? { out: '#ff5a3a', mid: '#ff9a6a', core: '#ffd6b0' }
+      : { out: '#ff7a1e', mid: '#ffb347', core: '#ffd98a' };
+    bgGlow(c, x, y - 26 * s, 92 * s, warm === false ? [255, 90, 60] : [255, 150, 60], 0.30);
+    bgPoly(c, [[x, y - 54 * s], [x + 13 * s, y - 14 * s], [x + 4 * s, y], [x - 16 * s, y - 9 * s]], o.out);
+    bgPoly(c, [[x, y - 44 * s], [x + 18 * s, y - 11 * s], [x + 6 * s, y]], o.out);
+    bgPoly(c, [[x, y - 40 * s], [x - 12 * s, y - 9 * s], [x - 3 * s, y]], o.out);
+    bgPoly(c, [[x, y - 34 * s], [x + 9 * s, y - 9 * s], [x, y - 2 * s], [x - 9 * s, y - 9 * s]], o.mid);
+    bgPoly(c, [[x, y - 22 * s], [x + 5 * s, y - 8 * s], [x, y - 2 * s], [x - 5 * s, y - 8 * s]], o.core);
+    for (var i = 0; i < 4; i++) {
+      bgRect(c, x + (((i * 7) % 11) - 5) * s, y - (34 + i * 8) * s, 2 * s, 2 * s, o.core);
+    }
+  }
+  /* D-89：构件落地——地面接触暗面 + 一层比地砖略亮的石座。
+   * 用于所有立地火把/篝火/火盆：先有 shadow，再画座，最后才是杆与焰。
+   * 这是"贴纸"与"房间里的东西"的分界：构件底部必须有一块属于地面的暗面。 */
+  function bgContact(c, x, groundY, rx, ry) {
+    c.fillStyle = 'rgba(0,0,0,0.55)';
+    c.beginPath();
+    c.ellipse(x, groundY, Math.max(4, rx), Math.max(2, ry), 0, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  /* F1 石厅：错缝石砌后墙 + 居中拱门（敌人站在黑洞前）+ 两侧壁挂火把 + 湿石板地面 */
+  function bgStoneHall(c, W, H, sc, cols, canTile) {
+    var CX = W / 2, hor = sc.horizon;
+    var bw = 48, bh = 22;
+    for (var y = 0, row = 0; y < hor; y += bh, row++) {
+      var off = (row % 2) ? -bw / 2 : 0;
+      for (var x = off; x < W + bw; x += bw) {
+        var k = (Math.floor(x / bw) + row * 2) % 3;
+        if (k < 0) k += 3;
+        bgRect(c, x + 1, y + 1, bw - 2, bh - 2, k === 0 ? '#141422' : (k === 1 ? '#111119' : '#171726'));
+      }
+    }
+    /* 拱门：外圈石线 + 纯黑洞（怪物的剪影落在洞里，最暗处就在脚后） */
+    var ri = Math.max(56, Math.min(96, W * 0.10));
+    var springY = hor - 64;
+    c.strokeStyle = '#232333';
+    c.lineWidth = 14;
+    c.beginPath();
+    c.arc(CX, springY, ri + 7, Math.PI, 0);
+    c.stroke();
+    bgRect(c, CX - ri - 14, springY, 14, hor - springY, '#232333');
+    bgRect(c, CX + ri, springY, 14, hor - springY, '#232333');
+    bgRect(c, CX - 12, springY - ri - 12, 24, 20, '#2a2a3d');
+    c.fillStyle = '#04040a';
+    c.beginPath();
+    c.moveTo(CX - ri, hor);
+    c.lineTo(CX - ri, springY);
+    c.arc(CX, springY, ri, Math.PI, 0);
+    c.lineTo(CX + ri, hor);
+    c.closePath();
+    c.fill();
+    /* 站台：一行湿石板，压到最暗（脚下不许比任何光源亮） */
+    if (canTile) bgTiles(c, 1, hor, Math.ceil((192 - hor) / TILE), cols, 'rgba(4,5,13,0.78)');
+    else bgRect(c, 0, hor, W, 192 - hor, '#0a0a12');
+    c.fillStyle = 'rgba(0,0,0,0.55)';
+    c.beginPath();
+    c.ellipse(CX, hor + 10, ri * 0.92, 9, 0, 0, Math.PI * 2);
+    c.fill();
+    /* 中带：舞台暗部 + 两侧石壁收边 */
+    bgRect(c, 0, 192, W, 240, '#08080f');
+    bgRect(c, 0, 192, Math.max(20, W * 0.05), 240, '#0b0b13');
+    bgRect(c, W - Math.max(20, W * 0.05), 192, Math.max(20, W * 0.05), 240, '#0b0b13');
+    /* D-89：先铺下带地面，再画立地火把——杆与石座必须压在地面上，不能被地面覆盖 */
+    if (canTile) bgTiles(c, 1, 432, Math.ceil((H - 432) / TILE), cols, 'rgba(6,8,18,0.70)');
+    else bgRect(c, 0, 432, W, H - 432, '#07070e');
+    /* 立地火把：光源仍只在中带两侧；杆从壁架一路落到地面 432，脚下一块石座 + 接触暗面 */
+    var tx = [Math.round(W * 0.16), Math.round(W * 0.84)];
+    for (var ti = 0; ti < tx.length; ti++) {
+      var px = tx[ti];
+      bgContact(c, px, 432, 22, 6);
+      bgRect(c, px - 16, 422, 32, 10, '#16141d');
+      bgRect(c, px - 13, 424, 26, 6, '#1f1d28');
+      bgRect(c, px - 13, 304, 26, 9, '#2a2119');
+      bgRect(c, px - 6, 313, 12, 7, '#241a12');
+      bgRect(c, px - 2, 320, 4, 104, '#241a12');
+      bgRect(c, px - 8, 360, 16, 5, '#2c2118');
+      bgRect(c, px + 1, 324, 1, 96, 'rgba(255,200,140,0.18)');
+      bgFlame(c, px, 306, 1, true);
+    }
+    /* 下带：湿石板 + 火把在地上的两摊暖反光（在 432 以下，不碰站台） */
+    for (var ri2 = 0; ri2 < tx.length; ri2++) {
+      c.fillStyle = 'rgba(255,160,80,0.07)';
+      c.beginPath();
+      c.ellipse(tx[ri2], 446, 52, 10, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    bgRect(c, 0, hor - 5, W, 5, '#191928');
+  }
+
+  /* F2 营地：尖头木栅栏 + 右上帐篷布 + 左侧篝火 + 右后木箱，地面是踩实的冷泥地 */
+  function bgOrcCamp(c, W, H, sc, cols, canTile) {
+    var hor = sc.horizon;
+    bgRect(c, 0, hor - 62, W, 3, '#241a11');
+    var step = Math.max(16, Math.round(20));
+    for (var x = -6, i = 0; x < W + step; x += step, i++) {
+      var hgt = 94 + ((i * 53) % 4) * 10;
+      var top = hor - hgt;
+      bgRect(c, x, top + 10, 14, hgt - 10, (i % 2) ? '#221a12' : '#1a130d');
+      bgPoly(c, [[x, top + 12], [x + 7, top], [x + 14, top + 12]], (i % 2) ? '#2a2016' : '#211a11');
+      bgRect(c, x + 2, top + 12, 2, hgt - 14, 'rgba(255,220,170,0.035)');
+    }
+    /* 帐篷布：右上斜挂一整片 + 左上一角 */
+    bgPoly(c, [[W, 0], [W, 104], [W - 176, 0]], '#2f2116');
+    bgPoly(c, [[W, 0], [W, 58], [W - 96, 0]], '#3a2a1b');
+    bgPoly(c, [[0, 0], [92, 0], [0, 78]], '#291d14');
+    /* 站台：踩实的泥地（冷、暗），只留极淡的草屑纹理 */
+    bgRect(c, 0, hor, W, 192 - hor, '#14110c');
+    for (var sx = 10; sx < W; sx += 52) bgRect(c, sx, hor + 9, 20, 2, 'rgba(70,58,38,0.26)');
+    bgRect(c, 0, 192, W, 240, '#0a0806');
+    /* D-89：先铺下带泥地，再放木箱与篝火——所有立地物件都站在 432 的地面上 */
+    if (canTile) bgTiles(c, 2, 432, Math.ceil((H - 432) / TILE), cols, 'rgba(10,8,6,0.74)');
+    else bgRect(c, 0, 432, W, H - 432, '#080705');
+    for (var gx = 26; gx < W; gx += 74) {
+      bgLine(c, gx, H - 14, gx + 5, H - 22, '#232a1a', 2);
+      bgLine(c, gx + 5, H - 22, gx + 9, H - 14, '#232a1a', 2);
+    }
+    /* 右后木箱堆：箱底落到 432，脚下有暗面（旧版箱底悬在 392） */
+    var bx = W - Math.max(78, W * 0.09);
+    bgContact(c, bx + 32, 432, 40, 6);
+    bgRect(c, bx, 376, 64, 56, '#221910');
+    bgRect(c, bx + 3, 379, 58, 50, '#2a2014');
+    bgRect(c, bx + 3, 400, 58, 3, '#150f09');
+    bgRect(c, bx + 30, 379, 3, 50, '#150f09');
+    /* 篝火：全场最亮，落在左侧地面（y=476，旧版悬在中带 372）；石圈 + 交叉木柴 + 余烬 */
+    var fx = Math.round(W * 0.16), fy = 476;
+    bgGlow(c, fx, fy - 8, 118, [255, 140, 50], 0.24);
+    for (var si = 0; si < 7; si++) {
+      var ang = Math.PI * 2 * si / 7;
+      bgRect(c, fx + Math.cos(ang) * 24 - 5, fy + Math.sin(ang) * 8 - 4, 11, 7, si % 2 ? '#22201c' : '#2b2822');
+    }
+    bgRect(c, fx - 22, fy - 5, 44, 5, '#2a1c10');
+    bgRect(c, fx - 16, fy - 9, 32, 4, '#241a10');
+    bgRect(c, fx - 20, fy + 1, 8, 3, '#3a2412');
+    bgRect(c, fx + 12, fy + 1, 8, 3, '#3a2412');
+    bgFlame(c, fx, fy - 4, 1.05, true);
+    /* 篝火在地面上的暖反光 */
+    c.fillStyle = 'rgba(255,150,60,0.06)';
+    c.beginPath();
+    c.ellipse(fx, fy + 12, 60, 11, 0, 0, Math.PI * 2);
+    c.fill();
+    /* D-89：接触暗面画在反光之上，才压得住篝火的光 */
+    bgContact(c, fx, fy + 6, 34, 8);
+    bgRect(c, 0, hor - 4, W, 4, '#1c160e');
+  }
+
+  /* F3 熔岩裂谷：裂口是"地面裂缝"——横向岩浆带只在中带左右两侧的底部，
+   * 站台带（敌人脚下）保持冷却黑曜石，一点红也不给。
+   * D-89：两池熔岩原比红色沃古尔更亮（峰值 200、亮部 337px），背景压了主体一头。
+   * 现在压暗 + 收窄：岩壳变宽、熔岩带变薄、亮心只留断续 2px，光晕 0.22→0.12；
+   * 峰值降到 ~180 且亮部面积压到 20px 以内（< 沃古尔自身的 170+ 亮部）。 */
+  function bgLavaSeam(c, x0, x1, y) {
+    var w = Math.max(40, x1 - x0);
+    bgGlow(c, (x0 + x1) / 2, y, Math.max(60, w * 0.60), [255, 120, 40], 0.12);
+    /* 上下岩缘（比旧版更厚，压住熔岩的面积） */
+    bgPoly(c, [[x0, y - 16], [x1, y - 8], [x1, y - 1], [x0, y - 9]], '#171219');
+    bgPoly(c, [[x0, y + 9], [x1, y + 16], [x1, y + 3], [x0, y + 2]], '#171219');
+    /* 熔岩带：锯齿边缘（暗橙，不再是高亮橙） */
+    bgPoly(c, [
+      [x0, y + 5], [x0 + w * 0.20, y - 3], [x0 + w * 0.42, y + 3], [x0 + w * 0.63, y - 4],
+      [x0 + w * 0.82, y + 4], [x1, y - 1], [x1, y + 7], [x0 + w * 0.70, y + 9],
+      [x0 + w * 0.40, y + 5], [x0, y + 8]
+    ], '#8e3c16');
+    /* 暗红过渡 */
+    bgPoly(c, [
+      [x0 + w * 0.08, y + 4], [x0 + w * 0.34, y + 1], [x0 + w * 0.60, y + 4],
+      [x0 + w * 0.88, y + 4], [x0 + w * 0.66, y + 7], [x0 + w * 0.30, y + 5]
+    ], '#c2551d');
+    /* 亮心：只留两段断续 2px（A1 需要 y≥192 有一个 ≥170 的像素，但不允许成片） */
+    bgPoly(c, [[x0 + w * 0.20, y + 3], [x0 + w * 0.30, y + 2], [x0 + w * 0.24, y + 4]], '#ffc060');
+    bgPoly(c, [[x0 + w * 0.66, y + 3], [x0 + w * 0.76, y + 2], [x0 + w * 0.70, y + 4]], '#ffc060');
+    /* 飞出的余烬（压暗，不构成亮部） */
+    for (var i = 0; i < 3; i++) {
+      bgRect(c, x0 + w * (0.18 + i * 0.24), y - 9 - (i % 2) * 4, 2, 2, '#b8641f');
+    }
+  }
+  function bgLavaRift(c, W, H, sc, cols, canTile) {
+    var hor = sc.horizon, CX = W / 2;
+    var lx = Math.round(W * 0.34), rx = Math.round(W * 0.66);
+    bgPoly(c, [[0, 0], [lx, 0], [lx - Math.round(W * 0.06), hor - 34], [lx - Math.round(W * 0.01), hor], [0, hor]], '#100d13');
+    bgPoly(c, [[W, 0], [rx, 0], [rx + Math.round(W * 0.06), hor - 34], [rx + Math.round(W * 0.01), hor], [W, hor]], '#100d13');
+    bgLine(c, lx - Math.round(W * 0.06), hor - 34, lx - Math.round(W * 0.01), hor, 'rgba(96,86,124,0.30)', 2);
+    bgLine(c, rx + Math.round(W * 0.06), hor - 34, rx + Math.round(W * 0.01), hor, 'rgba(96,86,124,0.30)', 2);
+    /* 两侧崖壁上的竖向断层（暗） */
+    for (var i = 0; i < 4; i++) {
+      var yy = 24 + i * 34;
+      bgLine(c, 6, yy, lx - Math.round(W * 0.09), yy + 18, 'rgba(0,0,0,0.55)', 3);
+      bgLine(c, W - 6, yy + 8, rx + Math.round(W * 0.09), yy + 26, 'rgba(0,0,0,0.55)', 3);
+    }
+    /* 站台：冷却黑曜石（冷、无红） */
+    bgRect(c, 0, hor, W, 192 - hor, '#0b0a0f');
+    for (var ci = 20; ci < W; ci += 64) bgLine(c, ci, hor + 3, ci + 12, 190, 'rgba(70,80,110,0.16)', 1);
+    bgRect(c, 0, 192, W, 240, '#07060a');
+    /* 熔岩裂口：中带左右两侧的底部横向裂缝（离玩家血条两端留足距离） */
+    bgLavaSeam(c, 0, Math.round(W * 0.16), 414);
+    bgLavaSeam(c, W - Math.round(W * 0.16), W, 414);
+    /* 飘灰（确定性点阵） */
+    for (var ai = 0; ai < 26; ai++) {
+      var ax = (ai * 137 + 40) % Math.max(1, W);
+      var ay = 200 + (ai * 73) % 220;
+      bgRect(c, ax, ay, 2, 2, 'rgba(180,140,120,0.10)');
+    }
+    /* 下带：玄武岩地砖 + 底缘余烬线 */
+    if (canTile) bgTiles(c, 3, 432, Math.ceil((H - 432) / TILE), cols, 'rgba(9,10,18,0.82)');
+    else bgRect(c, 0, 432, W, H - 432, '#07070c');
+    bgLine(c, 0, H - 3, Math.round(W * 0.18), H - 3, 'rgba(255,110,40,0.45)', 2);
+    bgLine(c, W - Math.round(W * 0.18), H - 3, W, H - 3, 'rgba(255,110,40,0.45)', 2);
+    bgRect(c, 0, hor - 5, W, 5, '#141119');
+  }
+
+  /* F4 冰霜墓穴：冰石后墙 + 两侧立柱 + 居中棺台 + 冷白烛火（烛火只落在下带两侧） */
+  function bgFrostCrypt(c, W, H, sc, cols, canTile) {
+    var hor = sc.horizon, CX = W / 2;
+    var bw = 56, bh = 26;
+    for (var y = 0, row = 0; y < hor; y += bh, row++) {
+      var off = (row % 2) ? -bw / 2 : 0;
+      for (var x = off; x < W + bw; x += bw) {
+        var k = (Math.floor(x / bw) + row) % 2;
+        bgRect(c, x + 1, y + 1, bw - 2, bh - 2, (k < 0 ? k + 2 : k) ? '#101d26' : '#0d1820');
+      }
+    }
+    /* 三个尖拱壁龛（暗） */
+    for (var ni = -1; ni <= 1; ni++) {
+      var nx = CX + ni * Math.min(220, W * 0.22);
+      bgPoly(c, [[nx - 34, hor - 22], [nx - 34, 66], [nx, 38], [nx + 34, 66], [nx + 34, hor - 22]], '#060e14');
+      bgLine(c, nx - 34, hor - 22, nx - 34, 66, 'rgba(90,130,150,0.22)', 2);
+      bgLine(c, nx - 34, 66, nx, 38, 'rgba(90,130,150,0.22)', 2);
+      bgLine(c, nx, 38, nx + 34, 66, 'rgba(90,130,150,0.22)', 2);
+      bgLine(c, nx + 34, 66, nx + 34, hor - 22, 'rgba(90,130,150,0.22)', 2);
+    }
+    /* 立柱：冷灰石，棱线略亮但远低于任何光源；柱脚有落地暗面 */
+    var pillars = [Math.round(W * 0.18), Math.round(W * 0.82)];
+    for (var pi = 0; pi < pillars.length; pi++) {
+      var px = pillars[pi];
+      bgContact(c, px, hor + 18, 34, 6);
+      bgRect(c, px - 22, 54, 44, hor - 54 + 20, '#1c2b36');
+      bgRect(c, px - 22, 54, 5, hor - 54 + 20, '#2b4050');
+      bgRect(c, px - 28, 48, 56, 12, '#243744');
+      bgRect(c, px - 28, hor + 8, 56, 10, '#22323d');
+    }
+    /* 站台：石阶 + 居中棺台（低矮、暗） */
+    bgRect(c, 0, hor, W, 192 - hor, '#0d1720');
+    bgRect(c, 0, hor, W, 8, '#16242e');
+    bgRect(c, 0, hor + 8, W, 3, '#1c2c37');
+    bgRect(c, CX - 150, hor - 18, 300, 20, '#1b2a35');
+    bgRect(c, CX - 150, hor - 18, 300, 4, '#2b3f4d');
+    bgRect(c, CX - 128, hor - 12, 256, 3, '#0e1a22');
+    bgRect(c, CX - 96, hor - 6, 192, 3, '#0e1a22');
+    bgRect(c, 0, 192, W, 240, '#070d12');
+    /* 霜雾：只贴中带下缘，压得很低 */
+    c.fillStyle = 'rgba(140,200,230,0.045)';
+    c.beginPath();
+    c.ellipse(W * 0.22, 408, W * 0.24, 22, 0, 0, Math.PI * 2);
+    c.ellipse(W * 0.78, 412, W * 0.24, 20, 0, 0, Math.PI * 2);
+    c.fill();
+    /* 冷白烛台：下带两侧，是全场最亮（画在地砖之后，否则会被下带覆盖） */
+    var cx2 = [Math.round(W * 0.14), Math.round(W * 0.86)];
+    var cy2 = Math.min(H - 44, 470);
+    /* 下带：霜石地砖 + 冰裂纹 */
+    if (canTile) bgTiles(c, 4, 432, Math.ceil((H - 432) / TILE), cols, 'rgba(10,24,36,0.80)');
+    else bgRect(c, 0, 432, W, H - 432, '#060d14');
+    for (var ci = 0; ci < cx2.length; ci++) {
+      bgRect(c, cx2[ci] - 2, cy2, 4, 34, '#26343e');
+      bgRect(c, cx2[ci] - 9, cy2 + 32, 18, 5, '#2e3f4b');
+      bgRect(c, cx2[ci] - 7, cy2 - 2, 14, 4, '#33454f');
+      bgGlow(c, cx2[ci], cy2 - 8, 74, [190, 235, 255], 0.38);
+      bgPoly(c, [[cx2[ci], cy2 - 24], [cx2[ci] + 6, cy2 - 4], [cx2[ci] - 6, cy2 - 4]], '#bfe8ff');
+      bgPoly(c, [[cx2[ci], cy2 - 15], [cx2[ci] + 3, cy2 - 4], [cx2[ci] - 3, cy2 - 4]], '#f2ffff');
+      bgRect(c, cx2[ci] - 1, cy2 - 12, 3, 4, '#ffffff');
+      /* D-89：接触暗面压在烛光之后，烛台脚下才有"落地"的暗面 */
+      bgContact(c, cx2[ci], cy2 + 36, 15, 5);
+    }
+    for (var ci2 = 0; ci2 < 7; ci2++) {
+      var sx = (ci2 * 151 + 60) % Math.max(1, W);
+      bgLine(c, sx, 452 + (ci2 % 3) * 26, sx + 34, 470 + (ci2 % 3) * 26, 'rgba(120,180,210,0.18)', 1);
+    }
+    /* 顶部冰凌：暗青、低透明，不构成亮点 */
+    for (var ii = 0; ii < 9; ii++) {
+      var ix = (ii * 149 + 30) % Math.max(1, W);
+      var ih = 10 + (ii * 7) % 16;
+      bgPoly(c, [[ix, 0], [ix + 6, 0], [ix + 3, ih]], 'rgba(150,210,235,0.28)');
+    }
+  }
+
+  /* F5 深渊王座前厅：双尖拱 + 居中王座与台阶 + 两侧火盆（最亮）+ 黑曜石金脉地面 */
+  function bgGothicArch(c, cx, baseY, w, h, rim, fill) {
+    var top = baseY - h;
+    bgPoly(c, [[cx - w / 2, baseY], [cx - w / 2, top + 28], [cx, top], [cx + w / 2, top + 28], [cx + w / 2, baseY]], fill);
+    bgLine(c, cx - w / 2, baseY, cx - w / 2, top + 28, rim, 2);
+    bgLine(c, cx - w / 2, top + 28, cx, top, rim, 2);
+    bgLine(c, cx, top, cx + w / 2, top + 28, rim, 2);
+    bgLine(c, cx + w / 2, top + 28, cx + w / 2, baseY, rim, 2);
+  }
+  function bgThroneHall(c, W, H, sc, cols, canTile) {
+    var hor = sc.horizon, CX = W / 2;
+    bgGothicArch(c, CX - Math.min(240, W * 0.24), hor, 120, 168, '#2a1938', '#120c1a');
+    bgGothicArch(c, CX + Math.min(240, W * 0.24), hor, 120, 168, '#2a1938', '#120c1a');
+    /* 王座：高背 + 双尖塔，尖塔高过龙翼——主体挡住椅面时"王座厅"仍读得出 */
+    bgRect(c, CX - 40, 18, 80, 150, '#170e22');
+    bgPoly(c, [[CX - 40, 18], [CX - 58, 18], [CX - 40, 54]], '#211430');
+    bgPoly(c, [[CX + 40, 18], [CX + 58, 18], [CX + 40, 54]], '#211430');
+    bgPoly(c, [[CX - 40, 18], [CX, 2], [CX + 40, 18]], '#24163a');
+    bgRect(c, CX - 40, 18, 4, 150, '#3a2448');
+    bgRect(c, CX + 36, 18, 4, 150, '#3a2448');
+    bgRect(c, CX - 30, 22, 60, 4, '#4b2f5e');
+    bgRect(c, CX - 48, 128, 96, 14, '#221530');
+    bgRect(c, CX - 56, 142, 112, 26, '#160e20');
+    bgRect(c, CX - 18, 40, 36, 8, '#3a2448');
+    /* 两侧垂落的暗红旗帜，把王座框在中间 */
+    var banX = [CX - Math.min(300, Math.round(W * 0.30)), CX + Math.min(300, Math.round(W * 0.30))];
+    for (var bi2 = 0; bi2 < banX.length; bi2++) {
+      var bx2 = banX[bi2];
+      bgRect(c, bx2 - 14, 26, 28, 100, '#2a0f16');
+      bgPoly(c, [[bx2 - 14, 126], [bx2 + 14, 126], [bx2, 146]], '#2a0f16');
+      bgRect(c, bx2 - 12, 26, 2, 96, '#57212c');
+      bgRect(c, bx2 + 10, 26, 2, 96, '#57212c');
+      bgPoly(c, [[bx2, 54], [bx2 + 7, 64], [bx2, 74], [bx2 - 7, 64]], '#6b2a36');
+    }
+    /* 王座台座前沿（站台带内，暗金线是站台上唯一的高光，仍远低于火盆） */
+    bgRect(c, CX - 130, 168, 260, 24, '#140d1c');
+    bgRect(c, CX - 130, 168, 260, 3, '#2a1938');
+    bgRect(c, CX - 150, 184, 300, 8, '#0f0a16');
+    /* 站台：黑曜石，horizon 192 时只剩脚下一条暗沿 */
+    bgRect(c, 0, hor, W, 192 - hor, '#0a0710');
+    bgRect(c, 0, 192, W, 240, '#080510');
+    /* 王座台阶：只在中带上半、中心 ±170，止于 236（不压 y240 的信息带） */
+    for (var st = 0; st < 3; st++) {
+      var sw = 340 - st * 56;
+      bgRect(c, CX - sw / 2, 192 + st * 15, sw, 15, st % 2 ? '#140e1c' : '#181020');
+      bgRect(c, CX - sw / 2, 192 + st * 15, sw, 3, '#2a1a38');
+    }
+    /* 中带两侧黑曜石柱 */
+    bgRect(c, 0, 192, Math.max(28, W * 0.045), 240, '#0c0714');
+    bgRect(c, W - Math.max(28, W * 0.045), 192, Math.max(28, W * 0.045), 240, '#0c0714');
+    bgLine(c, Math.max(28, W * 0.045), 192, Math.max(28, W * 0.045), 432, 'rgba(90,60,120,0.22)', 2);
+    bgLine(c, W - Math.max(28, W * 0.045), 192, W - Math.max(28, W * 0.045), 432, 'rgba(90,60,120,0.22)', 2);
+    /* D-89：先铺下带地面，再画火盆——杆必须落到 432 的地面上 */
+    if (canTile) bgTiles(c, 5, 432, Math.ceil((H - 432) / TILE), cols, 'rgba(14,8,24,0.78)');
+    else bgRect(c, 0, 432, W, H - 432, '#09050f');
+    for (var gi = 0; gi < 8; gi++) {
+      var gx = (gi * 173 + 40) % Math.max(1, W);
+      bgLine(c, gx, 440 + (gi % 2) * 30, gx + 58, 452 + (gi % 2) * 30, 'rgba(120,90,46,0.35)', 1);
+    }
+    /* 两侧立地火盆：冷红，全场最亮；杆从 330 落到 432，脚下石座 + 暗面 */
+    var bs = [Math.round(W * 0.16), Math.round(W * 0.84)];
+    for (var bi = 0; bi < bs.length; bi++) {
+      var bx = bs[bi];
+      bgContact(c, bx, 432, 24, 6);
+      bgRect(c, bx - 18, 422, 36, 10, '#140f1c');
+      bgRect(c, bx - 14, 424, 28, 6, '#1c1626');
+      bgRect(c, bx - 2, 330, 4, 94, '#241a2c');
+      bgRect(c, bx + 1, 332, 1, 88, 'rgba(220,160,120,0.16)');
+      bgRect(c, bx - 15, 322, 30, 9, '#2a1f33');
+      bgFlame(c, bx, 318, 1.1, false);
+    }
+    bgRect(c, 0, hor - 4, W, 4, '#2a1938');
+  }
+
+  var BG_PAINTERS = [bgStoneHall, bgOrcCamp, bgLavaRift, bgFrostCrypt, bgThroneHall];
+
+  /* 第三拨 D-88：龙的身份符号——只做「发光眼」这一件（不做口部余火、不做亮色翼膜）。
+   * D-89：素材重画为原生 72×72（原 64×54），锚点同步到新头部位（原生坐标）：
+   *   idle 双眼 (30..32,25..27)/(41..43,25..27) → 中点 (36,26)；attack 头下移 3px → (36,29)；
+   *   hurt 头上抬 1px → (36,25)。落屏 2×（Boss 144px 高）时双眼各 6×5px、间距 20px、光晕 46px，
+   *   1× 实显也能在静止帧读到"这里有一双眼睛"；不改剪影、不参与数值与时钟。 */
+  var DRAGON_EYES = {
+    idle: { x: 36, y: 26 },
+    attack: { x: 36, y: 29 },
+    hurt: { x: 36, y: 25 }
+  };
+  function drawDragonEyes(ctx, cx, bottom, h, mode, img) {
+    var a = DRAGON_EYES[mode] || DRAGON_EYES.idle;
+    var nw = (img && img.naturalWidth) || 72;
+    var nh = (img && img.naturalHeight) || 72;
+    var w = Math.max(2, Math.round(nw * h / nh));
+    var x0 = cx - w / 2, top = bottom - h;
+    var ex = x0 + a.x * w / nw;
+    var ey = top + a.y * h / nh;
+    var gr = Math.max(10, h * 0.16);
+    var g = ctx.createRadialGradient(ex, ey, 0, ex, ey, gr);
+    g.addColorStop(0, 'rgba(255,196,96,0.58)');
+    g.addColorStop(0.45, 'rgba(255,132,40,0.24)');
+    g.addColorStop(1, 'rgba(255,110,20,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(ex - gr, ey - gr, gr * 2, gr * 2);
+    var ew = Math.max(4, Math.round(h * 0.042));
+    var eh = Math.max(3, Math.round(h * 0.035));
+    var sep = Math.max(8, Math.round(h * 0.139));
+    for (var s = -1; s <= 1; s += 2) {
+      var x = Math.round(ex + s * sep / 2 - ew / 2);
+      var y = Math.round(ey - eh / 2);
+      ctx.fillStyle = '#ff7a16';
+      ctx.fillRect(x - 1, y - 1, ew + 2, eh + 2);
+      ctx.fillStyle = '#ffd05a';
+      ctx.fillRect(x, y, ew, eh);
+      ctx.fillStyle = '#fff6d8';
+      ctx.fillRect(x + 1, y + 1, 2, 2);
+    }
+  }
 
   function drawBattleBackdrop(ctx, W, H, floorNo) {
     var f = (floorNo >= 1 && floorNo <= 5) ? floorNo : 1;
     var R = Game.Core && Game.Core.Render;
     var k = ((R && R.dpr) || 1) * ((R && R.scale) || 1);
-    var bg = BATTLE_BG[f - 1];
+    var sc = BATTLE_SCENE[f - 1];
     var canTile = !!(Game.Core.Sprites && typeof Game.Core.Sprites.isReady === 'function' &&
       Game.Core.Sprites.isReady());
+    var tileFlag = canTile ? 1 : 0;
     if (!bgCache.cv) {
       bgCache.cv = document.createElement('canvas');
       bgCache.ctx = bgCache.cv.getContext('2d');
     }
     var c = bgCache.ctx;
     if (!c) return;
-    if (bgCache.floor !== f || bgCache.W !== W || bgCache.H !== H || bgCache.k !== k) {
+    if (bgCache.floor !== f || bgCache.W !== W || bgCache.H !== H ||
+      bgCache.k !== k || bgCache.tile !== tileFlag) {
       bgCache.cv.width = Math.max(1, Math.round(W * k));
       bgCache.cv.height = Math.max(1, Math.round(H * k));
       c.setTransform(k, 0, 0, k, 0, 0);
       c.imageSmoothingEnabled = false;
       c.globalAlpha = 1;
       c.globalCompositeOperation = 'source-over';
-      c.fillStyle = bg.base;
+      c.fillStyle = '#07070c';
       c.fillRect(0, 0, W, H);
-      var cols = Math.ceil(W / TILE), tx, ty, t1, t2;
-      if (canTile) {
-        /* 上带：敌方站台（8 行，脚底 180 之后收边） */
-        for (ty = 0; ty < 8; ty++) {
-          for (tx = 0; tx < cols; tx++) {
-            t1 = Game.Core.Sprites.get(floorVariantName(tx, ty, f));
-            if (t1) c.drawImage(t1, tx * TILE, ty * TILE, TILE, TILE);
-          }
-        }
-        c.fillStyle = 'rgba(6,6,14,' + bg.mix.toFixed(2) + ')';
-        c.fillRect(0, 0, W, 192);
-        /* 下带：我方脚下地面（从 432 起整行铺） */
-        for (ty = 0; ty < Math.ceil((H - 432) / TILE); ty++) {
-          for (tx = 0; tx < cols; tx++) {
-            t2 = Game.Core.Sprites.get(floorVariantName(tx, 18 + ty, f));
-            if (t2) c.drawImage(t2, tx * TILE, 432 + ty * TILE, TILE, TILE);
-          }
-        }
-        c.fillStyle = 'rgba(6,6,14,' + (bg.mix * 0.7).toFixed(2) + ')';
-        c.fillRect(0, 432, W, H - 432);
+      var cols = Math.ceil(W / TILE);
+      try {
+        BG_PAINTERS[f - 1](c, W, H, sc, cols, canTile);
+      } catch (e) {
+        /* 绘制异常时退回整块底色，不阻断战斗 */
+        c.setTransform(k, 0, 0, k, 0, 0);
+        c.globalAlpha = 1;
+        c.fillStyle = '#07070c';
+        c.fillRect(0, 0, W, H);
       }
-      /* 两条 1px 分界：台面 / 舞台 / 地面，三段读得出来 */
-      c.fillStyle = 'rgba(255,255,255,0.06)';
-      c.fillRect(0, 192, W, 1);
-      c.fillRect(0, 432, W, 1);
-      bgCache.floor = f; bgCache.W = W; bgCache.H = H; bgCache.k = k;
+      /* 四角轻压暗：只压边角，光源在中下带两侧，不被吃掉 */
+      var vg = c.createRadialGradient(W / 2, H * 0.52, Math.min(W, H) * 0.36, W / 2, H * 0.52, Math.max(W, H) * 0.78);
+      vg.addColorStop(0, 'rgba(0,0,0,0)');
+      vg.addColorStop(1, 'rgba(0,0,0,0.30)');
+      c.fillStyle = vg;
+      c.fillRect(0, 0, W, H);
+      bgCache.floor = f; bgCache.W = W; bgCache.H = H; bgCache.k = k; bgCache.tile = tileFlag;
     }
     ctx.drawImage(bgCache.cv, 0, 0, W, H);
   }
@@ -500,6 +945,12 @@
     },
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
     MONSTER_ANIM: MONSTER_ANIM,  /* P2-1：怪物 id → {idle,run} 帧组（验证/调试可读，运行时只读） */
+    /* 第三拨 D-88：五层背景的空间语义表（只读）与纯背景绘制入口（验证页逐像素裁决用）。
+     * 绘制入口只画背景，不画怪/文字/HUD，因此验证页可以把"背景亮度分布"和"战斗内容"分开测。 */
+    _battleScene: BATTLE_SCENE,
+    _battleBackdrop: function (c2, W2, H2, floor) { drawBattleBackdrop(c2, W2, H2, floor); },
+    /* 第三拨 D-88：龙眼绘制单元（验证页在纯画布上量"双瞳/间距/是否落在头部"） */
+    _drawDragonEyes: drawDragonEyes,
     /* 第二拨：Boss 落屏高度口径（原生高 × 2，整数倍），验证页与 drawBattle 共用同一公式 */
     BOSS_MUL: 2,
     bossDrawHeight: function (img) {
@@ -1500,7 +1951,14 @@
           }
         }
       }
+      /* D-88：龙的身份符号（发光眼）画在闪白之后——受击帧也保留眼睛，剪影身份不丢 */
+      if (!dying && monster.id === 'dragon' && sp2 && typeof drawDragonEyes === 'function') {
+        drawDragonEyes(ctx, ex + 45, ey + 90, mBaseH, mMode, sp2);
+      }
       ctx.restore();
+      var dbg = this._lastBattleBox || (this._lastBattleBox = {});
+      dbg.monster = { x: Math.round(ex + 45 - mW / 2), y: Math.round(ey + 90 - mBaseH), w: mW, h: mBaseH,
+        baseTop: Math.round(90 + 90 - mBaseH), groundY: 180, knock: Math.round(mKnock * 100) / 100 };
 
       if (!dying) {
         /* D-16：敌方名字（Boss 保留【BOSS】前缀，供 P2-4 断言） */
@@ -1599,6 +2057,8 @@
         }
       }
       ctx.restore();
+      dbg.player = { x: Math.round(px + 45 - pW / 2), y: Math.round(py + 90 - 90), w: pW, h: 90,
+        baseTop: H - 190, groundY: H - 100, knock: Math.round(pKnock * 100) / 100 };
       /* D-16：程序化斩击弧（零素材，1~2 段 arc） */
       if (Fx && typeof Fx.drawSlashes === 'function') Fx.drawSlashes(ctx);
 

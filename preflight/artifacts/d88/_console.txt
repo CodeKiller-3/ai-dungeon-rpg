@@ -1,0 +1,33 @@
+﻿msedge.exe : [96332:113224:1115/184552.553:WARNING:chrome\browser\extensions\external_registry_loader_win.cc:283] Error
+ observing HKLM: 5
+所在位置 行:20 字符: 1
++ & $edge --headless=new --disable-gpu --no-sandbox --user-data-dir=$tm ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([96332:113224:1...serving HKLM: 5:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[96332:5592:1115/184552.724:INFO:chrome\common\importer\edge_chrome_importer_utils_win.cc:34] Google chrome user data p
+ath not found.
+[96332:5592:1115/184552.730:ERROR:chrome\browser\importer\edge_china_browsers\edge_qqbrowser_importer_utils_win.cc:165]
+ QQBrowser user data path not found.
+[96332:113224:1115/184553.116:INFO:CONSOLE:6150] "[ProtocolLaunch] handler constructed; wiring port events.", source: c
+hrome-extension://ndcpkimcihhghdcddljkfmmjccdmcmof/background.rollup.js (6150)
+[96332:113224:1115/184553.313:ERROR:chrome\browser\task_manager\providers\fallback_task_provider.cc:126] Every renderer
+ should have at least one task provided by a primary task provider. If a "Renderer" fallback task is shown, it is a bug
+. If you have repro steps, please file a new bug and tag it as a dependency of crbug.com/40528867.
+[96332:113224:1115/184553.533:INFO:CONSOLE:146] "The AudioContext was not allowed to start. It must be resumed (or crea
+ted) after a user gesture on the page. ", source: file:///D:/%E6%A1%8C%E9%9D%A2/%E5%B7%A5%E4%BD%9C/%E4%BA%BA%E5%B7%A5%E
+6%99%BA%E8%83%BD%E5%A4%A7%E4%BD%9C%E4%B8%9A/js/systems/audio.js (146)
+[96332:113224:1115/184553.535:INFO:CONSOLE:126] "The AudioContext was not allowed to start. It must be resumed (or crea
+ted) after a user gesture on the page. ", source: file:///D:/%E6%A1%8C%E9%9D%A2/%E5%B7%A5%E4%BD%9C/%E4%BA%BA%E5%B7%A5%E
+6%99%BA%E8%83%BD%E5%A4%A7%E4%BD%9C%E4%B8%9A/js/systems/audio.js (126)
+[96332:113224:1115/184553.561:INFO:CONSOLE:146] "The AudioContext was not allowed to start. It must be resumed (or crea
+ted) after a user gesture on the page. ", source: file:///D:/%E6%A1%8C%E9%9D%A2/%E5%B7%A5%E4%BD%9C/%E4%BA%BA%E5%B7%A5%E
+6%99%BA%E8%83%BD%E5%A4%A7%E4%BD%9C%E4%B8%9A/js/systems/audio.js (146)
+[96332:113224:1115/184553.837:WARNING:components\signin\internal\identity_manager\account_fetcher_service.cc:252] Edge 
+does not support fetching account capabilities
+[96332:113224:1115/184553.837:WARNING:components\signin\internal\identity_manager\account_fetcher_service.cc:213] Shoul
+d not execute: Tests depending on this function may fail
+[96332:113224:1115/184554.204:INFO:CONSOLE:98] "The AudioContext was not allowed to start. It must be resumed (or creat
+ed) after a user gesture on the page. ", source: file:///D:/%E6%A1%8C%E9%9D%A2/%E5%B7%A5%E4%BD%9C/%E4%BA%BA%E5%B7%A5%E6
+%99%BA%E8%83%BD%E5%A4%A7%E4%BD%9C%E4%B8%9A/js/systems/audio.js (98)

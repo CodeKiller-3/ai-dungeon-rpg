@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1.25;"><head>
+<meta charset="UTF-8">
+<title>READY F2</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game" width="1280" height="800" style="width: 1280px; height: 800px;"></canvas>
+<pre id="err">FR=30 rb=true tile=Y mf=Y</pre>
+<!-- D-88 五层背景实拍：与主游戏同序加载、真实 drawBattle 出图（不合成、不补画）。
+     用法：?f=1..5&m=怪物id[&old=1]
+     old=1 时把 render.js 换成改动前的 HEAD 副本（_render_before.js），
+     其余脚本/素材/状态完全一致，因此改前/改后是同状态对照。
+     逻辑视口由 ?w=&h= 钉死（headless 的 --window-size 含边框）。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script>
+(function () {
+  var old = /[?&]old=1\b/.test(location.search);
+  document.write('<script src="' + (old ? '_render_before.js' : '../../../js/core/render.js') + '"><\/script>');
+})();
+</script><script src="_render_before.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  if (q.w) {
+    Object.defineProperty(window, 'innerWidth', { value: +q.w, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: +q.h || 640, configurable: true });
+  }
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+  var R = Game.Core.Render;
+
+  /* headless 不稳帧率：把 FPS 段从底部提示里去掉（与交付图口径一致） */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d88fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d88fps = true;
+  })();
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      var f = Math.max(1, Math.min(5, +(q.f || 1)));
+      Map.setFloor(f);
+      P.floor = f;
+      P.level = 5;
+      P.exp = 24;
+      P.gold = 268;
+      P.hp = 100;
+      P.maxHp = 140;
+      P.mp = 30;
+      P.maxMp = 30;
+      P.atk = 14;
+      P.def = 6;
+      B.start(q.m || 'slime');
+      M.switchScene('battle');
+      R.resize();
+      R._animNow = function () { return 1234; };
+      window.__d88F = f;
+      window.__d88Booted = true;
+    } catch (e) {
+      document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+      document.title = 'ERR';
+    }
+  }
+
+  function spritesReady(f) {
+    var S = Game.Core.Sprites;
+    if (!S.get('t' + f + '_floor_1') || !S.get('knight_m_idle_anim_f0')) return false;
+    var mid = q.m || 'slime';
+    var set = Game.Core.Render.MONSTER_ANIM && Game.Core.Render.MONSTER_ANIM[mid];
+    if (!set) return true;
+    return !!S.getFrame(set.idle, 0);
+  }
+
+  /* 页面脚本一跑完就建状态；真正的绘制放在 rAF 里持续出帧。
+     headless 的 --virtual-time-budget 会快进定时器，但图片解码仍要真实时间完成——
+     所以不能"等一个定时器再画一次"，而是每帧都画：素材到位后同一帧就是最终画面。
+     旧版（old=1）的背景缓存键里没有"素材是否就绪"，素材到位时手工切一次层强制重建；
+     这一步只影响缓存失效，不改任何绘制内容，改前/改后仍是同状态对照。 */
+  boot();
+  var rebuilt = false, frames = 0;
+  (function frame() {
+    try {
+      frames++;
+      if (window.__d88Booted) {
+        var f = window.__d88F;
+        if (!rebuilt && spritesReady(f)) {
+          if (!R._battleScene) {
+            P.floor = (f === 1) ? 2 : 1;
+            R.drawBattle(B.getState());
+            P.floor = f;
+          }
+          rebuilt = true;
+        }
+        R.drawBattle(B.getState());
+        if (rebuilt) { window.__d88Ready = true; document.title = 'READY F' + f; }
+      }
+      document.getElementById('err').textContent = 'FR=' + frames + ' rb=' + rebuilt +
+        ' tile=' + (Game.Core.Sprites.get('t' + (window.__d88F || 1) + '_floor_1') ? 'Y' : 'N') +
+        ' mf=' + (Game.Core.Sprites.getFrame && Game.Core.Sprites.getFrame('orc_warrior_idle', 0) ? 'Y' : 'N');
+    } catch (e) { /* 降级 */ }
+    window.requestAnimationFrame(frame);
+  })();
+})();
+</script>
+
+
+</body></html>
