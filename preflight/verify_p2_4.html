@@ -206,8 +206,9 @@
       var zkOk = !d2.thrown && hasPrefix('zombie_king_idle_anim_f') && hasText('【BOSS】') &&
         Math.abs(imgHeight('zombie_king_idle_anim_f') - 108) < 0.01;
       var d3 = drawFor('dragon');
+      /* D-89：龙重画为原生 72×72，落屏 144（仍是原生 × BOSS_MUL 的整数倍） */
       var drOk = !d3.thrown && hasPrefix('dragon_idle_anim_f') && hasText('【BOSS】') &&
-        Math.abs(imgHeight('dragon_idle_anim_f') - 108) < 0.01;
+        Math.abs(imgHeight('dragon_idle_anim_f') - 144) < 0.01;
       /* 普通怪不加倍：slime 90 高、无【BOSS】前缀 */
       var d4 = drawFor('slime');
       var normalOk = !d4.thrown && hasPrefix('tiny_slug_anim_f') && !hasText('【BOSS】') &&

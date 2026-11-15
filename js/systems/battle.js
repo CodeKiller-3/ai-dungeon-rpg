@@ -268,20 +268,42 @@
     return ev;
   }
 
+  /* D-89：接触点——火花/冲击环的落点，必须在"我方剑锋与对方身体的交界处"。
+   * 敌方：站在上方，玩家从下方上撩，落点取身体下缘偏右（骑士持剑侧）；
+   * 我方：怪物从上方下劈，落点取骑士上缘偏右（盾/肩交界）。 */
+  function contactMonster() {
+    var m = monsterPos();
+    return { x: m.cx + 24, y: m.cy + 30 };
+  }
+  function contactPlayer() {
+    var p = playerPos();
+    return { x: p.cx + 16, y: p.cy - 22 };
+  }
+
   /* D-16：一次命中的表现打包（顿帧/震屏/挤退/局部闪白/斩击弧）——纯视觉，Game.Fx 缺失时静默跳过 */
   function fxHit(who, dmg, opt) {
     var Fx = Game.Fx;
     if (!Fx || typeof Fx.hit !== 'function') return;
     var o = opt || {};
-    var pos = (who === 'monster') ? monsterPos() : playerPos();
+    var contact = (who === 'monster') ? contactMonster() : contactPlayer();
     Fx.hit({
       who: who,
       dir: (who === 'monster') ? -1 : 1,
+      /* D-89：玩家顶出 7px / 怪物退 4px，均在 100/150/180 时钟内回收 */
+      knockPx: (who === 'monster') ? 4 : 7,
       color: o.flash || (who === 'monster' ? '#ffffff' : '#ff6b6b'),
       slash: o.slash === false ? null : {
-        x: pos.cx, y: pos.cy, r: 40,
-        a0: (who === 'monster') ? -1.1 : 1.9,
-        color: o.color || '#ffffff'
+        /* 斩击中心 = 接触点：弧、冲击环、火花三者同点，读起来才是"砍在这里"。
+         * 玩家弧被 keepBelow 438 压在血条下方，敌方弧被 keepAbove 206 压在名称/血条上方。 */
+        x: contact.x,
+        y: contact.y,
+        r: 32,
+        a0: -0.15,
+        dir: (who === 'monster') ? -1 : 1,
+        color: o.color || '#ffffff',
+        keepAbove: (who === 'monster') ? 206 : null,
+        keepBelow: (who === 'player') ? 438 : null,
+        impact: contact
       }
     });
   }
@@ -309,11 +331,14 @@
     }
     fxHit('monster', dmg, { color: o.color, slash: o.slash !== false });
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
-      /* 第三拨 D-88：落点火花——从命中点朝"刀刃来向"反向溅开（向上 + 左右散）。 */
-      Game.Particles.spawn('impact', m.cx, m.cy, {
+      /* 第三拨 D-88：落点火花——从命中点朝"刀刃来向"反向溅开（向上 + 左右散）。
+       * D-89：落点从"怪物中心旁边"改到接触点（剑锋与身体交界，m.cx+24 / m.cy+30），
+       * impact 与 spark 同点起，火花不再飘在身体外侧。 */
+      var ct = contactMonster();
+      Game.Particles.spawn('impact', ct.x, ct.y, {
         count: 11, angle: -0.95, spread: 1.05, color: o.color || '#ffe6a8'
       });
-      Game.Particles.spawn('spark', m.cx, m.cy, o.color ? { count: 6, color: o.color } : { count: 6 });
+      Game.Particles.spawn('spark', ct.x, ct.y, o.color ? { count: 6, color: o.color } : { count: 6 });
     }
   }
   function spawnHurtPlayer(dmg) {
@@ -335,11 +360,13 @@
     }
     fxHit('player', dmg, {});
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
-      /* 玩家被反击：落点火花（D-88） */
-      Game.Particles.spawn('impact', p.cx, p.cy, {
+      /* 玩家被反击：落点火花同样从接触点（骑士上缘偏右）向下/向外溅，配合 Fx 的"顶住 50ms"，
+       * 受击不再只靠数字和战报文字。 */
+      var cp = contactPlayer();
+      Game.Particles.spawn('impact', cp.x, cp.y, {
         count: 11, angle: 0.65, spread: 1.05, color: '#ffd0b0'
       });
-      Game.Particles.spawn('spark', p.cx, p.cy, { count: 5, color: '#ff8888' });
+      Game.Particles.spawn('spark', cp.x, cp.y, { count: 5, color: '#ff8888' });
     }
   }
 
@@ -945,6 +972,8 @@
 
     /* D-16：注入时钟（验证页用；null 还原为 performance.now） */
     _setClock: function (fn) { clock = (typeof fn === 'function') ? fn : null; return clock; },
+    /* D-89：接触点只读出口（验证页据此断言火花/冲击环落在剑锋与身体交界） */
+    _contact: function (who) { return (who === 'monster') ? contactMonster() : contactPlayer(); },
     /* D-51：暂停恢复——把"暂停期间流逝的真实时长"一次性补进偏移量。
      * 恢复后的第一帧 now() 仍等于暂停前的时刻，pending/lockUntil/finalizeAt 的剩余量分毫不动，
      * 因此不会跳帧、不会把怪物段补结算两次，输入锁也照原样继续倒数。 */

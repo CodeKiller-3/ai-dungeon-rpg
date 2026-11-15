@@ -31,8 +31,17 @@
   var clockShift = 0;     /* 顿帧累计偏移；clockNow = 真实时间 - clockShift */
   var lastReal = null;
 
+  /* D-89：受击位移按"接触点保持 50ms → 回收"两段，且必须落在既有战斗时钟内。
+   * 玩家段 0~100ms（顶出 7px，100ms 回收完，正好等于 seg1）；
+   * 怪物段 100~180ms（退 4px，80ms 回收完，正好等于 lock→total）。
+   * 旧口径 9px×1.4=12.6px 的阻尼余弦在 160ms 后才归零，既超出窗口又读不出"被顶住"的接触感。 */
+  var KNOCK = {
+    player: { px: 7, ms: 100, hold: 50 },
+    monster: { px: 4, ms: 80, hold: 50 }
+  };
+
   var shake = null;                          /* { amp, ms, t0 } */
-  var knock = { monster: null, player: null }; /* { px, ms, t0, dir } */
+  var knock = { monster: null, player: null }; /* { px, ms, t0, dir, who } */
   var flashes = [];                          /* { who, alpha, ms, t0, color } */
   var slashes = [];                          /* { x, y, r, a0, dir, color, ms, t0, alpha } */
   var rings = [];                            /* 第三拨 D-88：落点冲击环 { x, y, ms, t0, r0, r1, color } */
@@ -79,8 +88,13 @@
       var t = fxNow();
       if (P.hitStop > 0) freezeLeft = Math.max(freezeLeft, P.hitStop);
       if (P.shake > 0) shake = { amp: P.shake, ms: 180, t0: t };
-      if (P.knock > 0 && o.who && knock[o.who]) {
-        knock[o.who] = { px: P.knock, ms: 160, t0: t, dir: (o.dir === -1 ? -1 : 1) };
+      if (P.knock > 0 && (o.who === 'player' || o.who === 'monster')) {
+        var kd = KNOCK[o.who];
+        knock[o.who] = {
+          px: (typeof o.knockPx === 'number') ? o.knockPx : kd.px,
+          ms: (typeof o.knockMs === 'number') ? o.knockMs : kd.ms,
+          hold: kd.hold, t0: t, dir: (o.dir === -1 ? -1 : 1), who: o.who
+        };
       }
       if (P.flash > 0 && o.who) {
         flashes.push({
@@ -94,12 +108,18 @@
         slashes.push({
           x: o.slash.x, y: o.slash.y, r: o.slash.r || 40, a0: o.slash.a0 || -0.9,
           dir: (o.slash.dir === 1 ? 1 : -1), color: o.slash.color || '#ffffff',
-          ms: 200, t0: t, alpha: P.slash
+          ms: 200, t0: t, alpha: P.slash,
+          /* D-89：血条保护线——斩击弧一律裁在 keepBelow 以下 / keepAbove 以上。
+           * 几何上已经把玩家弧压在 456 以下、怪物弧压在 202 以上，这里是硬兜底。 */
+          keepBelow: (typeof o.slash.keepBelow === 'number') ? o.slash.keepBelow : null,
+          keepAbove: (typeof o.slash.keepAbove === 'number') ? o.slash.keepAbove : null
         });
         if (slashes.length > 4) slashes.shift();
-        /* 落点冲击环：和斩击同时起，180ms 扩到 44px 后消失（纯视觉，不参与计时） */
+        /* 落点冲击环：和斩击同时起，180ms 扩到 44px 后消失（纯视觉，不参与计时）
+         * D-89：环心改用 impact（剑锋与身体的交界点），不再跟斩击中心混用。 */
+        var ip = o.slash.impact || { x: o.slash.x, y: o.slash.y };
         rings.push({
-          x: o.slash.x, y: o.slash.y, ms: 180, t0: t, r0: 6, r1: 44,
+          x: ip.x, y: ip.y, ms: 180, t0: t, r0: 6, r1: 44,
           color: o.slash.color || '#ffffff'
         });
         if (rings.length > 4) rings.shift();
@@ -146,13 +166,24 @@
       return { x: Math.round(Math.sin(t * 0.09) * a), y: Math.round(Math.cos(t * 0.13) * a * 0.6) };
     },
 
-    /* 受击位移偏移（px） */
+    /* 受击位移偏移（px）。D-89：接触点先保持 50ms（撞击的"顶住"），再平滑回收；
+     * 玩家 100ms、怪物 80ms 内归零，全部落在 100/150/180 战斗时钟内，不产生慢动作。 */
     knockOffset: function (who) {
       var e = knock[who];
       if (!e) return 0;
       var t = fxNow() - e.t0;
       if (t >= e.ms) { knock[who] = null; return 0; }
-      return e.dir * e.px * (1 - t / e.ms);
+      if (t <= e.hold) return e.dir * e.px;
+      var r = (t - e.hold) / Math.max(1, e.ms - e.hold);
+      if (r > 1) r = 1;
+      var ease = 1 - r * r * (3 - 2 * r);
+      return e.dir * e.px * ease;
+    },
+
+    /* D-89：验证页读取当前位移账（不做任何状态变更） */
+    knockState: function (who) {
+      var e = knock[who];
+      return e ? { px: e.px, ms: e.ms, hold: e.hold, dir: e.dir, t0: e.t0, who: e.who } : null;
     },
 
     /* 当前局部闪白（返回最强的一条；单次命中只闪一次） */
@@ -190,6 +221,18 @@
         var Wd = s.r * 0.40;
         var grow = 0.86 + k * 0.30;
         ctx.save();
+        /* D-89：血条保护裁切（玩家弧只允许在 keepBelow 以下，怪物弧只允许在 keepAbove 以上） */
+        if (s.keepBelow !== null || s.keepAbove !== null) {
+          ctx.beginPath();
+          if (s.keepBelow !== null) {
+            ctx.rect(-9999, s.keepBelow, 99999, 99999);
+            ctx.clip();
+          }
+          if (s.keepAbove !== null) {
+            ctx.rect(-9999, -9999, 99999, s.keepAbove + 9999);
+            ctx.clip();
+          }
+        }
         ctx.translate(s.x, s.y);
         ctx.rotate(rot);
         ctx.lineCap = 'round';
@@ -268,7 +311,10 @@
         rings: rings.length,
         slashDirs: slashes.map(function (s) { return s.dir; }),
         slashAlpha: slashes.length ? slashes[0].alpha : 0,
-        ringPos: rings.length ? { x: rings[0].x, y: rings[0].y } : null
+        ringPos: rings.length ? { x: rings[0].x, y: rings[0].y } : null,
+        slashPos: slashes.length ? { x: slashes[0].x, y: slashes[0].y, keepBelow: slashes[0].keepBelow, keepAbove: slashes[0].keepAbove } : null,
+        knock: { player: knock.player ? { px: knock.player.px, ms: knock.player.ms, hold: knock.player.hold } : null,
+                 monster: knock.monster ? { px: knock.monster.px, ms: knock.monster.ms, hold: knock.monster.hold } : null }
       };
     }
   };

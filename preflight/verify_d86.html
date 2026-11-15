@@ -28,7 +28,7 @@
   var BOSSES = [
     { id: 'ogre_boss', floor: 2, w: 48, h: 54, old: 'ogre_idle', oldNote: '旧：ogre_idle（食人魔）' },
     { id: 'zombie_king', floor: 4, w: 48, h: 54, old: 'big_zombie_idle', oldNote: '旧：big_zombie_idle（大僵尸）' },
-    { id: 'dragon', floor: 5, w: 64, h: 54, old: 'big_demon_idle', oldNote: '旧：big_demon_idle（大恶魔）' }
+    { id: 'dragon', floor: 5, w: 72, h: 72, old: 'big_demon_idle', oldNote: '旧：big_demon_idle（大恶魔）' }
   ];
   var STATES = ['idle', 'attack', 'hurt'];
   var FRAMES = 4;
@@ -132,7 +132,8 @@
           }
           var bb = bboxOf(imageData(fr.img));
           if (!bb) a1bad.push(fr.name + ':empty');
-          else if (bb.b < 52 || bb.b > 53) a1bad.push(fr.name + ':bboxBottom=' + bb.b);
+          /* D-89：龙改为原生 72×72，脚底仍贴原生画布底（距底 1~2px），口径不放松 */
+          else if (bb.b < b.h - 2 || bb.b > b.h - 1) a1bad.push(fr.name + ':bboxBottom=' + bb.b + '(want ' + (b.h - 2) + '~' + (b.h - 1) + ')');
         });
         row.states[st] = got;
       });

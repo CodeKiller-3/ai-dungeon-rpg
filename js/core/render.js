@@ -195,6 +195,26 @@
     ctx.restore();
   }
 
+  /* D-89：接触阴影——角色/怪物脚下一小块贴地暗面，五层统一。
+   * 与 D-35 的地图投影分开：战场版更宽更扁（rx≈屏宽的 38%），且始终画在"脚下地面线"上，
+   * 精灵被击退/上浮时阴影不跟着走，读起来才是"人在地面上"而不是贴纸。 */
+  function contactShadow(ctx, cx, groundY, w, alpha) {
+    var rx = Math.max(8, Math.round((w || 90) * 0.58));
+    var ry = Math.max(3, Math.round(rx * 0.13));
+    ctx.save();
+    /* 外圈一点点环境反光：纯黑地面（站台带）上也能看出"这里有一块地面" */
+    ctx.fillStyle = 'rgba(210,215,255,0.055)';
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY + 1, Math.round(rx * 1.22), Math.max(3, Math.round(ry * 1.5)), 0, 0, Math.PI * 2);
+    ctx.fill();
+    /* 贴地暗面：借精灵压住地面的那一小块 */
+    ctx.fillStyle = 'rgba(0,0,0,' + (typeof alpha === 'number' ? alpha : 0.62) + ')';
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   /* D-16：战斗血条（敌方/我方同款）——带数值标签，文字 11px（不低于 HUD 最小字号） */
   function battleBar(ctx, cx, y, ratio, color, bgColor, label) {
     var W = (Game.Core && Game.Core.Render && Game.Core.Render.cssW) || 960;
@@ -1917,6 +1937,13 @@
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-16：震屏只作用于战场精灵，不动文字与 HUD */
       var mW = 90;
+      /* D-89：接触阴影钉在敌方站台线（ey 不加击退/前摇），先画在地面再画精灵 */
+      var mShadowW = mW;
+      if (sp2) {
+        var snw = sp2.naturalWidth || 90, snh = sp2.naturalHeight || 90;
+        mShadowW = snh > 0 ? Math.round(snw * mBaseH / snh) : 90;
+      }
+      contactShadow(ctx, ex + 45, 180, mShadowW, dying ? 0.62 * (1 - dieProg) : 0.62);
       if (dying) {
         /* M9-3：死亡消散——渐隐 + 上浮 + 缩小 */
         ctx.globalAlpha = 1 - dieProg;
@@ -2038,6 +2065,13 @@
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
       var pW = 90;
+      /* D-89：玩家接触阴影钉在 H-100 地面线（不随击退/前摇移动）；宽度按精灵实宽取 */
+      var pShadowW = 90;
+      if (psp) {
+        var pnw = psp.naturalWidth || 90, pnh = psp.naturalHeight || 90;
+        pShadowW = pnh > 0 ? Math.round(pnw * 90 / pnh) : 90;
+      }
+      contactShadow(ctx, px + 45, H - 100, pShadowW, 0.62);
       if (psp) {
         pW = drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
       } else {

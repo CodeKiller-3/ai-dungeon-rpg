@@ -349,9 +349,10 @@
 
     /* ═══ F) 交付物 ══════════════════════════════════════════════ */
     var pb = readJson('selfcheck/page-baseline.json');
-    rec('F1_page_baseline', !!pb && pb.count === 118 && pb.pages.indexOf('verify_d78') >= 0 &&
-      pb.pages.indexOf('verify_d85') >= 0 && pb.pages.indexOf('verify_d88') >= 0, {
-      rule: 'page-baseline.json 计数 114→115→116→117→118（M3-A verify_d85、D-86 verify_d86、D-87 verify_d87、D-88 verify_d88），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d88',
+    rec('F1_page_baseline', !!pb && pb.count === 119 && pb.pages.indexOf('verify_d78') >= 0 &&
+      pb.pages.indexOf('verify_d85') >= 0 && pb.pages.indexOf('verify_d88') >= 0 &&
+      pb.pages.indexOf('verify_d89') >= 0, {
+      rule: 'page-baseline.json 计数 115→116→117→118→119（M3-A verify_d85、D-86 verify_d86、D-87 verify_d87、D-88 verify_d88、D-89 verify_d89），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d88 / verify_d89',
       count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d78') >= 0
     });
     var doc = readText('../docs/特效居中-D-78.md');

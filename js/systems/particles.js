@@ -194,6 +194,13 @@
       return particles.length;
     },
 
+    /* D-89：只读快照（验证页断言火花落点用；不改任何状态） */
+    _list: function () {
+      return particles.map(function (p) {
+        return { kind: p.kind, x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, alpha: p.alpha };
+      });
+    },
+
     /* 清空所有粒子（换场景/重置时调用） */
     clear: function () {
       particles = [];
