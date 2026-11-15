@@ -189,7 +189,8 @@
       sub.t5_enrage = t5ok;
       ok = ok && t5ok;
 
-      /* t6_battleDraw：三 Boss 落对应大图帧 + 【BOSS】前缀 + 放大 1.25 倍（高 112.5） */
+      /* t6_battleDraw：三 Boss 落各自专属剪影帧 + 【BOSS】前缀 + 原生高 × 2（108px 整数倍）
+       * D-86：Boss 不再复用 ogre / big_zombie / big_demon 的杂兵帧，也不再是 90×1.25=112.5。 */
       function drawFor(id) {
         B.start(id);
         var st = B.getState();
@@ -199,14 +200,14 @@
         return { thrown: thrown, imgs: imgs.slice(), texts: texts.slice() };
       }
       var d1 = drawFor('ogre_boss');
-      var ogreOk = !d1.thrown && hasPrefix('ogre_idle_anim_f') && hasText('【BOSS】') &&
-        Math.abs(imgHeight('ogre_idle_anim_f') - 112.5) < 0.01;
+      var ogreOk = !d1.thrown && hasPrefix('ogre_boss_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('ogre_boss_idle_anim_f') - 108) < 0.01;
       var d2 = drawFor('zombie_king');
-      var zkOk = !d2.thrown && hasPrefix('big_zombie_idle_anim_f') && hasText('【BOSS】') &&
-        Math.abs(imgHeight('big_zombie_idle_anim_f') - 112.5) < 0.01;
+      var zkOk = !d2.thrown && hasPrefix('zombie_king_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('zombie_king_idle_anim_f') - 108) < 0.01;
       var d3 = drawFor('dragon');
-      var drOk = !d3.thrown && hasPrefix('big_demon_idle_anim_f') && hasText('【BOSS】') &&
-        Math.abs(imgHeight('big_demon_idle_anim_f') - 112.5) < 0.01;
+      var drOk = !d3.thrown && hasPrefix('dragon_idle_anim_f') && hasText('【BOSS】') &&
+        Math.abs(imgHeight('dragon_idle_anim_f') - 108) < 0.01;
       /* 普通怪不加倍：slime 90 高、无【BOSS】前缀 */
       var d4 = drawFor('slime');
       var normalOk = !d4.thrown && hasPrefix('tiny_slug_anim_f') && !hasText('【BOSS】') &&

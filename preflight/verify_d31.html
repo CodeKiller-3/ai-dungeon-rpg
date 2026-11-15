@@ -172,10 +172,10 @@
   var nb = spritesJs.slice(spritesJs.indexOf('var NAMES ='), spritesJs.indexOf('];', spritesJs.indexOf('var NAMES =')));
   var namesCount = (nb.match(/'[a-z0-9_]+'/g) || []).length;
   var declared = (/共\s*\*\*(\d+)\s*个\s*PNG\*\*/.exec(TXT.sprites) || [])[1];
-  /* D-79 口径更新：素材 207 → 303（新增 96 张主题地块/装饰）。判据不变——LICENSE 声明、
-   * 磁盘审计、NAMES 注册三方必须**完全相等**，且许可字样仍在。 */
-  var a4 = !!TXT.sprites && declared === '303' && !!audit && audit.total === 303 &&
-    namesCount === 303 && TXT.sprites.indexOf('CC0') >= 0 && TXT.sprites.indexOf('MIT') >= 0;
+  /* D-79 口径更新：素材 207 → 303（新增 96 张主题地块/装饰）；D-86 → 339（三只 Boss 专属剪影 36 张）。
+   * 判据不变——LICENSE 声明、磁盘审计、NAMES 注册三方必须**完全相等**，且许可字样仍在。 */
+  var a4 = !!TXT.sprites && declared === '339' && !!audit && audit.total === 339 &&
+    namesCount === 339 && TXT.sprites.indexOf('CC0') >= 0 && TXT.sprites.indexOf('MIT') >= 0;
   rec('A4_spriteLicenseCountMatches', a4,
     'LICENSE.md 声明=' + declared + '；审计（磁盘实测）=' + (audit ? audit.total : 'n/a') +
     '；NAMES 注册=' + namesCount + '；许可字样 CC0=' + (TXT.sprites.indexOf('CC0') >= 0) +

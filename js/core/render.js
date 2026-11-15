@@ -352,7 +352,7 @@
     slime: { idle: 'tiny_slug', run: 'tiny_slug' },
     bat: { idle: 'imp_idle', run: 'imp_run' },
     skeleton: { idle: 'skelet_idle', run: 'skelet_run' },
-    dragon: { idle: 'big_demon_idle', run: 'big_demon_run' },
+    dragon: { idle: 'dragon_idle', run: 'dragon_idle', attack: 'dragon_attack', hurt: 'dragon_hurt' },
     goblin: { idle: 'goblin_idle', run: 'goblin_run' },
     tiny_zombie: { idle: 'tiny_zombie_idle', run: 'tiny_zombie_run' },
     orc_warrior: { idle: 'orc_warrior_idle', run: 'orc_warrior_run' },
@@ -366,18 +366,21 @@
     masked_orc: { idle: 'masked_orc_idle', run: 'masked_orc_run' },
     pumpkin_dude: { idle: 'pumpkin_dude_idle', run: 'pumpkin_dude_run' },
     angel: { idle: 'angel_idle', run: 'angel_idle' },
-    /* P2-4：层 Boss 复用既有大图帧组（素材零新增） */
-    ogre_boss: { idle: 'ogre_idle', run: 'ogre_run' },
-    zombie_king: { idle: 'big_zombie_idle', run: 'big_zombie_idle' }
+    /* P2-4：层 Boss 复用既有大图帧组（素材零新增）
+     * 第二拨：三只 Boss 改为专属剪影三态帧组（idle/attack/hurt），不再复用杂兵放大；
+     * run 与 idle 共用（Boss 在战场层不跑动，仅地图层取 idle）。 */
+    ogre_boss: { idle: 'ogre_boss_idle', run: 'ogre_boss_idle', attack: 'ogre_boss_attack', hurt: 'ogre_boss_hurt' },
+    zombie_king: { idle: 'zombie_king_idle', run: 'zombie_king_idle', attack: 'zombie_king_attack', hurt: 'zombie_king_hurt' }
   };
 
-  /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退） */
-  function monsterFrame(id, chasing) {
+  /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退）。
+   * 第二拨：第三参 mode = 'attack' | 'hurt' 时优先取专属态；未登记该态则回退 idle/run。 */
+  function monsterFrame(id, chasing, mode) {
     var set = MONSTER_ANIM[id];
     if (!set) return null;
     var S = Game.Core && Game.Core.Sprites;
     if (!S || typeof S.getFrame !== 'function') return null;
-    var name = chasing ? set.run : set.idle;
+    var name = (mode && set[mode]) ? set[mode] : (chasing ? set.run : set.idle);
     return S.getFrame(name, animIndex(name, 4));
   }
 
@@ -497,6 +500,12 @@
     },
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
     MONSTER_ANIM: MONSTER_ANIM,  /* P2-1：怪物 id → {idle,run} 帧组（验证/调试可读，运行时只读） */
+    /* 第二拨：Boss 落屏高度口径（原生高 × 2，整数倍），验证页与 drawBattle 共用同一公式 */
+    BOSS_MUL: 2,
+    bossDrawHeight: function (img) {
+      var nh = img && (img.naturalHeight || 0);
+      return nh > 0 ? nh * 2 : 108;
+    },
     /* M9-5：DPR 高清适配——逻辑坐标统一用 CSS 像素，物理像素 = CSS * dpr */
     dpr: 1,
     scale: 1,      /* 自适应缩放系数：逻辑像素 → CSS 像素 */
@@ -1433,12 +1442,26 @@
       /* P2-4：Boss 判定读 MONSTERS[id].boss */
       var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[monster.id] &&
         Game.Data.MONSTERS[monster.id].boss);
-      var bossScale = isBoss ? 1.25 : 1;
+      /* 第二拨：Boss 落屏高度 = 素材原生高 × 2（整数倍硬线，24 基素材 → 108px）。
+       * 旧口径 90×1.25=112.5px 既非整数倍，又让 Boss 沦为"杂兵放大 1.25 倍"。 */
+      var BOSS_MUL = 2;
+      /* 三态取帧：受击闪白帧优先，其次怪物出手窗口（与 _attackOffset 同 320ms 口径） */
+      var mMode = '';
+      if (!dying && Fx && typeof Fx.flashOf === 'function') {
+        var mfl = Fx.flashOf('monster');
+        if (mfl && mfl.alpha > 0.01) mMode = 'hurt';
+      }
+      if (!mMode && !dying && state.monsterActionAt && (now - state.monsterActionAt) < 320) mMode = 'attack';
       var shake = (Fx && typeof Fx.shakeOffset === 'function') ? Fx.shakeOffset() : { x: 0, y: 0 };
       var sp2 = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
-        sp2 = monsterFrame(monster.id, false);
+        sp2 = monsterFrame(monster.id, false, mMode);
         if (!sp2) sp2 = Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort');
+      }
+      var mBaseH = 90;
+      if (sp2 && isBoss) {
+        var nhB = sp2.naturalHeight || 0;
+        mBaseH = nhB > 0 ? nhB * BOSS_MUL : 108;
       }
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-16：震屏只作用于战场精灵，不动文字与 HUD */
@@ -1451,7 +1474,7 @@
         var mDrawX = ex + (90 - mSize) / 2;
         var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
         if (sp2) {
-          var dmSize = mSize * bossScale;
+          var dmSize = mBaseH * mScale;
           mW = drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, dmSize);
         } else {
           ctx.fillStyle = monster.color || '#888';
@@ -1459,7 +1482,7 @@
         }
       } else {
         if (sp2) {
-          mW = drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, 90 * bossScale);
+          mW = drawSpriteByHeight(ctx, sp2, ex + 45, ey + 90, mBaseH);
         } else {
           ctx.fillStyle = monster.color || '#888';
           ctx.fillRect(ex, ey, 90, 90);
@@ -1471,9 +1494,9 @@
       if (!dying && Fx && typeof Fx.flashOf === 'function') {
         var fl = Fx.flashOf('monster');
         if (fl && fl.alpha > 0.01) {
-          if (sp2 && !tintSprite(ctx, sp2, ex + 45, ey + 90, 90 * bossScale, '#ffffff', fl.alpha)) {
+          if (sp2 && !tintSprite(ctx, sp2, ex + 45, ey + 90, mBaseH, '#ffffff', fl.alpha)) {
             ctx.fillStyle = 'rgba(255,255,255,' + fl.alpha.toFixed(3) + ')';
-            ctx.fillRect(CX - mW / 2, ey + 90 - 90 * bossScale, mW, 90 * bossScale);
+            ctx.fillRect(CX - mW / 2, ey + 90 - mBaseH, mW, mBaseH);
           }
         }
       }

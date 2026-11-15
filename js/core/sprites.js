@@ -78,6 +78,18 @@
     'wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3',
     'ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3',
     'ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3',
+    /* 第二拨：三只 Boss 专属剪影（24 基原生，三态各 4 帧；不再复用杂兵放大）
+     * 巨龙 64×54（长颈/长吻/双角/双翼/卷尾/三爪）、独眼酋长 48×54（单眼/獠牙/尖刺肩甲/巨斧）、
+     * 僵尸王 48×54（三尖王冠/披风/露肋/权杖）。落屏高度 = 原生高 × 2（整数倍，见 render.js BOSS_MUL）。 */
+    'dragon_idle_anim_f0', 'dragon_idle_anim_f1', 'dragon_idle_anim_f2', 'dragon_idle_anim_f3',
+    'dragon_attack_anim_f0', 'dragon_attack_anim_f1', 'dragon_attack_anim_f2', 'dragon_attack_anim_f3',
+    'dragon_hurt_anim_f0', 'dragon_hurt_anim_f1', 'dragon_hurt_anim_f2', 'dragon_hurt_anim_f3',
+    'ogre_boss_idle_anim_f0', 'ogre_boss_idle_anim_f1', 'ogre_boss_idle_anim_f2', 'ogre_boss_idle_anim_f3',
+    'ogre_boss_attack_anim_f0', 'ogre_boss_attack_anim_f1', 'ogre_boss_attack_anim_f2', 'ogre_boss_attack_anim_f3',
+    'ogre_boss_hurt_anim_f0', 'ogre_boss_hurt_anim_f1', 'ogre_boss_hurt_anim_f2', 'ogre_boss_hurt_anim_f3',
+    'zombie_king_idle_anim_f0', 'zombie_king_idle_anim_f1', 'zombie_king_idle_anim_f2', 'zombie_king_idle_anim_f3',
+    'zombie_king_attack_anim_f0', 'zombie_king_attack_anim_f1', 'zombie_king_attack_anim_f2', 'zombie_king_attack_anim_f3',
+    'zombie_king_hurt_anim_f0', 'zombie_king_hurt_anim_f1', 'zombie_king_hurt_anim_f2', 'zombie_king_hurt_anim_f3',
     /* P2-3：F4/F5 主题怪——big_zombie 32×36 单态 4 帧、necromancer 16×23 单态 4 帧、
      * masked_orc/pumpkin_dude 双态各 8 帧、angel 16×16 单态 4 帧 */
     'big_zombie_idle_anim_f0', 'big_zombie_idle_anim_f1', 'big_zombie_idle_anim_f2', 'big_zombie_idle_anim_f3',
@@ -133,6 +145,16 @@
     wogol_run: ['wogol_run_anim_f0', 'wogol_run_anim_f1', 'wogol_run_anim_f2', 'wogol_run_anim_f3'],
     ogre_idle: ['ogre_idle_anim_f0', 'ogre_idle_anim_f1', 'ogre_idle_anim_f2', 'ogre_idle_anim_f3'],
     ogre_run: ['ogre_run_anim_f0', 'ogre_run_anim_f1', 'ogre_run_anim_f2', 'ogre_run_anim_f3'],
+    /* 第二拨：三只 Boss 专属剪影的三态帧组 */
+    dragon_idle: ['dragon_idle_anim_f0', 'dragon_idle_anim_f1', 'dragon_idle_anim_f2', 'dragon_idle_anim_f3'],
+    dragon_attack: ['dragon_attack_anim_f0', 'dragon_attack_anim_f1', 'dragon_attack_anim_f2', 'dragon_attack_anim_f3'],
+    dragon_hurt: ['dragon_hurt_anim_f0', 'dragon_hurt_anim_f1', 'dragon_hurt_anim_f2', 'dragon_hurt_anim_f3'],
+    ogre_boss_idle: ['ogre_boss_idle_anim_f0', 'ogre_boss_idle_anim_f1', 'ogre_boss_idle_anim_f2', 'ogre_boss_idle_anim_f3'],
+    ogre_boss_attack: ['ogre_boss_attack_anim_f0', 'ogre_boss_attack_anim_f1', 'ogre_boss_attack_anim_f2', 'ogre_boss_attack_anim_f3'],
+    ogre_boss_hurt: ['ogre_boss_hurt_anim_f0', 'ogre_boss_hurt_anim_f1', 'ogre_boss_hurt_anim_f2', 'ogre_boss_hurt_anim_f3'],
+    zombie_king_idle: ['zombie_king_idle_anim_f0', 'zombie_king_idle_anim_f1', 'zombie_king_idle_anim_f2', 'zombie_king_idle_anim_f3'],
+    zombie_king_attack: ['zombie_king_attack_anim_f0', 'zombie_king_attack_anim_f1', 'zombie_king_attack_anim_f2', 'zombie_king_attack_anim_f3'],
+    zombie_king_hurt: ['zombie_king_hurt_anim_f0', 'zombie_king_hurt_anim_f1', 'zombie_king_hurt_anim_f2', 'zombie_king_hurt_anim_f3'],
     /* P2-3：F4/F5 主题怪帧组（big_zombie/necromancer/angel 单态：idle 与 run 共用同一组） */
     big_zombie_idle: ['big_zombie_idle_anim_f0', 'big_zombie_idle_anim_f1', 'big_zombie_idle_anim_f2', 'big_zombie_idle_anim_f3'],
     necromancer: ['necromancer_anim_f0', 'necromancer_anim_f1', 'necromancer_anim_f2', 'necromancer_anim_f3'],
@@ -193,7 +215,7 @@
       /* D-80：角色/怪物帧按 24 基原生重画——原生高即当前屏幕绘制高（玩家 24×42、小怪 24×24）
        * 15 组怪物全部覆盖：漏掉任意一组都会让 24 基素材按 16 基放大 1.5 倍（落屏尺寸变大），
        * verify_d80 A9 逐组钉死 base=24 与 unitBox=原生尺寸。 */
-      if (/^(knight_m_|tiny_slug_|imp_|goblin_|tiny_zombie_|angel_|skelet_|orc_warrior_|orc_shaman_|wogol_|necromancer_|masked_orc_|pumpkin_dude_|ogre_|big_demon_|big_zombie_)/.test(name)) return 24;
+      if (/^(knight_m_|tiny_slug_|imp_|goblin_|tiny_zombie_|angel_|skelet_|orc_warrior_|orc_shaman_|wogol_|necromancer_|masked_orc_|pumpkin_dude_|ogre_|big_demon_|big_zombie_|dragon_|zombie_king_)/.test(name)) return 24;
       /* D-80 裁定 B：道具/UI 图标全部 24×24 原生 1:1（背包行 / 商店行 / HUD 一律按原生尺寸绘制） */
       if (/^(weapon_|icon_armor_|icon_scroll_|flask_|flask_big_|ui_heart_|coin$|button_)/.test(name)) return 24;
       return 16;

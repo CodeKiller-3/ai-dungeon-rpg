@@ -1,4 +1,4 @@
-# 地牢：我独自升级：像素冒险RPG小游戏
+﻿# 地牢：我独自升级：像素冒险RPG小游戏
 
 > 《人工智能基础》课程大作业 · 组件化拼装的 AI 冒险 RPG
 >
@@ -71,7 +71,7 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 303 张、验证页 115 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 物品 48 件、素材 339 张、验证页 116 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
 
 ## 技术栈
 
@@ -108,7 +108,7 @@ ai-dungeon-rpg/
 ├── js/data/              # 地图 / 怪物 / 物品（含 ITEM_ICONS 图标映射）/ 任务 / 对话 / 配置
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
-├── assets/sprites/       # 303 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
+├── assets/sprites/       # 339 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
 ├── preflight/            # 113 个 headless 验证页（M1 至今）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图：preflight/artifacts/d74/ 为 D-74 对外图 10 张（含 1920×1080）；d73/ 9 张、d61/ 8 张为历史；shots_resize/ 12 张响应式；D-35 8× 对照
@@ -135,7 +135,7 @@ ai-dungeon-rpg/
 | 音频引擎 | goldfire/howler.js（MIT） | MIT | **直接引入** `js/vendor/howler.min.js`（原始文件，未修改） |
 | Q-learning 算法 | 开源教学实现（Grid-World-RL 等） | 教学性质 | 参考算法，在真实游戏网格上自写落地 |
 | 大模型 NPC 对话 | DeepSeek API | 官方 API | fetch 在线对话 + 离线规则兜底 |
-| 像素美术 | **GitHub：fernandovmp/kni-dungeon（美术源自 0x72 CC0 像素包）** | MIT / CC0 | `assets/sprites/` 落盘 207 个 PNG，`js/core/sprites.js` 的 NAMES 注册 207 个，两个数一一对应、0 缺失（自检 AS-01/AS-02 逐文件核对）；其中 9 张为 D-30 背包图标（护甲 5 类 + 强化卷轴 4 档，与既有 198 张同属 60 色调色板）；地板 atlas 因 LFS 网络受限暂用自绘砖纹，其余界面自绘（Canvas 色块） |
+| 像素美术 | **GitHub：fernandovmp/kni-dungeon（美术源自 0x72 CC0 像素包）** | MIT / CC0 | `assets/sprites/` 落盘 339 个 PNG，`js/core/sprites.js` 的 NAMES 注册 339 个，两个数一一对应、0 缺失（自检 AS-01/AS-02 逐文件核对）；其中 9 张为 D-30 背包图标、96 张为 D-79 主题地块/装饰、36 张为 D-86 三只 Boss 专属剪影（均有 84 色调色板内自绘），地板 atlas 因 LFS 网络受限暂用自绘砖纹，其余界面自绘（Canvas 色块） |
 | 程序化音效 | Web Audio API 合成 | — | 零素材依赖，离线可玩 |
 
 详细开发规划见 [PLAN.md](PLAN.md)。

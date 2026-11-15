@@ -58,7 +58,7 @@
 (function () {
   'use strict';
   var q = String(location.search || '');
-  var view = (q.match(/view=(explore-f[1-5]|battle-f[1-5]|hit-f1)/) || [])[1] || 'battle-f1';
+  var view = (q.match(/view=(explore-f[1-5]|battle-f[1-5]|boss-f[245]|hit-f1)/) || [])[1] || 'battle-f1';
   var M = Game.Core.Main;
   var P = Game.Data.Player;
   var Map = Game.Systems.Map;
@@ -126,6 +126,8 @@
   }
 
   var MON = { 1: 'slime', 2: 'orc_warrior', 3: 'wogol', 4: 'big_zombie', 5: 'angel' };
+  /* D-86：boss-f2/f4/f5 直接开对应层的层 Boss（巨龙 / 独眼酋长 / 僵尸王） */
+  var BOSS = { 2: 'ogre_boss', 4: 'zombie_king', 5: 'dragon' };
 
   function enterFloor(n) {
     localStorage.setItem('aiDungeon_guided', '1');
@@ -141,7 +143,7 @@
   }
 
   try {
-    var m = view.match(/^(explore|battle|hit)-f([1-5])$/);
+    var m = view.match(/^(explore|battle|boss|hit)-f([1-5])$/);
     var kind = m ? m[1] : 'battle';
     var floorNo = m ? parseInt(m[2], 10) : 1;
 
@@ -178,7 +180,7 @@
     }
 
     enterFloor(floorNo);
-    B.start(MON[floorNo]);
+    B.start(kind === 'boss' ? BOSS[floorNo] : MON[floorNo]);
     M.switchScene('battle');
     M.start();
 

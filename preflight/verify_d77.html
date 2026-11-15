@@ -509,8 +509,8 @@
 
     /* ═══ E) 页数基线 ═════════════════════════════════════════ */
     var pb2 = readJson('selfcheck/page-baseline.json');
-    rec('E1_page_baseline', !!pb2 && pb2.count === 115,
-      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（M3-A 新增 verify_d85 后应为 115）');
+    rec('E1_page_baseline', !!pb2 && pb2.count === 116,
+      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-86 新增 verify_d86 后应为 116）');
     out.ms = Date.now() - START;
   } catch (e) {
     out.err = String(e && (e.stack || e.message) || e);

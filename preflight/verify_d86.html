@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d86</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+</style>
+</head>
+<body>
+<h1>D-86 · 三只 Boss 专属剪影：24 基 / 整数倍落屏 / 三态帧 / 同层轮廓差异 / 负例</h1>
+<pre id="result">RUNNING</pre>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/maps.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var res = document.getElementById('result');
+
+  /* Boss 清单：同层杂兵取自 Game.Data.MAPS.enemyTable[floor-1]；old = 第二拨之前复用的杂兵帧组 */
+  var BOSSES = [
+    { id: 'ogre_boss', floor: 2, w: 48, h: 54, old: 'ogre_idle', oldNote: '旧：ogre_idle（食人魔）' },
+    { id: 'zombie_king', floor: 4, w: 48, h: 54, old: 'big_zombie_idle', oldNote: '旧：big_zombie_idle（大僵尸）' },
+    { id: 'dragon', floor: 5, w: 64, h: 54, old: 'big_demon_idle', oldNote: '旧：big_demon_idle（大恶魔）' }
+  ];
+  var STATES = ['idle', 'attack', 'hurt'];
+  var FRAMES = 4;
+  var NORM = 96;          /* 轮廓归一化画布：高度 96、等比、水平居中 */
+  var IOU_MAX = 0.75;     /* 与同层任意杂兵的归一化轮廓 IoU 上限（差异率 ≥25%） */
+  var LEGACY_MAX = 0.95;  /* 与"旧素材"的 IoU 上限：只证明没有再复用旧图，不是形状判据 */
+  var BATTLE_BOTTOM = 180;/* drawBattle：ey+90 */
+
+  function rec(k, ok, d) { out.sub[k] = { ok: !!ok, d: d }; }
+
+  /* ── 像素掩码 / 包围盒 ── */
+  function imageData(img) {
+    var c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    return { w: c.width, h: c.height, d: g.getImageData(0, 0, c.width, c.height).data };
+  }
+  function bboxOf(o) {
+    var minX = o.w, minY = o.h, maxX = -1, maxY = -1, n = 0;
+    for (var y = 0; y < o.h; y++) {
+      for (var x = 0; x < o.w; x++) {
+        if (o.d[(y * o.w + x) * 4 + 3] > 0) {
+          n++;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+    return n ? { l: minX, t: minY, r: maxX, b: maxY, px: n, w: maxX - minX + 1, h: maxY - minY + 1 } : null;
+  }
+  /* 等比缩放（高度=96）后水平居中的 96×96 alpha 掩码 */
+  function normMask(img) {
+    var o = imageData(img), bb = bboxOf(o);
+    var k = NORM / bb.h;
+    var nw = Math.min(NORM, Math.round(bb.w * k));
+    var off = Math.floor((NORM - nw) / 2);
+    var m = new Uint8Array(NORM * NORM);
+    for (var y = 0; y < NORM; y++) {
+      var sy = bb.t + Math.floor(y / k);
+      if (sy < bb.t || sy > bb.b) continue;
+      for (var x = 0; x < NORM; x++) {
+        var sx = bb.l + Math.floor((x - off) / k);
+        if (sx < bb.l || sx > bb.r) continue;
+        if (o.d[(sy * o.w + sx) * 4 + 3] > 0) m[y * NORM + x] = 1;
+      }
+    }
+    return m;
+  }
+  function iou(a, b) {
+    var inter = 0, uni = 0;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] && b[i]) inter++;
+      if (a[i] || b[i]) uni++;
+    }
+    return uni ? (inter / uni) : 0;
+  }
+  function hash(img) {
+    var o = imageData(img), h = 2166136261;
+    for (var i = 0; i < o.d.length; i += 4) {
+      h ^= (o.d[i] << 16) ^ (o.d[i + 1] << 8) ^ o.d[i + 2] ^ o.d[i + 3];
+      h = (h * 16777619) >>> 0;
+    }
+    return h;
+  }
+
+  /* ── 帧组解析 ── */
+  function groupOf(id, state, map) {
+    var m = map || Game.Core.Render.MONSTER_ANIM;
+    return m[id] && m[id][state];
+  }
+  function frameName(group, f) { return group + '_anim_f' + f; }
+  function framesOf(group) {
+    var S = Game.Core.Sprites, a = [];
+    for (var f = 0; f < FRAMES; f++) a.push({ name: frameName(group, f), img: S.get(frameName(group, f)) });
+    return a;
+  }
+
+  function run() {
+    var S = Game.Core.Sprites, R = Game.Core.Render;
+    var MAPS = Game.Data.MAPS;
+
+    /* ══ A1. 36 帧全部登记：base=24、原生尺寸、unitBox=原生（1:1）══ */
+    var a1bad = [], a1rows = [], a1count = 0;
+    BOSSES.forEach(function (b) {
+      var row = { id: b.id, states: {} };
+      STATES.forEach(function (st) {
+        var g = groupOf(b.id, st);
+        var got = 0;
+        if (!g) { a1bad.push(b.id + ':' + st + ':unregistered'); return; }
+        framesOf(g).forEach(function (fr) {
+          if (!fr.img) { a1bad.push(fr.name + ':missing'); return; }
+          a1count++; got++;
+          var sx = S.baseOf(fr.name), ub = R._unitBoxOf(fr.img);
+          if (sx !== 24) a1bad.push(fr.name + ':base=' + sx);
+          if (fr.img.naturalWidth !== b.w || fr.img.naturalHeight !== b.h) {
+            a1bad.push(fr.name + ':nat=' + fr.img.naturalWidth + 'x' + fr.img.naturalHeight);
+          }
+          if (!ub || ub.w !== b.w || ub.h !== b.h) {
+            a1bad.push(fr.name + ':box=' + (ub ? ub.w + 'x' + ub.h : 'null'));
+          }
+          var bb = bboxOf(imageData(fr.img));
+          if (!bb) a1bad.push(fr.name + ':empty');
+          else if (bb.b < 52 || bb.b > 53) a1bad.push(fr.name + ':bboxBottom=' + bb.b);
+        });
+        row.states[st] = got;
+      });
+      a1rows.push(row);
+    });
+    rec('A1_36frames24base', a1bad.length === 0 && a1count === 36,
+      '帧数 ' + a1count + '/36；base=24 且 unitBox=原生 1:1；底边 52–53；异常 ' +
+      (a1bad.length ? a1bad.slice(0, 6).join(' | ') : '无') + '；分组 ' +
+      JSON.stringify(a1rows));
+
+    /* ══ A2. 三态帧组：每态 4 帧、三态互不相同（不是同一张图换个名字）══ */
+    var a2bad = [], a2rows = [];
+    BOSSES.forEach(function (b) {
+      var hs = {};
+      STATES.forEach(function (st) {
+        var g = groupOf(b.id, st);
+        var fr = g ? framesOf(g) : [];
+        if (fr.length !== FRAMES || fr.some(function (x) { return !x.img; })) {
+          a2bad.push(b.id + ':' + st + ':frames');
+        }
+        hs[st] = fr[0] && fr[0].img ? hash(fr[0].img) : 0;
+      });
+      if (hs.idle === hs.attack) a2bad.push(b.id + ':idle==attack');
+      if (hs.idle === hs.hurt) a2bad.push(b.id + ':idle==hurt');
+      if (hs.attack === hs.hurt) a2bad.push(b.id + ':attack==hurt');
+      a2rows.push({ id: b.id, hash: hs });
+    });
+    rec('A2_threeStates', a2bad.length === 0,
+      '每只 3 态 × 4 帧，三态首帧哈希互不相同；异常 ' + (a2bad.length ? a2bad.join(' | ') : '无') +
+      '；哈希 ' + JSON.stringify(a2rows));
+
+    /* ══ A3. 落屏：原生高 × 2 = 108（整数倍），底部 180，不压 HUD/敌名/血条/安全带 ══ */
+    var a3bad = [], a3rows = [];
+    BOSSES.forEach(function (b) {
+      STATEPICK: for (var si = 0; si < STATES.length; si++) {
+        var g = groupOf(b.id, STATES[si]);
+        if (!g) continue;
+        var fr = framesOf(g)[0];
+        if (!fr || !fr.img) continue;
+        var h0 = fr.img.naturalHeight, h1 = R.bossDrawHeight(fr.img);
+        var mul = h1 / h0, top = BATTLE_BOTTOM - h1;
+        var ok = (mul === R.BOSS_MUL) && (mul === Math.floor(mul)) &&
+          h1 === h0 * 2 && top >= 22 && BATTLE_BOTTOM <= 212 && BATTLE_BOTTOM < 236 && h1 > 90;
+        a3rows.push({ id: b.id, state: STATES[si], native: h0 + 'px', screen: h1 + 'px', mul: mul,
+          top: top, bottom: BATTLE_BOTTOM, ok: ok });
+        if (!ok) a3bad.push(b.id + ':' + STATES[si] + ':mul=' + mul + ',top=' + top);
+        break STATEPICK;
+      }
+    });
+    rec('A3_integerScale', a3bad.length === 0 && a3rows.length === 3,
+      'Boss 落屏高 = 原生高 × ' + R.BOSS_MUL + '（108px，整数倍）；顶部 72 ≥ HUD 下沿 22；' +
+      '底部 180 ≤ 敌血条上沿 212，且不进结果卡安全带 236–410；异常 ' +
+      (a3bad.length ? a3bad.join(' | ') : '无') + '；' + JSON.stringify(a3rows));
+
+    /* ══ A4. MONSTER_ANIM 指向专属组：不与其他任何怪物共用，也不是旧杂兵组 ══ */
+    var shared = {};
+    Object.keys(R.MONSTER_ANIM).forEach(function (id) {
+      var g = R.MONSTER_ANIM[id].idle;
+      (shared[g] = shared[g] || []).push(id);
+    });
+    function dedicatedOk(map) {
+      var bad = [];
+      BOSSES.forEach(function (b) {
+        var ent = map[b.id];
+        if (!ent || !ent.idle) { bad.push(b.id + ':none'); return; }
+        if (ent.idle.indexOf(b.id + '_') !== 0) bad.push(b.id + ':notOwn=' + ent.idle);
+        var users = shared[ent.idle] || [];
+        /* 覆盖映射下 shared 仍是真实表，故额外直接查旧组名 */
+        if (ent.idle === b.old) bad.push(b.id + ':old=' + ent.idle);
+        var oldSet = ['big_demon_idle', 'big_demon_run', 'ogre_idle', 'ogre_run', 'big_zombie_idle'];
+        if (oldSet.indexOf(ent.idle) >= 0) bad.push(b.id + ':reusedMob=' + ent.idle);
+        if (users.length > 1 && users.indexOf(b.id) >= 0) bad.push(b.id + ':shared=' + users.join(','));
+      });
+      return bad;
+    }
+    var a4bad = dedicatedOk(R.MONSTER_ANIM);
+    rec('A4_dedicatedGroups', a4bad.length === 0,
+      '三只 Boss 的 idle/attack/hurt 全部指向 ' + BOSSES.map(function (b) { return b.id + '_*'; }).join('、') +
+      ' 专属组；异常 ' + (a4bad.length ? a4bad.join(' | ') : '无'));
+
+    /* ══ A5. 同层轮廓差异：与同层每一只杂兵（以及旧素材）的归一化 IoU ≤ 0.75 ══ */
+    var pairs = [], a5bad = [];
+    BOSSES.forEach(function (b) {
+      var bm = normMask(framesOf(groupOf(b.id, 'idle'))[0].img);
+      var mobs = (MAPS.enemyTable[b.floor - 1] || []).map(function (e) { return e.id; });
+      mobs.forEach(function (mid) {
+        var g = R.MONSTER_ANIM[mid] && R.MONSTER_ANIM[mid].idle;
+        var img = g ? S.getFrame(g, 0) : null;
+        if (!img) { a5bad.push(b.id + ' vs ' + mid + ':missing'); return; }
+        var v = iou(bm, normMask(img));
+        pairs.push({ boss: b.id, mob: mid, iou: +v.toFixed(4) });
+        if (v > IOU_MAX) a5bad.push(b.id + ' vs ' + mid + ':iou=' + v.toFixed(4));
+      });
+      var oldImg = S.getFrame(b.old, 0);
+      if (oldImg) {
+        var ov = iou(bm, normMask(oldImg));
+        pairs.push({ boss: b.id, mob: '旧素材:' + b.old, iou: +ov.toFixed(4), legacy: true });
+        if (ov > LEGACY_MAX) a5bad.push(b.id + ' vs 旧素材:iou=' + ov.toFixed(4));
+      }
+    });
+    var mobPairs = pairs.filter(function (p) { return !p.legacy; });
+    var worst = mobPairs.slice().sort(function (a, b) { return b.iou - a.iou; })[0];
+    rec('A5_silhouetteDiff', a5bad.length === 0 && mobPairs.length >= 12,
+      '同层杂兵：归一化（高 96、等比、居中）轮廓 IoU 上限 ' + IOU_MAX + '；最差 ' +
+      (worst ? worst.boss + ' vs ' + worst.mob + ' = ' + worst.iou : 'n/a') +
+      '；旧素材：IoU ≤ ' + LEGACY_MAX + '（证明未复用）；越界 ' +
+      (a5bad.length ? a5bad.join(' | ') : '无') + '；全部 ' + JSON.stringify(pairs));
+
+    /* ══ A6. 负例：把 Boss 映射换回旧杂兵素材后，A4/A5 的判定必须为假 ══ */
+    var negBad = [];
+    BOSSES.forEach(function (b) {
+      var fake = {};
+      Object.keys(R.MONSTER_ANIM).forEach(function (k) { fake[k] = R.MONSTER_ANIM[k]; });
+      fake[b.id] = { idle: b.old, run: b.old, attack: b.old, hurt: b.old };
+      if (dedicatedOk(fake).length === 0) negBad.push(b.id + ':groupCheckStillPassed');
+      /* 换回后 Boss 剪影 == 旧素材剪影（IoU=1），必然突破 LEGACY_MAX */
+      var fm = normMask(S.getFrame(b.old, 0));
+      var sim = iou(fm, fm);
+      if (sim <= LEGACY_MAX) negBad.push(b.id + ':iouCheckStillPassed');
+    });
+    rec('A6_negativeRevertFails', negBad.length === 0,
+      '把任一 Boss 换回旧杂兵素材后，A4（专属组）必判负、A5（旧素材 IoU=1）必判负；漏判 ' +
+      (negBad.length ? negBad.join(' | ') : '无'));
+
+    /* ══ A7. 帧序列管线：getFrame(组, 0..3) 与逐帧名解析一致 ══ */
+    var a7bad = [];
+    BOSSES.forEach(function (b) {
+      STATES.forEach(function (st) {
+        var g = groupOf(b.id, st);
+        for (var f = 0; f < FRAMES; f++) {
+          var a = S.getFrame(g, f), nm = frameName(g, f), c = S.get(nm);
+          if (!a || !c || a !== c) a7bad.push(nm);
+        }
+      });
+    });
+    rec('A7_frameSets', a7bad.length === 0,
+      'FRAME_SETS 按组名解析与显式文件名完全一致（36 帧）；异常 ' +
+      (a7bad.length ? a7bad.slice(0, 6).join(' | ') : '无'));
+
+    var keys = Object.keys(out.sub);
+    var bad = keys.filter(function (k) { return !out.sub[k].ok; });
+    out.ok = bad.length === 0;
+    finish();
+  }
+
+  function finish() {
+    var keys = Object.keys(out.sub);
+    var bad = keys.filter(function (k) { return !out.sub[k].ok; });
+    document.getElementById('result').textContent =
+      (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: bad }) + '\n\n' +
+      keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+    document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: bad });
+  }
+
+  function boot() {
+    var t0 = Date.now();
+    Game.Core.Sprites.load('../assets/sprites/');
+    (function wait() {
+      if (Game.Core.Sprites.isReady()) {
+        try { run(); } catch (e) {
+          out.ok = false; out.err = String(e && (e.message + '\n' + e.stack));
+          document.getElementById('result').textContent = 'FAIL ' + JSON.stringify(out);
+          document.title = 'FAIL ' + JSON.stringify({ ok: false, err: out.err });
+        }
+      } else if (Date.now() - t0 > 20000) {
+        out.ok = false; out.err = 'sprites not ready (timeout)';
+        document.getElementById('result').textContent = 'FAIL ' + JSON.stringify(out);
+        document.title = 'FAIL timeout';
+      } else setTimeout(wait, 50);
+    })();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

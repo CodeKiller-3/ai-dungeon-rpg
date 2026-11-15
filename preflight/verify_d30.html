@@ -212,10 +212,10 @@
       var colors9 = uniq([].concat.apply([], stats.map(function (s) { return s.colors; })));
       var bad = AC.paletteViolations(stats, palette);
       var a3 = palette.length === 84 && (audit && audit.paletteSize === 84) &&
-        bad.length === 0 && !!audit && audit.total === 303;
+        bad.length === 0 && !!audit && audit.total === 339;
       rec('A3_paletteStill60', a3,
         '审计调色板=' + palette.length + '（paletteSize=' + (audit ? audit.paletteSize : 'n/a') +
-        '）、审计文件数=' + (audit ? audit.total : 'n/a') + '（期望 198+9+96=303）；' +
+        '）、审计文件数=' + (audit ? audit.total : 'n/a') + '（期望 198+9+96+36=339）；' +
         '9 张新图标用到 ' + colors9.length + ' 种色，越界=' +
         (bad.length ? JSON.stringify(bad) : '0'));
 

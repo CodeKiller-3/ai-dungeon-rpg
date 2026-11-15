@@ -170,10 +170,10 @@
       try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { mDrawOk = false; }
       sub.t4_monsterMap = mDrawOk && hasPrefix('tiny_slug_anim_f') &&
         hasPrefix('imp_idle_anim_f') && hasPrefix('imp_run_anim_f') &&
-        hasPrefix('big_demon_idle_anim_f') && hasPrefix('big_demon_run_anim_f');
+        hasPrefix('dragon_idle_anim_f');
       ok = ok && sub.t4_monsterMap;
 
-      /* t5_battle：玩家侧 knight_m 帧、Boss 侧 big_demon 帧；攻击态切换 knight_m_hit */
+      /* t5_battle：玩家侧 knight_m 帧、Boss 侧 dragon 专属帧；攻击态切换 knight_m_hit */
       Game.Data.Player.hp = 80; Game.Data.Player.maxHp = 100;
       var st = {
         monster: { id: 'dragon', name: '地牢巨龙', hp: 200, maxHp: 200, color: '#ff6666' },
@@ -184,7 +184,7 @@
       var bDrawOk = true;
       try { R.drawBattle(st); } catch (e) { bDrawOk = false; }
       var playerSide = hasPrefix('knight_m_idle_anim_f');
-      var bossSide = hasPrefix('big_demon_idle_anim_f');
+      var bossSide = hasPrefix('dragon_idle_anim_f');
       /* 玩家攻击动作期间 → knight_m_hit 帧 */
       st.playerActionAt = 1234; /* _animNow 冻结为 1234，now 读 performance.now 会不同 → 用注入时钟不可行；
                                    直接把 playerActionAt 设成当前真实时间，_attackOffset 用真实 performance.now */

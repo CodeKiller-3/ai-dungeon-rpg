@@ -1,6 +1,6 @@
-# assets/sprites 素材来源与许可
+﻿# assets/sprites 素材来源与许可
 
-本目录是《地牢：我独自升级》的**全部**运行时像素素材，共 **303 个 PNG**（截至 D-80），由两套开源素材与本项目自绘部分组成。
+本目录是《地牢：我独自升级》的**全部**运行时像素素材，共 **339 个 PNG**（截至 D-86），由两套开源素材与本项目自绘部分组成。
 
 ## 来源
 
@@ -17,7 +17,7 @@
 
 ## 处理说明
 
-- 除下方 **D-79 / D-80 重绘 / 新增** 列出的 284 张（118 + 16 + 150）外，其余素材**未重绘、未重导出、未改色**，仅按游戏需要挑选文件、保持原始像素尺寸与原始文件名落盘（D-30 新增的 9 张沿用上游文件名）。
+- 除下方 **D-79 / D-80 / D-86 重绘 / 新增** 列出的 320 张（118 + 16 + 150 + 36）外，其余素材**未重绘、未重导出、未改色**，仅按游戏需要挑选文件、保持原始像素尺寸与原始文件名落盘（D-30 新增的 9 张沿用上游文件名）。
 - **D-79 第一阶段（12 张）**：`coin.png`（6×7 → 16×16）、`floor_1..8`、`wall_left/mid/right`。
 - **D-79 第二阶段（117 张 = 96 新增 + 21 覆盖，24×24 原生 1:1）**：
   - `floor_1..8`、`wall_left/mid/right`、`wall_top_left/mid/right`（14 张，F1 冷灰石厅，覆盖第一阶段的 16×16 版本）
@@ -37,8 +37,14 @@
   - 怪物/精英帧 100 张（14 组）：`imp / goblin / tiny_zombie / angel / skelet` 24×24、`orc_warrior / orc_shaman / wogol / necromancer / masked_orc / pumpkin_dude` 24×35、`ogre / big_demon / big_zombie` 48×54
   - 作者：本项目自绘，随项目以 **CC0 1.0** 释出。
   - 做法：新素材原生尺寸 = 旧素材屏幕落位尺寸（×1.5），因此落屏像素尺寸与 D-79 完全一致；颜色逐组取自各怪原图既有色，**84 色板未扩张**；不做任何非整数缩放（图标绘制尺寸严格等于原生 24）。
-- 全部 303 张的不透明像素共用一套 **84 色**调色板（60 基础色 + F2~F5 各 6 个主题专属色），审计脚本 `preflight/selfcheck/d21_audit.js` 可复算。
-- 逐文件与 `js/core/sprites.js` 的 `NAMES` 一一对应，审计结论：303 注册 / 303 落盘 / 0 缺失 / 0 多余 / 0 空帧。
+- **D-86 新增（36 张，24 基原生，三态各 4 帧）**：
+  - `dragon_idle/attack/hurt_anim_f0..f3`（12 张，64×54）：F5 地牢巨龙，长颈 / 长吻 / 后掠双角 / 展开双翼 / 卷尾刺锤 / 双足三爪
+  - `ogre_boss_idle/attack/hurt_anim_f0..f3`（12 张，48×54）：F2 独眼酋长，单只巨眼 / 上翘獠牙 / 尖刺肩甲 / 图腾巨斧
+  - `zombie_king_idle/attack/hurt_anim_f0..f3`（12 张，48×54）：F4 僵尸王，三尖王冠 / 破烂披风 / 外露肋骨 / 权杖
+  - 作者：本项目自绘，随项目以 **CC0 1.0** 释出；颜色全部取自既有 84 色板，未新增颜色。
+  - 做法：战场落屏高度 = 原生高 × 2（巨龙 108px、酋长/僵尸王 108px），整数倍缩放，无插值；三只不再复用 `big_demon / ogre / big_zombie` 的杂兵帧。
+- 全部 339 张的不透明像素共用一套 **84 色**调色板（60 基础色 + F2~F5 各 6 个主题专属色），审计脚本 `preflight/selfcheck/d21_audit.js` 可复算。
+- 逐文件与 `js/core/sprites.js` 的 `NAMES` 一一对应，审计结论：339 注册 / 339 落盘 / 0 缺失 / 0 多余 / 0 空帧。
 
 ## 再分发
 
@@ -48,4 +54,4 @@
 
 ## 统计口径
 
-「303」的唯一权威来源是磁盘上的 `assets/sprites/*.png` 实际数量；`js/core/sprites.js` 的 `NAMES` 必须与之相等，由 `preflight/verify_d21.html` 与 `preflight/verify_d30.html` 双重断言。调色板的唯一权威来源是 `preflight/selfcheck/d21-audit.json` 的 `paletteSize`。
+「339」的唯一权威来源是磁盘上的 `assets/sprites/*.png` 实际数量；`js/core/sprites.js` 的 `NAMES` 必须与之相等，由 `preflight/verify_d21.html` 与 `preflight/verify_d30.html` 双重断言。调色板的唯一权威来源是 `preflight/selfcheck/d21-audit.json` 的 `paletteSize`。
