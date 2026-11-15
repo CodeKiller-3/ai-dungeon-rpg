@@ -1,0 +1,173 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-91 主菜单实拍页</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-91 实拍复现页（artifacts/d91 内部页，不登记 page-baseline.json）
+     ?view=menu-root-save|confirm-new|menu-settings|pause-settings|pause-confirm-clear
+     口径：加载与主游戏完全相同的脚本与顺序；用真实按键序列推进到目标页，再停 rAF。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = String(location.search || '');
+  var view = (q.match(/view=(menu-root-save|confirm-new|menu-settings|pause-settings|pause-confirm-clear)/) || [])[1] || 'menu-root-save';
+  var M = Game.Core.Main, P = Game.Data.Player, Map = Game.Systems.Map;
+  var KEY = 'ai_dungeon_rpg_save_v1';
+
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if ((Game.Core.Sprites && Game.Core.Sprites.isReady()) || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame, left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+  function playMenu(seq) {
+    var orig = M.loop, f = 0;
+    M.loop = function (ts) {
+      for (var i = 0; i < seq.length; i++) if (seq[i].f === f) Game.Core.Input.getState()[seq[i].code] = true;
+      f++;
+      return orig.call(M, ts);
+    };
+  }
+  function craft() {
+    return JSON.stringify({
+      saveVersion: 2, savedAt: '2026-11-16T10:00:00.000Z', floor: 3,
+      pos: { floor: 3, x: 2, y: 2 },
+      player: {
+        hp: 70, maxHp: 100, mp: 30, maxMp: 50, atk: 20, def: 8,
+        gold: 456, exp: 12, level: 7,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null }, quests: {},
+        upg: {}, eliteAtk: 0, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: { monsters: {}, items: {} },
+      run: { known: true, floorReached: 3, kills: 12, maxLevel: 7, turns: 88, potions: 3, rescues: 0, elapsedMs: 205000, win: false },
+      ending: null, map: null
+    });
+  }
+  function saveMenu() {
+    localStorage.setItem('aiDungeon_guided', '1');
+    localStorage.setItem(KEY, craft());
+  }
+  function enterFloor(n) {
+    localStorage.removeItem(KEY);
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init({ menu: false });
+    Map.setFloor(n);
+    P.floor = n;
+    var sp = Map.getSpawn();
+    P.x = sp.x; P.y = sp.y;
+    P.level = 1; P.exp = 0; P.gold = 20;
+    Game.Systems.Inventory.recalcEquip();
+    P.hp = P.maxHp; P.mp = P.maxMp;
+  }
+
+  try {
+    if (view === 'menu-root-save') {
+      saveMenu(); M.init({ menu: true });
+      localStorage.setItem(KEY, craft()); if (Game.Notice) Game.Notice._clear();
+      M.start(); stopAfterFrames(4); return;
+    }
+    if (view === 'confirm-new') {
+      saveMenu(); M.init({ menu: true });
+      localStorage.setItem(KEY, craft()); if (Game.Notice) Game.Notice._clear();
+      M.start();
+      playMenu([{ f: 2, code: 'ArrowUp' }, { f: 4, code: 'Enter' }]);
+      stopAfterFrames(12); return;
+    }
+    if (view === 'menu-settings') {
+      saveMenu(); M.init({ menu: true });
+      localStorage.setItem(KEY, craft()); if (Game.Notice) Game.Notice._clear();
+      M.start();
+      playMenu([
+        { f: 2, code: 'ArrowDown' }, { f: 3, code: 'ArrowDown' },
+        { f: 5, code: 'Enter' }
+      ]);
+      stopAfterFrames(12); return;
+    }
+    if (view === 'pause-settings') {
+      enterFloor(2); M.switchScene('explore'); M.start();
+      waitSprites(function () {
+        M.openPause(performance.now());
+        playMenu([
+          { f: 2, code: 'ArrowDown' }, { f: 4, code: 'Enter' },
+          { f: 6, code: 'ArrowDown' }, { f: 7, code: 'ArrowDown' }, { f: 8, code: 'ArrowDown' }
+        ]);
+        stopAfterFrames(14);
+      });
+      return;
+    }
+    if (view === 'pause-confirm-clear') {
+      enterFloor(2); M.switchScene('explore'); M.start();
+      waitSprites(function () {
+        M.openPause(performance.now());
+        playMenu([
+          { f: 2, code: 'ArrowDown' }, { f: 4, code: 'Enter' },
+          { f: 6, code: 'ArrowDown' }, { f: 7, code: 'ArrowDown' }, { f: 8, code: 'ArrowDown' },
+          { f: 10, code: 'Enter' }
+        ]);
+        stopAfterFrames(16);
+      });
+      return;
+    }
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>
+

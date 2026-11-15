@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-91 主菜单 P0 与四项</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-91 · 默认继续游戏 / 覆盖确认默认取消 / 玩家语域 / 危险语义 / 进度 / 设置去重（A–H）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D91ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D91ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D91ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var START = Date.now();
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  function readText(rel) {
+    try { var x = new XMLHttpRequest(); x.open('GET', rel, false); x.send(null); return x.responseText || ''; }
+    catch (e) { return ''; }
+  }
+  var M = Game.Core.Main, R = Game.Core.Render, S = Game.Systems.Save, P = Game.Data.Player;
+  var KEY = 'ai_dungeon_rpg_save_v1', SET_KEY = 'aiDungeon_settings_v1';
+  var T = 10000;
+
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+  function press(code, target) {
+    kd(code);
+    try {
+      if (target === 'pause') M._updatePauseMenu();
+      else M._updateMenu(T);
+    } catch (e) { window.__D91ERR.push('press ' + code + ': ' + ((e && e.message) || e)); }
+    ku(code);
+  }
+  function setSel(n) {
+    var guard = 0;
+    while (M.getMenuState().sel < n && guard++ < 10) press('ArrowDown');
+    while (M.getMenuState().sel > n && guard++ < 10) press('ArrowUp');
+    return M.getMenuState().sel;
+  }
+  function setSettingsSel(n) {
+    var guard = 0;
+    while (M.getMenuState().settingsSel < n && guard++ < 12) press('ArrowDown');
+    while (M.getMenuState().settingsSel > n && guard++ < 12) press('ArrowUp');
+    return M.getMenuState().settingsSel;
+  }
+  function setPauseSel(n) {
+    var guard = 0;
+    while (M.getPauseState().sel < n && guard++ < 12) press('ArrowDown', 'pause');
+    while (M.getPauseState().sel > n && guard++ < 12) press('ArrowUp', 'pause');
+    return M.getPauseState().sel;
+  }
+  function setPauseSettingsSel(n) {
+    var guard = 0;
+    while (M.getPauseState().settingsSel < n && guard++ < 12) press('ArrowDown', 'pause');
+    while (M.getPauseState().settingsSel > n && guard++ < 12) press('ArrowUp', 'pause');
+    return M.getPauseState().settingsSel;
+  }
+  function raw() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
+  function putRaw(s) { try { localStorage.setItem(KEY, s); } catch (e) { } }
+
+  /* 固定存档：3 层 / Lv7 / 456 金 / 用时 03:25。用于"取消不改档"逐字节比对。 */
+  function craft() {
+    return JSON.stringify({
+      saveVersion: 2, savedAt: '2026-11-16T10:00:00.000Z', floor: 3,
+      pos: { floor: 3, x: 2, y: 2 },
+      player: {
+        hp: 70, maxHp: 100, mp: 30, maxMp: 50, atk: 20, def: 8,
+        gold: 456, exp: 12, level: 7,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null }, quests: {},
+        upg: {}, eliteAtk: 0, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: { monsters: {}, items: {} },
+      run: { known: true, floorReached: 3, kills: 12, maxLevel: 7, turns: 88, potions: 3, rescues: 0, elapsedMs: 205000, win: false },
+      ending: null, map: null
+    });
+  }
+  function diffFields(a, b, path, acc) {
+    acc = acc || []; path = path || '';
+    if (a === b) return acc;
+    if (typeof a !== typeof b || a === null || b === null || typeof a !== 'object') {
+      acc.push(path || '(root)'); return acc;
+    }
+    var ka = Object.keys(a), kb = Object.keys(b);
+    for (var i = 0; i < ka.length; i++) if (kb.indexOf(ka[i]) < 0) acc.push(path + '.' + ka[i] + ' (missing)');
+    for (var j = 0; j < kb.length; j++) if (ka.indexOf(kb[j]) < 0) acc.push(path + '.' + kb[j] + ' (extra)');
+    for (var k = 0; k < ka.length; k++) {
+      if (kb.indexOf(ka[k]) >= 0) diffFields(a[ka[k]], b[ka[k]], path + '.' + ka[k], acc);
+    }
+    return acc;
+  }
+  function countKeys(o) {
+    if (!o || typeof o !== 'object') return 0;
+    var n = 0;
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) n += 1 + countKeys(o[k]);
+    return n;
+  }
+
+  try {
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem(SET_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+    } catch (e) { /* 存储禁用时后续断言会如实失败 */ }
+
+    /* ── A：无档默认「开始新游戏」；有档默认「继续游戏」+ 覆盖提示 + 进度行 ── */
+    M.init({ menu: true });
+    var aNoSave = M.getMenuState().page === 'root' && M.getMenuState().sel === 0;
+    var aNoNote = M._menuSpec().items[0].note === '';
+
+    putRaw(craft());
+    M.init({ menu: true });
+    var aSel = M.getMenuState().sel;
+    var aItems = M._menuSpec().items;
+    var aHas = aSel === 1 && aItems[0].note === '将覆盖现有存档' &&
+      !!aItems[1].detail && aItems[1].enabled === true;
+    rec('A_default_focus', aNoSave && aNoNote && aHas, {
+      rule: '无档：默认选中第 0 项「开始新游戏」；有档：默认选中第 1 项「继续游戏」，且新游戏行提示「将覆盖现有存档」',
+      noSave: { page: 'root', sel: 0, ok: aNoSave }, withSave: { sel: aSel, newNote: aItems[0].note }
+    });
+
+    /* ── B：「继续游戏」进度行逐字段来自存档（层/等级/金币/用时） ── */
+    putRaw(craft());   /* 避免 init 读档把 run.elapsedMs 写成本局真实用时 */
+    var bDetail = M._menuSpec().items[1].detail;
+    var bWant = '第 3 层 · Lv.7 · 金币 456 · 用时 03:25';
+    var bPeek = S.peek();
+    var bOk = bDetail === bWant && bPeek.floor === 3 && bPeek.player.level === 7 &&
+      bPeek.player.gold === 456 && bPeek.run.elapsedMs === 205000 && raw() === craft();
+    rec('B_continue_progress', bOk, {
+      rule: '「继续游戏」第二行 = 第 N 层 · Lv.X · 金币 G · 用时 mm:ss，全部取自存档；peek 只读，读完原串不变',
+      detail: bDetail, want: bWant, rawUnchanged: raw() === craft()
+    });
+
+    /* ── C：有档 → 新游戏 → 回车 → 覆盖确认（默认取消）→ 回车取消 → 存档逐字段未变 ── */
+    var cBefore = raw();
+    setSel(0);
+    press('Enter');
+    var cPage = M.getMenuState().page;
+    var cConf = M._menuSpec().confirm;
+    var cDefault = M.getMenuState().confirmSel;
+    var cCopy = cConf ? cConf.lines.join('') : '';
+    var cOpenOk = cPage === 'confirmNew' && cDefault === 0 &&
+      cConf.title === '开始新游戏' && cConf.opts[0] === '取消' && cConf.opts[1] === '开始新游戏' &&
+      cCopy.indexOf('清空当前存档') >= 0 && cCopy.indexOf('无法恢复') >= 0 &&
+      cCopy.indexOf('第 3 层') >= 0 && cCopy.indexOf(KEY) < 0;
+    /* 确认页也真实绘制一帧（覆盖标题/正文/两按钮），绘制不得抛错 */
+    var cDrawErr = null;
+    try { M.loop(T); } catch (e) { cDrawErr = String((e && e.message) || e); }
+    press('Enter');   /* 默认焦点 = 取消 */
+    var cAfterPage = M.getMenuState().page;
+    var cAfter = raw();
+    var cDiff = diffFields(JSON.parse(cBefore), JSON.parse(cAfter), '', []);
+    var cOk = cOpenOk && cDrawErr === null && cAfterPage === 'root' && cAfter === cBefore && cDiff.length === 0;
+    rec('C_new_confirm_cancel', cOk, {
+      rule: '有档时「开始新游戏」先弹覆盖确认，默认焦点「取消」；默认回车只取消：localStorage 原串逐字节相同、JSON 逐字段无差异',
+      page: cPage, defaultSel: cDefault, copy: cCopy,
+      drawErr: cDrawErr, afterPage: cAfterPage,
+      rawBytes: cBefore ? cBefore.length : 0, beforeAfterEqual: cAfter === cBefore,
+      swKeys: countKeys(JSON.parse(cBefore)), diffs: cDiff.slice(0, 12), diffCount: cDiff.length
+    });
+
+    /* ── D：同一确认页，Esc 取消也不动档；←→ 可把焦点移到危险项 ── */
+    var dBefore = raw();
+    setSel(0); press('Enter');
+    var dDefault = M.getMenuState().confirmSel;
+    press('ArrowRight');
+    var dRight = M.getMenuState().confirmSel;
+    press('ArrowLeft');
+    var dLeft = M.getMenuState().confirmSel;
+    press('Escape');
+    var dOk = dDefault === 0 && dRight === 1 && dLeft === 0 &&
+      M.getMenuState().page === 'root' && raw() === dBefore;
+    rec('D_confirm_nav_esc', dOk, {
+      rule: '确认页 ←→ 在「取消 / 开始新游戏」间移动；Esc 取消，存档原串不变',
+      sel: [dDefault, dRight, dLeft], page: M.getMenuState().page, rawUnchanged: raw() === dBefore
+    });
+
+    /* ── E：确认按钮确实生效——→ 到「开始新游戏」再回车，进入新局且清空旧档 ── */
+    setSel(0); press('Enter'); press('ArrowRight'); press('Enter');
+    var eSave = raw() === null ? null : JSON.parse(raw());
+    var eOk = M._scene === 'explore' && P.level === 1 && P.gold === 0 &&
+      (!eSave || !eSave.player || eSave.player.gold === 0);
+    rec('E_confirm_actually_new', eOk, {
+      rule: '焦点移到第 2 项后回车才真正开新局：场景 explore、等级 1、金币 0，旧档不残留',
+      scene: M._scene, level: P.level, gold: P.gold, saveGold: eSave && eSave.player ? eSave.player.gold : null
+    });
+
+    /* ── F：主菜单「删除存档」确认页默认取消；默认回车不动档，→ 回车才删 ── */
+    putRaw(craft());
+    M.switchScene('menu');
+    setSel(3); press('Enter');
+    setSettingsSel(3); press('Enter');
+    var fPage = M.getMenuState().page;
+    var fDefault = M.getMenuState().confirmSel;
+    var fBefore = raw();
+    press('Enter');
+    var fAfterPage = M.getMenuState().page;
+    var fAfter = raw();
+    var fDiff = diffFields(JSON.parse(fBefore), JSON.parse(fAfter), '', []);
+    /* 再进一次，显式移到「删除存档」 */
+    setSettingsSel(3); press('Enter'); press('ArrowRight'); press('Enter');
+    var fGone = raw() === null;
+    var fOk = fPage === 'confirmClear' && fDefault === 0 && fAfterPage === 'settings' &&
+      fAfter === fBefore && fDiff.length === 0 && fGone;
+    rec('F_clear_confirm_default_cancel', fOk, {
+      rule: '菜单设置「删除存档」确认页默认「取消」；默认回车取消后存档逐字段不变；←→ 移到「删除存档」再回车才删除',
+      page: fPage, defaultSel: fDefault, afterPage: fAfterPage, beforeAfterEqual: fAfter === fBefore,
+      diffs: fDiff.slice(0, 12), diffCount: fDiff.length, deleted: fGone
+    });
+
+    /* ── G：暂停面板——放弃本局 / 删除存档两个确认页同样默认取消且取消不动档 ── */
+    putRaw(craft());
+    M.enterGame('continue');
+    var gEnter = M._scene === 'explore' && P.floor === 3 && P.level === 7;
+    M.openPause(T);
+    setPauseSel(3); press('Enter', 'pause');   /* 放弃本局 */
+    var gAbandonPage = M.getPauseState().page;
+    var gAbandonDefault = M.getPauseState().confirmSel;
+    var gBefore = raw();
+    var gAbandonDraw = null;
+    try { R.drawPause(M._pauseSpec()); } catch (e2) { gAbandonDraw = String((e2 && e2.message) || e2); }
+    press('Enter', 'pause');                   /* 默认取消 */
+    var gAfterAbandon = raw();
+    var gBackRoot = M.getPauseState().page === 'root' && M.isPaused();
+    /* 设置页删除存档 */
+    setPauseSel(1); press('Enter', 'pause');
+    setPauseSettingsSel(3); press('Enter', 'pause');
+    var gClearPage = M.getPauseState().page;
+    var gClearDefault = M.getPauseState().confirmSel;
+    press('Enter', 'pause');
+    var gAfterClearCancel = raw();
+    var gBackSettings = M.getPauseState().page === 'settings';
+    setPauseSettingsSel(3); press('Enter', 'pause'); press('ArrowRight', 'pause'); press('Enter', 'pause');
+    var gGone = raw() === null;
+    var gOk = gEnter && gAbandonPage === 'confirmAbandon' && gAbandonDefault === 0 &&
+      gAbandonDraw === null && gAfterAbandon === gBefore && gBackRoot &&
+      gClearPage === 'confirmClear' && gClearDefault === 0 &&
+      gAfterClearCancel === gBefore && gBackSettings && gGone;
+    rec('G_pause_confirm_cancel', gOk, {
+      rule: '暂停「放弃本局」与「删除存档」确认页默认「取消」；默认回车取消后存档逐字节/逐字段不变；删除需显式右移',
+      entered: gEnter, scene: M._scene, floor: P.floor, gold: P.gold,
+      abandon: [gAbandonPage, gAbandonDefault], abandonRawSame: gAfterAbandon === gBefore,
+      clear: [gClearPage, gClearDefault], clearRawSame: gAfterClearCancel === gBefore,
+      backRoot: gBackRoot, backSettings: gBackSettings, deleted: gGone
+    });
+
+    /* ── H：文案换语域 / 存档键不入界面 / 危险语义与设置行去重（源码 + 渲染数据双证） ── */
+    var mainTxt = readText('../js/core/main.js');
+    var renderTxt = readText('../js/core/render.js');
+    var keyLines = mainTxt.split(/\r?\n/).filter(function (l) { return l.indexOf(KEY) >= 0; });
+    var keyOnlyCode = keyLines.every(function (l) { return /need:|^\s*\*|\/\//.test(l); });
+    var helpCopy = (M.HELP || []).map(function (e) { return (e.lines || []).join(''); }).join('');
+    var aboutOk = renderTxt.indexOf(KEY) < 0 &&
+      renderTxt.indexOf('存档自动保存在本机浏览器中') >= 0 &&
+      renderTxt.indexOf('只列已实现的机制') < 0 &&
+      renderTxt.indexOf('已全部挂起') < 0 &&
+      renderTxt.indexOf('鼠标可点') < 0 &&
+      renderTxt.indexOf('当前进度已暂停') >= 0;
+    var rowsMenu = M._menuSpec().settings;
+    var rowsPause = M._pauseSpec().settings;
+    var rowsSame = JSON.stringify(rowsMenu) === JSON.stringify(rowsPause);
+    var dangerRows = rowsMenu.filter(function (r) { return r.danger; });
+    var dedupCalls = (renderTxt.match(/_drawSettingsRows\(rows, /g) || []).length;
+    var dangerUses = (renderTxt.match(/rows\[i\]\.danger/g) || []).length;
+    var panelCalls = (renderTxt.match(/_drawConfirmPanel\(st\.confirm/g) || []).length;
+    var hOk = keyOnlyCode && helpCopy.indexOf(KEY) < 0 &&
+      aboutOk && rowsSame && dangerRows.length === 1 && dangerRows[0].id === 'clearSave' &&
+      dedupCalls === 2 && dangerUses === 2 && panelCalls === 2 && S.KEY === KEY;
+    rec('H_copy_danger_dedup', hOk, {
+      rule: '存档键只存在于代码/断言（不出现于任何界面文案）；说明/关于/暂停副标题改为玩家语域；' +
+        '主菜单与暂停共用 _settingsRows 与同一危险色；两份设置行逐字段一致；删除存档是唯一 danger 行',
+      saveKeyUnchanged: S.KEY === KEY, keyLines: keyLines.length, keyOnlyCode: keyOnlyCode,
+      helpHasKey: helpCopy.indexOf(KEY) >= 0,
+      aboutCopy: aboutOk, settingsIdentical: rowsSame,
+      dangerIds: dangerRows.map(function (r) { return r.id; }),
+      render: { settingsRowCalls: dedupCalls, dangerUses: dangerUses, confirmPanelCalls: panelCalls }
+    });
+
+    out.errs = window.__D91ERR;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D91ERR.length === 0;
+    out.ms = Date.now() - START;
+  } catch (e) {
+    out.err = String((e && (e.stack || e.message)) || e);
+    out.ok = false;
+  }
+
+  var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = txt.slice(0, 180);
+  document.getElementById('result').textContent = txt;
+})();
+</script>
+</body>
+</html>

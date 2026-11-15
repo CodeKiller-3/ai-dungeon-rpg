@@ -266,25 +266,38 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var eCancelPage = M.getMenuState().page;
     var eAfterCancel = S.has();
     var eAgain = goClear();
-    press('Enter'); /* 默认选中「确认删除」→ 第二次 Enter 才真删 */
+    /* D-91：确认页默认焦点改为「取消」——这里先按 Enter 验证"默认回车不删档"，
+     * 再用 → 移到「删除存档」并按 Enter 才真删。 */
+    var eDefaultSel = M.getMenuState().confirmSel;
+    press('Enter');
+    var eEnterCancelPage = M.getMenuState().page;
+    var eAfterEnterCancel = S.has();
+    var eThird = goClear();
+    press('ArrowRight');
+    press('Enter'); /* 显式移到「删除存档」→ Enter 才真删 */
     var eAfterSecond = S.has();
     press('Escape');
     var eCont = M._menuSpec().items[1];
     var eOk = eHad && ePrompt && eAfterFirst === true && eCancelPage === 'settings' && eAfterCancel === true &&
-      eAgain && eAfterSecond === false && eCont.enabled === false && eCont.note === '暂无存档' &&
+      eAgain && eDefaultSel === 0 && eEnterCancelPage === 'settings' && eAfterEnterCancel === true &&
+      eThird && eAfterSecond === false && eCont.enabled === false && eCont.note === '暂无存档' &&
       (M.getMenuState().settingsSel === 3);
     /* 损坏档也能清 */
     try { localStorage.setItem(KEY, '{broken json'); } catch (e2) { }
     var eCorruptHas = S.has();
     var eCorruptPage = goClear();
+    press('ArrowRight');
     press('Enter');
     var eCorruptGone = localStorage.getItem(KEY) === null;
     press('Escape');
     rec('E_clear_save_confirm', eOk && eCorruptHas && eCorruptPage && eCorruptGone, {
-      rule: '设置页「清除存档」：第一次 Enter 只弹确认（档还在），Esc 取消不删；第二次 Enter 才删除；' +
+      rule: '设置页「清除存档」：第一次 Enter 只弹确认（档还在），Esc 取消不删；' +
+        '确认页默认焦点「取消」，默认回车也只取消；←→ 移到「删除存档」再 Enter 才删除；' +
         '删后无档、主菜单「继续游戏」置灰；损坏档同样可删',
       hadSave: eHad, firstPressStillThere: eAfterFirst, cancelPage: eCancelPage,
-      afterCancelStillThere: eAfterCancel, afterSecond: eAfterSecond,
+      afterCancelStillThere: eAfterCancel,
+      defaultSel: eDefaultSel, enterOnDefault: eEnterCancelPage, afterEnterCancelStillThere: eAfterEnterCancel,
+      afterSecond: eAfterSecond,
       continueItem: { enabled: eCont.enabled, note: eCont.note }, settingsSel: M.getMenuState().settingsSel,
       corrupt: { detected: eCorruptHas, confirmPage: eCorruptPage, deleted: eCorruptGone }
     });

@@ -108,8 +108,72 @@
     return !!(opts && opts.menu);
   }
 
-  /* D-48：菜单运行期状态（页面/选中项/说明滚动），不落盘 */
-  var menu = { page: 'root', sel: 0, settingsSel: 0, helpScroll: 0, confirmSel: 1, confirm: null };
+  /* D-48：菜单运行期状态（页面/选中项/说明滚动），不落盘。
+   * D-91：confirmSel 默认 0 = 「取消」；任何会清空进度的操作都不允许回车直接确认。 */
+  var menu = { page: 'root', sel: 0, settingsSel: 0, helpScroll: 0, confirmSel: 0, confirm: null };
+
+  /* D-91：首屏数据源——"有档时默认选中继续游戏"、继续游戏显示进度、覆盖警告文案，
+   * 都只从 Save.has()/Save.peek() 读，不改存档键名、不写任何字段。 */
+  function saveHas() {
+    var S = Game.Systems && Game.Systems.Save;
+    return !!(S && typeof S.has === 'function' && S.has());
+  }
+  function saveProgress() {
+    var S = Game.Systems && Game.Systems.Save;
+    var d = (S && typeof S.peek === 'function') ? S.peek() : null;
+    if (!d) return null;
+    var p = d.player || {};
+    var floor = (typeof d.floor === 'number') ? d.floor
+      : ((d.pos && typeof d.pos.floor === 'number') ? d.pos.floor : 1);
+    var level = (typeof p.level === 'number' && p.level >= 1) ? p.level : 1;
+    var gold = (typeof p.gold === 'number') ? p.gold : 0;
+    var ms = (d.run && typeof d.run.elapsedMs === 'number') ? d.run.elapsedMs : null;
+    return {
+      floor: floor, level: level, gold: gold, elapsedMs: ms,
+      text: '第 ' + floor + ' 层 · Lv.' + level + ' · 金币 ' + gold +
+        (ms === null ? '' : ' · 用时 ' + fmtDuration(ms))
+    };
+  }
+  function menuDefaultSel() { return saveHas() ? 1 : 0; }
+
+  /* D-91：确认页文案与按钮——玩家语域，不出现存档键名。
+   * 所有会清空进度的确认页默认选中第 0 项「取消」（渲染侧按 confirmSel 高亮）。 */
+  function confirmData(kind) {
+    if (kind === 'new') {
+      var pr = saveProgress();
+      return {
+        kind: 'new', danger: true,
+        title: '开始新游戏',
+        lines: [
+          '开始新游戏会清空当前存档：' + (pr ? pr.text : '现有进度') + '。',
+          '清空后无法恢复。想保留进度，请选「取消」，回主菜单选「继续游戏」。'
+        ],
+        opts: ['取消', '开始新游戏']
+      };
+    }
+    if (kind === 'clear') {
+      return {
+        kind: 'clear', danger: true,
+        title: '删除存档',
+        lines: [
+          '删除后「继续游戏」将不可用，进度无法恢复。',
+          '确定要删除存档吗？'
+        ],
+        opts: ['取消', '删除存档']
+      };
+    }
+    return {
+      kind: 'abandon', danger: true,
+      title: '放弃本局',
+      lines: [
+        '放弃后本次进度不会写入存档。',
+        '若已有存档，继续游戏将回到最近一次自动存档。',
+        '确定要放弃本局吗？'
+      ],
+      opts: ['取消', '放弃本局']
+    };
+  }
+
 
   /* ---------- D-51：ESC 暂停面板 ----------
    * 只做"把游戏停下来"这层界面：不碰任何战斗/怪物/掉落/价格/经验/救援数值。
@@ -124,7 +188,7 @@
     page: 'root',   /* root | settings | confirmAbandon | confirmClear */
     sel: 0,
     settingsSel: 0,
-    confirmSel: 1,  /* 二次确认默认停在「确认」，仍需再按一次 Enter（第一次 Enter 只弹出提示） */
+    confirmSel: 0,  /* D-91：默认停在「取消」——清档/放弃/新游戏都不能回车即确认 */
     stoppedAt: 0,
     wasPaused: false
   };
@@ -184,7 +248,7 @@
     },
     {
       id: 'save', title: '存档',
-      lines: ['自动存档：换层、开箱、战斗结束时；存档键 ai_dungeon_rpg_save_v1。'],
+      lines: ['自动存档：换层、开箱、战斗结束时。可在「设置」里删除存档。'],
       src: ['js/systems/save.js', 'js/core/main.js'],
       need: ["var KEY = 'ai_dungeon_rpg_save_v1'", 'Game.Systems.Save.save()']
     }
@@ -667,7 +731,7 @@
       this._stats = { steps: 0, aiTicks: 0, battleTicks: 0 }; /* D-51：计数器新局归零 */
       /* D-51：暂停状态与战斗时间轴偏移一并复位（验证页会重复 init） */
       pause.active = false; pause.page = 'root'; pause.sel = 0; pause.settingsSel = 0;
-      pause.confirmSel = 1; pause.stoppedAt = 0; pause.wasPaused = false;
+      pause.confirmSel = 0; pause.stoppedAt = 0; pause.wasPaused = false;
       if (Game.Systems.Battle && typeof Game.Systems.Battle._resetClock === 'function') {
         Game.Systems.Battle._resetClock();
       }
@@ -691,6 +755,16 @@
       var loaded = Game.Systems.Save.load();
       if (!loaded) giveStartingGear();
       booting = false; /* 启动/读档完成，恢复 floorChanged 自动写档 */
+      /* D-91：首屏默认焦点——有档落在「继续游戏」，无档落在「开始新游戏」。
+       * 在读档之后判定，保证 Save.has() 已反映磁盘真实状态。 */
+      if (showMenu) {
+        menu.page = 'root';
+        menu.sel = menuDefaultSel();
+        menu.settingsSel = 0;
+        menu.helpScroll = 0;
+        menu.confirm = null;
+        menu.confirmSel = 0;
+      }
       /* D-90：无菜单的新冒险（验证页/跳过菜单）没有 floorChanged 时机，这里补布 F1 的入层测绘；
        * 读档继续不触发（规格 §6.1）。有菜单的新局由 restart → Map.setFloor → floorChanged 布点。 */
       if (!loaded && !showMenu && Game.Sys && typeof Game.Sys.armSurvey === 'function') {
@@ -933,8 +1007,8 @@
     /* D-52：死亡结算「回主菜单」（存档已在 _finalizeDeath 清掉；只离开当前局） */
     _deathReturnToMenu: function () {
       if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) Game.Modal.close();
-      menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
-      menu.confirm = null; menu.confirmSel = 1;
+      menu.page = 'root'; menu.sel = menuDefaultSel(); menu.settingsSel = 0; menu.helpScroll = 0;
+      menu.confirm = null; menu.confirmSel = 0;
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       this.switchScene('menu');
       Game.Core.EventBus.emit('ui:notice', { msg: '已回到主菜单（本局已结束，存档已清除）' });
@@ -943,8 +1017,8 @@
 
     /* D-52：结局页「回主菜单」——保留已通关存档，继续游戏可回到结局页 */
     _endingReturnToMenu: function () {
-      menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
-      menu.confirm = null; menu.confirmSel = 1;
+      menu.page = 'root'; menu.sel = menuDefaultSel(); menu.settingsSel = 0; menu.helpScroll = 0;
+      menu.confirm = null; menu.confirmSel = 0;
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       this.switchScene('menu');
       Game.Core.EventBus.emit('ui:notice', { msg: '已回到主菜单（结局存档保留）' });
@@ -961,7 +1035,7 @@
       endingSel = 0;
       /* D-51：新局不继承暂停态与残留战斗（从菜单/结算页重开时清干净） */
       pause.active = false; pause.page = 'root'; pause.sel = 0;
-      pause.settingsSel = 0; pause.confirmSel = 1; pause.wasPaused = false;
+      pause.settingsSel = 0; pause.confirmSel = 0; pause.wasPaused = false;
       if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.abort === 'function') {
         Game.Systems.Battle.abort();
       }
@@ -1086,19 +1160,22 @@
       return false;
     },
 
-    /* 菜单渲染数据（选项可用状态来自 Save.has()，无档时"继续游戏"置灰并带一行说明） */
+    /* 菜单渲染数据（选项可用状态来自 Save.has()，无档时"继续游戏"置灰并带一行说明；
+     * D-91：有档时「继续游戏」带楼层/等级/金币/用时，覆盖操作带玩家语域的警告） */
     _menuSpec: function () {
-      var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
+      var hasSave = saveHas();
+      var progress = hasSave ? saveProgress() : null;
       return {
         page: menu.page,
         sel: menu.sel,
         settingsSel: menu.settingsSel,
         helpScroll: menu.helpScroll,
-        confirm: menu.confirm,
+        confirm: menu.confirm ? confirmData(menu.confirm) : null,
         confirmSel: menu.confirmSel,
         items: [
-          { id: 'new', label: '开始新游戏', enabled: true },
-          { id: 'continue', label: '继续游戏', enabled: hasSave, note: hasSave ? '' : '暂无存档' },
+          { id: 'new', label: '开始新游戏', enabled: true, note: hasSave ? '将覆盖现有存档' : '' },
+          { id: 'continue', label: '继续游戏', enabled: hasSave,
+            note: hasSave ? '' : '暂无存档', detail: progress ? progress.text : '' },
           { id: 'help', label: '玩法说明', enabled: true },
           { id: 'settings', label: '设置', enabled: true },
           { id: 'about', label: '关于', enabled: true }
@@ -1149,7 +1226,8 @@
             encounter = null;
             if (Game.Modal) Game.Modal.close();
             this.switchScene('victory');
-            menu.page = 'root'; menu.sel = 0; menu.settingsSel = 0; menu.helpScroll = 0;
+            menu.page = 'root'; menu.sel = menuDefaultSel(); menu.settingsSel = 0; menu.helpScroll = 0;
+            menu.confirm = null; menu.confirmSel = 0;
             if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
             Game.Core.EventBus.emit('ui:notice', { msg: '本局已通关：显示上一局结局' });
             return true;
@@ -1177,9 +1255,11 @@
     /* 离开首屏后的共同收尾：清残留按键、按需弹首次引导、给一条提示 */
     _finishMenuEnter: function (msg) {
       menu.page = 'root';
-      menu.sel = 0;
+      menu.sel = menuDefaultSel();
       menu.settingsSel = 0;
       menu.helpScroll = 0;
+      menu.confirm = null;
+      menu.confirmSel = 0;
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       if (this._guidePending) {
         this._guidePending = false;
@@ -1203,7 +1283,17 @@
         if (enter) {
           delete k['Enter']; delete k['NumpadEnter'];
           var id = ['new', 'continue', 'help', 'settings', 'about'][menu.sel];
-          if (id === 'new') { this.enterGame('new'); return; }
+          if (id === 'new') {
+            /* D-91：有档时先弹覆盖确认，默认焦点在「取消」；无档才直接开新局 */
+            if (saveHas()) {
+              menu.confirm = 'new';
+              menu.confirmSel = 0;
+              menu.page = 'confirmNew';
+              return;
+            }
+            this.enterGame('new');
+            return;
+          }
           if (id === 'continue') { this.enterGame('continue'); return; }
           if (id === 'help') { menu.page = 'help'; menu.helpScroll = 0; return; }
           if (id === 'settings') { menu.page = 'settings'; menu.settingsSel = 0; return; }
@@ -1216,22 +1306,32 @@
         delete k['Escape'];
         /* D-51：清除存档确认页 → 返回设置页（取消，不删除） */
         if (menu.page === 'confirmClear') { menu.page = 'settings'; menu.confirm = null; return; }
+        /* D-91：新游戏覆盖确认页 → 返回主菜单（取消，不动存档） */
+        if (menu.page === 'confirmNew') { menu.page = 'root'; menu.confirm = null; return; }
         menu.page = 'root';
         return;
       }
 
-      /* D-51：清除存档二次确认——第一次 Enter 只弹提示，确认后才删 */
-      if (menu.page === 'confirmClear') {
+      /* D-51/D-91：二次确认（清除存档 / 覆盖存档）——默认「取消」，
+       * 回车在默认焦点上只取消；必须先用 ←→ 移到第 2 项才执行。 */
+      if (menu.page === 'confirmClear' || menu.page === 'confirmNew') {
+        var isNewConfirm = (menu.page === 'confirmNew');
         if (k['ArrowLeft'] || k['KeyA']) { delete k['ArrowLeft']; delete k['KeyA']; menu.confirmSel = 0; return; }
         if (k['ArrowRight'] || k['KeyD']) { delete k['ArrowRight']; delete k['KeyD']; menu.confirmSel = 1; return; }
         if (enter) {
           delete k['Enter']; delete k['NumpadEnter'];
           if (menu.confirmSel === 1) {
+            if (isNewConfirm) {
+              menu.page = 'root'; menu.confirm = null; menu.confirmSel = 0;
+              this.enterGame('new');
+              return;
+            }
             var had = this.clearSave();
             Game.Core.EventBus.emit('ui:notice', { msg: had ? '存档已清除（当前无存档）' : '当前没有存档可清除' });
           }
-          menu.page = 'settings';
+          menu.page = isNewConfirm ? 'root' : 'settings';
           menu.confirm = null;
+          menu.confirmSel = 0;
           return;
         }
         return;
@@ -1258,7 +1358,7 @@
             var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
             if (!hasSave) { Game.Core.EventBus.emit('ui:notice', { msg: '当前没有存档可清除' }); return; }
             menu.confirm = 'clear';
-            menu.confirmSel = 1;
+            menu.confirmSel = 0;   /* D-91：默认「取消」 */
             menu.page = 'confirmClear';
             return;
           }
@@ -1287,6 +1387,8 @@
         sel: pause.sel,
         settingsSel: pause.settingsSel,
         confirmSel: pause.confirmSel,
+        confirm: pause.page === 'confirmAbandon' ? confirmData('abandon')
+          : (pause.page === 'confirmClear' ? confirmData('clear') : null),
         items: PAUSE_ITEMS,
         settings: this._settingsRows(),
         hasSave: !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has())
@@ -1327,7 +1429,7 @@
       pause.page = 'root';
       pause.sel = 0;
       pause.settingsSel = 0;
-      pause.confirmSel = 1;
+      pause.confirmSel = 0;
       pause.stoppedAt = (typeof ts === 'number' && isFinite(ts)) ? ts : this._lastFrame;
       pause.wasPaused = false;
       /* 清掉按住的移动/动作键：恢复后不会因为"暂停时一直按着方向键"而突然走一步 */
@@ -1341,7 +1443,7 @@
       if (!pause.active) return false;
       pause.active = false;
       pause.page = 'root';
-      pause.confirmSel = 1;
+      pause.confirmSel = 0;
       pause.wasPaused = true;
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       return true;
@@ -1416,7 +1518,7 @@
               return;
             }
             pause.page = 'confirmClear';
-            pause.confirmSel = 1;
+            pause.confirmSel = 0;
           }
           return;
         }
@@ -1435,7 +1537,7 @@
       if (action === 'resume') { this.closePause(); return; }
       if (action === 'settings') { pause.page = 'settings'; pause.settingsSel = 0; return; }
       if (action === 'menu') { this._pauseReturnToMenu(); return; }
-      if (action === 'abandon') { pause.page = 'confirmAbandon'; pause.confirmSel = 1; return; }
+      if (action === 'abandon') { pause.page = 'confirmAbandon'; pause.confirmSel = 0; return; }
     },
 
     /* Esc / 取消：确认页回到上一级，设置页回根页，根页 = 继续游戏 */
@@ -1487,18 +1589,18 @@
       pause.active = false;
       pause.page = 'root';
       pause.sel = 0;
-      pause.confirmSel = 1;
+      pause.confirmSel = 0;
       pause.wasPaused = false;
       encounter = null;
       var B = Game.Systems && Game.Systems.Battle;
       if (B && typeof B.abort === 'function') B.abort();
       if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) Game.Modal.close();
       menu.page = 'root';
-      menu.sel = 0;
+      menu.sel = menuDefaultSel();
       menu.settingsSel = 0;
       menu.helpScroll = 0;
       menu.confirm = null;
-      menu.confirmSel = 1;
+      menu.confirmSel = 0;
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       this.switchScene('menu');
     },

@@ -20,6 +20,17 @@
       try { return localStorage.getItem(KEY) !== null; } catch (e) { return false; }
     },
 
+    /* D-91：只读快照——首屏「继续游戏」显示楼层/等级/金币/用时。
+     * 只解析、不写入、不改任何字段；损坏档返回 null（与 has() 的"存在"语义区分开）。 */
+    peek: function () {
+      try {
+        var raw = localStorage.getItem(KEY);
+        if (!raw) return null;
+        var d = JSON.parse(raw);
+        return (d && typeof d === 'object') ? d : null;
+      } catch (e) { return null; }
+    },
+
     save: function () {
       var p = Game.Data.Player;
       var M = Game.Systems.Map;
