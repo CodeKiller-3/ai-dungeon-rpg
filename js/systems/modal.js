@@ -769,6 +769,14 @@
   }
 
   Game.Modal = {
+    /* D-90（S0 取舍方案）：画面层唯一可读的系统令牌。
+     * 颜色与 5 个原语逐字沿用本文件既有定义，不复制第二份 SYS_C；
+     * sysviz.js 通过它取色/画线，突破刻度也直接调这里的同一份 sysBreakthroughParts。 */
+    _sys: {
+      C: SYS_C,
+      box: sysBox, edge: sysEdge, txt: sysTxt, bar: sysBar, segBar: sysSegBar,
+      breakthrough: sysBreakthroughParts
+    },
     /* D-28：供验证页断言"背包上下文传强化等级 / 商店图鉴走基础值"的只读入口 */
     _itemDesc: function (item, plus) { return itemDesc(item, plus); },
     /* D-85：第 4 页「系统」的只读行快照（验证页直接断言，不依赖画布像素） */

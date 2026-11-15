@@ -176,9 +176,9 @@
 
   /* S-04：状态图标行——画在顶栏正下方，仅在有中毒/流血时出现；
    * 单个 chip = 彩色边框 + 状态名 + 剩余回合；放不下则截断，不横向溢出 */
-  function drawStatusRow(ctx, list, W, barH) {
+  function drawStatusRow(ctx, list, W, y0) {
     if (!list || !list.length) return;
-    var x = 8, y = barH + 3, h = 13;
+    var x = 8, y = (typeof y0 === 'number') ? y0 : 31, h = 13;
     ctx.font = '10px monospace';
     ctx.textBaseline = 'top';
     ctx.textAlign = 'left';
@@ -347,8 +347,14 @@
           drawText(ctx, x, lvText, '#a78bfa');
         }
       }
-      /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏） */
-      drawStatusRow(ctx, s.status, W, barH);
+      /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏）。
+       * D-90：H1 读数带占 y=28–42，有读数带时 chip 下移到 45，避免两行文字相撞。 */
+      var bandOn = !!(Game.Sys && typeof Game.Sys.drawHudBand === 'function' &&
+        (typeof Game.Sys.ready !== 'function' || Game.Sys.ready()));
+      if (bandOn) {
+        try { Game.Sys.drawHudBand(ctx, W); } catch (e) { /* 降级：读数带异常不影响顶栏 */ }
+      }
+      drawStatusRow(ctx, s.status, W, bandOn ? 45 : barH + 3);
       /* D-55：任务指引（只在探索场景、已接任务、设置开启时由 guidance 返回非空） */
       var gd = null;
       try {
@@ -379,7 +385,7 @@
         ctx.fillStyle = '#ff6b6b';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
-        ctx.fillText(low.text, W - 14, barH + 6);
+        ctx.fillText(low.text, W - 14, bandOn ? 45 : barH + 6);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
       }

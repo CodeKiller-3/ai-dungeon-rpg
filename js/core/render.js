@@ -951,6 +951,8 @@
   }
 
   Game.Core.Render = {
+    /* D-90：地块尺寸只读入口（系统层按同一 TILE 换算，避免第二份 24） */
+    TILE: TILE,
     /* D-57：朝向帧状态与玩家图形绘制（验证页 B/C/F 组复用） */
     playerFrameState: playerFrameState,
     drawPlayerFigure: drawPlayerFigure,
@@ -1352,6 +1354,9 @@
         ctx.drawImage(staticCache.canvas, 0, 0);
         ctx.restore();
       }
+      /* D-90（X3）：系统底纹层（6 格网格残迹）——画在静态层之后、实体之前（z 序第 2 层）。
+       * 纯绘制，只读 Map.isSeen / FOV，不改任何地图数据。 */
+      try { if (Game.Sys && typeof Game.Sys.drawUnderlay === 'function') Game.Sys.drawUnderlay(ctx, grid, player); } catch (e) { /* 降级 */ }
       /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
       var es = Game.Systems.Map.getEnemies();
       for (var i = 0; i < es.length; i++) {

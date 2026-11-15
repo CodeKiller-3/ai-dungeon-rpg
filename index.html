@@ -42,6 +42,8 @@
 <script src="js/systems/map.js"></script>
 <!-- S3-1：fov.js 在 render.js 之后、main.js 之前 -->
 <script src="js/systems/fov.js"></script>
+<!-- D-90：系统测量层（只读 Game.Modal._sys；本模块不依赖任何 system，hud/render/main 运行时调用） -->
+<script src="js/systems/sysviz.js"></script>
 <!-- S3-2：hud.js 在 fov.js 之后、quest.js 之前 -->
 <script src="js/systems/hud.js"></script>
 <!-- S3-3：modal.js 在 hud.js 之后、quest.js 之前 -->

@@ -1575,6 +1575,15 @@
 
     getFloor: function () { return floorIndex + 1; },
     getGrid: function () { return grid; },
+    /* D-90：只读——该格是否已被点亮（已探索或当前可见）。
+     * 只读 FOV 记忆，不改 seen/explored 的任何写入逻辑；无 FOV 时视为可见。 */
+    isSeen: function (x, y) {
+      var F = Game.fov;
+      if (F && typeof F.isExplored === 'function') {
+        return F.isExplored(x, y) || (typeof F.isVisible === 'function' && F.isVisible(x, y));
+      }
+      return true;
+    },
     /* D-64：当前层按面积等比放大后的期望怪物数（只读；与 spawnEnemies 同一口径，
      * 供 verify_d18 断言"扩图后只增不减、且等于密度公式"。
      * D-67：同一口径包含 MAPS.density.enemyArea（只放大增量）。 */

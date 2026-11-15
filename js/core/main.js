@@ -425,6 +425,11 @@
 
   function onFloorChanged() {
     if (booting) return; /* 启动/读档期间不写档（含 Save.load 内部换层） */
+    /* D-90：T1 入层测绘——换层后布一次 520ms 的纯视觉事件（只记时间戳，不阻塞更新）。
+     * 放在 booting 守卫之后：启动/读档期间的 floorChanged 不触发，与规格 §6.1 同口径。 */
+    if (Game.Sys && typeof Game.Sys.armSurvey === 'function') {
+      try { Game.Sys.armSurvey(); } catch (e) { /* 降级：系统层异常不影响换层 */ }
+    }
     if (deferFloorSave) return; /* D-77：踩楼梯换层，见换层分支里的显式落盘 */
     Game.Systems.Save.save();
   }
@@ -686,6 +691,11 @@
       var loaded = Game.Systems.Save.load();
       if (!loaded) giveStartingGear();
       booting = false; /* 启动/读档完成，恢复 floorChanged 自动写档 */
+      /* D-90：无菜单的新冒险（验证页/跳过菜单）没有 floorChanged 时机，这里补布 F1 的入层测绘；
+       * 读档继续不触发（规格 §6.1）。有菜单的新局由 restart → Map.setFloor → floorChanged 布点。 */
+      if (!loaded && !showMenu && Game.Sys && typeof Game.Sys.armSurvey === 'function') {
+        try { Game.Sys.armSurvey(); } catch (e) { /* 降级 */ }
+      }
       refreshFov(); /* S3-1：初始视野（含读档后落点） */
       syncHud();    /* S3-2：初始顶部 HUD 数据 */
       /* D-48：首屏期间不弹提示/引导，等玩家真正进场景后再给 */
@@ -1817,11 +1827,15 @@
         var grid = Game.Systems.Map.getGrid();
         Game.Core.Render.drawMap(grid, player);
         Game.Core.Render.drawPlayer(player);
+        /* D-90（X1/X2）：系统标记层——目标四角括号 + 右上水印，画在实体之上、HUD 之下 */
+        try { if (Game.Sys && typeof Game.Sys.drawMarkers === 'function') Game.Sys.drawMarkers(Game.Core.Render._ctx, player); } catch (e) { /* 降级 */ }
         Game.Core.Render.drawHUD({
           fps: this._fps, floor: player.floor,
           hp: player.hp, maxHp: player.maxHp,
           gold: player.gold, atk: player.atk, def: player.def
         });
+        /* D-90（T1）：系统事件层——入层测绘黑场/层号/格数/房间括号，画在 HUD 之上、Juice 之下 */
+        try { if (Game.Sys && typeof Game.Sys.drawEvent === 'function') Game.Sys.drawEvent(Game.Core.Render._ctx, player); } catch (e) { /* 降级 */ }
       } else if (scene === 'battle') {
         this._updateBattle();
         Game.Core.Render.drawBattle(Game.Systems.Battle.getState());

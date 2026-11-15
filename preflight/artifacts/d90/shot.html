@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-90 实拍台</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<pre id="err"></pre>
+<!-- D-90 实拍台：真实 render/hud/sysviz 出图，时钟全部注入固定值。
+     参数：?view=survey|explore|hud|key&f=1..5&t=毫秒&phase=before|after&w=1024&h=640 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/sysviz.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  var W = +(q.w || 1024), H = +(q.h || 640);
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+  } catch (e) {}
+  var M = Game.Core.Main, P = Game.Data.Player, Map = Game.Systems.Map, Sys = Game.Sys;
+  var R = Game.Core.Render, S = Game.Core.Sprites;
+
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d90fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d90fps = true;
+  })();
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  var f = Math.max(1, Math.min(5, +(q.f || 3)));
+  var view = q.view || 'explore';
+  var tq = +(q.t || 0);
+  var phase = q.phase || 'after';
+  var rooms = -1, moved = null;
+
+  function placePlayer() {
+    var sp = Map.getSpawn();
+    P.x = sp.x; P.y = sp.y; P.floor = f;
+    Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+    R.invalidateStatic();
+  }
+  function stats() {
+    P.level = 5; P.exp = 120; P.atk = 14; P.def = 6;
+    P.hp = 92; P.maxHp = 140; P.mp = 30; P.maxMp = 30; P.gold = 268;
+    Game.hud.update({
+      hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+      floor: P.floor, level: P.level, exp: P.exp,
+      expNext: Game.Systems.Battle.expToNext(P.level), status: []
+    });
+  }
+  function warmTargets() {
+    /* X2 淡入 120ms：静帧拍摄前先按 t=0 登记目标，再切到目标时刻 → alpha=1 */
+    Sys._setClock(0);
+    try { Sys.drawMarkers(R._ctx, P); } catch (e) {}
+  }
+  function drawFrame() {
+    var ctx = R._ctx, grid = Map.getGrid();
+    R.drawMap(grid, P);
+    R.drawPlayer(P);
+    try { Sys.drawMarkers(ctx, P); } catch (e) {}
+    Game.hud.draw();
+    try { Sys.drawEvent(ctx, P); } catch (e) {}
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      M._guideVisible = false;
+      M._guidePending = false;
+      R.resize();
+      if (f > 1) Map.setFloor(f);
+      placePlayer();
+      stats();
+      R._animNow = function () { return 1234; };
+
+      if (view === 'survey') {
+        Sys._reset();
+        warmTargets(); /* 目标框按 t=0 登记（不能放在 armSurvey 之后，倒拨时钟会清事件） */
+        Sys._setClock(5000);
+        Sys.armSurvey();
+        var fr = Sys._surveyFrame();
+        rooms = fr ? fr.rooms : -1;
+        if (fr && fr.rooms > 0) {
+          /* 把镜头移到第一间房间内部，保证「房间四角括号」这一阶段真的在画面里 */
+          var sec = Game.Systems.Map.getRooms ? Game.Systems.Map.getRooms() : [];
+          if (sec.length) {
+            P.x = sec[0].x + Math.floor(sec[0].w / 2);
+            P.y = sec[0].y + Math.floor(sec[0].h / 2);
+            Game.fov.update(P.x, P.y, 6, function (x, y) { return Map.tileAt(x, y) === 0; });
+            R.invalidateStatic();
+          }
+        }
+        Sys._setClock(5000 + tq);
+        drawFrame();
+      } else if (view === 'key') {
+        Sys._reset();
+        Sys._setClock(5000);
+        Sys.armSurvey();
+        Sys._setClock(5200);
+        if (phase === 'after') {
+          var dirs = [[1, 0, 'ArrowRight'], [-1, 0, 'ArrowLeft'], [0, 1, 'ArrowDown'], [0, -1, 'ArrowUp']];
+          var picked = null;
+          for (var di = 0; di < dirs.length; di++) {
+            var nx = P.x + dirs[di][0], ny = P.y + dirs[di][1];
+            if (!Map.isWalkable(nx, ny)) continue;
+            if (Map.enemyAt && Map.enemyAt(nx, ny)) continue;
+            if (Map.eliteAt && Map.eliteAt(nx, ny)) continue;
+            picked = { x: P.x, y: P.y, code: dirs[di][2] };
+            break;
+          }
+          if (picked) {
+            Game.Core.Input.getState()[picked.code] = true;
+            M._updateExplore(performance.now() + 16); /* 真实更新函数：测绘期间照常走一格 */
+            delete Game.Core.Input.getState()[picked.code];
+            moved = { from: [picked.x, picked.y], to: [P.x, P.y] };
+            R.invalidateStatic();
+          }
+        } else {
+          moved = { from: [P.x, P.y], to: [P.x, P.y] };
+        }
+        warmTargets();
+        Sys._setClock(5200);
+        drawFrame();
+      } else if (view === 'target') {
+        /* X2 专项：站到楼梯/容器 3 格内，同时保证目标在视野里 */
+        Sys._reset();
+        Sys._setClock(9999);
+        var gT = Map.getGrid(), tg = null;
+        for (var ty = 0; ty < gT.length && !tg; ty++) {
+          for (var tx = 0; tx < gT[ty].length; tx++) {
+            if (gT[ty][tx] === 2 || gT[ty][tx] === 3) { tg = { x: tx, y: ty }; break; }
+          }
+        }
+        if (!tg) {
+          for (var dy2 = 0; dy2 < gT.length && !tg; dy2++) {
+            for (var dx2 = 0; dx2 < gT[dy2].length; dx2++) {
+              var dc = Map.getDecor ? Map.getDecor(dx2, dy2) : null;
+              if (dc && (dc === 'chest' || dc === 'room_chest' || dc === 'gold_pile' || dc === 'potion_stash')) {
+                tg = { x: dx2, y: dy2 }; break;
+              }
+            }
+          }
+        }
+        if (tg) {
+          var offsT = [[3, 0], [-3, 0], [0, 3], [0, -3], [2, 0], [-2, 0], [0, 2], [0, -2], [4, 0], [-4, 0], [0, 4], [0, -4]];
+          for (var oi = 0; oi < offsT.length; oi++) {
+            var ox = tg.x + offsT[oi][0], oy = tg.y + offsT[oi][1];
+            if (!Map.isWalkable(ox, oy)) continue;
+            P.x = ox; P.y = oy;
+            Game.fov.update(P.x, P.y, 6, function (x, y) { return Map.tileAt(x, y) === 0; });
+            if (Game.fov.isVisible(tg.x, tg.y)) break;
+          }
+          R.invalidateStatic();
+        }
+        warmTargets();
+        Sys._setClock(9999);
+        drawFrame();
+      } else {
+        Sys._reset(); /* 探索/HUD 实拍：常规底纹（不含入层测绘） */
+        Sys._setClock(9999);
+        /* 探索实拍要看底纹深浅：先把几处视野点亮（等价于走过），再站到地图中部 */
+        var gw = Map.getGrid();
+        var gx0 = Math.floor(gw[0].length / 2), gy0 = Math.floor(gw.length / 2);
+        var seq = [[1, 1], [gx0, gy0], [gw[0].length - 3, gw.length - 3], [gw[0].length - 3, 3], [3, gw.length - 3],
+          [gx0, 3], [gx0, gw.length - 3], [3, gy0], [gw[0].length - 3, gy0]];
+        for (var qi = 0; qi < seq.length; qi++) {
+          var qx = seq[qi][0], qy = seq[qi][1];
+          if (Map.isWalkable(qx, qy)) Game.fov.update(qx, qy, 8, function (x, y) { return Map.tileAt(x, y) === 0; });
+        }
+        var mx = Math.floor(gw[0].length / 2), my = Math.floor(gw.length / 2);
+        for (var ry = my; ry < gw.length; ry++) {
+          var found = false;
+          for (var rx = mx; rx < gw[0].length; rx++) if (gw[ry][rx] === 0) { P.x = rx; P.y = ry; found = true; break; }
+          if (found) break;
+        }
+        Game.fov.update(P.x, P.y, 7, function (x, y) { return Map.tileAt(x, y) === 0; });
+        R.invalidateStatic();
+        warmTargets();
+        Sys._setClock(9999);
+        drawFrame();
+      }
+      var sf = Sys._peek().survey;
+      window.__d90DrawAt = function (t) {
+        Sys._setClock(5000 + (+t || 0));
+        drawFrame();
+        return document.title;
+      };
+      /* 改前对照：同一张地图、同一时刻，只关掉系统测量层的四个绘制钩子 */
+      window.__d90SysOff = function () {
+        Sys.drawUnderlay = function () {};
+        Sys.drawMarkers = function () {};
+        Sys.drawEvent = function () {};
+        Sys.drawHudBand = function () { return null; };
+        drawFrame();
+        return 'SYS_OFF';
+      };
+      document.title = 'READY ' + view + ' F' + f + ' rooms=' + rooms +
+        ' pos=' + P.x + ',' + P.y + (moved ? (' moved=' + JSON.stringify(moved)) : '') +
+        ' survey=' + (sf ? (sf.t + 'ms/' + sf.phase) : 'none');
+      window.__d90Ready = true;
+    } catch (e) {
+      document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+      document.title = 'ERR ' + e;
+    }
+  }
+
+  S.load();
+  var tries = 0;
+  (function frame() {
+    tries++;
+    try {
+      if (!window.__d90Booted && S.isReady && S.isReady()) { window.__d90Booted = true; boot(); }
+      else if (!window.__d90Booted && tries > 240) { window.__d90Booted = true; boot(); }
+    } catch (e) { /* 降级 */ }
+    window.requestAnimationFrame(frame);
+  })();
+})();
+</script>
+</body>
+</html>
