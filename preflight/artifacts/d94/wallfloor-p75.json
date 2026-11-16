@@ -1,0 +1,158 @@
+{
+  "tag": "p75",
+  "method": "NTSC 0.299/0.587/0.114, alpha>0（PNG 已合成）",
+  "rule": "地板必须是最亮的可走面，且明显高于墙（gap≥15，同探索层）",
+  "views": [
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "floor": 1,
+      "floorL": 36.8,
+      "wallL": 8.2,
+      "standL": 36.7,
+      "playerStandL": 36.7,
+      "floorMinusWall": 28.6,
+      "floorMinusStand": 0.1,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "floor": 2,
+      "floorL": 36.9,
+      "wallL": 5.7,
+      "standL": 34.9,
+      "playerStandL": 35.1,
+      "floorMinusWall": 31.1,
+      "floorMinusStand": 1.9,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "floor": 3,
+      "floorL": 37.4,
+      "wallL": 3.7,
+      "standL": 35.4,
+      "playerStandL": 35.3,
+      "floorMinusWall": 33.7,
+      "floorMinusStand": 2.0,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "floor": 4,
+      "floorL": 38.9,
+      "wallL": 11.2,
+      "standL": 40.7,
+      "playerStandL": 40.7,
+      "floorMinusWall": 27.7,
+      "floorMinusStand": -1.8,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "floor": 5,
+      "floorL": 35.8,
+      "wallL": 5.4,
+      "standL": 34.3,
+      "playerStandL": 34.4,
+      "floorMinusWall": 30.4,
+      "floorMinusStand": 1.5,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        960,
+        540
+      ],
+      "floor": 1,
+      "floorL": 36.7,
+      "wallL": 7.8,
+      "standL": 35.8,
+      "playerStandL": 35.8,
+      "floorMinusWall": 28.9,
+      "floorMinusStand": 0.9,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        960,
+        540
+      ],
+      "floor": 2,
+      "floorL": 37.1,
+      "wallL": 5.6,
+      "standL": 35.3,
+      "playerStandL": 35.3,
+      "floorMinusWall": 31.5,
+      "floorMinusStand": 1.8,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        960,
+        540
+      ],
+      "floor": 3,
+      "floorL": 37.2,
+      "wallL": 3.7,
+      "standL": 35.4,
+      "playerStandL": 35.5,
+      "floorMinusWall": 33.6,
+      "floorMinusStand": 1.8,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        960,
+        540
+      ],
+      "floor": 4,
+      "floorL": 38.8,
+      "wallL": 10.9,
+      "standL": 40.3,
+      "playerStandL": 40.2,
+      "floorMinusWall": 27.9,
+      "floorMinusStand": -1.4,
+      "standsEqual": true,
+      "ok": true
+    },
+    {
+      "viewport": [
+        960,
+        540
+      ],
+      "floor": 5,
+      "floorL": 36.0,
+      "wallL": 5.3,
+      "standL": 34.0,
+      "playerStandL": 34.0,
+      "floorMinusWall": 30.7,
+      "floorMinusStand": 1.9,
+      "standsEqual": true,
+      "ok": true
+    }
+  ],
+  "allOk": true
+}

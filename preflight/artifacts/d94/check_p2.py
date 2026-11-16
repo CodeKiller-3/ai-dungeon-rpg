@@ -45,24 +45,33 @@ def bright(px):
 
 def main():
     geo = json.load(open(os.path.join(ROOT, 'geometry-p2.json'), encoding='utf-8'))
-    base = json.load(open(os.path.join(ROOT, 'geometry-base.json'), encoding='utf-8'))
 
-    # ---- 1) 纵置逐像素不变（与 P0 同参数同帧哈希对账） ----
-    base_by = {}
-    for k, v in base.items():
-        g = v.get('geo') or {}
-        base_by[(v['viewport'][0], v['viewport'][1], v['floor'], v['monster'], v['ask'])] = g.get('hash')
+    # ---- 1) 纵置场景逐像素不变（P7.5 起 HUD 顶栏获准最小修复，故对账口径为 y≥28；
+    #         顶栏差异由 check_p75.py D 组单独判"MP 读数留白"，不在这里放宽） ----
     for (w, h) in VIEWS:
         for f, mid in FLOORS:
             key = '%dx%d-f%d-%s-vertical' % (w, h, f, mid)
-            g = (geo.get(key) or {}).get('geo') or {}
-            want = base_by.get((w, h, f, mid, 'vertical'))
-            if not want:
-                fail('基线缺纵置样本 %s' % key)
-            elif g.get('hash') != want:
-                fail('纵置像素变了 %s: %s != %s' % (key, g.get('hash'), want))
+            base_name = 'base-%dx%d-vertical-%s.png' % (w, h, ('f3-' + mid) if f == 3 else mid)
+            bp = os.path.join(ROOT, base_name)
+            np_ = os.path.join(ROOT, 'p2-' + key + '.png')
+            if not os.path.exists(bp):
+                fail('基线缺纵置样本 %s' % base_name)
+                continue
+            a, b = load('p2-' + key), load(base_name[:-4])
+            W0, H0 = a.size
+            pa, pb = a.load(), b.load()
+            bad, hud = 0, 0
+            for y in range(H0):
+                for x in range(W0):
+                    if pa[x, y] != pb[x, y]:
+                        if y >= 28:
+                            bad += 1
+                        else:
+                            hud += 1
+            if bad:
+                fail('纵置场景变了 %s：y≥28 有 %d px 不同' % (key, bad))
             else:
-                ok('纵置逐像素不变 %s hash=%s' % (key, want))
+                ok('纵置场景逐像素不变 %s（顶栏差异 %d px，见 check_p75）' % (key, hud))
 
     # ---- 2) 横置纯背景亮度分区 ----
     sig = {}
@@ -130,12 +139,15 @@ def main():
                 x1 = min(W - 1, box['x'] + box['w'])
                 y0 = max(0, box['y'])
                 lowrow = None
-                for y in range(y0, min(H, G + 10)):
+                # P7.5：地板按"最亮可走面"提亮后，深色靴底不再比地面亮，
+                # 原来"精灵比背景亮 >16"的单向判据会漏掉靴底两行。改为同一阈值的
+                # 双向色差（|ΔR|/|ΔG|/|ΔB| 任一 >16），并把扫描上界收到基线行，
+                # 避开接触阴影（阴影恒在 groundY-1..+3，属于绘制结果而不是精灵本体）。
+                for y in range(y0, min(H, G)):
                     for x in range(x0, x1 + 1):
                         a, b = ps[x, y], pb[x, y]
-                        # 共享地面带本身就比纯背景亮 +10，故阈值取 16：
-                        # 高于地面带、低于最暗的靴底（实测 +23），不会把地面带误判成精灵。
-                        if (a[0] - b[0] > 16) or (a[1] - b[1] > 16) or (a[2] - b[2] > 16):
+                        if (abs(a[0] - b[0]) > 16 or abs(a[1] - b[1]) > 16 or
+                                abs(a[2] - b[2]) > 16):
                             lowrow = y
                             break
                 if lowrow is None:

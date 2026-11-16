@@ -517,7 +517,7 @@
    * D-89：两池熔岩原比红色沃古尔更亮（峰值 200、亮部 337px），背景压了主体一头。
    * 现在压暗 + 收窄：岩壳变宽、熔岩带变薄、亮心只留断续 2px，光晕 0.22→0.12；
    * 峰值降到 ~180 且亮部面积压到 20px 以内（< 沃古尔自身的 170+ 亮部）。 */
-  function bgLavaSeam(c, x0, x1, y) {
+  function bgLavaSeam(c, x0, x1, y, hot) {
     var w = Math.max(40, x1 - x0);
     bgGlow(c, (x0 + x1) / 2, y, Math.max(60, w * 0.60), [255, 120, 40], 0.12);
     /* 上下岩缘（比旧版更厚，压住熔岩的面积） */
@@ -540,6 +540,17 @@
     /* 飞出的余烬（压暗，不构成亮部） */
     for (var i = 0; i < 3; i++) {
       bgRect(c, x0 + w * (0.18 + i * 0.24), y - 9 - (i % 2) * 4, 2, 2, '#b8641f');
+    }
+    /* D-94 P7.5：横置每池留 5–10px 白热核心 + 几粒火星（纵置不传 hot → 逐像素不变）。
+     * 核心固定在池心（左 ≈0.07W / 右 ≈0.93W），仍落在两侧极值区，不进两人站位之间。 */
+    if (hot) {
+      var chx = Math.round(x0 + w * 0.5);
+      bgGlow(c, chx, y + 3, Math.max(18, Math.round(w * 0.14)), [255, 214, 150], 0.28);
+      bgRect(c, chx - 4, y + 2, 8, 3, '#ffe4a8');
+      bgRect(c, chx - 2, y + 2, 4, 2, '#fffaf0');
+      for (var hj = 0; hj < 3; hj++) {
+        bgRect(c, chx + (hj - 1) * 9, y - 7 - hj * 3, 2, 2, '#ffd27a');
+      }
     }
   }
   function bgLavaRift(c, W, H, sc, cols, canTile) {
@@ -800,6 +811,14 @@
     if (canTile) bgTiles(c, f, bwY, Math.ceil((H - bwY) / TILE), cols, tint);
     else bgRect(c, 0, bwY, W, H - bwY, fallback || '#07070c');
   }
+  /* D-94 P7.5：后墙压暗——探索层已定的关系（地板是最亮可走面）在战斗背景沿用。
+   * 只压 y<bwY 的后墙与贴墙构件；火把/熔岩/地板都画在这之后，光源与可走面不受影响。
+   * 不是把墙压成纯黑：各层 a 按砖面实测亮度取，压后砖面仍看得见砌缝。 */
+  function hWallDim(c, W, bwY, a) {
+    if (!(a > 0)) return;
+    c.fillStyle = 'rgba(0,0,0,' + a + ')';
+    c.fillRect(0, 0, W, bwY);
+  }
 
   /* F1 石厅：错缝石墙 + 左窄拱/右宽拱（两侧构件）+ 中央只留远端暗 + 湿石板 */
   function hbgStoneHall(c, W, H, sc, cols, canTile) {
@@ -825,7 +844,9 @@
       bgRect(c, px2 - 22, bwY - 12, 44, 20, '#171722');
       bgRect(c, px2 - 22, bwY - 12, 44, 3, '#242435');
     }
-    hFloorTiles(c, W, H, bwY, 1, cols, canTile, 'rgba(4,5,13,0.72)', '#08080f');
+    /* P7.5：墙压 0.28、地板洗到 ≈37（改前 0.72 黑洗 → 20.5，比墙的砖面还暗） */
+    hWallDim(c, W, bwY, 0.28);
+    hFloorTiles(c, W, H, bwY, 1, cols, canTile, 'rgba(22,24,26,0.60)', '#08080f');
     bgRect(c, 0, bwY - 5, W, 5, '#191928');
     /* 壁挂火把：两侧极值；火心在下带（y≥0.594H） */
     var tx = [Math.round(W * 0.09), Math.round(W * 0.91)];
@@ -879,7 +900,9 @@
     }
     bgRect(c, px0, bwY - Math.round(H * 0.10), W - px0, 4, '#31261a');
     bgContact(c, Math.round(W * 0.93), bwY + 8, Math.round(W * 0.06), 5);
-    hFloorTiles(c, W, H, bwY, 2, cols, canTile, 'rgba(10,8,6,0.70)', '#080705');
+    /* P7.5：营地后墙本就极暗（实测 8.4），只补 0.10 压一层；地板洗到 ≈37 */
+    hWallDim(c, W, bwY, 0.10);
+    hFloorTiles(c, W, H, bwY, 2, cols, canTile, 'rgba(3,2,2,0.60)', '#080705');
     /* 木箱必须画在地砖之后，否则会被地面覆盖（D-89 同一坑） */
     var bx = Math.round(W * 0.905);
     bgContact(c, bx, G - 2, 42, 6);
@@ -939,25 +962,25 @@
     for (var gpi = 1; gpi < gap.length; gpi++) c.lineTo(gap[gpi][0], gap[gpi][1]);
     c.closePath();
     c.fill();
-    /* 缝底一点余热：给"远处还有更深的裂谷"一个明度落点，不是光源 */
-    bgGlow(c, W * 0.5, bwY - Math.round(H * 0.012), Math.round(W * 0.11), [255, 110, 40], 0.07);
-    /* 缝里再退一层：远处崖壁剪影 + 顶部岩檐——黑块有了层次才读成深谷，而不是门 */
-    var farTop = Math.round(bwY * 0.34);
-    bgPoly(c, [[Math.round(W * 0.34), bwY], [Math.round(W * 0.38), farTop + Math.round(H * 0.05)],
-      [Math.round(W * 0.44), farTop], [Math.round(W * 0.50), farTop + Math.round(H * 0.035)],
-      [Math.round(W * 0.56), farTop - Math.round(H * 0.01)], [Math.round(W * 0.62), farTop + Math.round(H * 0.05)],
-      [Math.round(W * 0.66), bwY]], '#16121c');
-    bgPoly(c, [[Math.round(W * 0.28), 0], [Math.round(W * 0.41), 0],
-      [Math.round(W * 0.45), Math.round(H * 0.06)], [Math.round(W * 0.38), Math.round(H * 0.095)],
-      [Math.round(W * 0.33), Math.round(H * 0.052)], [Math.round(W * 0.30), Math.round(H * 0.082)]], '#0a080e');
-    bgPoly(c, [[Math.round(W * 0.72), 0], [Math.round(W * 0.59), 0],
-      [Math.round(W * 0.56), Math.round(H * 0.07)], [Math.round(W * 0.63), Math.round(H * 0.10)],
-      [Math.round(W * 0.67), Math.round(H * 0.05)], [Math.round(W * 0.70), Math.round(H * 0.08)]], '#0a080e');
+    /* D-94 P7.5：中央不再有任何单点物件——原来的「远处崖壁剪影 + 顶部岩檐」在横置下
+     * 读成一座从顶压到地面的黑岩体，把两个人挤到画面两边。现在中央只留空走道 +
+     * 越远越暗的缝（纵深交给明度差），重量全部移到两侧崖壁。 */
+    for (var li = 0; li < 5; li++) {
+      var ly = Math.round(bwY * (0.16 + li * 0.155));
+      bgLine(c, 0, ly, Math.round(W * 0.20), ly + Math.round(H * 0.016), 'rgba(86,78,110,0.10)', 3);
+      bgLine(c, W, ly + Math.round(H * 0.008), Math.round(W * 0.80),
+        ly + Math.round(H * 0.024), 'rgba(86,78,110,0.10)', 3);
+    }
     bgRect(c, 0, bwY - 4, W, 4, '#141119');
-    hFloorTiles(c, W, H, bwY, 3, cols, canTile, 'rgba(9,10,18,0.80)', '#07070c');
-    /* 两侧地面熔岩：亮心只在极值侧（左 ≤0.12W / 右 ≥0.88W） */
-    bgLavaSeam(c, 0, Math.round(W * 0.14), Math.round(H * 0.705));
-    bgLavaSeam(c, Math.round(W * 0.86), W, Math.round(H * 0.705));
+    hWallDim(c, W, bwY, 0.22);
+    /* P7.5：地板洗到 ≈37 并降对比（改前 0.80 黑洗 → 21，暖棕砖纹又亮又密压过角色） */
+    hFloorTiles(c, W, H, bwY, 3, cols, canTile, 'rgba(28,16,10,0.60)', '#07070c');
+    /* 两侧崖脚压地线：画在地板之后才不会被地砖盖住，崖壁才读成"落在地上" */
+    bgRect(c, 0, bwY, Math.round(W * 0.18), 3, 'rgba(0,0,0,0.35)');
+    bgRect(c, W - Math.round(W * 0.18), bwY, Math.round(W * 0.18), 3, 'rgba(0,0,0,0.35)');
+    /* 两侧地面熔岩：亮心只在极值侧（左 ≤0.12W / 右 ≥0.88W）；hot=true 每池留白热核心 + 火星 */
+    bgLavaSeam(c, 0, Math.round(W * 0.14), Math.round(H * 0.705), true);
+    bgLavaSeam(c, Math.round(W * 0.86), W, Math.round(H * 0.705), true);
     for (var ai = 0; ai < 22; ai++) {
       var ax = (ai * 137 + 40) % Math.max(1, W);
       var ay = Math.round(H * 0.32) + (ai * 73) % Math.round(H * 0.34);
@@ -1004,7 +1027,9 @@
     bgPoly(c, [[sx - 38, G], [sx - 30, G - 54], [sx + 34, G - 62], [sx + 40, G]], '#1b2a35');
     bgPoly(c, [[sx - 32, G - 6], [sx - 26, G - 48], [sx + 30, G - 55], [sx + 34, G - 6]], '#22323d');
     bgLine(c, sx - 22, G - 44, sx + 26, G - 50, 'rgba(120,180,210,0.20)', 1);
-    hFloorTiles(c, W, H, bwY, 4, cols, canTile, 'rgba(10,24,36,0.80)', '#060d14');
+    /* P7.5：冰石后墙砖面实测 19.6（五层最高），压 0.30；地板洗到 ≈39 */
+    hWallDim(c, W, bwY, 0.30);
+    hFloorTiles(c, W, H, bwY, 4, cols, canTile, 'rgba(12,18,24,0.60)', '#060d14');
     bgRect(c, 0, bwY - 5, W, 5, '#16242e');
     /* 霜雾：只贴两侧地面，中央空场不铺 */
     c.fillStyle = 'rgba(140,200,230,0.04)';
@@ -1093,7 +1118,9 @@
     c.beginPath();
     c.ellipse(tx, tb + 2, hw2 + 16, Math.round(H * 0.02), 0, 0, Math.PI * 2);
     c.fill();
-    hFloorTiles(c, W, H, bwY, 5, cols, canTile, 'rgba(14,8,24,0.78)', '#09050f');
+    /* P7.5：黑曜石后墙压 0.10（本就 8.1）；地板洗到 ≈36 并降纹理对比 */
+    hWallDim(c, W, bwY, 0.10);
+    hFloorTiles(c, W, H, bwY, 5, cols, canTile, 'rgba(32,22,28,0.60)', '#09050f');
     for (var fi = 0; fi < 8; fi++) {
       var fgx = (fi * 173 + 40) % Math.max(1, W);
       bgLine(c, fgx, G + Math.round(H * 0.02) + (fi % 2) * Math.round(H * 0.03),

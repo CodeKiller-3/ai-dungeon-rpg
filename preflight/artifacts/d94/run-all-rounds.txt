@@ -105,6 +105,25 @@ TOTAL_DIFF=0
 默认证据（`geometry-p7.json`）：1024 默认 hash `46e0cb3d` == 显式 horizontal；320 默认 resolved=vertical，
 hash `3ee9c054` == 显式 vertical。页数 122，未增删页。
 
+---
+
+## P7.5 墙地关系 + F3 中央空场 + 熔岩白热 + HUD 最小修复（2026-11-16）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | d90 C_targetBrackets 装置抖动（单页 6/6 PASS） |
+| 2 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | d05–d09/d60 读第 1 轮台账 |
+| 3 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 |
+| 4 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | d89 E1_bodyDisplacement 装置抖动 |
+| 5 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | d05–d09/d60 读第 4 轮台账 |
+| 6 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 |
+| 7 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p75-run-7.txt`） |
+| 8 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p75-run-8.txt`） |
+
+四策略（`compare_runs.py p75`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+纵置对账口径：场景区 y≥28 与 P0 逐像素相同（HUD 顶栏按授权最小修复，见说明 §14.7）。
+墙地亮度：改前 2/10 行达标 → 改后 **10/10**（`wallfloor-{p7a,p75}.json`）。
+
 
 
 

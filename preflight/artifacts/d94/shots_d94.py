@@ -86,6 +86,17 @@ def p4_shots():
     return out
 
 
+# P7.5：墙地亮度关系 + 五层地板纹理 + F3 重构（横置纯背景 + 全图）
+def p75_shots():
+    out = []
+    for w, h in [(1024, 640), (960, 540)]:
+        for f, mid in FLOORS:
+            tag = '%dx%d-f%d-%s' % (w, h, f, mid)
+            out.append((tag + '-horizontal-bg', w, h, f, mid, 'horizontal', '&bg=1'))
+            out.append((tag + '-horizontal', w, h, f, mid, 'horizontal', ''))
+    return out
+
+
 # P7：默认布局实拍（不传 layout，走产品默认）+ 显式对照 + 竖屏回退
 def p7_shots():
     out = [
@@ -110,6 +121,8 @@ def main():
         shots = p4_shots()
     elif mode == 'p5':
         shots = p5_shots()
+    elif mode == 'p75':
+        shots = p75_shots()
     elif mode == 'p7':
         shots = p7_shots()
     else:

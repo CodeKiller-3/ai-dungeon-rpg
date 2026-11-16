@@ -115,7 +115,8 @@
     var R1 = Game.Core && Game.Core.Render;
     if (R1 && R1.drawIcon) R1.drawIcon(ctx, icon, x, iy);
     else ctx.drawImage(icon, x, iy, iw, ih);
-    return drawBar(ctx, x + iw + 3, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 44 : 56);
+    /* P7.5：图标与条之间留 6px——3px 时两者都是蓝色，窄屏读成一块叠在一起的蓝 */
+    return drawBar(ctx, x + iw + 6, 'MP', mp, mpMax, '#60a5fa', '#131d33', narrow ? 44 : 56);
   }
 
   /* D-79：金币文字 + coin 图标（D-80 起 24×24 原生 1:1）；图标缺失回退纯文字 */
@@ -141,6 +142,11 @@
   function drawBar(ctx, x, label, v, vmax, color, bg, w) {
     var h = 10;
     var y = Math.max(2, Math.round((CUR_BAR_H - h) / 2));
+    /* P7.5：条宽至少要装得下它自己的读数（字号体系不变，只拒绝"字比条宽"）。
+     * 改前窄屏 HP 60px / MP 44px 配 "HP 100/140" "MP 30/30"，数字压到条框外，
+     * 与条幅互相盖；这里按实际测量把条放宽到 label+12，文字左右各留 6px。 */
+    ctx.font = 'bold 9px monospace';
+    w = Math.max(w, Math.ceil(ctx.measureText(label + ' ' + fmt(v) + '/' + fmt(vmax)).width) + 12);
     ctx.fillStyle = bg;
     ctx.fillRect(x, y, w, h);
     var ratio = (typeof v === 'number' && typeof vmax === 'number' && vmax > 0)

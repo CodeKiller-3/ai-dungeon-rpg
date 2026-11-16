@@ -41,24 +41,26 @@ def geo_of(geo, tag):
 
 def main():
     geo = json.load(open(os.path.join(ROOT, 'geometry-p5.json'), encoding='utf-8'))
-    base = json.load(open(os.path.join(ROOT, 'geometry-base.json'), encoding='utf-8'))
-
-    base_by = {}
-    for k, v in base.items():
-        g = v.get('geo') or {}
-        base_by[(v['viewport'][0], v['viewport'][1], v['floor'], v['monster'], v['ask'])] = g.get('hash')
-
-    # ---- 1) 纵置逐像素不变 ----
+    # ---- 1) 纵置场景逐像素不变（P7.5 起 HUD 顶栏获准最小修复，对账口径改为 y≥28） ----
+    from PIL import Image
     bad = 0
     for (w, h) in VIEWS:
         for f, mid in FLOORS:
             tag = '%dx%d-f%d-%s-vertical-nofx' % (w, h, f, mid)
-            g = geo_of(geo, tag)
-            want = base_by.get((w, h, f, mid, 'vertical'))
-            if not want or g.get('hash') != want:
+            base_name = 'base-%dx%d-vertical-%s.png' % (w, h, ('f3-' + mid) if f == 3 else mid)
+            a = Image.open(os.path.join(ROOT, 'p5-' + tag + '.png')).convert('RGB')
+            b = Image.open(os.path.join(ROOT, base_name)).convert('RGB')
+            pa, pb = a.load(), b.load()
+            diff = 0
+            for y in range(28, h):
+                for x in range(w):
+                    if pa[x, y] != pb[x, y]:
+                        diff += 1
+            if diff:
                 bad += 1
-                fail('纵置像素变了 %s: %s != %s' % (tag, g.get('hash'), want))
-    ok('纵置无特效帧逐像素不变：%d/%d 与 P0 哈希相同' % (len(VIEWS) * len(FLOORS) - bad, len(VIEWS) * len(FLOORS)))
+                fail('纵置场景变了 %s：y≥28 有 %d px' % (tag, diff))
+    ok('纵置无特效帧场景逐像素不变：%d/%d（y≥28；顶栏差异见 check_p75）' %
+       (len(VIEWS) * len(FLOORS) - bad, len(VIEWS) * len(FLOORS)))
 
     # ---- 2/3) 横置两个方向 ----
     for (w, h) in VIEWS:

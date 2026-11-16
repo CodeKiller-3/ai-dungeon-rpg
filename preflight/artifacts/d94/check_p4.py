@@ -37,24 +37,27 @@ def clamp_w(sprite_w):
 
 def main():
     geo = json.load(open(os.path.join(ROOT, 'geometry-p4.json'), encoding='utf-8'))
-    base = json.load(open(os.path.join(ROOT, 'geometry-base.json'), encoding='utf-8'))
 
-    base_by = {}
-    for k, v in base.items():
-        g = v.get('geo') or {}
-        base_by[(v['viewport'][0], v['viewport'][1], v['floor'], v['monster'], v['ask'])] = g.get('hash')
-
-    # ---- 1) 纵置逐像素不变 ----
+    # ---- 1) 纵置场景逐像素不变（P7.5 起 HUD 顶栏获准最小修复，对账口径改为 y≥28） ----
+    from PIL import Image
+    badn = 0
     for (w, h) in VIEWS:
         for f, mid in FLOORS:
             key = '%dx%d-f%d-%s-vertical' % (w, h, f, mid)
-            g = (geo.get(key) or {}).get('geo') or {}
-            want = base_by.get((w, h, f, mid, 'vertical'))
-            if not want:
-                fail('基线缺纵置样本 %s' % key)
-            elif g.get('hash') != want:
-                fail('纵置像素变了 %s: %s != %s' % (key, g.get('hash'), want))
-    ok('纵置逐像素不变：%d/%d 与 P0 哈希相同' % (len(VIEWS) * len(FLOORS), len(VIEWS) * len(FLOORS)))
+            base_name = 'base-%dx%d-vertical-%s.png' % (w, h, ('f3-' + mid) if f == 3 else mid)
+            a = Image.open(os.path.join(ROOT, 'p4-' + key + '.png')).convert('RGB')
+            b = Image.open(os.path.join(ROOT, base_name)).convert('RGB')
+            pa, pb = a.load(), b.load()
+            bad = 0
+            for y in range(28, h):
+                for x in range(w):
+                    if pa[x, y] != pb[x, y]:
+                        bad += 1
+            if bad:
+                badn += 1
+                fail('纵置场景变了 %s：y≥28 有 %d px' % (key, bad))
+    ok('纵置场景逐像素不变：%d/%d（y≥28 与 P0 相同；顶栏差异见 check_p75）' %
+       (len(VIEWS) * len(FLOORS) - badn, len(VIEWS) * len(FLOORS)))
 
     # ---- 2) 铭牌 + 回合条 ----
     for (w, h) in VIEWS:
