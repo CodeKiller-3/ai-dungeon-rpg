@@ -160,6 +160,25 @@ F3 熔岩池（`check_p75.py` C 组）：每侧高温区 ≥1900px、外接框 0
 四策略（`compare_runs.py p77`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
 `verify_d93` / `verify_d60` / `verify_d14` 单页 PASS；门缝仍 2px `#ffbf73`。
 
+---
+
+## P7.8 B1 重做 + B3 修正（2026-11-16）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | 连续全绿（`p78-run-1.txt`） |
+| 2 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | d90 `C_targetBrackets` 装置抖动 |
+| 3 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | d05–d09/d60 读第 2 轮台账 |
+| 4 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 |
+| 5 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | d89 `E1_bodyDisplacement` 装置抖动 |
+| 6 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | 元页面连带 |
+| 7 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 |
+| 8 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p78-run-8.txt`） |
+| 9 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p78-run-9.txt`） |
+
+四策略（`compare_runs.py p78`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+B1 机器判据（`check_menu_b1.py`）：门缝 2px、门板峰值 126<255、横档 55.3/58.6<门板 66.1/68.3、光池横向单调无硬边、台阶 55>49>33>19、门区无第二亮点。
+
 
 
 
