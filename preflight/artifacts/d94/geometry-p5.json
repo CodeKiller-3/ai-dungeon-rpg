@@ -1,0 +1,5294 @@
+{
+  "1024x640-f1-slime-vertical-nofx": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "263beb64"
+    }
+  },
+  "1024x640-f2-ogre_boss-vertical-nofx": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 464,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "51a19351"
+    }
+  },
+  "1024x640-f3-slime-vertical-nofx": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "abdceb49"
+    }
+  },
+  "1024x640-f4-zombie_king-vertical-nofx": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 464,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "cfff218e"
+    }
+  },
+  "1024x640-f5-dragon-vertical-nofx": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 440,
+        "y": 36,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "d585780c"
+    }
+  },
+  "1024x640-f1-slime-horizontal-fx-p": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 736,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": 3,
+        "lungeX": 0,
+        "knock": 3
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 352,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 372,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 711,
+        "y": 352,
+        "w": 135,
+        "h": 34,
+        "barX": 719,
+        "barY": 372,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 436,
+        "y": 52,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            1
+          ],
+          "slashAngles": [
+            1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 744,
+              "y": 444,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 744,
+            "y": 444
+          },
+          "slashPos": {
+            "x": 744,
+            "y": 444,
+            "keepBelow": 332,
+            "keepAbove": 544
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 745.52,
+            "y": 437.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 747.37,
+            "y": 436.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.5,
+            "y": 436.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 751.77,
+            "y": 437.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.01,
+            "y": 438.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 756.04,
+            "y": 440.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 755.42,
+            "y": 442.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.26,
+            "y": 445.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 752.7,
+            "y": 446.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 750.92,
+            "y": 448.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.07,
+            "y": 448.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 740.53,
+            "y": 445.08,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 746.83,
+            "y": 442.59,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 744.8,
+            "y": 448.42,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 746.57,
+            "y": 444.79,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 746.78,
+            "y": 443.4,
+            "alpha": 0.9871706652719304
+          },
+          {
+            "kind": "spark",
+            "x": 742.16,
+            "y": 445.8,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "a55e798f"
+    }
+  },
+  "1024x640-f1-slime-vertical-fx-p": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 456,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 87,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": -2.96
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            -1
+          ],
+          "slashAngles": [
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 536,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 536,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 536,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 533.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 534.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 540.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 543.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 542.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 537.73,
+            "y": 169.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 539.52,
+            "y": 164.76,
+            "alpha": 0.8984067111443533
+          },
+          {
+            "kind": "spark",
+            "x": 537.55,
+            "y": 161.5,
+            "alpha": 0.9869223637235839
+          },
+          {
+            "kind": "spark",
+            "x": 533.17,
+            "y": 166.73,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 539.55,
+            "y": 167.79,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 532.37,
+            "y": 166.47,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "6b685383"
+    }
+  },
+  "1024x640-f1-slime-horizontal-fx-m": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 214,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -6,
+        "lungeX": 0,
+        "knock": -6
+      },
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 352,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 372,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 711,
+        "y": 352,
+        "w": 135,
+        "h": 34,
+        "barX": 719,
+        "barY": 372,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 436,
+        "y": 52,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            1,
+            -1
+          ],
+          "slashAngles": [
+            1.0707963267948966,
+            -1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 744,
+              "y": 444,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            },
+            {
+              "x": 270,
+              "y": 442,
+              "dir": -1,
+              "a0": -1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 744,
+            "y": 444
+          },
+          "slashPos": {
+            "x": 744,
+            "y": 444,
+            "keepBelow": 332,
+            "keepAbove": 544
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 745.52,
+            "y": 437.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 747.37,
+            "y": 436.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.5,
+            "y": 436.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 751.77,
+            "y": 437.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.01,
+            "y": 438.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 756.04,
+            "y": 440.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 755.42,
+            "y": 442.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.26,
+            "y": 445.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 752.7,
+            "y": 446.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 750.92,
+            "y": 448.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.07,
+            "y": 448.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 745.07,
+            "y": 446.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 744.56,
+            "y": 446.08,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 742.08,
+            "y": 442.1,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 745.93,
+            "y": 444.66,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 746.69,
+            "y": 443.6,
+            "alpha": 0.9152539046823918
+          },
+          {
+            "kind": "spark",
+            "x": 741.42,
+            "y": 446.22,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 264.93,
+            "y": 446.72,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 263.08,
+            "y": 446.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 261.3,
+            "y": 444.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 259.74,
+            "y": 443.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 258.58,
+            "y": 440.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 257.96,
+            "y": 438.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 259.99,
+            "y": 436.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 262.23,
+            "y": 435.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 264.5,
+            "y": 434.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 266.63,
+            "y": 434.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 268.48,
+            "y": 435.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 273.28,
+            "y": 443.76,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 272.06,
+            "y": 444.56,
+            "alpha": 0.9531445308972287
+          },
+          {
+            "kind": "spark",
+            "x": 273.25,
+            "y": 443.76,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 271.11,
+            "y": 443.89,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 271.39,
+            "y": 439.85,
+            "alpha": 0.9243127711641337
+          }
+        ]
+      },
+      "hash": "1e7926d6"
+    }
+  },
+  "1024x640-f1-slime-vertical-fx-m": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 453,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 6.27
+      },
+      "monster": {
+        "x": 467,
+        "y": 91,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            -1,
+            1
+          ],
+          "slashAngles": [
+            -0.15,
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 536,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            },
+            {
+              "x": 528,
+              "y": 473,
+              "dir": 1,
+              "a0": -0.15,
+              "keepAbove": null,
+              "keepBelow": 438
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 536,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 536,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 533.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 534.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 540.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 543.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 542.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 534.85,
+            "y": 166.94,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 537.6,
+            "y": 163.77,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 536.3,
+            "y": 161.03,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 531.57,
+            "y": 163.17,
+            "alpha": 0.9181254218651578
+          },
+          {
+            "kind": "spark",
+            "x": 540.23,
+            "y": 166.64,
+            "alpha": 0.9146379296361573
+          },
+          {
+            "kind": "spark",
+            "x": 536.18,
+            "y": 162.07,
+            "alpha": 0.9479021777711233
+          },
+          {
+            "kind": "impact",
+            "x": 534.38,
+            "y": 470.3,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 471.48,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 537.2,
+            "y": 473.18,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 475.36,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.37,
+            "y": 477.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.03,
+            "y": 480.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.48,
+            "y": 481.69,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 532.96,
+            "y": 482.06,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 530.64,
+            "y": 481.81,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 528.65,
+            "y": 481.04,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 527.11,
+            "y": 479.87,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 529.24,
+            "y": 471.11,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 531.71,
+            "y": 473.87,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 527.23,
+            "y": 476.58,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 532.07,
+            "y": 474.17,
+            "alpha": 0.9724611531330376
+          },
+          {
+            "kind": "spark",
+            "x": 529.83,
+            "y": 473.62,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "952b32b1"
+    }
+  },
+  "1024x640-f5-dragon-horizontal-fx-p": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 709,
+        "y": 346,
+        "w": 144,
+        "h": 144,
+        "baseTop": 346,
+        "groundY": 490,
+        "knockX": 3,
+        "lungeX": 0,
+        "knock": 3
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 298,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 318,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 670,
+        "y": 298,
+        "w": 216,
+        "h": 34,
+        "barX": 678,
+        "barY": 318,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 436,
+        "y": 52,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            1
+          ],
+          "slashAngles": [
+            1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 744,
+              "y": 444,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 744,
+            "y": 444
+          },
+          "slashPos": {
+            "x": 744,
+            "y": 444,
+            "keepBelow": 332,
+            "keepAbove": 544
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 745.52,
+            "y": 437.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 747.37,
+            "y": 436.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.5,
+            "y": 436.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 751.77,
+            "y": 437.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.01,
+            "y": 438.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 756.04,
+            "y": 440.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 755.42,
+            "y": 442.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.26,
+            "y": 445.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 752.7,
+            "y": 446.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 750.92,
+            "y": 448.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.07,
+            "y": 448.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 742.09,
+            "y": 441.4,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 747.04,
+            "y": 442.66,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 747.94,
+            "y": 444.61,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 747.61,
+            "y": 446.17,
+            "alpha": 0.9927424939299019
+          },
+          {
+            "kind": "spark",
+            "x": 741.56,
+            "y": 446.33,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 739.34,
+            "y": 442.93,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "76f442c7"
+    }
+  },
+  "1024x640-f5-dragon-vertical-fx-p": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 456,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 440,
+        "y": 33,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": -2.96
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            -1
+          ],
+          "slashAngles": [
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 536,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 536,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 536,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 533.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 534.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 540.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 543.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 542.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 536.31,
+            "y": 167.41,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 535.16,
+            "y": 162.9,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 535.73,
+            "y": 169.28,
+            "alpha": 0.9133108946094748
+          },
+          {
+            "kind": "spark",
+            "x": 537.08,
+            "y": 161.06,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 536.9,
+            "y": 160.8,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 539.07,
+            "y": 166.18,
+            "alpha": 0.8992150823585069
+          }
+        ]
+      },
+      "hash": "2d0ffb0a"
+    }
+  },
+  "1024x640-f5-dragon-horizontal-fx-m": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 214,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -6,
+        "lungeX": 0,
+        "knock": -6
+      },
+      "monster": {
+        "x": 706,
+        "y": 346,
+        "w": 144,
+        "h": 144,
+        "baseTop": 346,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 298,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 318,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 670,
+        "y": 298,
+        "w": 216,
+        "h": 34,
+        "barX": 678,
+        "barY": 318,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 436,
+        "y": 52,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            1,
+            -1
+          ],
+          "slashAngles": [
+            1.0707963267948966,
+            -1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 744,
+              "y": 444,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            },
+            {
+              "x": 270,
+              "y": 442,
+              "dir": -1,
+              "a0": -1.0707963267948966,
+              "keepAbove": 544,
+              "keepBelow": 332
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 744,
+            "y": 444
+          },
+          "slashPos": {
+            "x": 744,
+            "y": 444,
+            "keepBelow": 332,
+            "keepAbove": 544
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 745.52,
+            "y": 437.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 747.37,
+            "y": 436.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.5,
+            "y": 436.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 751.77,
+            "y": 437.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.01,
+            "y": 438.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 756.04,
+            "y": 440.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 755.42,
+            "y": 442.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 754.26,
+            "y": 445.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 752.7,
+            "y": 446.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 750.92,
+            "y": 448.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 749.07,
+            "y": 448.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 746.16,
+            "y": 444.42,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 747.22,
+            "y": 441.9,
+            "alpha": 0.9908801987735756
+          },
+          {
+            "kind": "spark",
+            "x": 740.67,
+            "y": 444.11,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 744.15,
+            "y": 448.01,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 741.59,
+            "y": 443.84,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 744.76,
+            "y": 446.33,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 264.93,
+            "y": 446.72,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 263.08,
+            "y": 446.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 261.3,
+            "y": 444.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 259.74,
+            "y": 443.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 258.58,
+            "y": 440.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 257.96,
+            "y": 438.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 259.99,
+            "y": 436.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 262.23,
+            "y": 435.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 264.5,
+            "y": 434.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 266.63,
+            "y": 434.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 268.48,
+            "y": 435.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 267.82,
+            "y": 443.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 269.31,
+            "y": 437.55,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 271.84,
+            "y": 443.61,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 269.7,
+            "y": 439.33,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 265.26,
+            "y": 441.39,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "42d4bf44"
+    }
+  },
+  "1024x640-f5-dragon-vertical-fx-m": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 462,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 6.27
+      },
+      "monster": {
+        "x": 440,
+        "y": 31,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            -1,
+            1
+          ],
+          "slashAngles": [
+            -0.15,
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 536,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            },
+            {
+              "x": 528,
+              "y": 473,
+              "dir": 1,
+              "a0": -0.15,
+              "keepAbove": null,
+              "keepBelow": 438
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 536,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 536,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 533.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 534.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 540.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 543.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 544.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 542.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 534.81,
+            "y": 162.71,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 535.76,
+            "y": 160.93,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 532.4,
+            "y": 163.22,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 533.05,
+            "y": 162.95,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 536,
+            "y": 168.53,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 532.79,
+            "y": 166.39,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 534.38,
+            "y": 470.3,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.92,
+            "y": 471.48,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 537.2,
+            "y": 473.18,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.06,
+            "y": 475.36,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.37,
+            "y": 477.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 538.03,
+            "y": 480.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 535.48,
+            "y": 481.69,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 532.96,
+            "y": 482.06,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 530.64,
+            "y": 481.81,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 528.65,
+            "y": 481.04,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 527.11,
+            "y": 479.87,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 531.18,
+            "y": 473.64,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 524.94,
+            "y": 473.33,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 530.34,
+            "y": 470.77,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 528.38,
+            "y": 469.23,
+            "alpha": 0.9377810484375355
+          },
+          {
+            "kind": "spark",
+            "x": 530.83,
+            "y": 473.77,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "12446ccd"
+    }
+  },
+  "960x540-f1-slime-vertical-nofx": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "6ad6512"
+    }
+  },
+  "960x540-f2-ogre_boss-vertical-nofx": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 432,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "49657dc1"
+    }
+  },
+  "960x540-f3-slime-vertical-nofx": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "e48b55b9"
+    }
+  },
+  "960x540-f4-zombie_king-vertical-nofx": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 432,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "122684ff"
+    }
+  },
+  "960x540-f5-dragon-vertical-nofx": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 408,
+        "y": 36,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": null,
+      "hash": "a825b2f1"
+    }
+  },
+  "960x540-f1-slime-horizontal-fx-p": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 688,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": 3,
+        "lungeX": 0,
+        "knock": 3
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 276,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 296,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 663,
+        "y": 276,
+        "w": 135,
+        "h": 34,
+        "barX": 671,
+        "barY": 296,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 404,
+        "y": 44,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            1
+          ],
+          "slashAngles": [
+            1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 696,
+              "y": 368,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 696,
+            "y": 368
+          },
+          "slashPos": {
+            "x": 696,
+            "y": 368,
+            "keepBelow": 281,
+            "keepAbove": 444
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 697.52,
+            "y": 361.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 699.37,
+            "y": 360.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.5,
+            "y": 360.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 703.77,
+            "y": 361.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.01,
+            "y": 362.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 708.04,
+            "y": 364.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 707.42,
+            "y": 366.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.26,
+            "y": 369.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 704.7,
+            "y": 370.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 702.92,
+            "y": 372.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.07,
+            "y": 372.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 693.62,
+            "y": 367.5,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 697.69,
+            "y": 365.3,
+            "alpha": 0.9271206567007595
+          },
+          {
+            "kind": "spark",
+            "x": 696.57,
+            "y": 365.83,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 700.62,
+            "y": 369.27,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 696.04,
+            "y": 370.12,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 692.77,
+            "y": 368.45,
+            "alpha": 0.9738811357045692
+          }
+        ]
+      },
+      "hash": "5f264f4d"
+    }
+  },
+  "960x540-f1-slime-vertical-fx-p": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 356,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 87,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": -2.96
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            -1
+          ],
+          "slashAngles": [
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 504,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 504,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 504,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 501.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 508.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 511.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 510.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 502.67,
+            "y": 167.27,
+            "alpha": 0.9754569992505763
+          },
+          {
+            "kind": "spark",
+            "x": 506.68,
+            "y": 164.44,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 502.27,
+            "y": 166.57,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 505.27,
+            "y": 166.94,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 500.44,
+            "y": 166.33,
+            "alpha": 0.895312543395866
+          },
+          {
+            "kind": "spark",
+            "x": 502.83,
+            "y": 161.57,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "879be98"
+    }
+  },
+  "960x540-f1-slime-horizontal-fx-m": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 198,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -6,
+        "lungeX": 0,
+        "knock": -6
+      },
+      "monster": {
+        "x": 685,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 276,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 296,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 663,
+        "y": 276,
+        "w": 135,
+        "h": 34,
+        "barX": 671,
+        "barY": 296,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 404,
+        "y": 44,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            1,
+            -1
+          ],
+          "slashAngles": [
+            1.0707963267948966,
+            -1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 696,
+              "y": 368,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            },
+            {
+              "x": 254,
+              "y": 366,
+              "dir": -1,
+              "a0": -1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 696,
+            "y": 368
+          },
+          "slashPos": {
+            "x": 696,
+            "y": 368,
+            "keepBelow": 281,
+            "keepAbove": 444
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 697.52,
+            "y": 361.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 699.37,
+            "y": 360.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.5,
+            "y": 360.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 703.77,
+            "y": 361.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.01,
+            "y": 362.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 708.04,
+            "y": 364.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 707.42,
+            "y": 366.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.26,
+            "y": 369.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 704.7,
+            "y": 370.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 702.92,
+            "y": 372.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.07,
+            "y": 372.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 694.39,
+            "y": 366.77,
+            "alpha": 0.9579007464955708
+          },
+          {
+            "kind": "spark",
+            "x": 697.01,
+            "y": 371.44,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 692.47,
+            "y": 370.08,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 700.42,
+            "y": 368.21,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 696.96,
+            "y": 370.91,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 696.22,
+            "y": 365.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 248.93,
+            "y": 370.72,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 247.08,
+            "y": 370.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 245.3,
+            "y": 368.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 243.74,
+            "y": 367.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 242.58,
+            "y": 364.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 241.96,
+            "y": 362.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 243.99,
+            "y": 360.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 246.23,
+            "y": 359.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 248.5,
+            "y": 358.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 250.63,
+            "y": 358.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 252.48,
+            "y": 359.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 252.19,
+            "y": 369.13,
+            "alpha": 0.95186870186127
+          },
+          {
+            "kind": "spark",
+            "x": 257.37,
+            "y": 368.75,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 254,
+            "y": 368.19,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 252.03,
+            "y": 363.85,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 251.29,
+            "y": 364.44,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "2c53546e"
+    }
+  },
+  "960x540-f1-slime-vertical-fx-m": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 363,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 6.27
+      },
+      "monster": {
+        "x": 435,
+        "y": 84,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            -1,
+            1
+          ],
+          "slashAngles": [
+            -0.15,
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 504,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            },
+            {
+              "x": 496,
+              "y": 373,
+              "dir": 1,
+              "a0": -0.15,
+              "keepAbove": null,
+              "keepBelow": 438
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 504,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 504,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 501.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 508.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 511.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 510.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 502,
+            "y": 166.81,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 499.53,
+            "y": 164.37,
+            "alpha": 0.9019430654636882
+          },
+          {
+            "kind": "spark",
+            "x": 500.33,
+            "y": 162.22,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 502.4,
+            "y": 168.69,
+            "alpha": 0.9271637325246851
+          },
+          {
+            "kind": "spark",
+            "x": 505.47,
+            "y": 162.36,
+            "alpha": 0.9482575122429502
+          },
+          {
+            "kind": "spark",
+            "x": 502.49,
+            "y": 160.6,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.38,
+            "y": 370.3,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 371.48,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 505.2,
+            "y": 373.18,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 375.36,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.37,
+            "y": 377.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.03,
+            "y": 380.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.48,
+            "y": 381.69,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 500.96,
+            "y": 382.06,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 498.64,
+            "y": 381.81,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 496.65,
+            "y": 381.04,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 495.11,
+            "y": 379.87,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 498.96,
+            "y": 373.42,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 500.42,
+            "y": 372.38,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 493.98,
+            "y": 373.5,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 492.98,
+            "y": 371.07,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 499.11,
+            "y": 376.08,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "459c1768"
+    }
+  },
+  "960x540-f5-dragon-horizontal-fx-p": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 661,
+        "y": 270,
+        "w": 144,
+        "h": 144,
+        "baseTop": 270,
+        "groundY": 414,
+        "knockX": 3,
+        "lungeX": 0,
+        "knock": 3
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 222,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 242,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 622,
+        "y": 222,
+        "w": 216,
+        "h": 34,
+        "barX": 630,
+        "barY": 242,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 404,
+        "y": 44,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            1
+          ],
+          "slashAngles": [
+            1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 696,
+              "y": 368,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 696,
+            "y": 368
+          },
+          "slashPos": {
+            "x": 696,
+            "y": 368,
+            "keepBelow": 281,
+            "keepAbove": 444
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 697.52,
+            "y": 361.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 699.37,
+            "y": 360.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.5,
+            "y": 360.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 703.77,
+            "y": 361.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.01,
+            "y": 362.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 708.04,
+            "y": 364.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 707.42,
+            "y": 366.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.26,
+            "y": 369.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 704.7,
+            "y": 370.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 702.92,
+            "y": 372.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.07,
+            "y": 372.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 697.91,
+            "y": 368.23,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 694.7,
+            "y": 365.11,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 695.87,
+            "y": 370.18,
+            "alpha": 0.9393081705346312
+          },
+          {
+            "kind": "spark",
+            "x": 693.51,
+            "y": 367.12,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 695.99,
+            "y": 370.43,
+            "alpha": 0.9485522823935044
+          },
+          {
+            "kind": "spark",
+            "x": 698.92,
+            "y": 368.69,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "b07d8ed5"
+    }
+  },
+  "960x540-f5-dragon-vertical-fx-p": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 355,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 408,
+        "y": 33,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": -2.96
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "p",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 1,
+          "slashes": 1,
+          "rings": 1,
+          "slashDirs": [
+            -1
+          ],
+          "slashAngles": [
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 504,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 504,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 504,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": null,
+            "monster": {
+              "px": 4,
+              "ms": 80,
+              "hold": 50
+            }
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 501.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 508.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 511.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 510.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 505.41,
+            "y": 167.73,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 499.81,
+            "y": 165.95,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 503.18,
+            "y": 167.38,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 499.78,
+            "y": 166.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 507.27,
+            "y": 165.95,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 499.84,
+            "y": 162.64,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "2767f5e9"
+    }
+  },
+  "960x540-f5-dragon-horizontal-fx-m": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 198,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -6,
+        "lungeX": 0,
+        "knock": -6
+      },
+      "monster": {
+        "x": 658,
+        "y": 270,
+        "w": 144,
+        "h": 144,
+        "baseTop": 270,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 222,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 242,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 622,
+        "y": 222,
+        "w": 216,
+        "h": 34,
+        "barX": 630,
+        "barY": 242,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 404,
+        "y": 44,
+        "w": 152,
+        "h": 24,
+        "text": "第 1 回合 · 敌方行动"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            1,
+            -1
+          ],
+          "slashAngles": [
+            1.0707963267948966,
+            -1.0707963267948966
+          ],
+          "slashList": [
+            {
+              "x": 696,
+              "y": 368,
+              "dir": 1,
+              "a0": 1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            },
+            {
+              "x": 254,
+              "y": 366,
+              "dir": -1,
+              "a0": -1.0707963267948966,
+              "keepAbove": 444,
+              "keepBelow": 281
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 696,
+            "y": 368
+          },
+          "slashPos": {
+            "x": 696,
+            "y": 368,
+            "keepBelow": 281,
+            "keepAbove": 444
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 697.52,
+            "y": 361.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 699.37,
+            "y": 360.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.5,
+            "y": 360.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 703.77,
+            "y": 361.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.01,
+            "y": 362.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 708.04,
+            "y": 364.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 707.42,
+            "y": 366.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 706.26,
+            "y": 369.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 704.7,
+            "y": 370.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 702.92,
+            "y": 372.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 701.07,
+            "y": 372.72,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 693.94,
+            "y": 365.22,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 699.99,
+            "y": 365.6,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 695.12,
+            "y": 371.92,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 695.7,
+            "y": 370.63,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 698.26,
+            "y": 371.16,
+            "alpha": 0.9034260225744312
+          },
+          {
+            "kind": "spark",
+            "x": 691.59,
+            "y": 369.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 248.93,
+            "y": 370.72,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 247.08,
+            "y": 370.15,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 245.3,
+            "y": 368.98,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 243.74,
+            "y": 367.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 242.58,
+            "y": 364.97,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 241.96,
+            "y": 362.28,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 243.99,
+            "y": 360.4,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 246.23,
+            "y": 359.19,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 248.5,
+            "y": 358.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 250.63,
+            "y": 358.67,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 252.48,
+            "y": 359.24,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 257.49,
+            "y": 365.14,
+            "alpha": 0.9927969686482696
+          },
+          {
+            "kind": "spark",
+            "x": 253.5,
+            "y": 369.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 252.73,
+            "y": 369.8,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 255.3,
+            "y": 363.1,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 256.64,
+            "y": 367.56,
+            "alpha": 1
+          }
+        ]
+      },
+      "hash": "2d472826"
+    }
+  },
+  "960x540-f5-dragon-vertical-fx-m": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 361,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 6.27
+      },
+      "monster": {
+        "x": 408,
+        "y": 31,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": null,
+      "fx": {
+        "mode": "m",
+        "state": {
+          "level": "high",
+          "effective": "high",
+          "reduced": false,
+          "preset": {
+            "hitStop": 80,
+            "shake": 4,
+            "knock": 9,
+            "flash": 0.6,
+            "flashMs": 110,
+            "slash": 1
+          },
+          "frozen": true,
+          "freezeLeft": 80,
+          "shake": true,
+          "flashes": 2,
+          "slashes": 2,
+          "rings": 2,
+          "slashDirs": [
+            -1,
+            1
+          ],
+          "slashAngles": [
+            -0.15,
+            -0.15
+          ],
+          "slashList": [
+            {
+              "x": 504,
+              "y": 165,
+              "dir": -1,
+              "a0": -0.15,
+              "keepAbove": 206,
+              "keepBelow": null
+            },
+            {
+              "x": 496,
+              "y": 373,
+              "dir": 1,
+              "a0": -0.15,
+              "keepAbove": null,
+              "keepBelow": 438
+            }
+          ],
+          "slashAlpha": 1,
+          "ringPos": {
+            "x": 504,
+            "y": 165
+          },
+          "slashPos": {
+            "x": 504,
+            "y": 165,
+            "keepBelow": null,
+            "keepAbove": 206
+          },
+          "knock": {
+            "player": {
+              "px": 7,
+              "ms": 100,
+              "hold": 50
+            },
+            "monster": null
+          }
+        },
+        "particles": [
+          {
+            "kind": "impact",
+            "x": 501.12,
+            "y": 158.7,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.25,
+            "y": 157.13,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 155.8,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 154.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 508.58,
+            "y": 154.49,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 511.33,
+            "y": 154.75,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.47,
+            "y": 157.27,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.91,
+            "y": 159.78,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.73,
+            "y": 162.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 512.02,
+            "y": 164.11,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 510.9,
+            "y": 165.69,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 506.49,
+            "y": 167.3,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 506.51,
+            "y": 162.4,
+            "alpha": 0.9365411754631333
+          },
+          {
+            "kind": "spark",
+            "x": 501.58,
+            "y": 163.62,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 504.69,
+            "y": 167.46,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 506.75,
+            "y": 164.57,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 503.7,
+            "y": 162.24,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 502.38,
+            "y": 370.3,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.92,
+            "y": 371.48,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 505.2,
+            "y": 373.18,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.06,
+            "y": 375.36,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.37,
+            "y": 377.88,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 506.03,
+            "y": 380.63,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 503.48,
+            "y": 381.69,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 500.96,
+            "y": 382.06,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 498.64,
+            "y": 381.81,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 496.65,
+            "y": 381.04,
+            "alpha": 1
+          },
+          {
+            "kind": "impact",
+            "x": 495.11,
+            "y": 379.87,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 498.33,
+            "y": 372.5,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 497.12,
+            "y": 368.85,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 500.53,
+            "y": 372.53,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 497.85,
+            "y": 371.8,
+            "alpha": 1
+          },
+          {
+            "kind": "spark",
+            "x": 496.96,
+            "y": 377.31,
+            "alpha": 0.9067872187689594
+          }
+        ]
+      },
+      "hash": "cd5b0130"
+    }
+  }
+}

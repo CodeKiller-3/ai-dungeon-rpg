@@ -310,6 +310,12 @@
         shake: !!shake, flashes: flashes.length, slashes: slashes.length,
         rings: rings.length,
         slashDirs: slashes.map(function (s) { return s.dir; }),
+        /* D-94 P5：弧的起始角——纵置 -0.15（横月牙），横置 ±(π/2−0.5)（竖月牙、左右镜像） */
+        slashAngles: slashes.map(function (s) { return s.a0; }),
+        /* D-94 P5：逐条列表（一次连击里可能有两条：玩家段 + 怪物段），验收按最后一条取 */
+        slashList: slashes.map(function (s) {
+          return { x: s.x, y: s.y, dir: s.dir, a0: s.a0, keepAbove: s.keepAbove, keepBelow: s.keepBelow };
+        }),
         slashAlpha: slashes.length ? slashes[0].alpha : 0,
         ringPos: rings.length ? { x: rings[0].x, y: rings[0].y } : null,
         slashPos: slashes.length ? { x: slashes[0].x, y: slashes[0].y, keepBelow: slashes[0].keepBelow, keepAbove: slashes[0].keepAbove } : null,

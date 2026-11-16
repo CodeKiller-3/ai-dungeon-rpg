@@ -268,14 +268,36 @@
     return ev;
   }
 
+  /* D-94 P5：横置时特效几何跟站位走，不跟纵置坐标走。
+   * 纵置：敌人在上、玩家在下，攻击轴为纵（玩家上撩 / 怪物下劈）；
+   * 横置：玩家在左、敌人在右，攻击轴为横（玩家向右斩 / 怪物向左劈）。
+   * 这里只提供"接触点与方向"，不碰任何结算、随机数与时钟。 */
+  function battleLayoutH() {
+    var R = Game.Core && Game.Core.Render;
+    return !!(R && typeof R._battleLayoutNow === 'function' && R._battleLayoutNow() === 'horizontal');
+  }
+  function hBattleGeo() {
+    var R = Game.Core && Game.Core.Render;
+    return (R && typeof R._battleLayoutGeo === 'function') ? R._battleLayoutGeo(R.cssW, R.cssH) : null;
+  }
+
   /* D-89：接触点——火花/冲击环的落点，必须在"我方剑锋与对方身体的交界处"。
    * 敌方：站在上方，玩家从下方上撩，落点取身体下缘偏右（骑士持剑侧）；
-   * 我方：怪物从上方下劈，落点取骑士上缘偏右（盾/肩交界）。 */
+   * 我方：怪物从上方下劈，落点取骑士上缘偏右（盾/肩交界）。
+   * D-94 P5：横置改取"朝向对手的那一侧"——敌人在右取左缘，玩家在左取右缘。 */
   function contactMonster() {
+    if (battleLayoutH()) {
+      var hg = hBattleGeo();
+      if (hg) return { x: hg.enemyCx - 34, y: hg.groundY - 46 };
+    }
     var m = monsterPos();
     return { x: m.cx + 24, y: m.cy + 30 };
   }
   function contactPlayer() {
+    if (battleLayoutH()) {
+      var hg2 = hBattleGeo();
+      if (hg2) return { x: hg2.playerCx + 24, y: hg2.groundY - 48 };
+    }
     var p = playerPos();
     return { x: p.cx + 16, y: p.cy - 22 };
   }
@@ -286,6 +308,8 @@
     if (!Fx || typeof Fx.hit !== 'function') return;
     var o = opt || {};
     var contact = (who === 'monster') ? contactMonster() : contactPlayer();
+    var hLay = battleLayoutH();
+    var hg = hLay ? hBattleGeo() : null;
     Fx.hit({
       who: who,
       dir: (who === 'monster') ? -1 : 1,
@@ -294,15 +318,20 @@
       color: o.flash || (who === 'monster' ? '#ffffff' : '#ff6b6b'),
       slash: o.slash === false ? null : {
         /* 斩击中心 = 接触点：弧、冲击环、火花三者同点，读起来才是"砍在这里"。
-         * 玩家弧被 keepBelow 438 压在血条下方，敌方弧被 keepAbove 206 压在名称/血条上方。 */
+         * 纵置：玩家弧被 keepBelow 438 压在血条下方，敌方弧被 keepAbove 206 压在名称/血条上方。
+         * 横置 P5：弧转 90°（a0=±(π/2−0.5)），玩家从左往右扫、敌人从右往左扫，
+         * 两条弧是镜像的竖月牙，不是把纵置坐标原样搬过来。 */
         x: contact.x,
         y: contact.y,
         r: 32,
-        a0: -0.15,
-        dir: (who === 'monster') ? -1 : 1,
+        a0: hLay ? (who === 'monster' ? (Math.PI / 2 - 0.5) : -(Math.PI / 2 - 0.5)) : -0.15,
+        dir: hLay ? (who === 'monster' ? 1 : -1) : ((who === 'monster') ? -1 : 1),
         color: o.color || '#ffffff',
-        keepAbove: (who === 'monster') ? 206 : null,
-        keepBelow: (who === 'player') ? 438 : null,
+        /* 横置的保护带 = [铭牌下沿, 指令条上沿]：keepAbove 是"允许到这一行为止"（上界），
+         * keepBelow 是"允许从这一行往下"（下界），两条一起夹出中间的决斗带。
+         * 只给一条会漏保护，给反会裁成空集（弧直接消失）。 */
+        keepAbove: hLay ? (hg.H - 96) : ((who === 'monster') ? 206 : null),
+        keepBelow: hLay ? (hg.groundY - Math.round(hg.H * 0.247)) : ((who === 'player') ? 438 : null),
         impact: contact
       }
     });
@@ -322,9 +351,14 @@
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
       /* 美学整改 A1：飘字锚点从精灵中心（m.cy）移到头顶上方 22px，
-       * 数字不再压在怪物脸上；主体轮廓始终完整可见。 */
+       * 数字不再压在怪物脸上；主体轮廓始终完整可见。
+       * D-94 P5：横置改锚在敌人"面朝玩家"的一侧外沿（enemyCx−78），数字不进剪影也不飘到中线。 */
+      var hLayM = battleLayoutH();
+      var hgM = hLayM ? hBattleGeo() : null;
       Game.Feedback.spawn({
-        x: m.cx, y: m.y - 22, text: '-' + dmg, tier: tier, who: 'monster',
+        x: hgM ? (hgM.enemyCx - 78) : m.cx,
+        y: hgM ? (hgM.groundY - 46) : (m.y - 22),
+        text: '-' + dmg, tier: tier, who: 'monster',
         color: heavy ? '#ffc14d' : '#ffffff',
         size: heavy ? 26 : 18, life: heavy ? 760 : 620
       });
@@ -333,10 +367,12 @@
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
       /* 第三拨 D-88：落点火花——从命中点朝"刀刃来向"反向溅开（向上 + 左右散）。
        * D-89：落点从"怪物中心旁边"改到接触点（剑锋与身体交界，m.cx+24 / m.cy+30），
-       * impact 与 spark 同点起，火花不再飘在身体外侧。 */
+       * impact 与 spark 同点起，火花不再飘在身体外侧。
+       * D-94 P5：横置时刀刃从左来，火花向右上溅（angle −0.30），不再是纵置的 −0.95。 */
       var ct = contactMonster();
       Game.Particles.spawn('impact', ct.x, ct.y, {
-        count: 11, angle: -0.95, spread: 1.05, color: o.color || '#ffe6a8'
+        count: 11, angle: battleLayoutH() ? -0.30 : -0.95, spread: 1.05,
+        color: o.color || '#ffe6a8'
       });
       Game.Particles.spawn('spark', ct.x, ct.y, o.color ? { count: 6, color: o.color } : { count: 6 });
     }
@@ -351,9 +387,15 @@
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
       /* 美学整改 A1：玩家头顶被血条（414~434）占满，飘字改锚在精灵右侧外沿（cx+70），
-       * 同样不进剪影；"-XX" 三/四字宽约 43px，与精灵右边缘留 ≥20px 间隙。 */
+       * 同样不进剪影；"-XX" 三/四字宽约 43px，与精灵右边缘留 ≥20px 间隙。
+       * D-94 P5：横置玩家在左，锚点放在骑士右侧外沿（playerCx+78），数字落在两人之间的
+       * 空场里，既不压剪影也不进铭牌带。 */
+      var hLayP = battleLayoutH();
+      var hgP = hLayP ? hBattleGeo() : null;
       Game.Feedback.spawn({
-        x: p.cx + 70, y: p.y + 30, text: '-' + dmg, tier: tier, who: 'player',
+        x: hgP ? (hgP.playerCx + 78) : (p.cx + 70),
+        y: hgP ? (hgP.groundY - 46) : (p.y + 30),
+        text: '-' + dmg, tier: tier, who: 'player',
         color: heavy ? '#ff8a3d' : '#ff5555',
         size: heavy ? 24 : 18
       });
@@ -361,10 +403,11 @@
     fxHit('player', dmg, {});
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
       /* 玩家被反击：落点火花同样从接触点（骑士上缘偏右）向下/向外溅，配合 Fx 的"顶住 50ms"，
-       * 受击不再只靠数字和战报文字。 */
+       * 受击不再只靠数字和战报文字。
+       * D-94 P5：横置时刀刃从右来，火花向左上溅（angle π+0.30）。 */
       var cp = contactPlayer();
       Game.Particles.spawn('impact', cp.x, cp.y, {
-        count: 11, angle: 0.65, spread: 1.05, color: '#ffd0b0'
+        count: 11, angle: battleLayoutH() ? (Math.PI + 0.30) : 0.65, spread: 1.05, color: '#ffd0b0'
       });
       Game.Particles.spawn('spark', cp.x, cp.y, { count: 5, color: '#ff8888' });
     }

@@ -60,6 +60,20 @@ def p2_shots():
     return out
 
 
+# P5：横置特效方向语义（玩家右斩 / 敌人左劈）+ 纵置同状态对照 + 纵置无特效基线
+def p5_shots():
+    out = []
+    for w, h in [(1024, 640), (960, 540)]:
+        for f, mid in FLOORS:
+            out.append(('%dx%d-f%d-%s-vertical-nofx' % (w, h, f, mid), w, h, f, mid, 'vertical', ''))
+        for f, mid in [(1, 'slime'), (5, 'dragon')]:
+            for mode in ('p', 'm'):
+                tag = '%dx%d-f%d-%s' % (w, h, f, mid)
+                out.append((tag + '-horizontal-fx-' + mode, w, h, f, mid, 'horizontal', '&fx=' + mode))
+                out.append((tag + '-vertical-fx-' + mode, w, h, f, mid, 'vertical', '&fx=' + mode))
+    return out
+
+
 # P4：身份带 + 指令条（五层）+ 纵置同状态 + MP=0 的降级对照
 def p4_shots():
     out = []
@@ -80,6 +94,8 @@ def main():
         shots = p2_shots()
     elif mode == 'p4':
         shots = p4_shots()
+    elif mode == 'p5':
+        shots = p5_shots()
     else:
         shots = gate_shots()
     geo = {}

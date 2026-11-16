@@ -172,6 +172,21 @@
         });
       }
       R._animNow = function () { return 1234; };
+      /* P5：在真实调用链上打一次，冻结在斩击可见的那一帧。
+         fx=p → 玩家出手（玩家段，t0+60ms）；fx=m → 玩家出手后推进到怪物反击段再 +60ms。
+         时钟同时注入 B 与 Fx，粒子再推进 60ms，保证同参数同帧可复算。 */
+      if (q.fx === 'p' || q.fx === 'm') {
+        T = 1000;
+        B.playerAction('attack');
+        if (q.fx === 'm') {
+          T = 1110;
+          B.tick(1110);   /* 推进到怪物段：真实 runMonsterSegment → fxHit('player') */
+          T = 1170;
+        } else {
+          T = 1060;
+        }
+        PT.update(60);
+      }
       sceneReady = true;
       window.__d94Booted = true;
     } catch (e) {
@@ -218,6 +233,11 @@
             player: dbg.player || null, monster: dbg.monster || null,
             playerPlate: dbg.playerPlate || null, monsterPlate: dbg.monsterPlate || null,
             roundBar: dbg.roundBar || null, commandBar: dbg.commandBar || null,
+            fx: (q.fx === 'p' || q.fx === 'm') ? {
+              mode: q.fx,
+              state: Fx._state(),
+              particles: PT._list()
+            } : null,
             hash: pixelHash()
           };
           document.getElementById('geo').textContent = JSON.stringify(window.__D94_GEO);

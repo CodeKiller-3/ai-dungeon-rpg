@@ -2410,10 +2410,11 @@
     },
 
     /* M9-3：计算攻击动作帧偏移（前摇后拉→出手前冲→恢复），纯视觉不阻塞结算
-     * actionAt: 动作起始时间戳；duration: 总时长 ms；forward: 出手方向 (+1/-1) */
-    _attackOffset: function (actionAt, duration, forward) {
+     * actionAt: 动作起始时间戳；duration: 总时长 ms；forward: 出手方向 (+1/-1)；
+     * at: 可选时钟（横置用 Fx 注入时钟，纵置不传 → 行为逐像素不变） */
+    _attackOffset: function (actionAt, duration, forward, at) {
       if (!actionAt) return 0;
-      var elapsed = performance.now() - actionAt;
+      var elapsed = ((typeof at === 'number') ? at : performance.now()) - actionAt;
       var t = Math.min(elapsed / duration, 1);
       if (t >= 1) return 0;
       if (t < 0.3) return -forward * 8 * (t / 0.3);           /* 前摇：后拉 */
@@ -2450,10 +2451,22 @@
       ctx.fillRect(Math.round(W * 0.08), g.groundY - 1, Math.round(W * 0.84), 2);
       ctx.restore();
 
-      /* ===== 敌人（右） ===== */
+      /* ===== 敌人（右） =====
+       * P5：横置攻击轴为横——出手向左（forward=−1），受击沿 +x 弹开。
+       * Fx 的 knockOffset 以"纵置方向"记账（怪物 −4、玩家 +7），横置对 x 取反即可，
+       * 不新增/不修改任何位移数值。 */
+      var mAtkOff = this._attackOffset(state.monsterActionAt, 320, -1, now);
+      var mKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('monster') : 0;
+      var mDrawCx = g.enemyCx + mAtkOff - mKnock;
       var sp2 = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
-        sp2 = monsterFrame(monster.id, false, '');
+        var mMode = '';
+        if (!dying && Fx && typeof Fx.flashOf === 'function') {
+          var mfl = Fx.flashOf('monster');
+          if (mfl && mfl.alpha > 0.01) mMode = 'hurt';
+        }
+        if (!mMode && !dying && state.monsterActionAt && (now - state.monsterActionAt) < 320) mMode = 'attack';
+        sp2 = monsterFrame(monster.id, false, mMode);
         if (!sp2) sp2 = Game.Core.Sprites.get(isBoss ? 'boss_demon' : 'monster_chort');
       }
       var mBaseH = 90;
@@ -2471,22 +2484,27 @@
       if (dying) ctx.globalAlpha = 1 - dieProg;
       hContactShadow(ctx, g.enemyCx, g.groundY, mShadowW, dying ? 0.55 * (1 - dieProg) : 0.55);
       if (sp2) {
-        mW = drawSpriteByHeight(ctx, sp2, g.enemyCx, g.groundY, mH);
+        mW = drawSpriteByHeight(ctx, sp2, mDrawCx, g.groundY, mH);
       } else {
         ctx.fillStyle = monster.color || '#888';
-        ctx.fillRect(g.enemyCx - 45, g.groundY - mH, 90, mH);
+        ctx.fillRect(mDrawCx - 45, g.groundY - mH, 90, mH);
         mW = 90;
       }
       /* D-88：龙眼随横置一起平移，仍是"最暗处的一双亮眼" */
       if (!dying && monster.id === 'dragon' && sp2 && typeof drawDragonEyes === 'function') {
-        drawDragonEyes(ctx, g.enemyCx, g.groundY, mBaseH, '', sp2);
+        drawDragonEyes(ctx, mDrawCx, g.groundY, mBaseH, '', sp2);
       }
       ctx.restore();
       var dbg = this._lastBattleBox || (this._lastBattleBox = {});
-      dbg.monster = { x: Math.round(g.enemyCx - mW / 2), y: g.groundY - mBaseH, w: mW, h: mBaseH,
-        baseTop: g.groundY - mBaseH, groundY: g.groundY, knock: 0 };
+      dbg.monster = { x: Math.round(mDrawCx - mW / 2), y: g.groundY - mBaseH, w: mW, h: mBaseH,
+        baseTop: g.groundY - mBaseH, groundY: g.groundY,
+        knockX: Math.round(-mKnock), lungeX: Math.round(mAtkOff), knock: Math.round(-mKnock) };
 
-      /* ===== 玩家（左）：既有侧面帧原生朝右，不镜像 = 朝敌人 ===== */
+      /* ===== 玩家（左）：既有侧面帧原生朝右，不镜像 = 朝敌人 =====
+       * P5：出手向右（forward=+1），受击沿 −x 弹开（与怪物方向相反）。 */
+      var pAtkOff = this._attackOffset(state.playerActionAt, 320, 1, now);
+      var pKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('player') : 0;
+      var pDrawCx = g.playerCx + pAtkOff - pKnock;
       var psp = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady() && typeof Game.Core.Sprites.getFrame === 'function') {
         var pActing = !!(state.playerActionAt && (now - state.playerActionAt) < 320);
@@ -2502,14 +2520,15 @@
       ctx.save();
       hContactShadow(ctx, g.playerCx, g.groundY, pShadowW, 0.55);
       if (psp) {
-        pW = drawSpriteByHeight(ctx, psp, g.playerCx, g.groundY, 90);
+        pW = drawSpriteByHeight(ctx, psp, pDrawCx, g.groundY, 90);
       } else {
         ctx.fillStyle = '#ffcf6e';
-        ctx.fillRect(g.playerCx - 45, g.groundY - 90, 90, 90);
+        ctx.fillRect(pDrawCx - 45, g.groundY - 90, 90, 90);
       }
       ctx.restore();
-      dbg.player = { x: Math.round(g.playerCx - pW / 2), y: g.groundY - 90, w: pW, h: 90,
-        baseTop: g.groundY - 90, groundY: g.groundY, knock: 0 };
+      dbg.player = { x: Math.round(pDrawCx - pW / 2), y: g.groundY - 90, w: pW, h: 90,
+        baseTop: g.groundY - 90, groundY: g.groundY,
+        knockX: Math.round(-pKnock), lungeX: Math.round(pAtkOff), knock: Math.round(-pKnock) };
 
       /* ===== 身份带：双方紧凑铭牌同一条带上，宽度按各自落屏尺寸走 =====
        * 铭牌底边钉在"最高精灵顶 − 14"：龙顶 346（960×540 → 270），铭牌 298–332（222–256）。
@@ -2551,6 +2570,8 @@
 
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
+      /* P5：斩击弧以前只有纵置分支在画，横置从来没画过——补上，弧的朝向由 battle.fxHit 给 */
+      try { if (Fx && typeof Fx.drawSlashes === 'function') Fx.drawSlashes(ctx); } catch (e) { /* 降级 */ }
       /* 指令条压在特效之上（UI 不被粒子穿过） */
       hDrawCommandBar(ctx, dbg.commandBar);
       this._drawHud();
