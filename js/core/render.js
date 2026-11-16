@@ -3527,11 +3527,13 @@
       lay.web = { x: sc.x + T - 12, y: sc.y + T + 4 };
       lay.hint = { x: m.x + 2, y: m.y + 5 * m.rowH + 20 };
       lay.hasSave = !!hasSave;
-      /* 进度标签：有档写真实楼层/等级，无档写目标值；终点符号紧贴标签右缘（不越过面板内边距） */
+      /* 进度标签：有档写真实楼层/等级，无档写目标值；终点符号紧贴标签右缘（不越过面板内边距）。
+       * 第 5 层已到头：不再写「→ 第 5 层」（不出现箭头指向自己），到达状态由下方的「已抵达」承担。 */
       var pr = lay.progress;
       var f = (typeof floor === 'number' && floor >= 1) ? floor : 1;
       var lv = (typeof level === 'number' && level >= 1) ? level : 1;
-      pr.label = hasSave ? ('第 ' + f + ' 层 · Lv.' + lv + ' → 第 5 层') : 'Lv.1 → 第 5 层';
+      if (hasSave && f >= 5) pr.label = '第 ' + f + ' 层 · Lv.' + lv;
+      else pr.label = hasSave ? ('第 ' + f + ' 层 · Lv.' + lv + ' → 第 5 层') : 'Lv.1 → 第 5 层';
       pr.fontSize = (tier === 'narrow') ? 11 : 12;
       pr.end.x = Math.min(pr.end.x, pr.x + this._menuTextW(pr.label, pr.fontSize) + 10);
       return lay;
@@ -3625,6 +3627,9 @@
       spr('t1_door', d.x + T, d.y, 2, 1, '#1a1410');
       spr('t1_door', d.x, d.y + T, 2, 1, '#1a1410');
       spr('t1_door', d.x + T, d.y + T, 2, 1, '#1a1410');
+      /* 门矩形压暗 0.40：门读成"更深的洞"，只压门、不压墙（墙砖保持原亮度） */
+      ctx.fillStyle = 'rgba(0,0,0,0.40)';
+      ctx.fillRect(d.x, d.y, d.w, d.h);
 
       /* 暗井：门内一格黑底 + 两侧 2px 暖边 */
       var sh = lay.shaft;
@@ -3651,6 +3656,19 @@
         ctx.fillStyle = 'rgba(255,190,110,' + (0.36 - si * 0.07) + ')';
         ctx.fillRect(stp.x + inset, stp.y + si * 15, stp.w - inset * 2, 2);
       }
+      /* 最上一级台阶补一小片光池：暖光从门底落到台阶上，不往墙上铺 */
+      var poolX = stp.x + stp.w / 2, poolY = stp.y + 8;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      var poolG = ctx.createRadialGradient(poolX, poolY, 0, poolX, poolY, 46);
+      poolG.addColorStop(0, 'rgba(255,190,110,0.20)');
+      poolG.addColorStop(0.55, 'rgba(255,170,90,0.07)');
+      poolG.addColorStop(1, 'rgba(255,170,90,0)');
+      ctx.fillStyle = poolG;
+      ctx.beginPath();
+      ctx.ellipse(poolX, poolY, 46, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
 
       /* 墙饰（1× 原生） */
       spr('t1_dc_chain', lay.chain.x, lay.chain.y, 1, 0.75, 'rgba(120,120,140,0.25)');
@@ -3693,10 +3711,15 @@
       ctx.fillStyle = eg;
       ctx.fillRect(kn.x, kn.bottom - 84, 10, 84);
 
-      /* 门缝光：先给一圈暖晕，再把 2px 核心不透明地压在最上层（逐像素可验证） */
+      /* 门缝暖晕：中心从门心（seamCY）下移到门槛，并夹在门洞竖列内——光只落在门、暗井与台阶上，不压墙 */
       var seam = this._seamSpec(lay);
-      var seamCY = seam.y + seam.h / 2;
-      glow(seam.x + 1, seamCY, 90, '255,170,90', 0.22);
+      var gateY = d.y + d.h;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(d.x - 4, d.y, d.w + 8, d.h + T * 2);
+      ctx.clip();
+      glow(seam.x + 1, gateY, 96, '255,170,90', 0.26);
+      ctx.restore();
       ctx.fillStyle = seam.color;
       ctx.fillRect(seam.x, seam.y, seam.w, seam.h);
     },
@@ -3728,7 +3751,9 @@
 
       ctx.fillStyle = '#9aa0b4';
       ctx.font = ti.sub + 'px ' + FONT_CN;
-      ctx.fillText('往地牢更深处走 · 第 5 层击败地牢巨龙', ti.x, ti.subY);
+      /* 终点图标与文案统一：宽屏终点是 72×72 巨龙，中/窄屏放不下巨龙、用 32×36 恶魔，文案随图标写 */
+      ctx.fillText('往地牢更深处走 · 第 5 层击败' + ((lay.tier === 'wide') ? '地牢巨龙' : '地牢恶魔'),
+        ti.x, ti.subY);
 
       var items = st.items || [];
       for (var i = 0; i < items.length; i++) {

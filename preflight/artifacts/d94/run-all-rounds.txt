@@ -144,6 +144,22 @@ hash `3ee9c054` == 显式 vertical。页数 122，未增删页。
 F3 熔岩池（`check_p75.py` C 组）：每侧高温区 ≥1900px、外接框 0.073–0.074W、池心 0.09W/0.91W、不触边、白热核心 40px。
 纵置（`check_p2.py`）：场景区 y≥28 逐像素不变 10/10。
 
+---
+
+## P7.7 主菜单 1–3 项（第三件 B，2026-11-16）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | 连续全绿第 1 轮（`p77-run-1.txt`） |
+| 2 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | d89 `E1_bodyDisplacement` 装置抖动 |
+| 3 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | d05–d09/d60 读第 2 轮台账 |
+| 4 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 |
+| 5 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | 连续全绿（`p77-run-5.txt`） |
+| 6 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p77-run-6.txt`） |
+
+四策略（`compare_runs.py p77`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+`verify_d93` / `verify_d60` / `verify_d14` 单页 PASS；门缝仍 2px `#ffbf73`。
+
 
 
 
