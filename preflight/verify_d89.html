@@ -58,6 +58,7 @@
 <script>
 (function () {
   'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
   var out = { protocol: 'D-89', ok: true, sub: {} };
   function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
   function lum(r, g, b) { return Math.round(r * 0.299 + g * 0.587 + b * 0.114); }
@@ -192,6 +193,28 @@
       var tl = B.getTimeline();
       var planOk = tl && tl.plan.seg1 === 100 && tl.plan.lock === 150 && tl.plan.total === 180;
       rec('E2_battleClock', !!planOk, { rule: '100/150/180 一律不动', plan: tl && tl.plan });
+
+      /* ══ E3：横置同基线——几何只从 Render._battleLayoutGeo 取，不复制常量 ══════
+       * 同一份 setupBattle / draw()，只切布局；比对的是"双方脚底 = 共享地平线"这件事。 */
+      R._setBattleLayout('horizontal');
+      setupBattle(2, 'orc_warrior');
+      T = 0;
+      var hb = draw();
+      var hg = R._battleLayoutGeo(W, H);
+      var hLayout = R._battleLayoutNow();
+      var hFeet = hb.player && hb.monster &&
+        (hb.player.y + hb.player.h) === hg.groundY && (hb.monster.y + hb.monster.h) === hg.groundY &&
+        hb.player.groundY === hg.groundY && hb.monster.groundY === hg.groundY;
+      var hPlates = hb.playerPlate && hb.monsterPlate &&
+        hb.playerPlate.y + hb.playerPlate.h <= Math.min(hb.player.y, hb.monster.y) &&
+        hb.monsterPlate.y + hb.monsterPlate.h <= Math.min(hb.player.y, hb.monster.y);
+      var hBar = hb.commandBar && hb.commandBar.y >= hg.groundY;
+      rec('E3_horizontalSharedGeo', hLayout === 'horizontal' && !!hg && !!hFeet && !!hPlates && !!hBar, {
+        rule: '横置：玩家/怪物脚底都落在 _battleLayoutGeo(共享几何) 的 groundY 上；铭牌在双方精灵顶之上；指令条在地平线之下',
+        layout: hLayout, g: hg, player: hb.player, monster: hb.monster,
+        plates: [hb.playerPlate, hb.monsterPlate], commandBarY: hb.commandBar && hb.commandBar.y
+      });
+      R._setBattleLayout('vertical');
 
       /* ══ F：接触点火花 + 血条保护 ═══════════════════════ */
       setupBattle(2, 'orc_warrior');

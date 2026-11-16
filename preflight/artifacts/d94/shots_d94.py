@@ -86,6 +86,20 @@ def p4_shots():
     return out
 
 
+# P7：默认布局实拍（不传 layout，走产品默认）+ 显式对照 + 竖屏回退
+def p7_shots():
+    out = [
+        ('p7-1024x640-f1-default', 1024, 640, 1, 'slime', '', ''),
+        ('p7-1024x640-f1-explicit-horizontal', 1024, 640, 1, 'slime', 'horizontal', ''),
+        ('p7-1024x640-f5-default', 1024, 640, 5, 'dragon', '', ''),
+        ('p7-960x540-f1-default', 960, 540, 1, 'slime', '', ''),
+        ('p7-960x540-f5-default', 960, 540, 5, 'dragon', '', ''),
+        ('p7-320x568-f1-default', 320, 568, 1, 'slime', '', ''),
+        ('p7-320x568-f1-explicit-vertical', 320, 568, 1, 'slime', 'vertical', ''),
+    ]
+    return out
+
+
 def main():
     mode = (sys.argv[1] if len(sys.argv) > 1 else 'gate').lower()
     if mode == 'base':
@@ -96,6 +110,8 @@ def main():
         shots = p4_shots()
     elif mode == 'p5':
         shots = p5_shots()
+    elif mode == 'p7':
+        shots = p7_shots()
     else:
         shots = gate_shots()
     geo = {}

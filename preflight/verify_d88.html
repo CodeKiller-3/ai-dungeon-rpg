@@ -57,6 +57,7 @@
 <script>
 (function () {
   'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
   var out = { protocol: 'D-88', ok: true, sub: {} };
   function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
   function lum(r, g, b) { return Math.round(r * 0.299 + g * 0.587 + b * 0.114); }

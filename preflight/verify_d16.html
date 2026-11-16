@@ -60,6 +60,9 @@
 <script>
 (function () {
   'use strict';
+  /* D-94 P7：默认布局已改 horizontal——先记录默认值（后面对账），再显式钉纵置跑纵置组 */
+  var bootLayoutMode = Game.Core.Render._battleLayoutMode();
+  Game.Core.Render._setBattleLayout('vertical');
   var out = { ok: false, sub: {} };
   var M = Game.Core.Main, B = Game.Systems.Battle, Fx = Game.Fx;
   var P = Game.Data.Player, R = Game.Core.Render;
@@ -279,37 +282,62 @@
       return { n: n, h: h };
     }
 
-    T = 500000; P.hp = 100; P.maxHp = 100;
-    B.start('slime');
-    bandTexts = [];
-    R.drawBattle(B.getState());
-    var sigIdle = bandSig();
-    var textsIdle = bandTexts.slice();
-    B.playerAction('attack');
-    bandTexts = [];
-    R.drawBattle(B.getState());
-    var sigActing = bandSig();
-    var textsActing = bandTexts.slice();
+    /* 纵置 / 横置各跑一遍，同一判据、同一测量方式（不复制常量，布局切换只走 _setBattleLayout） */
+    function bandProbe(layout) {
+      var mode = R._setBattleLayout(layout);
+      T = 500000; P.hp = 100; P.maxHp = 100;
+      B.start('slime');
+      bandTexts = [];
+      uiFonts.length = 0;
+      R.drawBattle(B.getState());
+      var sigIdle = bandSig();
+      var textsIdle = bandTexts.slice();
+      B.playerAction('attack');
+      bandTexts = [];
+      R.drawBattle(B.getState());
+      return {
+        mode: mode, idle: sigIdle, acting: bandSig(),
+        tIdle: textsIdle, tActing: bandTexts.slice(), fonts: uiFonts.slice()
+      };
+    }
+    var bpV = bandProbe('vertical');
+    var bpH = bandProbe('horizontal');
     c2.fillText = origFillText;
 
-    var idleHasInfo = textsIdle.length >= 2 && sigIdle.n > 300;
-    var actingHasInfo = textsActing.length >= 2 && sigActing.n > 300;
-    var bandChanges = sigIdle.h !== sigActing.h;
-    var textsChange = textsIdle.join('|') !== textsActing.join('|');
-    rec('E1_bandFilledWithInfo', idleHasInfo && actingHasInfo,
-      '中段条带 y240~400：待机文字 ' + textsIdle.length + ' 条 / 非背景像素 ' + sigIdle.n +
-      '；行动后文字 ' + textsActing.length + ' 条 / 非背景像素 ' + sigActing.n);
-    rec('E2_bandContentChangesWithBattle', bandChanges && textsChange,
+    function bandOk(bp) {
+      return bp.tIdle.length >= 2 && bp.idle.n > 300 &&
+        bp.tActing.length >= 2 && bp.acting.n > 300 &&
+        bp.idle.h !== bp.acting.h && bp.tIdle.join('|') !== bp.tActing.join('|');
+    }
+    function fontOk(bp) {
+      var mn = bp.fonts.length ? Math.min.apply(null, bp.fonts) : 0;
+      return bp.fonts.length >= 6 && mn >= 9 && mn >= 11;
+    }
+    rec('E0_defaultLayoutHorizontal', bootLayoutMode === 'horizontal' && bpH.mode === 'horizontal',
+      '默认布局=' + bootLayoutMode + '（改横置上线）；显式切横置后 mode=' + bpH.mode);
+    rec('E1_bandFilledWithInfo', bandOk(bpV),
+      '纵置中段条带 y240~400：待机文字 ' + bpV.tIdle.length + ' 条 / 非背景像素 ' + bpV.idle.n +
+      '；行动后文字 ' + bpV.tActing.length + ' 条 / 非背景像素 ' + bpV.acting.n);
+    rec('E2_bandContentChangesWithBattle',
+      bpV.idle.h !== bpV.acting.h && bpV.tIdle.join('|') !== bpV.tActing.join('|'),
       '判定方式：对该条带做 getImageData 像素哈希 + fillText 文本集比对；' +
-      '哈希 ' + sigIdle.h + '→' + sigActing.h + '，文本集变化=' + textsChange +
-      '（示例「' + (textsActing[1] || '-') + '」）');
+      '哈希 ' + bpV.idle.h + '→' + bpV.acting.h + '，文本集变化=' +
+      (bpV.tIdle.join('|') !== bpV.tActing.join('|')) + '（示例「' + (bpV.tActing[1] || '-') + '」）');
 
-    /* 文字可读性：战斗界面（不含顶部 HUD）实际绘制的字号不得低于 HUD 最小字号 9px */
-    var minFont = uiFonts.length ? Math.min.apply(null, uiFonts) : 0;
-    var hudMin = 9;   /* hud.js 现有最小字号（血条数值 9px bold） */
-    rec('E3_textNotSmallerThanHud', uiFonts.length >= 6 && minFont >= hudMin && minFont >= 11,
-      '战斗界面实测字号 ' + uiFonts.length + ' 处，最小 ' + minFont + 'px（HUD 最小 ' + hudMin +
-      'px；本卡取 ≥11px 的可读档）');
+    /* 文字可读性：战斗界面（不含顶部 HUD）实际绘制的字号不得低于 HUD 最小字号 9px；本卡取 ≥11px */
+    var minFontV = bpV.fonts.length ? Math.min.apply(null, bpV.fonts) : 0;
+    var minFontH = bpH.fonts.length ? Math.min.apply(null, bpH.fonts) : 0;
+    rec('E3_textNotSmallerThanHud', fontOk(bpV),
+      '纵置实测字号 ' + bpV.fonts.length + ' 处，最小 ' + minFontV + 'px（HUD 最小 9px；本卡取 ≥11px）');
+
+    /* 横置同一组判据：信息带（铭牌 + 回合条）随行动变化、字号不降 */
+    rec('E4_horizontalBandFilledWithInfo', bandOk(bpH),
+      '横置中段条带 y240~400：待机文字 ' + bpH.tIdle.length + ' 条 / 非背景像素 ' + bpH.idle.n +
+      '；行动后文字 ' + bpH.tActing.length + ' 条 / 非背景像素 ' + bpH.acting.n +
+      '；哈希 ' + bpH.idle.h + '→' + bpH.acting.h);
+    rec('E5_horizontalTextReadable', fontOk(bpH),
+      '横置实测字号 ' + bpH.fonts.length + ' 处，最小 ' + minFontH + 'px（与纵置同一条 ≥11px 判据）');
+    R._setBattleLayout('vertical');
 
     /* ══ f) 性能：读 CDP 实测产物 d16-perf.json ═════════════════ */
     var perf = null, perfErr = '';

@@ -62,6 +62,7 @@
 <script>
 (function () {
   'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
   var out = { ok: true, sub: {} };
   var M = Game.Core.Main, B = Game.Systems.Battle, Inv = Game.Systems.Inventory,
       P = Game.Data.Player, IT = Game.Data.ITEMS, Mdl = Game.Modal;

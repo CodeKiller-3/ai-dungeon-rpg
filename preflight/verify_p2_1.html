@@ -31,6 +31,7 @@
 <script>
 (function () {
   'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
   var out = { monsterLoaded: false, monsterApi: false, monsterOk: false };
   var cv = document.getElementById('game');
   var ctx = cv.getContext('2d');

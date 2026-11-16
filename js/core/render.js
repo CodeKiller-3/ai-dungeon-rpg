@@ -731,15 +731,16 @@
    *   玩家 x=0.24W、敌人 x=0.76W、双方同一地平线 y=0.766H。
    * 1024×640（1280×800 窗口 scale=1.25 的逻辑视口）由同一比例式得出 246/778/490；
    * 960×540 得 230/730/414 —— 两档都不写死，断言按各自实数取。
-   * 默认 'vertical'：玩家不可见横置，纵置路径一行不改、逐像素不变。
-   * 'auto' 按设计卡 §6.8：W≥720 且 W/H≥1.20 走横置，否则回退纵置。
-   * 本阶段只做站位与朝向：背景复用既有五层 painter（不重排、不新画），尺寸口径沿用现有落屏高度。 */
-  var BATTLE_LAYOUT = 'vertical';
+   * D-94 P7：默认改成 'horizontal'（横置上线），'vertical' 保留为完整回退路径。
+   * 竖屏仍按设计卡 §6.8 回退：W≥720 且 W/H≥1.20 才走横置，320/480 竖屏继续纵置，
+   * 否则 320 宽七格指令条会被挤成 36px 一格。'auto' 与 'horizontal' 同一口径。
+   * 验证页一律显式 `_setBattleLayout('vertical'|'horizontal')`，不靠默认值。 */
+  var BATTLE_LAYOUT = 'horizontal';
   var HORIZONTAL_MIN_W = 720;
   var HORIZONTAL_MIN_RATIO = 1.20;
 
   function resolveBattleLayout(W, H) {
-    if (BATTLE_LAYOUT === 'horizontal' || BATTLE_LAYOUT === 'vertical') return BATTLE_LAYOUT;
+    if (BATTLE_LAYOUT === 'vertical') return 'vertical';
     var w = (typeof W === 'number' && W > 0) ? W : BASE_W;
     var h = (typeof H === 'number' && H > 0) ? H : BASE_H;
     return (w >= HORIZONTAL_MIN_W && w / h >= HORIZONTAL_MIN_RATIO) ? 'horizontal' : 'vertical';
@@ -1241,7 +1242,9 @@
       ctx.font = 'bold 13px monospace';
       ctx.fillText(cc.label, cc.x + 38, cc.y + 22);
       ctx.fillStyle = cc.disabled ? '#9aa3bd' : '#9fb0d8';
-      ctx.font = '10px monospace';
+      /* D-94 P7：副标签由 10px 提到 11px——D-16 的可读线是"战斗文字 ≥11px"，
+       * 横置上线后这行 10px 会被 verify_d16 的 E5 直接判负，不是放宽判据而是补回标准。 */
+      ctx.font = '11px monospace';
       ctx.fillText(cc.sub, cc.x + 38, cc.y + 44);
       ctx.globalAlpha = 1;
     }

@@ -230,6 +230,9 @@
           window.__D94_GEO = {
             cssW: R.cssW, cssH: R.cssH,
             layout: (typeof R._battleLayoutMode === 'function') ? R._battleLayoutMode() : (R._battleLayout || ''),
+            /* D-94 P7：mode 是配置值（默认 horizontal），resolved 才是本视口真正走的布局
+             * （320/480 竖屏按 §6.8 回退 vertical）——证据看 resolved。 */
+            resolved: (typeof R._battleLayoutNow === 'function') ? R._battleLayoutNow() : null,
             player: dbg.player || null, monster: dbg.monster || null,
             playerPlate: dbg.playerPlate || null, monsterPlate: dbg.monsterPlate || null,
             roundBar: dbg.roundBar || null, commandBar: dbg.commandBar || null,

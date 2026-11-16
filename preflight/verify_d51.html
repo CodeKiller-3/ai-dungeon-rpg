@@ -77,6 +77,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
 <script>
 (function () {
   'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
   var out = { ok: false, sub: {} };
   var START = Date.now();
   function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
