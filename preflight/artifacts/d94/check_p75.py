@@ -2,7 +2,10 @@
 """D-94 P7.5 断言：
   A) 五层横置「地板/墙/敌人站位区」亮度关系（复用 measure_wallfloor.py 的实测 JSON）
   B) 纵置只改了 HUD：与 P0 基线逐像素对账，所有差异必须落在顶栏 y<28
-  C) F3 两池熔岩各留 ≥5px 白热核心（min(R,G,B)≥230）
+  C) F3 两池熔岩：①白热核心与池心（min(R,G,B)≥190，≥5px）；
+     ②池形可见——高温区（R≥190 且 G≥80 且 B≤150 且 R−B≥60）外接框
+     宽 ≥0.06W、高 ≥0.03H、面积 ≥800px、且不接触画面左右边界（两侧各留 ≥2%W）；
+     ③池心横向落在 0.05–0.20W / 0.80–0.95W（读成"这一层两侧的池"，不是画框边上的亮点）。
   D) HUD MP 读数留白：320 窄屏改前 <4px、改后 ≥4px（数字不再贴/压条框）
 用法：python check_p75.py
 """
@@ -71,23 +74,50 @@ def main():
             else:
                 ok('%s 纵置逐像素不变（差异 %d px 全在顶栏 y<28）' % (new, n))
 
-    # ---- C) F3 白热核心 ----
-    im = load('p75-1024x640-f3-slime-horizontal-bg.png')
-    px = im.load()
-    W, H = im.size
-    for side, x0, x1 in [('左', 0, int(0.12 * W)), ('右', int(0.88 * W), W)]:
-        c = 0
-        for y in range(int(0.594 * H), H):
-            for x in range(x0, x1):
-                p = px[x, y]
-                # 背景缓存最后叠了一层四角压暗（边角最多 0.30），纯白核心落屏约 225；
-                # 190 仍高于任何石材/熔岩（橙 #ffc060 的蓝通道只有 96），不会误判。
-                if p[0] >= 190 and p[1] >= 190 and p[2] >= 190:
-                    c += 1
-        if c < 5:
-            fail('F3 %s池白热核心只有 %d px（需 ≥5）' % (side, c))
-        else:
-            ok('F3 %s池白热核心 %d px（≥5，在 x≤0.12W / ≥0.88W 的外侧）' % (side, c))
+    # ---- C) F3 熔岩池：白热核心 + 池形可见 + 位置 ----
+    for vw, vh in VIEWS:
+        im = load('p75-%dx%d-f3-slime-horizontal-bg.png' % (vw, vh))
+        px = im.load()
+        W, H = im.size
+        zones = [('左', 0, int(0.30 * W), 0.05, 0.20),
+                 ('右', int(0.70 * W), W, 0.80, 0.95)]
+        for side, x0, x1, lo, hi in zones:
+            core = 0
+            hot = []
+            for y in range(int(0.60 * H), H):
+                for x in range(x0, x1):
+                    p = px[x, y]
+                    # 背景缓存最后叠了一层四角压暗（边角最多 0.30），纯白核心落屏约 225；
+                    # 190 仍高于任何石材/熔岩（橙 #ffc060 的蓝通道只有 96），不会误判。
+                    if p[0] >= 190 and p[1] >= 190 and p[2] >= 190:
+                        core += 1
+                    if p[0] >= 190 and p[1] >= 80 and p[2] <= 150 and p[0] - p[2] >= 60:
+                        hot.append((x, y))
+            if core < 5:
+                fail('F3 %s池白热核心只有 %d px（需 ≥5）' % (side, core))
+            if not hot:
+                fail('F3 %s池找不到高温区（池形断了）' % side)
+                continue
+            xs = [q[0] for q in hot]
+            ys = [q[1] for q in hot]
+            bx0, bx1, by0, by1 = min(xs), max(xs), min(ys), max(ys)
+            bw, bh = bx1 - bx0 + 1, by1 - by0 + 1
+            ccx = (bx0 + bx1) / 2.0 / W
+            if bw < 0.06 * W:
+                fail('F3 %s池高温区宽 %dpx < 0.06W=%.0fpx（读不成池）' % (side, bw, 0.06 * W))
+            if bh < 0.03 * H:
+                fail('F3 %s池高温区高 %dpx < 0.03H=%.0fpx' % (side, bh, 0.03 * H))
+            if len(hot) < 800:
+                fail('F3 %s池高温区面积 %dpx < 800（只剩亮点）' % (side, len(hot)))
+            if bx0 < 0.02 * W or bx1 > 0.98 * W:
+                fail('F3 %s池贴到画面边界 x[%d,%d]（池被切掉）' % (side, bx0, bx1))
+            if not (lo <= ccx <= hi):
+                fail('F3 %s池心在 %.3fW，不在 %.2f–%.2fW' % (side, ccx, lo, hi))
+            if (bw >= 0.06 * W and bh >= 0.03 * H and len(hot) >= 800
+                    and bx0 >= 0.02 * W and bx1 <= 0.98 * W and lo <= ccx <= hi):
+                ok('F3 %s池形可见：高温区 %dpx，外接框 %dx%d（%.3fW×%.3fH），'
+                   'x[%d,%d] 不触边，池心 %.3fW，白热 %dpx'
+                   % (side, len(hot), bw, bh, bw / W, bh / H, bx0, bx1, ccx, core))
 
     # ---- D) HUD MP 读数留白（320） ----
     for tag, need in [('before', 0), ('after', 4)]:

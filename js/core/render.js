@@ -387,6 +387,35 @@
     c.fill();
   }
 
+  /* D-94 P7.6：立地构件的落地处理（画在构件之后）。
+   * 四件事一起做，缺一件都会读回"剪纸"：
+   *   1) 底缘 12px 垂直压暗——深色不再直接切在亮地上；
+   *   2) 接地影——椭圆落在构件两侧的地面上，左重右轻，避免贴纸式对称；
+   *   3) 底缘断口——两三块 2–4px 暗块把整条直线打断；
+   *   4) 落到地面的暗斑——越过底缘，底边不再是一条笔直的硬边。
+   * 只作用于构件自身宽度，不铺满全宽，避免把地板压暗。 */
+  function hPropFoot(c, cx, baseY, w, dark) {
+    var half = Math.max(6, Math.round(w / 2));
+    var x0 = Math.round(cx - half), ww = half * 2;
+    var d = (typeof dark === 'number') ? dark : 0.55;
+    var gd = c.createLinearGradient(0, baseY - 12, 0, baseY);
+    gd.addColorStop(0, 'rgba(0,0,0,0)');
+    gd.addColorStop(1, 'rgba(0,0,0,' + d + ')');
+    c.fillStyle = gd;
+    c.fillRect(x0, baseY - 12, ww, 12);
+    c.fillStyle = 'rgba(0,0,0,0.45)';
+    c.beginPath();
+    c.ellipse(cx + Math.round(ww * 0.10), baseY + 2, Math.round(ww * 0.60), 4, 0, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = 'rgba(0,0,0,' + Math.min(0.7, d + 0.12) + ')';
+    c.fillRect(x0 + Math.round(ww * 0.10), baseY - 3, Math.round(ww * 0.20), 3);
+    c.fillRect(x0 + Math.round(ww * 0.56), baseY - 2, Math.round(ww * 0.24), 2);
+    /* 越过底缘、落到地面上的两小块暗斑：底边不能再是一条笔直的硬边 */
+    c.fillStyle = 'rgba(0,0,0,' + Math.min(0.6, d + 0.02) + ')';
+    c.fillRect(x0 + Math.round(ww * 0.14), baseY, Math.round(ww * 0.13), 3);
+    c.fillRect(x0 + Math.round(ww * 0.58), baseY, Math.round(ww * 0.17), 2);
+  }
+
   /* F1 石厅：错缝石砌后墙 + 居中拱门（敌人站在黑洞前）+ 两侧壁挂火把 + 湿石板地面 */
   function bgStoneHall(c, W, H, sc, cols, canTile) {
     var CX = W / 2, hor = sc.horizon;
@@ -517,7 +546,7 @@
    * D-89：两池熔岩原比红色沃古尔更亮（峰值 200、亮部 337px），背景压了主体一头。
    * 现在压暗 + 收窄：岩壳变宽、熔岩带变薄、亮心只留断续 2px，光晕 0.22→0.12；
    * 峰值降到 ~180 且亮部面积压到 20px 以内（< 沃古尔自身的 170+ 亮部）。 */
-  function bgLavaSeam(c, x0, x1, y, hot) {
+  function bgLavaSeam(c, x0, x1, y) {
     var w = Math.max(40, x1 - x0);
     bgGlow(c, (x0 + x1) / 2, y, Math.max(60, w * 0.60), [255, 120, 40], 0.12);
     /* 上下岩缘（比旧版更厚，压住熔岩的面积） */
@@ -541,16 +570,56 @@
     for (var i = 0; i < 3; i++) {
       bgRect(c, x0 + w * (0.18 + i * 0.24), y - 9 - (i % 2) * 4, 2, 2, '#b8641f');
     }
-    /* D-94 P7.5：横置每池留 5–10px 白热核心 + 几粒火星（纵置不传 hot → 逐像素不变）。
-     * 核心固定在池心（左 ≈0.07W / 右 ≈0.93W），仍落在两侧极值区，不进两人站位之间。 */
-    if (hot) {
-      var chx = Math.round(x0 + w * 0.5);
-      bgGlow(c, chx, y + 3, Math.max(18, Math.round(w * 0.14)), [255, 214, 150], 0.28);
-      bgRect(c, chx - 4, y + 2, 8, 3, '#ffe4a8');
-      bgRect(c, chx - 2, y + 2, 4, 2, '#fffaf0');
-      for (var hj = 0; hj < 3; hj++) {
-        bgRect(c, chx + (hj - 1) * 9, y - 7 - hj * 3, 2, 2, '#ffd27a');
-      }
+  }
+  /* D-94 P7.6：完整的熔岩池（只在横置 F3 用）。
+   * 与 bgLavaSeam 的"细缝"不同：池形有外轮廓、有由内向外衰减的热光、有落在周围地板上的反光，
+   * 白热核心在池心而不是画框边缘；池体左右各留 ≥2%W 边距，不会被画面切掉。
+   * cx/cy = 池心，hw/hh = 半宽/半高（像素）。 */
+  function bgLavaPool(c, cx, cy, hw, hh) {
+    var i, a;
+    /* 1) 落在周围地板上的热反光（先画，池沿压在上面） */
+    c.fillStyle = 'rgba(255,120,50,0.10)';
+    c.beginPath();
+    c.ellipse(cx, cy + Math.round(hh * 0.55), Math.round(hw * 1.32), Math.round(hh * 1.45), 0, 0, Math.PI * 2);
+    c.fill();
+    /* 2) 由内向外衰减的热光：大圈橙 + 小圈暖黄 */
+    bgGlow(c, cx, cy, Math.round(hw * 1.60), [255, 130, 50], 0.30);
+    bgGlow(c, cx, cy, Math.round(hw * 0.78), [255, 198, 108], 0.24);
+    /* 3) 岩壳：不规则外轮廓（比池体大 6–8px），把池从地板上"挖"出来 */
+    var rim = [], rimR = [1.00, 0.90, 1.06, 0.93, 0.88, 1.04, 0.91, 1.07, 0.94, 1.02, 0.89, 1.05];
+    for (i = 0; i < 12; i++) {
+      a = Math.PI * 2 * i / 12;
+      rim.push([cx + Math.cos(a) * (hw + 7) * rimR[i], cy + Math.sin(a) * (hh + 6) * rimR[i]]);
+    }
+    bgPoly(c, rim, '#171118');
+    /* 4) 池体：不规则轮廓 + 径向渐变（白热核心 → 橙 → 暗红） */
+    var pool = [], poolR = [1.00, 0.94, 1.03, 0.91, 0.97, 1.02, 0.90, 1.04, 0.95, 1.00, 0.92, 1.01];
+    for (i = 0; i < 12; i++) {
+      a = Math.PI * 2 * i / 12;
+      pool.push([cx + Math.cos(a) * hw * poolR[i], cy + Math.sin(a) * hh * poolR[i]]);
+    }
+    c.save();
+    c.beginPath();
+    c.moveTo(pool[0][0], pool[0][1]);
+    for (i = 1; i < pool.length; i++) c.lineTo(pool[i][0], pool[i][1]);
+    c.closePath();
+    c.clip();
+    var lg = c.createRadialGradient(cx, cy, 1, cx, cy, Math.max(10, hw * 0.92));
+    lg.addColorStop(0, '#fff6dc');
+    lg.addColorStop(0.16, '#ffd27a');
+    lg.addColorStop(0.42, '#ff8a2e');
+    lg.addColorStop(0.74, '#b83a12');
+    lg.addColorStop(1, '#4a1608');
+    c.fillStyle = lg;
+    c.fillRect(cx - hw - 8, cy - hh - 8, hw * 2 + 16, hh * 2 + 16);
+    c.restore();
+    /* 5) 白热核心：池心 10×4，不贴画框 */
+    bgRect(c, Math.round(cx - 5), Math.round(cy - 2), 10, 4, '#fff6e2');
+    bgRect(c, Math.round(cx - 2), Math.round(cy - 1), 4, 2, '#ffffff');
+    /* 6) 火星：收在池心上方 ±0.32hw 内，不飞到 x>0.12W 的光源极值区之外 */
+    for (i = 0; i < 4; i++) {
+      bgRect(c, Math.round(cx - hw * 0.34 + i * hw * 0.22),
+        Math.round(cy - hh - 9 - (i % 2) * 5), 2, 2, '#ffcf7a');
     }
   }
   function bgLavaRift(c, W, H, sc, cols, canTile) {
@@ -662,13 +731,33 @@
   }
 
   /* F5 深渊王座前厅：双尖拱 + 居中王座与台阶 + 两侧火盆（最亮）+ 黑曜石金脉地面 */
-  function bgGothicArch(c, cx, baseY, w, h, rim, fill) {
+  function bgGothicArch(c, cx, baseY, w, h, rim, fill, deep) {
     var top = baseY - h;
-    bgPoly(c, [[cx - w / 2, baseY], [cx - w / 2, top + 28], [cx, top], [cx + w / 2, top + 28], [cx + w / 2, baseY]], fill);
+    var pts = [[cx - w / 2, baseY], [cx - w / 2, top + 28], [cx, top], [cx + w / 2, top + 28], [cx + w / 2, baseY]];
+    var fs = fill;
+    /* D-94 P7.6：deep 给出"龛底返光"色——洞口不再是一整块纯黑，下半段渐亮到龛内地面，
+     * 上段保持暗，读成"有深度的门洞/壁龛"而不是贴在墙上的黑片。 */
+    if (deep) {
+      var dg = c.createLinearGradient(0, top, 0, baseY);
+      dg.addColorStop(0, fill);
+      dg.addColorStop(0.60, fill);
+      dg.addColorStop(1, deep);
+      fs = dg;
+    }
+    bgPoly(c, pts, fs);
     bgLine(c, cx - w / 2, baseY, cx - w / 2, top + 28, rim, 2);
     bgLine(c, cx - w / 2, top + 28, cx, top, rim, 2);
     bgLine(c, cx, top, cx + w / 2, top + 28, rim, 2);
     bgLine(c, cx + w / 2, top + 28, cx + w / 2, baseY, rim, 2);
+    /* 龛内：一道"后墙脚线" + 10px 龛内地面 + 两侧内缘返光——
+     * 有地面、有墙角，才读成"可以走进去的门洞/壁龛"，而不是贴在墙上的一块黑。 */
+    if (deep) {
+      bgRect(c, cx - w / 2 + 2, Math.round(baseY - h * 0.40), w - 4, 1, 'rgba(190,196,235,0.05)');
+      bgRect(c, cx - w / 2 + 2, baseY - 10, w - 4, 10, deep);
+      bgRect(c, cx - w / 2 + 2, baseY - 10, w - 4, 1, 'rgba(210,214,240,0.10)');
+      bgRect(c, cx - w / 2 + 2, baseY - 10, 1, 10, 'rgba(190,196,235,0.08)');
+      bgRect(c, cx + w / 2 - 3, baseY - 10, 1, 10, 'rgba(190,196,235,0.08)');
+    }
   }
   function bgThroneHall(c, W, H, sc, cols, canTile) {
     var hor = sc.horizon, CX = W / 2;
@@ -835,8 +924,9 @@
     hCenterDark(c, W, bwY, W * 0.5, W * 0.34, 0.62);
     /* 侧拱：左窄右宽，不做镜像 */
     var lx = Math.round(W * 0.155), rx = Math.round(W * 0.885);
-    bgGothicArch(c, lx, bwY, Math.round(W * 0.066), Math.round(H * 0.42), '#232333', '#07070d');
-    bgGothicArch(c, rx, bwY, Math.round(W * 0.088), Math.round(H * 0.36), '#232333', '#07070d');
+    /* P7.6：拱龛加宽压矮（68×269 像石碑），现在宽高比≈1:2.4，读成能走进去的门洞 */
+    bgGothicArch(c, lx, bwY, Math.round(W * 0.085), Math.round(H * 0.36), '#232333', '#07070d', '#15151f');
+    bgGothicArch(c, rx, bwY, Math.round(W * 0.105), Math.round(H * 0.34), '#232333', '#07070d', '#15151f');
     /* 拱脚石座：构件落到地面上 */
     for (var fi = 0; fi < 2; fi++) {
       var px2 = fi ? rx : lx;
@@ -848,6 +938,9 @@
     hWallDim(c, W, bwY, 0.28);
     hFloorTiles(c, W, H, bwY, 1, cols, canTile, 'rgba(22,24,26,0.60)', '#08080f');
     bgRect(c, 0, bwY - 5, W, 5, '#191928');
+    /* P7.6：两座拱龛落地——底缘压暗 + 接地影 + 断口（底边不再是一条直线切在亮地上） */
+    hPropFoot(c, lx, bwY, Math.round(W * 0.085) + 10, 0.50);
+    hPropFoot(c, rx, bwY, Math.round(W * 0.105) + 10, 0.50);
     /* 壁挂火把：两侧极值；火心在下带（y≥0.594H） */
     var tx = [Math.round(W * 0.09), Math.round(W * 0.91)];
     var ty = bwY - Math.round(H * 0.018);
@@ -911,6 +1004,10 @@
     bgRect(c, bx - 31, G - 53, 62, 2, '#43321f');
     bgRect(c, bx - 31, G - 30, 62, 3, '#191108');
     bgRect(c, bx - 2, G - 53, 3, 50, '#191108');
+    /* P7.6：帐篷 / 木栅 / 木箱落地——底缘压暗 + 接地影 + 断口 */
+    hPropFoot(c, Math.round(tw * 0.5), bwY, tw, 0.50);
+    hPropFoot(c, Math.round(W * 0.93), bwY, Math.round(W * 0.13), 0.46);
+    hPropFoot(c, bx, G, 68, 0.52);
     /* 车辙：地面材质，不是物件 */
     bgLine(c, 0, G + Math.round(H * 0.055), W, G + Math.round(H * 0.058), 'rgba(84,70,46,0.16)', 2);
     bgLine(c, 0, G + Math.round(H * 0.085), W, G + Math.round(H * 0.088), 'rgba(84,70,46,0.12)', 2);
@@ -978,9 +1075,7 @@
     /* 两侧崖脚压地线：画在地板之后才不会被地砖盖住，崖壁才读成"落在地上" */
     bgRect(c, 0, bwY, Math.round(W * 0.18), 3, 'rgba(0,0,0,0.35)');
     bgRect(c, W - Math.round(W * 0.18), bwY, Math.round(W * 0.18), 3, 'rgba(0,0,0,0.35)');
-    /* 两侧地面熔岩：亮心只在极值侧（左 ≤0.12W / 右 ≥0.88W）；hot=true 每池留白热核心 + 火星 */
-    bgLavaSeam(c, 0, Math.round(W * 0.14), Math.round(H * 0.705), true);
-    bgLavaSeam(c, Math.round(W * 0.86), W, Math.round(H * 0.705), true);
+    /* P7.6：两池熔岩移到前景（地面线之下），池体完整、不被画框切、也不撞两侧构件 */
     for (var ai = 0; ai < 22; ai++) {
       var ax = (ai * 137 + 40) % Math.max(1, W);
       var ay = Math.round(H * 0.32) + (ai * 73) % Math.round(H * 0.34);
@@ -994,8 +1089,18 @@
     bgRect(c, lx - 18, colTop, 5, bwY - colTop + 10, '#241f2b');
     bgRect(c, lx - 24, colTop - Math.round(H * 0.018), 48, Math.round(H * 0.018), '#211c28');
     bgContact(c, rx, bwY + 8, 34, 5);
-    bgGothicArch(c, rx, bwY + 6, 84, Math.round(H * 0.26), 'rgba(74,64,92,0.40)', '#0b0910');
+    bgGothicArch(c, rx, bwY + 6, 84, Math.round(H * 0.26), 'rgba(74,64,92,0.40)', '#0b0910', '#19131b');
+    /* P7.6：柱/拱落地——底缘压暗 + 接地影 + 断口，不再把深色底边直接切在亮地上 */
+    hPropFoot(c, lx, bwY + 10, 48, 0.52);
+    hPropFoot(c, rx, bwY + 6, 90, 0.46);
     bgRect(c, 0, G + 2, W, Math.max(3, Math.round(H * 0.010)), 'rgba(0,0,0,0.22)');
+    /* P7.6：熔岩池是这一层的主热源——有池形、有由内向外衰减的热光、有落在周围地板的反光；
+     * 白热核心在池心（0.09W / 0.91W），池体左右各留 ≈2.4%W 边距，不会被画面切掉，
+     * 池心也落在"光源极值区 x≤0.12W / ≥0.88W"内（P2 亮度分区断言）。 */
+    var phw = Math.round(W * 0.066);
+    var phh = Math.max(14, Math.round(H * 0.032));
+    bgLavaPool(c, Math.round(W * 0.09), Math.round(H * 0.806), phw, phh);
+    bgLavaPool(c, W - Math.round(W * 0.09), Math.round(H * 0.806), phw, phh);
   }
 
   /* F4 墓穴：冰石后墙 + 左双柱/右单粗柱与倾斜棺盖 + 中央空墓道 + 霜石阶 */
@@ -1021,16 +1126,21 @@
       bgRect(c, px - pw / 2 - 6, ptop - 10, pw + 12, 11, '#243744');
       bgRect(c, px - pw / 2 - 6, bwY, pw + 12, 10, '#22323d');
     }
-    /* 右：倾斜棺盖，靠着粗柱落到地面 */
-    var sx = Math.round(W * 0.885);
-    bgContact(c, sx, G - 4, 44, 6);
-    bgPoly(c, [[sx - 38, G], [sx - 30, G - 54], [sx + 34, G - 62], [sx + 40, G]], '#1b2a35');
-    bgPoly(c, [[sx - 32, G - 6], [sx - 26, G - 48], [sx + 30, G - 55], [sx + 34, G - 6]], '#22323d');
-    bgLine(c, sx - 22, G - 44, sx + 26, G - 50, 'rgba(120,180,210,0.20)', 1);
     /* P7.5：冰石后墙砖面实测 19.6（五层最高），压 0.30；地板洗到 ≈39 */
     hWallDim(c, W, bwY, 0.30);
     hFloorTiles(c, W, H, bwY, 4, cols, canTile, 'rgba(12,18,24,0.60)', '#060d14');
     bgRect(c, 0, bwY - 5, W, 5, '#16242e');
+    /* P7.6：右：倾斜棺盖——必须画在地砖之后（与 F2 木箱同一个坑），否则整个棺盖被地板吞掉 */
+    var sx = Math.round(W * 0.885);
+    bgContact(c, sx, G - 2, 44, 6);
+    bgPoly(c, [[sx - 38, G], [sx - 30, G - 54], [sx + 34, G - 62], [sx + 40, G]], '#1b2a35');
+    bgPoly(c, [[sx - 32, G - 6], [sx - 26, G - 48], [sx + 30, G - 55], [sx + 34, G - 6]], '#22323d');
+    bgLine(c, sx - 22, G - 44, sx + 26, G - 50, 'rgba(120,180,210,0.20)', 1);
+    hPropFoot(c, sx, G, 78, 0.50);
+    /* 三根柱子的可见底边在 bwY（以下被地砖盖住），补落地处理 */
+    hPropFoot(c, Math.round(W * 0.115), bwY, 40, 0.46);
+    hPropFoot(c, Math.round(W * 0.325), bwY, 40, 0.46);
+    hPropFoot(c, Math.round(W * 0.90), bwY, 58, 0.46);
     /* 霜雾：只贴两侧地面，中央空场不铺 */
     c.fillStyle = 'rgba(140,200,230,0.04)';
     c.beginPath();
@@ -1083,7 +1193,7 @@
     bgRect(c, Math.round(W * 0.5 + cw / 2), bwY, 1, H - bwY, 'rgba(150,110,60,0.16)');
     /* 左：侧拱 + 两面垂旗 */
     var lx = Math.round(W * 0.155);
-    bgGothicArch(c, lx, bwY, Math.round(W * 0.066), Math.round(H * 0.36), '#2a1938', '#0d0812');
+    bgGothicArch(c, lx, bwY, Math.round(W * 0.066), Math.round(H * 0.36), '#2a1938', '#0d0812', '#17101c');
     var ban = [Math.round(W * 0.105), lx];
     for (var bi2 = 0; bi2 < ban.length; bi2++) {
       var bx2 = ban[bi2];
@@ -1092,10 +1202,21 @@
       bgRect(c, bx2 - 11, Math.round(H * 0.06), 2, Math.round(H * 0.145), '#57212c');
       bgRect(c, bx2 + 9, Math.round(H * 0.06), 2, Math.round(H * 0.145), '#57212c');
     }
-    /* 右：王座（后墙前，居中偏右）+ 两级台座（落到地面） */
+    /* 右：王座（后墙前，居中偏右）+ 两级台座（落到地面）——P7.6 起画在地砖之后 */
     var tx = Math.round(W * 0.925), tb = Math.round(H * 0.69);
     var hw2 = Math.round(W * 0.046);
     var bH = Math.round(H * 0.15), spH = Math.round(H * 0.05);
+    /* P7.5：黑曜石后墙压 0.10（本就 8.1）；地板洗到 ≈36 并降纹理对比 */
+    hWallDim(c, W, bwY, 0.10);
+    hFloorTiles(c, W, H, bwY, 5, cols, canTile, 'rgba(32,22,28,0.60)', '#09050f');
+    for (var fi = 0; fi < 8; fi++) {
+      var fgx = (fi * 173 + 40) % Math.max(1, W);
+      bgLine(c, fgx, G + Math.round(H * 0.02) + (fi % 2) * Math.round(H * 0.03),
+        fgx + 58, G + Math.round(H * 0.035) + (fi % 2) * Math.round(H * 0.03), 'rgba(120,90,46,0.30)', 1);
+    }
+    /* 后墙脚线属于墙，必须先于王座/火盆，否则会横切过立地构件 */
+    bgRect(c, 0, bwY - 4, W, 4, '#2a1938');
+    /* P7.6：王座整块改画在地砖之后——台座落在地面上，不再被地板切掉半截 */
     bgContact(c, tx, tb + 10, hw2 + 8, 6);
     bgRect(c, tx - hw2 - 6, tb - Math.round(H * 0.012), (hw2 + 6) * 2, Math.round(H * 0.022), '#150d1e');
     bgRect(c, tx - hw2 - 6, tb - Math.round(H * 0.012), (hw2 + 6) * 2, 2, '#33203f');
@@ -1118,14 +1239,9 @@
     c.beginPath();
     c.ellipse(tx, tb + 2, hw2 + 16, Math.round(H * 0.02), 0, 0, Math.PI * 2);
     c.fill();
-    /* P7.5：黑曜石后墙压 0.10（本就 8.1）；地板洗到 ≈36 并降纹理对比 */
-    hWallDim(c, W, bwY, 0.10);
-    hFloorTiles(c, W, H, bwY, 5, cols, canTile, 'rgba(32,22,28,0.60)', '#09050f');
-    for (var fi = 0; fi < 8; fi++) {
-      var fgx = (fi * 173 + 40) % Math.max(1, W);
-      bgLine(c, fgx, G + Math.round(H * 0.02) + (fi % 2) * Math.round(H * 0.03),
-        fgx + 58, G + Math.round(H * 0.035) + (fi % 2) * Math.round(H * 0.03), 'rgba(120,90,46,0.30)', 1);
-    }
+    /* P7.6：王座与左侧拱龛落地——底缘压暗 + 接地影 + 断口 */
+    hPropFoot(c, tx, tb, (hw2 + 6) * 2, 0.50);
+    hPropFoot(c, lx, bwY, Math.round(W * 0.066) + 8, 0.48);
     /* 两侧火盆：短座火碗，火心在下带、x 在极值侧 */
     var bs = [Math.round(W * 0.075), Math.round(W * 0.885)];
     for (var bi = 0; bi < bs.length; bi++) {
@@ -1136,8 +1252,8 @@
       bgRect(c, bx + 1, by - Math.round(H * 0.088), 1, Math.round(H * 0.078), 'rgba(220,160,120,0.16)');
       bgRect(c, bx - 13, by - Math.round(H * 0.098), 26, 8, '#2a1f33');
       bgFlame(c, bx, by - Math.round(H * 0.102), 0.62, false);
+      hPropFoot(c, bx, by, 32, 0.50);
     }
-    bgRect(c, 0, bwY - 4, W, 4, '#2a1938');
     bgRect(c, 0, G + 2, W, Math.max(3, Math.round(H * 0.010)), 'rgba(0,0,0,0.22)');
   }
 

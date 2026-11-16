@@ -147,7 +147,7 @@
         ]
       },
       "fx": null,
-      "hash": "dacbddd9"
+      "hash": "2188855e"
     }
   },
   "1024x640-f1-slime-vertical": {
@@ -209,7 +209,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "e150d2f5"
+      "hash": "ecce5498"
     }
   },
   "1024x640-f2-ogre_boss-horizontal": {
@@ -360,7 +360,7 @@
         ]
       },
       "fx": null,
-      "hash": "33d21b81"
+      "hash": "61cb0a52"
     }
   },
   "1024x640-f2-ogre_boss-vertical": {
@@ -422,7 +422,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "e0014cdc"
+      "hash": "62a94ab7"
     }
   },
   "1024x640-f3-slime-horizontal": {
@@ -573,7 +573,7 @@
         ]
       },
       "fx": null,
-      "hash": "4d2ff0c1"
+      "hash": "a875f3c7"
     }
   },
   "1024x640-f3-slime-vertical": {
@@ -635,7 +635,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "fac8f95f"
+      "hash": "a26a61cc"
     }
   },
   "1024x640-f4-zombie_king-horizontal": {
@@ -786,7 +786,7 @@
         ]
       },
       "fx": null,
-      "hash": "995edae"
+      "hash": "11790543"
     }
   },
   "1024x640-f4-zombie_king-vertical": {
@@ -848,7 +848,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "3dc9cc41"
+      "hash": "a847832a"
     }
   },
   "1024x640-f5-dragon-horizontal": {
@@ -999,7 +999,7 @@
         ]
       },
       "fx": null,
-      "hash": "627be108"
+      "hash": "33899fde"
     }
   },
   "1024x640-f5-dragon-vertical": {
@@ -1061,7 +1061,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "6fb20c0a"
+      "hash": "f0850818"
     }
   },
   "960x540-f1-slime-horizontal": {
@@ -1212,7 +1212,7 @@
         ]
       },
       "fx": null,
-      "hash": "804b5a2b"
+      "hash": "8a1da79"
     }
   },
   "960x540-f1-slime-vertical": {
@@ -1274,7 +1274,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "72d97996"
+      "hash": "3b4d38ee"
     }
   },
   "960x540-f2-ogre_boss-horizontal": {
@@ -1425,7 +1425,7 @@
         ]
       },
       "fx": null,
-      "hash": "172d4c26"
+      "hash": "ae967fbc"
     }
   },
   "960x540-f2-ogre_boss-vertical": {
@@ -1487,7 +1487,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "54f0cbc9"
+      "hash": "1e7adb77"
     }
   },
   "960x540-f3-slime-horizontal": {
@@ -1638,7 +1638,7 @@
         ]
       },
       "fx": null,
-      "hash": "f3c3f5af"
+      "hash": "d466411"
     }
   },
   "960x540-f3-slime-vertical": {
@@ -1700,7 +1700,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "2cdb4ccf"
+      "hash": "ef805fb7"
     }
   },
   "960x540-f4-zombie_king-horizontal": {
@@ -1851,7 +1851,7 @@
         ]
       },
       "fx": null,
-      "hash": "3d4c109c"
+      "hash": "1313f6c8"
     }
   },
   "960x540-f4-zombie_king-vertical": {
@@ -1913,7 +1913,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "3358d2a4"
+      "hash": "bdb223ba"
     }
   },
   "960x540-f5-dragon-horizontal": {
@@ -2064,7 +2064,7 @@
         ]
       },
       "fx": null,
-      "hash": "fe041a1f"
+      "hash": "ebf99885"
     }
   },
   "960x540-f5-dragon-vertical": {
@@ -2126,7 +2126,7 @@
       "roundBar": null,
       "commandBar": null,
       "fx": null,
-      "hash": "a8ac753c"
+      "hash": "eeb6f263"
     }
   }
 }
