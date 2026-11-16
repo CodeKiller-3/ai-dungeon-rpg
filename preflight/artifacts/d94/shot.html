@@ -153,6 +153,7 @@
       P.maxHp = 140;
       P.mp = 30;
       P.maxMp = 30;
+      if (q.mp !== undefined && q.mp !== '') P.mp = Math.max(0, +q.mp);
       P.atk = 14;
       P.def = 6;
       B._setClock(function () { return T; });
@@ -215,6 +216,8 @@
             cssW: R.cssW, cssH: R.cssH,
             layout: (typeof R._battleLayoutMode === 'function') ? R._battleLayoutMode() : (R._battleLayout || ''),
             player: dbg.player || null, monster: dbg.monster || null,
+            playerPlate: dbg.playerPlate || null, monsterPlate: dbg.monsterPlate || null,
+            roundBar: dbg.roundBar || null, commandBar: dbg.commandBar || null,
             hash: pixelHash()
           };
           document.getElementById('geo').textContent = JSON.stringify(window.__D94_GEO);

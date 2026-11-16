@@ -1131,6 +1131,124 @@
     ctx.restore();
   }
 
+  /* D-94 P4：紧凑铭牌——名字 + HP 数值 + 一条细血条，宽度按角色落屏尺寸走。
+   * 旧版固定 340 的条配 90 高的角色，视觉重量倒置（一眼是两条色块，不是两个人在对峙）。
+   * width = clamp(round(spriteW×1.5), 96, 240)：骑士 96、Boss 144、龙 216。
+   * 返回铭牌矩形，供 drawBattle 写进 _lastBattleBox 做几何断言。 */
+  function hNamePlate(ctx, cx, topY, spriteW, name, hp, hpMax, color, enraged) {
+    var w = Math.max(96, Math.min(240, Math.round((spriteW || 90) * 1.5)));
+    var h = 34;
+    var x = Math.round(cx - w / 2);
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,8,16,0.78)';
+    ctx.fillRect(x, topY, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, topY + 0.5, w - 1, h - 1);
+    if (enraged) {
+      /* 狂暴标记只占左沿 3px：文案永不溢出铭牌，颜色也够区分 */
+      ctx.fillStyle = '#ff9a4a';
+      ctx.fillRect(x + 1, topY + 1, 3, h - 2);
+    }
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = enraged ? '#ffb37a' : '#e8ecff';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(name, x + 9, topY + 10);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#cfd6ea';
+    ctx.font = '11px monospace';
+    ctx.fillText(hp + ' / ' + hpMax, x + w - 8, topY + 10);
+    var bx = x + 8, bw = w - 16, by = topY + 20, bh = 7;
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(bx, by, bw, bh);
+    var r = Math.max(0, Math.min(1, (hpMax > 0) ? hp / hpMax : 0));
+    if (r > 0) {
+      ctx.fillStyle = color;
+      ctx.fillRect(bx, by, Math.round(bw * r), bh);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.restore();
+    return { x: x, y: topY, w: w, h: h, barX: bx, barY: by, barW: bw, barH: bh };
+  }
+
+  /* D-94 P4：7 格指令条（只显示、不接管输入；键盘 1–7 仍是唯一输入）。
+   * 数值不抄第二份：技能名/MP 从 Game.Data.SKILLS 读，冷却从 Game.Skills.getCooldown 读。
+   * MP 不足或冷却中都把整格降到 alpha 0.45，不改变任何判定。 */
+  var H_CMDS = [
+    { key: 1, cmd: 'attack', label: '攻击', sub: function () { return '无消耗'; } },
+    { key: 2, cmd: 'defend', label: '防御', sub: function () { return '无消耗'; } },
+    { key: 3, cmd: 'run', label: '逃跑', sub: function () { return '—'; } },
+    { key: 4, cmd: 'skill:fireball', label: '火球', skill: 'fireball' },
+    { key: 5, cmd: 'skill:dash', label: '冲刺', skill: 'dash' },
+    { key: 6, cmd: 'skill:shield', label: '护盾', skill: 'shield' },
+    { key: 7, cmd: 'potion', label: '用药', sub: function (st) { return '×' + ((st && st.potionsLeft) | 0); } }
+  ];
+  function hCommandBar(W, H, state) {
+    var barH = 96, y0 = H - barH;
+    var m = 26, gap = 8;
+    var cw = Math.floor((W - m * 2 - gap * (H_CMDS.length - 1)) / H_CMDS.length);
+    var total = cw * H_CMDS.length + gap * (H_CMDS.length - 1);
+    var x0 = Math.round((W - total) / 2);
+    var ch = 64, cy = y0 + 16;
+    var mp = (Game.Data.Player && typeof Game.Data.Player.mp === 'number') ? Game.Data.Player.mp : 0;
+    var cells = [];
+    for (var i = 0; i < H_CMDS.length; i++) {
+      var c0 = H_CMDS[i];
+      var cx = x0 + i * (cw + gap);
+      var sub = '', disabled = false;
+      if (c0.skill && Game.Data.SKILLS && Game.Data.SKILLS[c0.skill]) {
+        var sk = Game.Data.SKILLS[c0.skill];
+        var cdLeft = (Game.Skills && typeof Game.Skills.getCooldown === 'function')
+          ? Game.Skills.getCooldown(c0.skill) : 0;
+        sub = cdLeft > 0 ? ('CD ' + cdLeft) : ('MP ' + sk.mpCost);
+        disabled = (mp < sk.mpCost) || cdLeft > 0;
+      } else {
+        sub = c0.sub ? c0.sub(state) : '';
+      }
+      cells.push({ x: cx, y: cy, w: cw, h: ch, key: c0.key, cmd: c0.cmd, label: c0.label,
+        sub: sub, disabled: disabled });
+    }
+    return { x: 0, y: y0, w: W, h: barH, cells: cells };
+  }
+  function hDrawCommandBar(ctx, bar) {
+    if (!bar) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,8,16,0.92)';
+    ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+    ctx.fillStyle = '#2a2a44';
+    ctx.fillRect(bar.x, bar.y, bar.w, 1);
+    for (var i = 0; i < bar.cells.length; i++) {
+      var cc = bar.cells[i];
+      ctx.globalAlpha = cc.disabled ? 0.45 : 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(cc.x, cc.y, cc.w, cc.h);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cc.x + 0.5, cc.y + 0.5, cc.w - 1, cc.h - 1);
+      ctx.fillStyle = 'rgba(120,160,255,0.18)';
+      ctx.fillRect(cc.x + 10, cc.y + 10, 20, 20);
+      ctx.strokeStyle = 'rgba(150,180,255,0.45)';
+      ctx.strokeRect(cc.x + 10.5, cc.y + 10.5, 19, 19);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#dfe9ff';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(String(cc.key), cc.x + 20, cc.y + 21);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#eef2ff';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText(cc.label, cc.x + 38, cc.y + 22);
+      ctx.fillStyle = cc.disabled ? '#9aa3bd' : '#9fb0d8';
+      ctx.font = '10px monospace';
+      ctx.fillText(cc.sub, cc.x + 38, cc.y + 44);
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+
 
   /* 第三拨 D-88：龙的身份符号——只做「发光眼」这一件（不做口部余火、不做亮色翼膜）。
    * D-89：素材重画为原生 72×72（原 64×54），锚点同步到新头部位（原生坐标）：
@@ -2393,38 +2511,48 @@
       dbg.player = { x: Math.round(g.playerCx - pW / 2), y: g.groundY - 90, w: pW, h: 90,
         baseTop: g.groundY - 90, groundY: g.groundY, knock: 0 };
 
-      /* ===== 名字 + 血条：分列两侧头顶；960×540 下龙顶 270，条带按最高精灵上移避让 ===== */
+      /* ===== 身份带：双方紧凑铭牌同一条带上，宽度按各自落屏尺寸走 =====
+       * 铭牌底边钉在"最高精灵顶 − 14"：龙顶 346（960×540 → 270），铭牌 298–332（222–256）。
+       * 960×540 下龙角尖与铭牌底留 14px，不再挤到 8px。 */
+      var plateBottom = Math.min(g.groundY - 90, g.groundY - mBaseH) - 14;
+      var plateTop = plateBottom - 34;
+      var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
+      var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
+      var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
+      var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
       if (!dying) {
-        var topMost = Math.min(g.groundY - 90, g.groundY - mBaseH);
-        var barY = Math.min(g.barY, topMost - 28);
-        var nameY = barY - 12;
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText('勇者', g.playerCx, nameY);
-        ctx.fillText((isBoss ? '【BOSS】' : '') + (monster.name || '?'), g.enemyCx, nameY);
-        ctx.restore();
-        var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
-        var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
-        battleBar(ctx, g.playerCx, barY, pHp / pMax, '#4ade80', '#132a1c', 'HP ' + pHp + ' / ' + pMax);
-        var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
-        var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
-        battleBar(ctx, g.enemyCx, barY, mobHp / mobMax, '#e24a4a', '#3a1218',
-          'HP ' + mobHp + ' / ' + mobMax + (state.enraged ? '  ⚡狂暴' : ''));
+        dbg.playerPlate = hNamePlate(ctx, g.playerCx, plateTop, pW, '勇者', pHp, pMax, '#4ade80', false);
+        dbg.monsterPlate = hNamePlate(ctx, g.enemyCx, plateTop, mW,
+          (isBoss ? '【BOSS】' : '') + (monster.name || '?'), mobHp, mobMax, '#e24a4a', !!state.enraged);
       }
+      /* 回合条：横置原本没有回合反馈，放在身份带上方居中（HUD 测量条 0–28 之下） */
+      var phase = state.phase || 'idle';
+      var roundNo = state.roundNo || ((state.turn | 0) + 1);
+      var phaseLabel = (phase === 'monster') ? '敌方行动' : (phase === 'player' ? '我方行动' : '待机');
+      var roundText = '第 ' + roundNo + ' 回合 · ' + phaseLabel;
+      ctx.save();
+      ctx.font = 'bold 12px monospace';
+      var rtW = Math.round(ctx.measureText(roundText).width) + 28;
+      var rtH = 24, rtY = Math.round(H * 0.082);
+      ctx.fillStyle = 'rgba(8,8,16,0.72)';
+      ctx.fillRect(Math.round(W / 2 - rtW / 2), rtY, rtW, rtH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(W / 2 - rtW / 2) + 0.5, rtY + 0.5, rtW - 1, rtH - 1);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = phase === 'monster' ? '#ffb3a0' : '#a8c6ff';
+      ctx.fillText(roundText, W / 2, rtY + rtH / 2 + 1);
+      ctx.restore();
+      dbg.roundBar = { x: Math.round(W / 2 - rtW / 2), y: rtY, w: rtW, h: rtH, text: roundText };
 
-      /* 指令提示（P4 才搬指令条；本阶段保留原提示行与位置） */
-      if (!dying) {
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#9bbbf4';
-        ctx.font = '13px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药', W / 2, H - 30);
-        ctx.restore();
-      }
+      /* 指令条：7 格只显示，不接管输入（键盘 1–7 仍是唯一输入） */
+      dbg.commandBar = hCommandBar(W, H, state);
+
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
+      /* 指令条压在特效之上（UI 不被粒子穿过） */
+      hDrawCommandBar(ctx, dbg.commandBar);
       this._drawHud();
     },
 

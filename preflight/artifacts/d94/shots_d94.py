@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """D-94 横置战斗实拍 / 几何实测
-用法：python shots_d94.py base|gate|p2
+用法：python shots_d94.py base|gate|p2|p4
   base → 改动前纵置基线（P0）：五层纵置 + 四怪矩阵（1024×640、960×540）
   gate → 改动后门帧：纵置/横置同状态对照 + 四怪 + 2× 骑士对照
   p2   → 五层横置全量 + 五层纵置同状态 + 五层横置纯背景（bg=1）
+  p4   → 五层横置身份带/指令条 + 纵置同状态 + MP=0 降级对照
 同一页面、同一固定时钟（T=0、_animNow=1234），参数即"种子"：同参数同帧可复算。
 写出 geometry-{mode}.json：每张图的 _lastBattleBox + cssW/cssH + 布局 + 像素哈希。
 """
@@ -59,9 +60,28 @@ def p2_shots():
     return out
 
 
+# P4：身份带 + 指令条（五层）+ 纵置同状态 + MP=0 的降级对照
+def p4_shots():
+    out = []
+    for w, h in [(1024, 640), (960, 540)]:
+        for f, mid in FLOORS:
+            tag = '%dx%d-f%d-%s' % (w, h, f, mid)
+            out.append((tag + '-horizontal', w, h, f, mid, 'horizontal', ''))
+            out.append((tag + '-vertical', w, h, f, mid, 'vertical', ''))
+        out.append(('%dx%d-f5-dragon-horizontal-mp0' % (w, h), w, h, 5, 'dragon', 'horizontal', '&mp=0'))
+    return out
+
+
 def main():
     mode = (sys.argv[1] if len(sys.argv) > 1 else 'gate').lower()
-    shots = base_shots() if mode == 'base' else (p2_shots() if mode == 'p2' else gate_shots())
+    if mode == 'base':
+        shots = base_shots()
+    elif mode == 'p2':
+        shots = p2_shots()
+    elif mode == 'p4':
+        shots = p4_shots()
+    else:
+        shots = gate_shots()
     geo = {}
     with sync_playwright() as p:
         b = p.chromium.launch(channel='msedge', headless=True,

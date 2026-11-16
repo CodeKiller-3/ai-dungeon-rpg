@@ -45,3 +45,16 @@ TOTAL_DIFF=0
 
 四策略（`compare_runs.py p2`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
 
+---
+
+## P4 身份带 + 指令区 + 紧凑铭牌（2026-11-16）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | MIXED | GUARD | 备注 |
+|---|---|---|---|---|---|---|---|
+| 第 1 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | |
+| 第 2 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 连续全绿第 2 轮 |
+
+日志：`p4-run-1.txt` / `p4-run-2.txt`。未增删页、未放宽阈值；`verify_d20` PASS。
+四策略（`compare_runs.py p4`）：各 50 局 diffs=0，**TOTAL_DIFF=0**。
+
+
