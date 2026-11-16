@@ -183,3 +183,18 @@ B1 机器判据（`check_menu_b1.py`）：门缝 2px、门板峰值 126<255、�
 
 
 
+
+---
+
+## P7.9 C 四子页暗栏卡（2026-11-17）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d89 `E1_bodyDisplacement` 装置抖动 |
+| 2 | 122 | 116 | 6 | 0 | OK expected=122 actual=122 | 元页面连带（d05–d09/d60 读第 1 轮台账） |
+| 3 | 122 | 121 | 1 | 0 | OK expected=122 actual=122 | 仅 d60 级联（`p79-run-3.txt`） |
+| 4 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p79-run-4.txt`） |
+| 5 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p79-run-5.txt`） |
+
+四策略（`compare_runs.py p79`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+单页：`verify_d93 / d91 / d48 / d51 / d60 / d20` 全 PASS；d91 三处源码计数实测 2/2/2。

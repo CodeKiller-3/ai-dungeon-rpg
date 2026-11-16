@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>主菜单美学评估 · 实拍复现页</title>
+<style>html,body{margin:0;background:#0b0d14;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- 主菜单美学评估实拍复现页（临时页，_ 前缀，不登记 page-baseline.json）
+     ?view=menu-root-nosave|menu-root-save|menu-help|menu-settings|menu-confirm|menu-about
+           |ref-f1|ref-f2|ref-f3|ref-f4|ref-f5|ref-battle-f2|ref-boss-f5
+           |ref-bag|ref-system|ref-settings-modal|ref-pause
+     口径：加载与主游戏完全相同的脚本与顺序；只把状态推进到要拍的那一帧，之后停 rAF。
+     菜单页全部通过真实按键序列（Input 状态 → 同一 _updateMenu 入口）到达，不手改菜单内部状态。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = String(location.search || '');
+  var view = (q.match(/view=(menu-root-nosave|menu-root-save|menu-help|menu-settings|menu-confirm|menu-about|ref-f[1-5]|ref-battle-f2|ref-boss-f5|ref-bag|ref-system|ref-settings-modal|ref-pause|ref-pause-confirm|ref-guide)/) || [])[1] || 'menu-root-nosave';
+  var fq = q.match(/[?&]floor=([1-5])/);
+  var saveFloor = fq ? parseInt(fq[1], 10) : 3;
+  var M = Game.Core.Main;
+  var P = Game.Data.Player;
+  var Map = Game.Systems.Map;
+  var B = Game.Systems.Battle;
+  var SAVE_KEY = 'ai_dungeon_rpg_save_v1';
+
+  /* headless 下 rAF 不驱动，底部 FPS 恒为 0；只隐去 "FPS=… | " 一段（不改 js/） */
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__maesFpsPatched) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__maesFpsPatched = true;
+  })();
+
+  /* 本页在 preflight/ 下：素材目录改到 ../assets/sprites/ */
+  var spriteLoad = Game.Core.Sprites.load;
+  Game.Core.Sprites.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  function waitSprites(fn, tries) {
+    tries = tries || 0;
+    if ((Game.Core.Sprites && Game.Core.Sprites.isReady()) || tries > 200) { fn(); return; }
+    setTimeout(function () { waitSprites(fn, tries + 1); }, 50);
+  }
+  function stopAfterFrames(n) {
+    var orig = window.requestAnimationFrame;
+    var left = n;
+    window.requestAnimationFrame = function (cb) {
+      if (left-- <= 0) return 0;
+      return orig.call(window, cb);
+    };
+  }
+  /* 真实按键：不靠定时器猜帧，而是在主循环每一帧注入一次按键（同一 Input 状态表、
+     同一 _updateMenu 消费路径）。seq: [{f: 帧序号, code: 'ArrowDown'}, ...] */
+  function playMenu(seq) {
+    var orig = M.loop, f = 0;
+    M.loop = function (ts) {
+      for (var i = 0; i < seq.length; i++) {
+        if (seq[i].f === f) Game.Core.Input.getState()[seq[i].code] = true;
+      }
+      f++;
+      return orig.call(M, ts);
+    };
+  }
+
+  function fakeSave(floor) {
+    localStorage.setItem('aiDungeon_guided', '1');
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      saveVersion: 2, savedAt: '2026-11-16T10:00:00', floor: floor || 3,
+      player: {
+        hp: 82, maxHp: 100, mp: 30, maxMp: 50, atk: 13, def: 6,
+        gold: 168, exp: 24, level: 3,
+        inventory: { potion_small: 3 }, equipment: { weapon: 'sword_rusty', armor: null },
+        quests: {}, upg: {}, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: {}, map: null
+    }));
+  }
+
+  function planPath(tx, ty) {
+    var dirs = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+    function walkable(x, y) { return Map.tileAt(x, y) !== 0; }
+    var start = { x: P.x, y: P.y };
+    var seen = {}, prev = {}, qq = [start], qi = 0;
+    seen[start.x + ',' + start.y] = 1;
+    while (qi < qq.length) {
+      var c = qq[qi++];
+      if (c.x === tx && c.y === ty) {
+        var path = [], cur = c;
+        while (!(cur.x === start.x && cur.y === start.y)) {
+          path.push(cur);
+          cur = prev[cur.x + ',' + cur.y];
+        }
+        return path.reverse();
+      }
+      for (var i = 0; i < dirs.length; i++) {
+        var nx = c.x + dirs[i][0], ny = c.y + dirs[i][1];
+        var key = nx + ',' + ny;
+        if (seen[key] || !walkable(nx, ny)) continue;
+        seen[key] = 1;
+        prev[key] = { x: c.x, y: c.y };
+        qq.push({ x: nx, y: ny });
+      }
+    }
+    return [];
+  }
+
+  function enterFloor(n) {
+    localStorage.setItem('aiDungeon_guided', '1');
+    M.init({ menu: false });
+    Map.setFloor(n);
+    P.floor = n;
+    var sp = Map.getSpawn();
+    P.x = sp.x; P.y = sp.y;
+    P.level = 1; P.exp = 0; P.gold = 20;
+    Game.Systems.Inventory.recalcEquip();
+    P.hp = P.maxHp; P.mp = P.maxMp;
+    return sp;
+  }
+
+  var MON = { 1: 'slime', 2: 'orc_warrior', 3: 'wogol', 4: 'big_zombie', 5: 'angel' };
+  var BOSS = { 5: 'dragon' };
+
+  try {
+    /* ── 主菜单：无档根页 ─────────────────────────────────────── */
+    if (view === 'menu-root-nosave') {
+      localStorage.removeItem(SAVE_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: true });
+      M.start();
+      return;
+    }
+    /* ── 主菜单：有档根页，选中「继续游戏」 ───────────────────── */
+    if (view === 'menu-root-save') {
+      fakeSave(saveFloor);
+      M.init({ menu: true });
+      M.start();
+      playMenu([{ f: 2, code: 'ArrowDown' }]);
+      return;
+    }
+    /* ── 玩法说明（根页 ↓↓ Enter）───────────────────────────── */
+    if (view === 'menu-help') {
+      localStorage.removeItem(SAVE_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: true });
+      M.start();
+      playMenu([
+        { f: 2, code: 'ArrowDown' }, { f: 3, code: 'ArrowDown' },
+        { f: 6, code: 'Enter' }
+      ]);
+      return;
+    }
+    /* ── 设置（有档时初始焦点在“继续游戏”，↓↓ 到设置）──────────── */
+    if (view === 'menu-settings') {
+      fakeSave(3);
+      M.init({ menu: true });
+      M.start();
+      playMenu([
+        { f: 2, code: 'ArrowDown' }, { f: 3, code: 'ArrowDown' },
+        { f: 6, code: 'Enter' }
+      ]);
+      return;
+    }
+    /* ── 清除存档二次确认（设置页 ↓↓↓ Enter）────────────────── */
+    /* ── 新游戏覆盖确认（有档时焦点在“继续游戏”，↑ 到“开始新游戏”）── */
+    if (view === 'menu-confirm') {
+      fakeSave(3);
+      M.init({ menu: true });
+      M.start();
+      playMenu([
+        { f: 2, code: 'ArrowUp' },
+        { f: 5, code: 'Enter' }
+      ]);
+      return;
+    }
+    /* ── 关于（根页 ↓↓↓↓ Enter）────────────────────────────── */
+    if (view === 'menu-about') {
+      localStorage.removeItem(SAVE_KEY);
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: true });
+      M.start();
+      playMenu([
+        { f: 2, code: 'ArrowDown' }, { f: 3, code: 'ArrowDown' },
+        { f: 4, code: 'ArrowDown' }, { f: 5, code: 'ArrowDown' },
+        { f: 8, code: 'Enter' }
+      ]);
+      return;
+    }
+
+    /* ── 对照：首次进入的引导层（开始新游戏的真实落点）────────── */
+    if (view === 'ref-guide') {
+      localStorage.setItem('aiDungeon_guided', '1');
+      M.init({ menu: false });
+      M._guideVisible = true;
+      M.start();
+      return;
+    }
+
+    /* ── 地牢对照：五层探索 ──────────────────────────────────── */
+    var em = view.match(/^ref-f([1-5])$/);
+    if (em) {
+      var fn = parseInt(em[1], 10);
+      enterFloor(fn);
+      var g = Map.getGrid(), st = null;
+      for (var y = 0; y < g.length && !st; y++) {
+        for (var x = 0; x < g[y].length; x++) {
+          if (g[y][x] === 2) { st = { x: x, y: y }; break; }
+        }
+      }
+      var path = st ? planPath(st.x, st.y) : [];
+      var fs = Game.fov.RADIUS || 5;
+      var blocked = function (x, y) { return Map.tileAt(x, y) === 0; };
+      Game.fov.update(P.x, P.y, fs, blocked);
+      var upto = path.length ? Math.max(1, Math.floor(path.length * 0.45)) : 0;
+      /* 只走到"本格与四邻都没有怪"的位置：踩怪或相邻怪在下一帧 AI tick 走进来
+         都会触发遭遇战，把探索页拍成战斗页。 */
+      function nearEnemy(x, y) {
+        if (!Map.enemyAt) return false;
+        return !!(Map.enemyAt(x, y) || Map.enemyAt(x + 1, y) || Map.enemyAt(x - 1, y) ||
+          Map.enemyAt(x, y + 1) || Map.enemyAt(x, y - 1));
+      }
+      var safe = 0;
+      for (var si = 0; si < upto; si++) {
+        if (nearEnemy(path[si].x, path[si].y)) break;
+        safe = si + 1;
+      }
+      for (var i = 0; i < safe; i++) {
+        P.x = path[i].x; P.y = path[i].y;
+        Game.fov.update(P.x, P.y, fs, blocked);
+      }
+      if (M._scene !== 'explore') M.switchScene('explore');
+      waitSprites(function () {
+        if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+          Game.Core.Render.invalidateStatic();
+        }
+        M.start();
+        stopAfterFrames(6);
+      });
+      return;
+    }
+
+    if (view === 'ref-battle-f2' || view === 'ref-boss-f5') {
+      var bf = (view === 'ref-boss-f5') ? 5 : 2;
+      enterFloor(bf);
+      B.start((view === 'ref-boss-f5') ? BOSS[5] : MON[bf]);
+      M.switchScene('battle');
+      M.start();
+      return;
+    }
+
+    /* ── 地牢对照：背包 / 系统页 / 设置弹窗 / 暂停 ───────────── */
+    if (view === 'ref-bag') {
+      enterFloor(3);
+      Game.Systems.Inventory.add('potion_small', 2);
+      Game.Systems.Inventory.add('potion_large', 1);
+      Game.Systems.Inventory.add('sword_iron', 1);
+      Game.Systems.Inventory.add('armor_leather', 1);
+      Game.Systems.Inventory.add('scroll_upgrade', 1);
+      Game.Systems.Inventory.add('elite_fang_1', 1);
+      P.gold = 168; P.level = 4;
+      Game.Systems.Inventory.recalcEquip();
+      M.switchScene('explore');
+      M.start();
+      waitSprites(function () {
+        Game.Modal.open('inventory');
+      });
+      return;
+    }
+    if (view === 'ref-system') {
+      enterFloor(3);
+      P.gold = 168; P.level = 4;
+      Game.Systems.Bestiary.record('monster', 'slime');
+      Game.Systems.Bestiary.record('monster', 'orc_warrior');
+      M.switchScene('explore');
+      M.start();
+      waitSprites(function () {
+        Game.Modal.open('quests');
+        Game.Modal._setPage(3);
+      });
+      return;
+    }
+    if (view === 'ref-settings-modal') {
+      enterFloor(2);
+      M.switchScene('explore');
+      M.start();
+      waitSprites(function () {
+        Game.Modal.open('settings');
+      });
+      return;
+    }
+    if (view === 'ref-pause') {
+      enterFloor(2);
+      M.switchScene('explore');
+      M.start();
+      waitSprites(function () {
+        M.openPause(performance.now());
+      });
+      return;
+    }
+    if (view === 'ref-pause-confirm') {
+      enterFloor(2);
+      M.switchScene('explore');
+      M.start();
+      waitSprites(function () {
+        M.openPause(performance.now());
+        setTimeout(function () { Game.Core.Input.getState()['ArrowDown'] = true; }, 300);
+        setTimeout(function () { Game.Core.Input.getState()['ArrowDown'] = true; }, 450);
+        setTimeout(function () { Game.Core.Input.getState()['ArrowDown'] = true; }, 600);
+        setTimeout(function () { Game.Core.Input.getState()['Enter'] = true; }, 850);
+      });
+      return;
+    }
+  } catch (e) {
+    document.body.innerHTML = '<pre style="color:#f66">' + (e && e.stack || e) + '</pre>';
+  }
+})();
+</script>
+</body>
+</html>
