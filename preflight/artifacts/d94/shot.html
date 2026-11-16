@@ -93,6 +93,7 @@
   var mid = q.m || 'slime';
   var layout = (q.layout === 'horizontal') ? 'horizontal' : (q.layout === 'vertical' ? 'vertical' : '');
   var gk2x = (q.gk === '2x');
+  var bgOnly = (q.bg === '1');   /* P2：只画背景（亮度分区/地标断言用，不含精灵与文字） */
   var T = 0;
   var sceneReady = false;
   var drawn = 0;
@@ -197,7 +198,16 @@
     try {
       if (!window.__d94Booted && allReady()) boot();
       if (sceneReady) {
-        R.drawBattle(B.getState());
+        if (bgOnly) {
+          var cv0 = document.getElementById('game');
+          var c0 = cv0.getContext('2d');
+          R._applyDpr();
+          c0.fillStyle = '#07070c';
+          c0.fillRect(0, 0, R.cssW, R.cssH);
+          R._battleBackdrop(c0, R.cssW, R.cssH, f, layout || 'horizontal');
+        } else {
+          R.drawBattle(B.getState());
+        }
         drawn++;
         if (drawn === 3) {
           var dbg = R._lastBattleBox || {};

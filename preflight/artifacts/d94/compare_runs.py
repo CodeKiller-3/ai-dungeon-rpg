@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 """D-94 四策略逐局对照：与改动前 P0 基线逐局比对 15 个字段。
-用法：python compare_runs.py
+用法：python compare_runs.py [post|p2|p4|p5...]   —— 后缀对应 d94-{suffix}-{key}-*.json
 """
 import json
+import sys
 
 BASE = r'd:\桌面\工作\人工智能大作业\preflight\selfcheck'
+SUF = (sys.argv[1] if len(sys.argv) > 1 else 'post')
 FIELDS = ['seed', 'outcome', 'deathFloor', 'floor', 'maxFloor', 'steps', 'actions',
           'battleTurns', 'level', 'maxLevel', 'kills', 'hp', 'gold', 'potions', 'rescue']
-PAIRS = [('b1', 'd94-base-b1-2500.json', 'd94-post-b1-2500.json'),
-         ('s1', 'd94-base-s1-2500.json', 'd94-post-s1-2500.json'),
-         ('g2', 'd94-base-g2-4500.json', 'd94-post-g2-4500.json'),
-         ('m1', 'd94-base-m1-6000.json', 'd94-post-m1-6000.json')]
+PAIRS = [('b1', 'd94-base-b1-2500.json', 'd94-%s-b1-2500.json' % SUF),
+         ('s1', 'd94-base-s1-2500.json', 'd94-%s-s1-2500.json' % SUF),
+         ('g2', 'd94-base-g2-4500.json', 'd94-%s-g2-4500.json' % SUF),
+         ('m1', 'd94-base-m1-6000.json', 'd94-%s-m1-6000.json' % SUF)]
 
 allbad = 0
 for key, oldf, newf in PAIRS:
