@@ -222,3 +222,15 @@ B1 机器判据（`check_menu_b1.py`）：门缝 2px、门板峰值 126<255、�
 
 四策略（`compare_runs.py p81`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
 右半区非背景像素：**59.5%**（判据 ≥25%，`check_help_section.py`）。
+
+---
+
+## P7.12 纵剖面三处收口（2026-11-17）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p82-run-1.txt`） |
+| 2 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p82-run-2.txt`） |
+
+四策略（`compare_runs.py p82`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+右半区非背景 61.8%（>=25%）；左侧最长行 47.7%（<=55%）。

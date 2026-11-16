@@ -3978,59 +3978,108 @@
       return out.length ? out : [''];
     },
 
-    /* 均衡折行（确认页说明用）：按「· ： ； 。」切成语义片段，在“行数最少”的前提下
-     * 让各行宽度尽量接近——「用时 00:00。」不会再被甩成单独一行寡妇行。
-     * 任一片段本身超宽时退回逐字折行。 */
+    /* 均衡折行（确认页说明、帮助页正文共用）：先按语义片段（·，：；。、）切词，
+     * 在“行数最少”的前提下让各行宽度尽量接近；只有某个片段本身超宽时，才把它拆成
+     * 单字参与分配。断点规则：收尾标点不落行首、开括号不落行尾、不在 ASCII 词内部断。
+     * 结果带缓存（每帧都会调）。 */
     _menuWrapBalanced: function (text, size, maxW) {
       var s = String(text || '');
-      var toks = [], start = 0, i;
-      for (i = 0; i < s.length; i++) {
-        var ch = s.charAt(i);
-        if (ch === '·' || ch === '：' || ch === '；' || ch === '。') {
-          toks.push({ a: start, b: i + 1 });
-          start = i + 1;
-        }
-      }
-      if (start < s.length) toks.push({ a: start, b: s.length });
-      if (toks.length < 2) return this._menuWrap(s, size, maxW);
+      if (!s) return [''];
+      var key = size + '|' + maxW + '|' + s;
+      this.__wrapCache = this.__wrapCache || {};
+      if (this.__wrapCache[key]) return this.__wrapCache[key].slice();
 
-      var w = [], self = this;
-      for (i = 0; i < toks.length; i++) {
-        w.push(self._menuTextW(s.slice(toks[i].a, toks[i].b).replace(/^\s+|\s+$/g, ''), size));
-        if (w[i] > maxW) return self._menuWrap(s, size, maxW);
+      var n = s.length, i, j, k, e;
+      var close = '。，、；：！？）》」』】…·';
+      var open = '（《「『【';
+      var sep = '·，：；。、';
+      var ASCII = /[0-9A-Za-z%+.\-:\/]/;
+      var pw = [0];
+      for (i = 0; i < n; i++) {
+        pw.push(pw[i] + ((s.charCodeAt(i) > 0x2E80) ? size : size * 0.6));
       }
-      var N = toks.length, INF = 1e9, k, e, j;
-      var dp = [], cut = [];
-      for (k = 0; k <= N; k++) {
-        dp.push(new Array(N + 1));
-        cut.push(new Array(N + 1));
-        for (e = 0; e <= N; e++) { dp[k][e] = INF; cut[k][e] = 0; }
+      var spanW = function (x, y) {
+        while (x < y && s.charAt(x) === ' ') x++;
+        while (y > x && s.charAt(y - 1) === ' ') y--;
+        return Math.round(pw[y] - pw[x]);
+      };
+      var canBreakAt = function (pos) {
+        if (pos <= 0 || pos >= n) return true;
+        var a = s.charAt(pos - 1), b = s.charAt(pos);
+        if (close.indexOf(b) >= 0) return false;
+        if (open.indexOf(a) >= 0) return false;
+        if (ASCII.test(a) && ASCII.test(b)) return false;
+        return true;
+      };
+
+      /* 语义片段；超宽片段拆成单字 */
+      var toks = [], st = 0;
+      var pushSeg = function (a, b) {
+        if (spanW(a, b) <= maxW) toks.push({ a: a, b: b });
+        else for (var q = a; q < b; q++) toks.push({ a: q, b: q + 1 });
+      };
+      for (i = 0; i < n; i++) {
+        if (sep.indexOf(s.charAt(i)) >= 0) { pushSeg(st, i + 1); st = i + 1; }
       }
-      dp[0][0] = 0;
-      for (k = 1; k <= N; k++) {
-        for (e = k; e <= N; e++) {
-          var acc = 0, best = INF, bk = 0;
-          for (j = e - 1; j >= k - 1; j--) {
-            acc += w[j];
-            if (acc > maxW) break;
-            var cand = Math.max(dp[k - 1][j], acc);
-            if (cand < best) { best = cand; bk = j; }
+      if (st < n) pushSeg(st, n);
+      if (!toks.length) return [''];
+
+      var runDP = function (tk) {
+        var N = tk.length, K = 12, i2, j2, k2, e2;
+        if (!N) return null;
+        var tw = [], okPos = [];
+        for (i2 = 0; i2 < N; i2++) tw.push(spanW(tk[i2].a, tk[i2].b));
+        for (e2 = 0; e2 <= N; e2++) okPos.push(e2 === N || canBreakAt(tk[e2].a));
+        var dp = [], cut = [];
+        for (k2 = 0; k2 <= K; k2++) {
+          dp.push(new Array(N + 1));
+          cut.push(new Array(N + 1));
+          for (e2 = 0; e2 <= N; e2++) { dp[k2][e2] = 1e9; cut[k2][e2] = 0; }
+        }
+        dp[0][0] = 0;
+        for (k2 = 1; k2 <= K; k2++) {
+          for (e2 = 1; e2 <= N; e2++) {
+            if (!okPos[e2]) continue;
+            var sum = 0, best = 1e9, bk = 0;
+            for (j2 = e2 - 1; j2 >= 0; j2--) {
+              sum += tw[j2];
+              if (sum > maxW) break;
+              var cand = Math.max(dp[k2 - 1][j2], Math.round(sum));
+              if (cand < best) { best = cand; bk = j2; }
+            }
+            dp[k2][e2] = best;
+            cut[k2][e2] = bk;
           }
-          dp[k][e] = best;
-          cut[k][e] = bk;
+        }
+        for (k2 = 1; k2 <= K; k2++) if (dp[k2][N] <= maxW) break;
+        if (k2 > K) return null;
+        var res = [], e3 = N;
+        for (var k3 = k2; k3 >= 1; k3--) {
+          var s3 = cut[k3][e3];
+          /* 断行处的「·」是分隔符不是标点：行尾/行首都去掉，不让它悬在行边 */
+          res.unshift(s.slice(tk[s3].a, tk[e3 - 1].b)
+            .replace(/^[\s·]+/, '').replace(/[\s·]+$/, ''));
+          e3 = s3;
+        }
+        return res;
+      };
+
+      var out = runDP(toks);
+      /* 末行过短（寡妇行）时，退到逐字分配再比一次：行数不多、末行更长就采用。
+       * 逐字分配仍受行首/行尾禁则与“不在 ASCII 词内部断”约束。 */
+      if (out && out.length > 1 &&
+          this._menuTextW(out[out.length - 1], size) < maxW * 0.5) {
+        var ct = [];
+        for (i = 0; i < n; i++) ct.push({ a: i, b: i + 1 });
+        var alt = runDP(ct);
+        if (alt && alt.length <= out.length &&
+            this._menuTextW(alt[alt.length - 1], size) > this._menuTextW(out[out.length - 1], size)) {
+          out = alt;
         }
       }
-      var lines = -1;
-      for (k = 1; k <= N; k++) if (dp[k][N] <= maxW) { lines = k; break; }
-      if (lines < 0) return this._menuWrap(s, size, maxW);
-      var out = [];
-      e = N;
-      for (k = lines; k >= 1; k--) {
-        var st = cut[k][e];
-        out.unshift(s.slice(toks[st].a, toks[e - 1].b).replace(/^[\s·]+/, '').replace(/[\s·]+$/, ''));
-        e = st;
-      }
-      return out;
+      if (!out) out = this._menuWrap(s, size, maxW);
+      this.__wrapCache[key] = out;
+      return out.slice();
     },
 
     _drawMenuHelp: function (st, W, H) {
@@ -4064,7 +4113,8 @@
         rows.push({ kind: 'head', h: headH, n: ('0' + (i + 1)).slice(-2), text: help[i].title });
         var ls = help[i].lines || [];
         for (var j = 0; j < ls.length; j++) {
-          var ws = this._menuWrap(ls[j], bodySize, maxW);
+          /* 与确认页同一套规则：语义片段整体换行，避免「H 重看引导」「上限 +5。」落成寡妇行 */
+          var ws = this._menuWrapBalanced(ls[j], bodySize, maxW);
           for (var k = 0; k < ws.length; k++) rows.push({ kind: 'body', h: lineH, text: ws[k] });
         }
       }
@@ -4129,21 +4179,24 @@
     /* D-94：玩法说明右半区的五层纵剖面。
      * 只用既有 t1_*–t5_* 24×24 瓦片（岩壁 1×、地面 2×）与 72×72 龙（1×），不新增素材。
      * 结构：一条向下的竖井——左右岩壁随深度换地层，每层底一块地面（ledge），
-     * 地面之间是井身的暗。左侧竖尺打 F1…F5 刻度，所以它读作“越往下越深”，
-     * 而不是五条并排的横带。 */
+     * 地面之间是井身的暗。左侧竖尺打 F1…F5 刻度，
+     * 读作一条向下的竖井，而不是五条并排的横带。 */
     _drawHelpSection: function (cx0, cardW, top, avail) {
       var ctx = this._ctx;
+      var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
       var FONT_MONO = 'Consolas, "Courier New", monospace';
       var px = cx0 + 490;
       var pw = cardW - 490 - 18;
       var py = top + 2;
-      var bandH = 96, floorH = 48, wallW = 24;
+      /* 前四层 84（36 井身 + 48 地面），F5 放大成 144 的 Boss 厅：144 的龙正好落地到顶 */
+      var bandHs = [84, 84, 84, 84, 144];
+      var floorH = 48, wallW = 24;
       var gutter = 30, contentW = 288;                 /* 6 × 48 = 12 × 24，两种瓦片同宽 */
       var ox = px + gutter + Math.round((pw - gutter - contentW) / 2);
 
       /* 与文字的分隔：一条竖线，不做外框（避免“卡中卡”） */
       ctx.fillStyle = 'rgba(255,207,110,0.12)';
-      ctx.fillRect(px - 14, py, 1, Math.min(avail, bandH * 5));
+      ctx.fillRect(px - 14, py, 1, Math.min(avail, 480));
 
       var spr = function (name, dx, dy, dw, dh, fallback) {
         var im = (Game.Core.Sprites && typeof Game.Core.Sprites.get === 'function')
@@ -4157,13 +4210,14 @@
       };
 
       var tint = ['#3b2c22', '#39402c', '#2c3138', '#3a2430', '#241a1c'];
+      var by = py;
       for (var i = 0; i < 5; i++) {
-        var by = py + i * bandH, fl = i + 1;
+        var bandH = bandHs[i], fl = i + 1;
         var wallName = (fl === 1) ? 'wall_mid' : 't' + fl + '_wall_mid';
 
         /* 井身：先整幅铺该层岩壁作为“远墙”，压暗后只把左右两列提亮成近墙，
          * 中段留出暗的井筒——这样层与层之间不是一块死黑，也读得出前后关系 */
-        for (var br = 0; br < 4; br++) {
+        for (var br = 0; br < Math.ceil(bandH / 24); br++) {
           for (var bc = 0; bc < 12; bc++) {
             spr(wallName, ox + bc * 24, by + br * 24, 24, 24, tint[i]);
           }
@@ -4171,29 +4225,38 @@
         ctx.fillStyle = 'rgba(0,0,0,0.62)';
         ctx.fillRect(ox, by, contentW, bandH);
 
-        /* 近墙：左右各 4 行，保持原亮度 */
-        for (var wr = 0; wr < 4; wr++) {
+        /* 近墙：左右两列，保持原亮度 */
+        for (var wr = 0; wr < Math.ceil(bandH / 24); wr++) {
           spr(wallName, ox, by + wr * 24, wallW, 24, tint[i]);
           spr(wallName, ox + contentW - wallW, by + wr * 24, wallW, 24, tint[i]);
         }
 
-        /* 本层地面（ledge）：该层地砖 2×，7 列，贴在层底 */
+        /* 本层地面（ledge）：该层地砖 2×，6 列，贴在层底 */
         var fy = by + bandH - floorH;
         for (var fc = 0; fc < 6; fc++) {
           spr(floorVariantName(fc, i, fl), ox + fc * 48, fy, 48, floorH, tint[i]);
         }
-        /* 越往下越暗：每层叠 5% 黑 */
+        /* 轻微的深度压暗（5%/层）：只作前后层次，不承担“越往下越暗”的说法 */
         if (i > 0) {
-          ctx.fillStyle = 'rgba(0,0,0,' + (0.05 * i).toFixed(2) + ')';
+          ctx.fillStyle = 'rgba(0,0,0,' + (0.03 * i).toFixed(2) + ')';
           ctx.fillRect(ox, by, contentW, bandH);
         }
         /* 地面边缘的暗缝，明确“这是一层可站的平面” */
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
         ctx.fillRect(ox, fy, contentW, 1);
 
-        /* F5 终点：龙站在本层地面上（72×72 原生 1×） */
+        /* F5 终点：不画精灵。dragon_idle_anim_f0 在 144 下仍是“粉翼飞虫”的剪影
+         * （翅膀占主体，头/尾在紫色地面上读不出），放大只会让它压到 F4 的地面。
+         * 说明页宁可写字，不放认不出的贴纸。 */
         if (fl === 5) {
-          spr('dragon_idle_anim_f0', ox + contentW - wallW - 74, fy + floorH - 72, 72, 72, '#5a2430');
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#8a7a56';
+          ctx.font = '9px ' + FONT_MONO;
+          ctx.fillText('BOSS', ox + contentW - wallW - 12, fy - 34);
+          ctx.fillStyle = '#ffb86b';
+          ctx.font = 'bold 13px ' + FONT_CN;
+          ctx.fillText('地牢巨龙', ox + contentW - wallW - 12, fy - 14);
+          ctx.textAlign = 'left';
         }
 
         /* 左竖尺：刻度对齐本层地面 + F 编号 */
@@ -4203,17 +4266,19 @@
         ctx.fillStyle = (fl === 5) ? '#ffb86b' : '#8a7a56';
         ctx.font = '11px ' + FONT_MONO;
         ctx.fillText('F' + fl, px + 20, fy + 11);
+        by += bandH;
       }
 
       /* 竖尺主轴 */
       ctx.fillStyle = 'rgba(255,207,110,0.16)';
-      ctx.fillRect(px + 28, py + 8, 1, bandH * 5 - 8);
+      ctx.fillRect(px + 28, py + 8, 1, 472);
 
       ctx.textAlign = 'center';
       ctx.fillStyle = '#7f8798';
       ctx.font = '9px ' + FONT_MONO;
-      ctx.fillText('F1 → F5 · 越往下越深', px + gutter + Math.round((pw - gutter) / 2),
-        Math.min(py + bandH * 5 + 12, py + avail));
+      /* 文案只写画面真能支撑的事实：五层地貌各不相同（亮度并非单调递减） */
+      ctx.fillText('F1 → F5 · 五层地貌各不相同', px + gutter + Math.round((pw - gutter) / 2),
+        Math.min(py + 480 + 12, py + avail));
       ctx.textAlign = 'left';
     },
 
