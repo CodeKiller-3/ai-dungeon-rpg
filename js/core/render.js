@@ -4046,65 +4046,174 @@
 
       var bodyTop = cy0 + 66, hintY = cy0 + cardH - 14;
       var innerX = cx0 + 18, textX = innerX + 34;
-      var bodySize = (W < 420) ? 12 : 13;
-      var lineH = (W < 420) ? 18 : 20;
-      var maxW = cardW - 84;
+      var narrow = W < 420;
+      /* D-94：1280 档左文右图——右半区放五层纵剖面；窄屏保持单列滚动 */
+      var split = cardW >= 840;
+      var bodySize = narrow ? 12 : 13;
+      var lineH = narrow ? 18 : (split ? 19 : 20);
+      /* 分栏时文字列 ≤ 420（卡宽 47.7%，≪55%），给右侧纵剖面让出半区 */
+      var maxW = split ? 420 : cardW - 84;
 
-      /* 扁平行：节标题 / 正文（按卡片宽度换行）/ 节间空行；helpScroll 仍是行索引 */
+      /* 扁平行：节标题 / 正文（按卡宽换行）/ 节间空行；helpScroll 仍是行索引。
+       * 分栏时行高收紧（头 28 / 间 10），让 8 组在首屏全部可见、不出现滚动。 */
+      var gapH = split ? 8 : lineH;
+      var headH = split ? 26 : lineH;
       var rows = [], help = st.help || [];
       for (var i = 0; i < help.length; i++) {
-        if (i > 0) rows.push({ kind: 'gap' });
-        rows.push({ kind: 'head', n: ('0' + (i + 1)).slice(-2), text: help[i].title });
+        if (i > 0) rows.push({ kind: 'gap', h: gapH });
+        rows.push({ kind: 'head', h: headH, n: ('0' + (i + 1)).slice(-2), text: help[i].title });
         var ls = help[i].lines || [];
         for (var j = 0; j < ls.length; j++) {
           var ws = this._menuWrap(ls[j], bodySize, maxW);
-          for (var k = 0; k < ws.length; k++) rows.push({ kind: 'body', text: ws[k] });
+          for (var k = 0; k < ws.length; k++) rows.push({ kind: 'body', h: lineH, text: ws[k] });
         }
       }
-      var maxRows = Math.max(4, Math.floor((hintY - 20 - bodyTop) / lineH));
-      var scroll = Math.max(0, Math.min(st.helpScroll || 0, Math.max(0, rows.length - maxRows)));
+      var avail = hintY - 20 - bodyTop;
+      var totalH = 0, r0;
+      for (r0 = 0; r0 < rows.length; r0++) totalH += rows[r0].h;
+      /* 滚动上限：从第 s 行起剩余高度必须放得下（按行高累计，不再用“行数×固定行高”） */
+      var scrollMax = 0, rest = totalH;
+      while (scrollMax < rows.length && rest > avail) { rest -= rows[scrollMax].h; scrollMax++; }
+      var scroll = Math.max(0, Math.min(st.helpScroll || 0, scrollMax));
 
       ctx.save();
       ctx.beginPath();
-      ctx.rect(cx0 + 8, bodyTop - 6, cardW - 24, maxRows * lineH + 12);
+      ctx.rect(cx0 + 8, bodyTop - 6, cardW - 24, avail + 12);
       ctx.clip();
-      for (var r = 0; r < maxRows && (r + scroll) < rows.length; r++) {
-        var row = rows[r + scroll];
-        var y = bodyTop + r * lineH + 14;
+      var y = bodyTop + 12;
+      for (var r = scroll; r < rows.length; r++) {
+        var row = rows[r];
+        if (y > bodyTop + avail) break;
         if (row.kind === 'head') {
           ctx.textAlign = 'left';
           ctx.fillStyle = '#8a7a56';
           ctx.font = '11px ' + FONT_MONO;
-          ctx.fillText(row.n, innerX, y);
+          ctx.fillText(row.n, innerX, y + 14);
           ctx.fillStyle = '#ffb86b';
           ctx.font = 'bold 14px ' + FONT_CN;
-          ctx.fillText(row.text, textX, y);
-          if (r + scroll > 0) {
+          ctx.fillText(row.text, textX, y + 14);
+          if (r > 0) {
             ctx.fillStyle = 'rgba(255,207,110,0.10)';
-            ctx.fillRect(textX, y - lineH + 7, cardW - 88, 1);
+            ctx.fillRect(textX, y - 5, maxW, 1);
           }
         } else if (row.kind === 'body') {
           ctx.textAlign = 'left';
           ctx.fillStyle = '#cfcfcf';
           ctx.font = bodySize + 'px ' + FONT_CN;
-          ctx.fillText(row.text, textX, y);
+          ctx.fillText(row.text, textX, y + 14);
         }
+        y += row.h;
       }
       ctx.restore();
 
-      if (rows.length > maxRows) {
-        var trackX = cx0 + cardW - 7, trackY = bodyTop, trackH = maxRows * lineH;
+      if (scrollMax > 0) {
+        var trackX = cx0 + cardW - 7, trackY = bodyTop, trackH = avail;
         ctx.fillStyle = 'rgba(255,255,255,0.06)';
         ctx.fillRect(trackX, trackY, 2, trackH);
-        var th = Math.max(18, Math.round(trackH * maxRows / rows.length));
-        var ty = trackY + Math.round((trackH - th) * (scroll / Math.max(1, rows.length - maxRows)));
+        var th = Math.max(18, Math.round(trackH * avail / Math.max(1, totalH)));
+        var ty = trackY + Math.round((trackH - th) * (scroll / Math.max(1, scrollMax)));
         ctx.fillStyle = 'rgba(255,207,110,0.50)';
         ctx.fillRect(trackX, ty, 2, th);
       }
+
+      if (split) this._drawHelpSection(cx0, cardW, bodyTop, (hintY - 20) - bodyTop);
+
       ctx.textAlign = 'center';
       ctx.fillStyle = '#7f8fa8';
       ctx.font = '11px ' + FONT_MONO;
-      ctx.fillText('↑↓ 滚动 · Esc 返回主菜单', cx0 + cardW / 2, hintY);
+      ctx.fillText(scrollMax > 0 ? '↑↓ 滚动 · Esc 返回主菜单' : 'Esc 返回主菜单',
+        cx0 + cardW / 2, hintY);
+      ctx.textAlign = 'left';
+    },
+
+    /* D-94：玩法说明右半区的五层纵剖面。
+     * 只用既有 t1_*–t5_* 24×24 瓦片（岩壁 1×、地面 2×）与 72×72 龙（1×），不新增素材。
+     * 结构：一条向下的竖井——左右岩壁随深度换地层，每层底一块地面（ledge），
+     * 地面之间是井身的暗。左侧竖尺打 F1…F5 刻度，所以它读作“越往下越深”，
+     * 而不是五条并排的横带。 */
+    _drawHelpSection: function (cx0, cardW, top, avail) {
+      var ctx = this._ctx;
+      var FONT_MONO = 'Consolas, "Courier New", monospace';
+      var px = cx0 + 490;
+      var pw = cardW - 490 - 18;
+      var py = top + 2;
+      var bandH = 96, floorH = 48, wallW = 24;
+      var gutter = 30, contentW = 288;                 /* 6 × 48 = 12 × 24，两种瓦片同宽 */
+      var ox = px + gutter + Math.round((pw - gutter - contentW) / 2);
+
+      /* 与文字的分隔：一条竖线，不做外框（避免“卡中卡”） */
+      ctx.fillStyle = 'rgba(255,207,110,0.12)';
+      ctx.fillRect(px - 14, py, 1, Math.min(avail, bandH * 5));
+
+      var spr = function (name, dx, dy, dw, dh, fallback) {
+        var im = (Game.Core.Sprites && typeof Game.Core.Sprites.get === 'function')
+          ? Game.Core.Sprites.get(name) : null;
+        if (im && im.naturalWidth && typeof ctx.drawImage === 'function') {
+          ctx.drawImage(im, dx, dy, dw, dh);
+          return;
+        }
+        ctx.fillStyle = fallback;
+        ctx.fillRect(dx, dy, dw, dh);
+      };
+
+      var tint = ['#3b2c22', '#39402c', '#2c3138', '#3a2430', '#241a1c'];
+      for (var i = 0; i < 5; i++) {
+        var by = py + i * bandH, fl = i + 1;
+        var wallName = (fl === 1) ? 'wall_mid' : 't' + fl + '_wall_mid';
+
+        /* 井身：先整幅铺该层岩壁作为“远墙”，压暗后只把左右两列提亮成近墙，
+         * 中段留出暗的井筒——这样层与层之间不是一块死黑，也读得出前后关系 */
+        for (var br = 0; br < 4; br++) {
+          for (var bc = 0; bc < 12; bc++) {
+            spr(wallName, ox + bc * 24, by + br * 24, 24, 24, tint[i]);
+          }
+        }
+        ctx.fillStyle = 'rgba(0,0,0,0.62)';
+        ctx.fillRect(ox, by, contentW, bandH);
+
+        /* 近墙：左右各 4 行，保持原亮度 */
+        for (var wr = 0; wr < 4; wr++) {
+          spr(wallName, ox, by + wr * 24, wallW, 24, tint[i]);
+          spr(wallName, ox + contentW - wallW, by + wr * 24, wallW, 24, tint[i]);
+        }
+
+        /* 本层地面（ledge）：该层地砖 2×，7 列，贴在层底 */
+        var fy = by + bandH - floorH;
+        for (var fc = 0; fc < 6; fc++) {
+          spr(floorVariantName(fc, i, fl), ox + fc * 48, fy, 48, floorH, tint[i]);
+        }
+        /* 越往下越暗：每层叠 5% 黑 */
+        if (i > 0) {
+          ctx.fillStyle = 'rgba(0,0,0,' + (0.05 * i).toFixed(2) + ')';
+          ctx.fillRect(ox, by, contentW, bandH);
+        }
+        /* 地面边缘的暗缝，明确“这是一层可站的平面” */
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(ox, fy, contentW, 1);
+
+        /* F5 终点：龙站在本层地面上（72×72 原生 1×） */
+        if (fl === 5) {
+          spr('dragon_idle_anim_f0', ox + contentW - wallW - 74, fy + floorH - 72, 72, 72, '#5a2430');
+        }
+
+        /* 左竖尺：刻度对齐本层地面 + F 编号 */
+        ctx.fillStyle = 'rgba(255,207,110,0.30)';
+        ctx.fillRect(px + 24, fy + 6, 6, 1);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = (fl === 5) ? '#ffb86b' : '#8a7a56';
+        ctx.font = '11px ' + FONT_MONO;
+        ctx.fillText('F' + fl, px + 20, fy + 11);
+      }
+
+      /* 竖尺主轴 */
+      ctx.fillStyle = 'rgba(255,207,110,0.16)';
+      ctx.fillRect(px + 28, py + 8, 1, bandH * 5 - 8);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8798';
+      ctx.font = '9px ' + FONT_MONO;
+      ctx.fillText('F1 → F5 · 越往下越深', px + gutter + Math.round((pw - gutter) / 2),
+        Math.min(py + bandH * 5 + 12, py + avail));
       ctx.textAlign = 'left';
     },
 
