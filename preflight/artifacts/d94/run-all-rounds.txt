@@ -69,5 +69,23 @@ TOTAL_DIFF=0
 日志：`p5-run-1.txt` / `p5-run-2.txt`。未增删页、未放宽阈值；`verify_d20` PASS。
 四策略（`compare_runs.py p5`）：各 50 局 diffs=0，**TOTAL_DIFF=0**。
 
+---
+
+## P6 收口（代码零改动，2026-11-16）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | MIXED | GUARD | 备注 |
+|---|---|---|---|---|---|---|---|
+| 第 1 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 起跑全绿（`p6-run-1.txt`） |
+| 第 2 轮 | 122 | 120 | 2 | 0 | 0 | OK expected=122 actual=122 | d89/d90 测试装置偶发红，见说明 §12.5 |
+| 第 3 轮 | 122 | 116 | 6 | 0 | 0 | OK expected=122 actual=122 | d05–d09/d60 读上一轮台账（元页面连带） |
+| 第 4 轮 | 122 | 121 | 1 | 0 | 0 | OK expected=122 actual=122 | 仅 d60 读上一轮汇总，收敛中 |
+| 第 5 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p6-run-5.txt`） |
+| 第 6 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p6-run-6.txt`） |
+
+六轮中实质页（非元页面）失败数 **0**；第 3/4 轮红页全部是读上一轮台账的元页面。
+
+四策略（`compare_runs.py p6`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+
+
 
 

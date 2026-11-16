@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>PASS {"protocol":"D-90","ok":true,"sub":{"A_surveyTimeline":{"ok":true,"d":{"rule":"0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 网格 0.09/文字 0.5；260ms 网格 0.18/房间 1；360ms 退去起点；460ms 0.18；520ms 归零；房间 ≤6","frames":{"t0":{"t":0,"phase":"in","black":0,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t40":{"t":40,"phase":"in","black":0.36,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t80":{"t":80,"phase":"survey","black":0.72,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t120":{"t":120,"phase":"survey","black":0.72,"gridAlpha":0.09,"textAlpha":0.5,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t260":{"t":260,"phase":"survey","black":0.72,"gridAlpha":0.18,"textAlpha":1,"roomAlpha":0.75,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t360":{"t":360,"phase":"out","black":0.72,"gridAlpha":0.18,"textAlpha":1,"roomAlpha":1,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t460":{"t":460,"phase":"out","black":0.27,"gridAlpha":0.068,"textAlpha":0,"roomAlpha":0.167,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t520":null}}},"B_gridRemnant":{"ok":true,"d":{"rule":"只画视口内每 6 格交点；坐标落在 6 的整数倍；每点 Map.isSeen=true；alpha 随层深 0.06→0.14","n":3,"bad":[],"alpha":0.06,"floor":1,"mid":{"x":13,"y":9},"cam":{"x":-212,"y":-92},"exploredN":60,"cand":["0,0=1","6,0=0","12,0=0","18,0=0","24,0=0","0,6=1","6,6=0","12,6=0","18,6=0","24,6=0","0,12=0","6,12=0","12,12=1","18,12=0","24,12=0","0,18=0","6,18=0","12,18=0","18,18=0","24,18=0"]}},"C_targetBrackets":{"ok":true,"d":{"rule":"目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；至少检出楼梯","stair":{"x":14,"y":5},"n":2,"bad":[],"keys":[{"key":"stair:14,5","kind":"stair","x":14,"y":5,"gold":false},{"key":"container:13,7","kind":"container","x":13,"y":7,"gold":false}]}},"D_hudBand":{"ok":true,"d":{"rule":"宽屏三簇（LV/ATK/突破，y=28）；320 只留左簇且经验条缩到 32","wide":{"W":1024,"narrow":false,"tiny":false,"left":{"x":8,"w":103,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":44,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":482,"w":61,"text":"ATK 12 刀 1"},"right":{"x":939,"w":77,"text":"突破 还差 2381","kind":"next","notch":{"x":930,"y":32,"w":2,"h":6}},"y":28},"narrow":{"W":320,"narrow":true,"tiny":true,"left":{"x":8,"w":91,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.533}},"mid":null,"right":null,"y":28}}},"E_breakthroughShared":{"ok":true,"d":{"rule":"Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破","live":{"kind":"next","need":2450,"have":69,"remain":2381},"ready":{"kind":"ready","need":2450,"have":2450,"remain":0},"done":{"kind":"done","ms":{"atk":9,"def":4,"maxHp":20}},"same":true}},"F_noNewKeys":{"ok":true,"d":{"rule":"HELP 8 条不变，键位需求未改（verify_d20 仍是权威）","n":8}},"G_pureVisual":{"ok":true,"d":{"rule":"绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变","random":0,"writes":0}},"H_inputDuringSurvey":{"ok":true,"d":{"rule":"测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制","picked":{"dx":1,"dy":0,"code":"ArrowRight"},"before":{"x":1,"y":1,"scene":"explore"},"after":{"x":2,"y":1,"scene":"explore"},"surveyPhase":"survey","surveyT":200,"sceneAfter":"explore"}},"I_evidence":{"ok":true,"d":{"rule":"本轮实拍证据必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）","n":9,"bad":[]}}}}</title>
+<style>
+  html,body{margin:0;background:#0b0b10;color:#d8d8e0;font:13px/1.5 monospace}
+  #result{padding:14px 18px;white-space:pre-wrap;word-break:break-all}
+  canvas{position:fixed;left:-9999px;top:0}
+  h1{font-size:15px;margin:12px 0 6px;color:#ffd479}
+</style>
+</head>
+<body>
+<h1>D-90：系统测量层（T1 入层测绘 / X1 水印 / X3 网格残迹 / X2 目标括号 / H1+H2 读数带）</h1>
+<pre id="result">PASS {"protocol":"D-90","ok":true,"sub":{"A_surveyTimeline":{"ok":true,"d":{"rule":"0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 网格 0.09/文字 0.5；260ms 网格 0.18/房间 1；360ms 退去起点；460ms 0.18；520ms 归零；房间 ≤6","frames":{"t0":{"t":0,"phase":"in","black":0,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t40":{"t":40,"phase":"in","black":0.36,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t80":{"t":80,"phase":"survey","black":0.72,"gridAlpha":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t120":{"t":120,"phase":"survey","black":0.72,"gridAlpha":0.09,"textAlpha":0.5,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t260":{"t":260,"phase":"survey","black":0.72,"gridAlpha":0.18,"textAlpha":1,"roomAlpha":0.75,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t360":{"t":360,"phase":"out","black":0.72,"gridAlpha":0.18,"textAlpha":1,"roomAlpha":1,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t460":{"t":460,"phase":"out","black":0.27,"gridAlpha":0.068,"textAlpha":0,"roomAlpha":0.167,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t520":null}}},"B_gridRemnant":{"ok":true,"d":{"rule":"只画视口内每 6 格交点；坐标落在 6 的整数倍；每点 Map.isSeen=true；alpha 随层深 0.06→0.14","n":3,"bad":[],"alpha":0.06,"floor":1,"mid":{"x":13,"y":9},"cam":{"x":-212,"y":-92},"exploredN":60,"cand":["0,0=1","6,0=0","12,0=0","18,0=0","24,0=0","0,6=1","6,6=0","12,6=0","18,6=0","24,6=0","0,12=0","6,12=0","12,12=1","18,12=0","24,12=0","0,18=0","6,18=0","12,18=0","18,18=0","24,18=0"]}},"C_targetBrackets":{"ok":true,"d":{"rule":"目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；至少检出楼梯","stair":{"x":14,"y":5},"n":2,"bad":[],"keys":[{"key":"stair:14,5","kind":"stair","x":14,"y":5,"gold":false},{"key":"container:13,7","kind":"container","x":13,"y":7,"gold":false}]}},"D_hudBand":{"ok":true,"d":{"rule":"宽屏三簇（LV/ATK/突破，y=28）；320 只留左簇且经验条缩到 32","wide":{"W":1024,"narrow":false,"tiny":false,"left":{"x":8,"w":103,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":44,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":482,"w":61,"text":"ATK 12 刀 1"},"right":{"x":939,"w":77,"text":"突破 还差 2381","kind":"next","notch":{"x":930,"y":32,"w":2,"h":6}},"y":28},"narrow":{"W":320,"narrow":true,"tiny":true,"left":{"x":8,"w":91,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.533}},"mid":null,"right":null,"y":28}}},"E_breakthroughShared":{"ok":true,"d":{"rule":"Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破","live":{"kind":"next","need":2450,"have":69,"remain":2381},"ready":{"kind":"ready","need":2450,"have":2450,"remain":0},"done":{"kind":"done","ms":{"atk":9,"def":4,"maxHp":20}},"same":true}},"F_noNewKeys":{"ok":true,"d":{"rule":"HELP 8 条不变，键位需求未改（verify_d20 仍是权威）","n":8}},"G_pureVisual":{"ok":true,"d":{"rule":"绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变","random":0,"writes":0}},"H_inputDuringSurvey":{"ok":true,"d":{"rule":"测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制","picked":{"dx":1,"dy":0,"code":"ArrowRight"},"before":{"x":1,"y":1,"scene":"explore"},"after":{"x":2,"y":1,"scene":"explore"},"surveyPhase":"survey","surveyT":200,"sceneAfter":"explore"}},"I_evidence":{"ok":true,"d":{"rule":"本轮实拍证据必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）","n":9,"bad":[]}}}}</pre>
+<canvas id="game" width="1024" height="640" style="width: 1024px; height: 640px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-90', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function r3(v) { return Math.round(v * 1000) / 1000; }
+  function near(a, b, eps) { return typeof a === 'number' && Math.abs(a - b) <= (eps || 0.002); }
+
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 640, configurable: true });
+  } catch (e) {}
+
+  var R = Game.Core.Render, S = Game.Core.Sprites, M = Game.Core.Main;
+  var Map = Game.Systems.Map, P = Game.Data.Player, Sys = Game.Sys, Modal = Game.Modal;
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  function offctx(w, h) {
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    return cv.getContext('2d');
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      R.resize();
+      M._guideVisible = false; /* 首次引导覆盖层会暂停探索输入，本页只测系统层 */
+      M._guidePending = false;
+      P.hp = 100; P.maxHp = 100; P.mp = 30; P.maxMp = 30; P.gold = 128;
+      P.level = 3; P.exp = 24; P.atk = 12; P.def = 6;
+      Game.hud.update({
+        hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: Game.Systems.Battle.expToNext(P.level), status: []
+      });
+
+      var snap = JSON.stringify(P);
+
+      /* ── A：T1 三阶段（0/80/360/520ms） ── */
+      Sys._reset();
+      Sys._setClock(10000);
+      Sys.armSurvey();
+      function at(t) { Sys._setClock(10000 + t); return Sys._surveyFrame(); }
+      var a0 = at(0), a40 = at(40), a80 = at(80), a120 = at(120),
+        a260 = at(260), a360 = at(360), a460 = at(460), a520 = at(520);
+      var aOk = !!a0 && !!a80 && !!a260 && !!a360 && a520 === null &&
+        near(a0.black, 0) && a0.phase === 'in' &&
+        near(a40.black, 0.36) &&
+        near(a80.black, 0.72) && a80.phase === 'survey' &&
+        near(a120.gridAlpha, 0.09) && near(a120.textAlpha, 0.5) &&
+        near(a260.gridAlpha, 0.18) && near(a260.roomAlpha, 0.75) &&
+        near(a360.black, 0.72) && a360.phase === 'out' &&
+        near(a460.black, 0.27) &&
+        a260.title === 'F' + P.floor && a260.sub.indexOf('×') > 0 && a260.sub.indexOf('已测绘') > 0 &&
+        a260.rooms >= 0 && a260.rooms <= 6;
+      rec('A_surveyTimeline', aOk, {
+        rule: '0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 网格 0.09/文字 0.5；260ms 网格 0.18/房间 1；360ms 退去起点；460ms 0.18；520ms 归零；房间 ≤6',
+        frames: { t0: a0, t40: a40, t80: a80, t120: a120, t260: a260, t360: a360, t460: a460, t520: a520 }
+      });
+
+      /* ── B：网格残迹（视口内每 6 格；只画已点亮格） ── */
+      Sys._setClock(10000 + 600); /* 测绘已结束，回落到常驻 alpha */
+      /* 站到地图中部（可通行格）并刷新 FOV，保证至少有一个六格交点被点亮 */
+      var gB = Map.getGrid(), bpos = { x: P.x, y: P.y }, mid = null;
+      for (var by = Math.floor(gB.length / 2); by < gB.length && !mid; by++) {
+        for (var bx = Math.floor(gB[0].length / 2); bx < gB[0].length; bx++) {
+          if (gB[by][bx] !== 0) { mid = { x: bx, y: by }; break; }
+        }
+      }
+      if (mid) {
+        P.x = mid.x; P.y = mid.y;
+        Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+        R.drawMap(gB, P); /* 先画一帧更新相机，再取视口内交点（_cam 只在 drawMap 内更新） */
+      }
+      var pts = Sys._gridPoints();
+      var cam = R._cam(), badB = [], xs = {};
+      var exploredN = 0, candB = [];
+      for (var ey = 0; ey < gB.length; ey++) {
+        for (var ex = 0; ex < gB[ey].length; ex++) if (Map.isSeen(ex, ey)) exploredN++;
+      }
+      for (var cy2 = 0; cy2 < gB.length; cy2 += 6) {
+        for (var cx2 = 0; cx2 < gB[0].length; cx2 += 6) candB.push(cx2 + ',' + cy2 + '=' + (Map.isSeen(cx2, cy2) ? 1 : 0));
+      }
+      for (var i = 0; i < pts.length; i++) {
+        var wx = (pts[i].x + cam.x) / 24, wy = (pts[i].y + cam.y) / 24;
+        if (Math.abs(wx - Math.round(wx)) > 1e-6 || Math.round(wx) % 6 !== 0) badB.push({ p: pts[i], wx: wx });
+        if (Math.abs(wy - Math.round(wy)) > 1e-6 || Math.round(wy) % 6 !== 0) badB.push({ p: pts[i], wy: wy });
+        if (!Map.isSeen(Math.round(wx), Math.round(wy))) badB.push({ p: pts[i], unsel: true });
+        xs[Math.round(pts[i].x)] = true;
+      }
+      P.x = bpos.x; P.y = bpos.y;
+      Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+      var gAlpha = Sys._depthAlpha(P.floor);
+      var bOk = pts.length > 0 && pts.length <= 60 && badB.length === 0 &&
+        near(gAlpha, [0.06, 0.08, 0.10, 0.12, 0.14][Math.min(4, Math.max(0, P.floor - 1))]);
+      rec('B_gridRemnant', bOk, {
+        rule: '只画视口内每 6 格交点；坐标落在 6 的整数倍；每点 Map.isSeen=true；alpha 随层深 0.06→0.14',
+        n: pts.length, bad: badB.slice(0, 4), alpha: gAlpha, floor: P.floor,
+        mid: mid, cam: cam, exploredN: exploredN, cand: candB
+      });
+
+      /* ── C：目标四角括号（只允许 陷阱/容器/楼梯/精英；与玩家包围盒不相交） ── */
+      function targetCheck() {
+        var list = Sys._targets(P), bad = [];
+        for (var j = 0; j < list.length; j++) {
+          var g = list[j];
+          if (['trap', 'container', 'stair', 'elite'].indexOf(g.kind) < 0) bad.push({ kind: g.kind });
+          var bx = g.x * 24 - 2, by = g.y * 24 - 2, bw = 28, bh = 28;
+          var pxx = P.x * 24 - 2, pyy = P.y * 24 - 2, pww = 28, phh = 28;
+          if (bx < pxx + pww && bx + bw > pxx && by < pyy + phh && by + bh > pyy) bad.push({ overlap: g.key });
+          if (g.x === P.x && g.y === P.y) bad.push({ sameCell: g.key });
+        }
+        return { n: list.length, bad: bad, list: list };
+      }
+      var grid0 = Map.getGrid(), stair = null;
+      for (var sy = 0; sy < grid0.length && !stair; sy++) {
+        for (var sx = 0; sx < grid0[sy].length; sx++) {
+          if (grid0[sy][sx] === 2 || grid0[sy][sx] === 3) { stair = { x: sx, y: sy }; break; }
+        }
+      }
+      var savedPos = { x: P.x, y: P.y };
+      if (stair) {
+        /* 在楼梯周围 2–4 格找一处"能看见楼梯"的可通行格，刷新 FOV 后再收集目标 */
+        var offs = [[2, 0], [-2, 0], [0, 2], [0, -2], [3, 0], [-3, 0], [0, 3], [0, -3],
+          [4, 0], [-4, 0], [0, 4], [0, -4], [2, 2], [-2, 2], [2, -2], [-2, -2]];
+        var placed = false;
+        for (var ci = 0; ci < offs.length && !placed; ci++) {
+          var cx = stair.x + offs[ci][0], cy = stair.y + offs[ci][1];
+          if (!(cx > 0 && cy > 0 && cx < grid0[0].length && cy < grid0.length && Map.isWalkable(cx, cy))) continue;
+          P.x = cx; P.y = cy;
+          Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+          if (Game.fov.isVisible(stair.x, stair.y)) placed = true;
+        }
+      }
+      var tc = targetCheck();
+      P.x = savedPos.x; P.y = savedPos.y;
+      Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+      var cOk = tc.bad.length === 0 && (!stair || tc.n > 0);
+      rec('C_targetBrackets', cOk, {
+        rule: '目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；至少检出楼梯',
+        stair: stair, n: tc.n, bad: tc.bad.slice(0, 5), keys: tc.list.slice(0, 8)
+      });
+
+      /* ── D：HUD 读数带（宽 1024 三簇；窄 320 只留左簇） ── */
+      var c1 = offctx(1024, 64), c2 = offctx(320, 64);
+      var w1 = Sys.drawHudBand(c1, 1024);
+      var w2 = Sys.drawHudBand(c2, 320);
+      var dOk = !!w1 && !!w1.left && !!w1.mid && !!w1.right &&
+        w1.left.text.indexOf('LV') === 0 && w1.mid.text.indexOf('ATK') === 0 &&
+        w1.right.text.indexOf('突破') === 0 && w1.y === 28 &&
+        !!w2 && !!w2.left && !w2.mid && !w2.right && w2.tiny && w2.left.bar.w === 32;
+      rec('D_hudBand', dOk, {
+        rule: '宽屏三簇（LV/ATK/突破，y=28）；320 只留左簇且经验条缩到 32',
+        wide: w1, narrow: w2
+      });
+
+      /* ── E：突破读数与第 4 页同源（Sys.breakthrough === Modal._sys.breakthrough） ── */
+      var b1 = Sys.breakthrough(), b2 = Modal._sys.breakthrough(), b3 = Modal._systemModel().brk;
+      var eSame = JSON.stringify(b1) === JSON.stringify(b2) && JSON.stringify(b1) === JSON.stringify(b3);
+      var savedLv = P.level, savedExp = P.exp, eStates = {};
+      P.level = 10; P.exp = 200; eStates.ready = Sys.breakthrough();
+      P.level = 11; P.exp = 0; eStates.done = Sys.breakthrough();
+      P.level = savedLv; P.exp = savedExp;
+      var eOk = eSame && eStates.ready && eStates.ready.kind === 'ready' &&
+        eStates.done && eStates.done.kind === 'done';
+      rec('E_breakthroughShared', eOk, {
+        rule: 'Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破',
+        live: b1, ready: eStates.ready, done: eStates.done, same: eSame
+      });
+
+      /* ── F：未新增按键（HELP 仍是 8 条，键位需求未变） ── */
+      var helpOk = M.HELP && M.HELP.length === 8 &&
+        M.HELP[0].need.indexOf('KeyB') >= 0 && M.HELP[1].need.indexOf('Digit4') >= 0;
+      rec('F_noNewKeys', helpOk, { rule: 'HELP 8 条不变，键位需求未改（verify_d20 仍是权威）', n: M.HELP ? M.HELP.length : 0 });
+
+      /* ── G：纯视觉（MATH.random 0 / localStorage 写入 0 / Player 不变） ── */
+      var rnd0 = Math.random, rndN = 0;
+      Math.random = function () { rndN++; return rnd0(); };
+      var setN = 0, set0 = Storage.prototype.setItem;
+      Storage.prototype.setItem = function () { setN++; return set0.apply(this, arguments); };
+      try {
+        Sys._setClock(10200);
+        var dctx = offctx(1024, 640);
+        Sys.drawUnderlay(dctx, Map.getGrid(), P);
+        Sys.drawMarkers(dctx, P);
+        Sys.drawEvent(dctx, P);
+        Sys.drawHudBand(dctx, 1024);
+      } finally {
+        Math.random = rnd0;
+        Storage.prototype.setItem = set0;
+      }
+      var gOk = rndN === 0 && setN === 0 && JSON.stringify(P) === snap;
+      rec('G_pureVisual', gOk, { rule: '绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变', random: rndN, writes: setN });
+
+      /* ── H：死线自证——测绘期间按键仍然生效 ── */
+      Sys._reset();
+      Sys._setClock(30000);
+      Sys.armSurvey();
+      Sys._setClock(30200); /* 200ms：测绘进行中（黑场 0.72 段） */
+      var dirs = [[1, 0, 'ArrowRight'], [-1, 0, 'ArrowLeft'], [0, 1, 'ArrowDown'], [0, -1, 'ArrowUp']];
+      var picked = null;
+      for (var di = 0; di < dirs.length; di++) {
+        var nx = P.x + dirs[di][0], ny = P.y + dirs[di][1];
+        if (!Map.isWalkable(nx, ny)) continue;
+        if (typeof Map.enemyAt === 'function' && Map.enemyAt(nx, ny)) continue;
+        if (typeof Map.eliteAt === 'function' && Map.eliteAt(nx, ny)) continue;
+        var pat = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
+        var blocked = false;
+        for (var pi = 0; pi < pat.length; pi++) if (pat[pi].x === nx && pat[pi].y === ny) blocked = true;
+        if (blocked) continue;
+        picked = { dx: dirs[di][0], dy: dirs[di][1], code: dirs[di][2] };
+        break;
+      }
+      var before = { x: P.x, y: P.y, scene: M._scene };
+      if (picked) {
+        Game.Core.Input.getState()[picked.code] = true;
+        M.loop(performance.now() + 16); /* 真实主循环：测绘只叠加绘制，不拦截更新 */
+        delete Game.Core.Input.getState()[picked.code];
+      }
+      var after = { x: P.x, y: P.y, scene: M._scene };
+      var sfH = Sys._peek().survey;
+      var moved = picked && (after.x !== before.x || after.y !== before.y);
+      var hOk = !!moved && !!sfH && sfH.phase === 'survey';
+      rec('H_inputDuringSurvey', hOk, {
+        rule: '测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制',
+        picked: picked, before: before, after: after,
+        surveyPhase: sfH ? sfH.phase : null, surveyT: sfH ? sfH.t : null, sceneAfter: M._scene
+      });
+
+      /* 收尾：清掉注入时钟与事件，恢复初始位置 */
+      Sys._reset();
+      M.switchScene('explore');
+      P.x = savedPos.x; P.y = savedPos.y;
+
+      evidence();
+    } catch (e) {
+      out.ok = false;
+      out.error = String(e && (e.stack || e.message) || e);
+      finish();
+    }
+  }
+
+  /* ══ 本轮实拍证据登记（按实际尺寸逐张核对，缺一张即判负）══ */
+  var EVID = [
+    ['survey-t000.png', 1280, 800], ['survey-t120.png', 1280, 800],
+    ['survey-t260.png', 1280, 800], ['survey-t460.png', 1280, 800],
+    ['explore-f1.png', 1280, 800], ['explore-f5.png', 1280, 800],
+    ['hud-wide.png', 1280, 800], ['hud-narrow320.png', 400, 800],
+    ['key-during-survey.png', 1280, 800]
+  ];
+  function evidence() {
+    var done = 0, bad = [];
+    function tick() {
+      if (++done < EVID.length) return;
+      rec('I_evidence', bad.length === 0, {
+        rule: '本轮实拍证据必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）',
+        n: EVID.length, bad: bad
+      });
+      finish();
+    }
+    EVID.forEach(function (e) {
+      var im = new Image();
+      im.onload = function () {
+        if (im.naturalWidth !== e[1] || im.naturalHeight !== e[2]) {
+          bad.push({ f: e[0], got: [im.naturalWidth, im.naturalHeight], want: [e[1], e[2]] });
+        }
+        tick();
+      };
+      im.onerror = function () { bad.push({ f: e[0], got: 'missing' }); tick(); };
+      im.src = 'artifacts/d90/' + e[0];
+    });
+  }
+
+  function finish() {
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = txt;
+    document.getElementById('result').textContent = txt;
+  }
+
+  S.load();
+  var tries = 0;
+  (function wait() {
+    tries++;
+    if (S.isReady && S.isReady()) { boot(); return; }
+    if (tries > 240) { boot(); return; }
+    window.setTimeout(wait, 50);
+  })();
+})();
+</script>
+
+
+</body></html>
