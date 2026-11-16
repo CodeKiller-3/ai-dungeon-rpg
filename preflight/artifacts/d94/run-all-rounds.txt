@@ -198,3 +198,15 @@ B1 机器判据（`check_menu_b1.py`）：门缝 2px、门板峰值 126<255、�
 
 四策略（`compare_runs.py p79`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
 单页：`verify_d93 / d91 / d48 / d51 / d60 / d20` 全 PASS；d91 三处源码计数实测 2/2/2。
+
+---
+
+## P7.10 C 收口五处（2026-11-17）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | GUARD | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 1 轮**（`p80-run-1.txt`） |
+| 2 | 122 | 122 | 0 | 0 | OK expected=122 actual=122 | **连续全绿第 2 轮**（`p80-run-2.txt`） |
+
+四策略（`compare_runs.py p80`）：`b1/s1/g2/m1` 各 50 局 diffs=0，**TOTAL_DIFF=0**。
+单页：`verify_d93 / d91 / d48 / d51 / d60` 全 PASS；d91 三处源码计数 2/2/2。

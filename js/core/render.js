@@ -3378,7 +3378,9 @@
         ctx.fillStyle = rows[i].danger ? this._dangerColor(on) : (on ? '#ffcf6e' : '#cfcfcf');
         ctx.font = (on ? 'bold ' : '') + '15px ' + FONT_CN;
         ctx.fillText(rr.label, cx - pw / 2 + 18, y + 23);
-        var vtxt = '‹ ' + rr.value + ' ›';
+        /* 值只显示「自动」：与下一行「自适应难度」不再撞词（原始值仍在 main.js，不改） */
+        var vshow = (rr.id === 'zoom' && rr.value === '自动（自适应）') ? '自动' : rr.value;
+        var vtxt = '‹ ' + vshow + ' ›';
         var kw = Math.max(78, Math.min(pw - 170, this._menuTextW(vtxt, 12) + 16));
         var kx = cx + pw / 2 - 18 - kw, kyy = y + 14;
         var ds = desc[rr.id];
@@ -3391,15 +3393,11 @@
           ctx.font = '10px ' + FONT_CN;
           ctx.fillText(dTxt, cx - pw / 2 + 18, y + 39);
         }
-        ctx.fillStyle = '#11121c';
-        ctx.fillRect(kx, kyy, kw, 24);
-        ctx.strokeStyle = rr.id === 'clearSave'
-          ? (on ? '#ff9b6b' : 'rgba(255,155,107,0.45)') : '#3a3340';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(kx + 0.5, kyy + 0.5, kw - 1, 23);
+        /* 值不再描框：全页只有一个矩形焦点（选中行本身），
+         * 否则未选中行的键帽框会被读成“第二个选中”。 */
         ctx.textAlign = 'center';
         ctx.fillStyle = rows[i].danger ? (on ? '#ffb08a' : '#9a6f5e') : (on ? '#ffcf6e' : '#9bbbf4');
-        ctx.font = '12px ' + FONT_MONO;
+        ctx.font = (on ? 'bold ' : '') + '12px ' + FONT_MONO;
         ctx.fillText(vtxt, kx + kw / 2, kyy + 16);
       }
       ctx.textAlign = 'center';
@@ -3424,7 +3422,7 @@
       var wrapped = [];
       var lines = d.lines || [];
       for (var i = 0; i < lines.length; i++) {
-        var ws = this._menuWrap(lines[i], 13, textW);
+        var ws = this._menuWrapBalanced(lines[i], 13, textW);
         for (var wi = 0; wi < ws.length; wi++) wrapped.push(ws[wi]);
       }
       ctx.fillStyle = '#cfcfcf';
@@ -3478,11 +3476,13 @@
       for (var gy = 0; gy < H; gy += 32) {
         ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
       }
-      /* 顶部/底部装饰线 */
-      ctx.fillStyle = '#ffcf6e';
-      ctx.fillRect(W / 2 - 120, 22, 240, 2);
-      ctx.fillStyle = '#3a3a55';
-      ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
+      /* 顶部/底部装饰线只属于首屏构图：子页有自己的卡头，不跟着复制 */
+      if (!st.page || st.page === 'root') {
+        ctx.fillStyle = '#ffcf6e';
+        ctx.fillRect(W / 2 - 120, 22, 240, 2);
+        ctx.fillStyle = '#3a3a55';
+        ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
+      }
 
       if (st.page === 'help') this._drawMenuHelp(st, W, H);
       else if (st.page === 'settings') this._drawMenuSettings(st, W, H);
@@ -3978,6 +3978,61 @@
       return out.length ? out : [''];
     },
 
+    /* 均衡折行（确认页说明用）：按「· ： ； 。」切成语义片段，在“行数最少”的前提下
+     * 让各行宽度尽量接近——「用时 00:00。」不会再被甩成单独一行寡妇行。
+     * 任一片段本身超宽时退回逐字折行。 */
+    _menuWrapBalanced: function (text, size, maxW) {
+      var s = String(text || '');
+      var toks = [], start = 0, i;
+      for (i = 0; i < s.length; i++) {
+        var ch = s.charAt(i);
+        if (ch === '·' || ch === '：' || ch === '；' || ch === '。') {
+          toks.push({ a: start, b: i + 1 });
+          start = i + 1;
+        }
+      }
+      if (start < s.length) toks.push({ a: start, b: s.length });
+      if (toks.length < 2) return this._menuWrap(s, size, maxW);
+
+      var w = [], self = this;
+      for (i = 0; i < toks.length; i++) {
+        w.push(self._menuTextW(s.slice(toks[i].a, toks[i].b).replace(/^\s+|\s+$/g, ''), size));
+        if (w[i] > maxW) return self._menuWrap(s, size, maxW);
+      }
+      var N = toks.length, INF = 1e9, k, e, j;
+      var dp = [], cut = [];
+      for (k = 0; k <= N; k++) {
+        dp.push(new Array(N + 1));
+        cut.push(new Array(N + 1));
+        for (e = 0; e <= N; e++) { dp[k][e] = INF; cut[k][e] = 0; }
+      }
+      dp[0][0] = 0;
+      for (k = 1; k <= N; k++) {
+        for (e = k; e <= N; e++) {
+          var acc = 0, best = INF, bk = 0;
+          for (j = e - 1; j >= k - 1; j--) {
+            acc += w[j];
+            if (acc > maxW) break;
+            var cand = Math.max(dp[k - 1][j], acc);
+            if (cand < best) { best = cand; bk = j; }
+          }
+          dp[k][e] = best;
+          cut[k][e] = bk;
+        }
+      }
+      var lines = -1;
+      for (k = 1; k <= N; k++) if (dp[k][N] <= maxW) { lines = k; break; }
+      if (lines < 0) return this._menuWrap(s, size, maxW);
+      var out = [];
+      e = N;
+      for (k = lines; k >= 1; k--) {
+        var st = cut[k][e];
+        out.unshift(s.slice(toks[st].a, toks[e - 1].b).replace(/^[\s·]+/, '').replace(/[\s·]+$/, ''));
+        e = st;
+      }
+      return out;
+    },
+
     _drawMenuHelp: function (st, W, H) {
       var ctx = this._ctx;
       var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
@@ -4061,17 +4116,19 @@
       var rows = st.settings || [];
       var rowH = 54;
       var cardW = Math.min(560, W - 24);
-      var cardH = 66 + rows.length * rowH + 34;
+      var cardH = 66 + rows.length * rowH + 20;
       var x = Math.round((W - cardW) / 2);
       var y = Math.max(20, Math.round((H - cardH) / 2) - 8);
       this._menuPageCard(x, y, cardW, cardH, 'SYSTEM', '设置');
 
       this._drawSettingsRows(rows, st.settingsSel, W, y + 66, rowH);
 
+      /* 提示放在卡外：卡内再嵌一条提示带，就成了“卡中卡” */
       ctx.textAlign = 'center';
       ctx.fillStyle = '#7f8fa8';
       ctx.font = '11px ' + FONT_MONO;
-      ctx.fillText('↑↓ 选择 · ←→ / Enter 切换 · Esc 返回主菜单', x + cardW / 2, y + cardH - 14);
+      ctx.fillText('↑↓ 选择 · ←→ / Enter 切换 · Esc 返回主菜单', x + cardW / 2,
+        Math.min(H - 12, y + cardH + 22));
       ctx.textAlign = 'left';
     },
 
@@ -4085,7 +4142,7 @@
       var cardW = Math.min(460, W - 40);
       var textW = cardW - 48, lineH = 22;
       var nLines = 0;
-      for (var i = 0; i < lines.length; i++) nLines += this._menuWrap(lines[i], 13, textW).length;
+      for (var i = 0; i < lines.length; i++) nLines += this._menuWrapBalanced(lines[i], 13, textW).length;
       var cardH = 76 + nLines * lineH + 24 + 40 + 34;
       var x = Math.round((W - cardW) / 2);
       var y = Math.max(16, Math.round((H - cardH) / 2) - 6);
@@ -4236,18 +4293,26 @@
       var y = Math.max(16, Math.round((H - cardH) / 2) - 8);
       this._menuPageCard(x, y, cardW, cardH, 'ABOUT / COLOPHON', '关于', null);
 
-      /* 铭牌：复用首屏的门贴图（24×24 原生 2× = 48×48），素材缺失时退回纯色门形 */
-      var emblemY = y + 64;
-      var im = (Game.Core.Sprites && typeof Game.Core.Sprites.get === 'function')
-        ? Game.Core.Sprites.get('t1_door') : null;
-      if (im && im.naturalWidth && typeof ctx.drawImage === 'function') {
-        ctx.drawImage(im, x + padX, emblemY, 48, 48);
-      } else {
-        ctx.fillStyle = '#241a14';
-        ctx.fillRect(x + padX, emblemY, 48, 48);
-        ctx.fillStyle = '#ffbf73';
-        ctx.fillRect(x + padX + 23, emblemY + 8, 2, 32);
-      }
+      /* 门徽：不再用 24×24 贴图（放到 48 只剩一块褐色，读不出双扇门），
+       * 改为与首屏同一套几何的纯绘制：门框 → 门洞 → 双扇 → 横档压暗 → 2px 门缝 → 门槛暖光。
+       * 全为整数像素，不涉及任何非整数缩放。 */
+      var emblemY = y + 64, ex = x + padX, ey = emblemY;
+      ctx.fillStyle = '#241a14';
+      ctx.fillRect(ex, ey, 48, 48);
+      ctx.fillStyle = '#0c0806';
+      ctx.fillRect(ex + 4, ey + 3, 40, 45);
+      ctx.fillStyle = '#3d2c20';
+      ctx.fillRect(ex + 6, ey + 5, 17, 41);
+      ctx.fillStyle = '#372719';
+      ctx.fillRect(ex + 25, ey + 5, 17, 41);
+      ctx.fillStyle = 'rgba(0,0,0,0.48)';
+      ctx.fillRect(ex + 6, ey + 15, 36, 2);
+      ctx.fillRect(ex + 6, ey + 27, 36, 2);
+      ctx.fillRect(ex + 6, ey + 37, 36, 2);
+      ctx.fillStyle = '#ffbf73';
+      ctx.fillRect(ex + 23, ey + 6, 2, 38);
+      ctx.fillStyle = 'rgba(255,178,96,0.28)';
+      ctx.fillRect(ex + 12, ey + 46, 24, 2);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#ffcf6e';
       ctx.font = 'bold 20px ' + FONT_CN;
