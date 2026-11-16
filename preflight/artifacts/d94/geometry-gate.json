@@ -1,0 +1,728 @@
+{
+  "1024x640-horizontal-slime": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "c13bba6f"
+    }
+  },
+  "1024x640-vertical-slime": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "263beb64"
+    }
+  },
+  "1024x640-horizontal-ogre_boss": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 730,
+        "y": 382,
+        "w": 96,
+        "h": 108,
+        "baseTop": 382,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "d2b3d3bb"
+    }
+  },
+  "1024x640-vertical-ogre_boss": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 464,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "51a19351"
+    }
+  },
+  "1024x640-horizontal-zombie_king": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 730,
+        "y": 382,
+        "w": 96,
+        "h": 108,
+        "baseTop": 382,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "f7756812"
+    }
+  },
+  "1024x640-vertical-zombie_king": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 464,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "cfff218e"
+    }
+  },
+  "1024x640-horizontal-dragon": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 706,
+        "y": 346,
+        "w": 144,
+        "h": 144,
+        "baseTop": 346,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "7912533b"
+    }
+  },
+  "1024x640-vertical-dragon": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 440,
+        "y": 36,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "d585780c"
+    }
+  },
+  "1024x640-horizontal-f3-slime": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "8fa0aa50"
+    }
+  },
+  "1024x640-vertical-f3-slime": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "abdceb49"
+    }
+  },
+  "960x540-horizontal-slime": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "monster": {
+        "x": 685,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "hash": "1ec7f408"
+    }
+  },
+  "960x540-vertical-slime": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "6ad6512"
+    }
+  },
+  "960x540-horizontal-ogre_boss": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "monster": {
+        "x": 682,
+        "y": 306,
+        "w": 96,
+        "h": 108,
+        "baseTop": 306,
+        "groundY": 414,
+        "knock": 0
+      },
+      "hash": "ff189c26"
+    }
+  },
+  "960x540-vertical-ogre_boss": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 2,
+    "monster": "ogre_boss",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 432,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "49657dc1"
+    }
+  },
+  "960x540-horizontal-zombie_king": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "monster": {
+        "x": 682,
+        "y": 306,
+        "w": 96,
+        "h": 108,
+        "baseTop": 306,
+        "groundY": 414,
+        "knock": 0
+      },
+      "hash": "57244281"
+    }
+  },
+  "960x540-vertical-zombie_king": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 4,
+    "monster": "zombie_king",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 432,
+        "y": 72,
+        "w": 96,
+        "h": 108,
+        "baseTop": 72,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "122684ff"
+    }
+  },
+  "960x540-horizontal-dragon": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "monster": {
+        "x": 658,
+        "y": 270,
+        "w": 144,
+        "h": 144,
+        "baseTop": 270,
+        "groundY": 414,
+        "knock": 0
+      },
+      "hash": "a86fe804"
+    }
+  },
+  "960x540-vertical-dragon": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 408,
+        "y": 36,
+        "w": 144,
+        "h": 144,
+        "baseTop": 36,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "a825b2f1"
+    }
+  },
+  "960x540-horizontal-f3-slime": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "monster": {
+        "x": 685,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knock": 0
+      },
+      "hash": "8702a7d8"
+    }
+  },
+  "960x540-vertical-f3-slime": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 3,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "e48b55b9"
+    }
+  },
+  "1024x640-horizontal-slime-2x": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knock": 0
+      },
+      "hash": "7c093b4e"
+    }
+  },
+  "1024x640-vertical-slime-2x": {
+    "viewport": [
+      1024,
+      640
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "hash": "fbad65dd"
+    }
+  }
+}

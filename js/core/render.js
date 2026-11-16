@@ -726,6 +726,41 @@
 
   var BG_PAINTERS = [bgStoneHall, bgOrcCamp, bgLavaRift, bgFrostCrypt, bgThroneHall];
 
+  /* ── D-94：战斗布局双轨（纵置 = 现行玩家路径 / 横置 = 站位与朝向门试装） ────────
+   * 设计网格以 BASE_W/H = 960×540 为基准，全部用比例式：
+   *   玩家 x=0.24W、敌人 x=0.76W、双方同一地平线 y=0.766H。
+   * 1024×640（1280×800 窗口 scale=1.25 的逻辑视口）由同一比例式得出 246/778/490；
+   * 960×540 得 230/730/414 —— 两档都不写死，断言按各自实数取。
+   * 默认 'vertical'：玩家不可见横置，纵置路径一行不改、逐像素不变。
+   * 'auto' 按设计卡 §6.8：W≥720 且 W/H≥1.20 走横置，否则回退纵置。
+   * 本阶段只做站位与朝向：背景复用既有五层 painter（不重排、不新画），尺寸口径沿用现有落屏高度。 */
+  var BATTLE_LAYOUT = 'vertical';
+  var HORIZONTAL_MIN_W = 720;
+  var HORIZONTAL_MIN_RATIO = 1.20;
+
+  function resolveBattleLayout(W, H) {
+    if (BATTLE_LAYOUT === 'horizontal' || BATTLE_LAYOUT === 'vertical') return BATTLE_LAYOUT;
+    var w = (typeof W === 'number' && W > 0) ? W : BASE_W;
+    var h = (typeof H === 'number' && H > 0) ? H : BASE_H;
+    return (w >= HORIZONTAL_MIN_W && w / h >= HORIZONTAL_MIN_RATIO) ? 'horizontal' : 'vertical';
+  }
+
+  /* 横置几何：只由 W/H 比例推出（960×540 → 230/730/414；1024×640 → 246/778/490） */
+  function horizontalBattleGeo(W, H) {
+    var w = (typeof W === 'number' && W > 0) ? W : BASE_W;
+    var h = (typeof H === 'number' && H > 0) ? H : BASE_H;
+    return {
+      W: w, H: h,
+      groundY: Math.round(h * 0.766),
+      playerCx: Math.round(w * 0.24),
+      enemyCx: Math.round(w * 0.76),
+      nameY: Math.round(h * 0.447),
+      barY: Math.round(h * 0.466),
+      chipY: Math.round(h * 0.506)
+    };
+  }
+
+
   /* 第三拨 D-88：龙的身份符号——只做「发光眼」这一件（不做口部余火、不做亮色翼膜）。
    * D-89：素材重画为原生 72×72（原 64×54），锚点同步到新头部位（原生坐标）：
    *   idle 双眼 (30..32,25..27)/(41..43,25..27) → 中点 (36,26)；attack 头下移 3px → (36,29)；
@@ -970,6 +1005,17 @@
     /* 第三拨 D-88：五层背景的空间语义表（只读）与纯背景绘制入口（验证页逐像素裁决用）。
      * 绘制入口只画背景，不画怪/文字/HUD，因此验证页可以把"背景亮度分布"和"战斗内容"分开测。 */
     _battleScene: BATTLE_SCENE,
+    /* D-94：战斗布局开关与横置几何（只读；验证页/实拍台与 drawBattle 共用一份公式）。
+     * 默认 'vertical'；'auto' 按 §6.8 回退；'horizontal' 仅门帧试装使用。 */
+    _setBattleLayout: function (mode) {
+      BATTLE_LAYOUT = (mode === 'horizontal' || mode === 'auto') ? mode : 'vertical';
+      return BATTLE_LAYOUT;
+    },
+    _battleLayoutMode: function () { return BATTLE_LAYOUT; },
+    _battleLayoutNow: function () {
+      return resolveBattleLayout(this.cssW || BASE_W, this.cssH || BASE_H);
+    },
+    _battleLayoutGeo: function (W, H) { return horizontalBattleGeo(W, H); },
     _battleBackdrop: function (c2, W2, H2, floor) { drawBattleBackdrop(c2, W2, H2, floor); },
     /* 第三拨 D-88：龙眼绘制单元（验证页在纯画布上量"双瞳/间距/是否落在头部"） */
     _drawDragonEyes: drawDragonEyes,
@@ -1880,6 +1926,131 @@
       return forward * 14 * (1 - (t - 0.5) / 0.5);            /* 恢复：回位 */
     },
 
+    /* D-94：横置站位与朝向门（玩家左 / 敌人右 / 同一地平线）。本阶段只验
+     *   「左边是我、右边是它、站在同一块地上」；
+     *   - 背景复用当前层的纵置 painter，原样 blit，不重排、不新画；
+     *   - 玩家用既有骑士侧面帧（原生朝右），不镜像/不旋转：站左边就是朝敌人；
+     *   - 敌人保持正面帧（D-88 龙眼/角饰按当前像素方向验收，镜像会换边）；
+     *   - 落屏高度沿用纵置口径：玩家/杂兵 90、Boss 108（原生×2）、龙 144（原生×2）。
+     * 中段信息带 / 指令条 / 结果卡属 P4，本阶段不搬；只保留双方名字、血条与底部指令提示。 */
+    _drawBattleHorizontal: function (state) {
+      var ctx = this._ctx;
+      var W = this.cssW, H = this.cssH;
+      var g = horizontalBattleGeo(W, H);
+      var Fx = Game.Fx;
+      var now = (Fx && typeof Fx.clockNow === 'function') ? Fx.clockNow() : performance.now();
+      var monster = state.monster || {};
+      var p = Game.Data.Player || {};
+      var dying = !!state.dying;
+      var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
+      var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[monster.id] &&
+        Game.Data.MONSTERS[monster.id].boss);
+
+      drawBattleBackdrop(ctx, W, H, (typeof p.floor === 'number' ? p.floor : 1));
+
+      /* 共享地面带：一条 2px 微亮横线钉住"两人同一块地"；接触阴影再压在它上面。
+       * 这是站位几何，不是背景重排（五层 painter 未改一行）。 */
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,0.045)';
+      ctx.fillRect(Math.round(W * 0.08), g.groundY - 1, Math.round(W * 0.84), 2);
+      ctx.restore();
+
+      /* ===== 敌人（右） ===== */
+      var sp2 = null;
+      if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
+        sp2 = monsterFrame(monster.id, false, '');
+        if (!sp2) sp2 = Game.Core.Sprites.get(isBoss ? 'boss_demon' : 'monster_chort');
+      }
+      var mBaseH = 90;
+      if (sp2 && isBoss) {
+        var nhB = sp2.naturalHeight || 0;
+        mBaseH = nhB > 0 ? nhB * 2 : 108;
+      }
+      var mW = 90, mShadowW = 90;
+      if (sp2) {
+        var snw = sp2.naturalWidth || 90, snh = sp2.naturalHeight || 90;
+        mShadowW = snh > 0 ? Math.round(snw * mBaseH / snh) : 90;
+      }
+      var mH = dying ? Math.round(mBaseH * (1 - dieProg * 0.5)) : mBaseH;
+      ctx.save();
+      if (dying) ctx.globalAlpha = 1 - dieProg;
+      contactShadow(ctx, g.enemyCx, g.groundY, mShadowW, dying ? 0.62 * (1 - dieProg) : 0.62);
+      if (sp2) {
+        mW = drawSpriteByHeight(ctx, sp2, g.enemyCx, g.groundY, mH);
+      } else {
+        ctx.fillStyle = monster.color || '#888';
+        ctx.fillRect(g.enemyCx - 45, g.groundY - mH, 90, mH);
+        mW = 90;
+      }
+      /* D-88：龙眼随横置一起平移，仍是"最暗处的一双亮眼" */
+      if (!dying && monster.id === 'dragon' && sp2 && typeof drawDragonEyes === 'function') {
+        drawDragonEyes(ctx, g.enemyCx, g.groundY, mBaseH, '', sp2);
+      }
+      ctx.restore();
+      var dbg = this._lastBattleBox || (this._lastBattleBox = {});
+      dbg.monster = { x: Math.round(g.enemyCx - mW / 2), y: g.groundY - mBaseH, w: mW, h: mBaseH,
+        baseTop: g.groundY - mBaseH, groundY: g.groundY, knock: 0 };
+
+      /* ===== 玩家（左）：既有侧面帧原生朝右，不镜像 = 朝敌人 ===== */
+      var psp = null;
+      if (Game.Core.Sprites && Game.Core.Sprites.isReady() && typeof Game.Core.Sprites.getFrame === 'function') {
+        var pActing = !!(state.playerActionAt && (now - state.playerActionAt) < 320);
+        psp = Game.Core.Sprites.getFrame(pActing ? 'knight_m_hit' : 'knight_m_idle',
+          animIndex(pActing ? 'knight_m_hit' : 'knight_m_idle', 4));
+      }
+      if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
+      var pW = 90, pShadowW = 90;
+      if (psp) {
+        var pnw = psp.naturalWidth || 90, pnh = psp.naturalHeight || 90;
+        pShadowW = pnh > 0 ? Math.round(pnw * 90 / pnh) : 90;
+      }
+      ctx.save();
+      contactShadow(ctx, g.playerCx, g.groundY, pShadowW, 0.62);
+      if (psp) {
+        pW = drawSpriteByHeight(ctx, psp, g.playerCx, g.groundY, 90);
+      } else {
+        ctx.fillStyle = '#ffcf6e';
+        ctx.fillRect(g.playerCx - 45, g.groundY - 90, 90, 90);
+      }
+      ctx.restore();
+      dbg.player = { x: Math.round(g.playerCx - pW / 2), y: g.groundY - 90, w: pW, h: 90,
+        baseTop: g.groundY - 90, groundY: g.groundY, knock: 0 };
+
+      /* ===== 名字 + 血条：分列两侧头顶；960×540 下龙顶 270，条带按最高精灵上移避让 ===== */
+      if (!dying) {
+        var topMost = Math.min(g.groundY - 90, g.groundY - mBaseH);
+        var barY = Math.min(g.barY, topMost - 28);
+        var nameY = barY - 12;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px monospace';
+        ctx.fillText('勇者', g.playerCx, nameY);
+        ctx.fillText((isBoss ? '【BOSS】' : '') + (monster.name || '?'), g.enemyCx, nameY);
+        ctx.restore();
+        var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
+        var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
+        battleBar(ctx, g.playerCx, barY, pHp / pMax, '#4ade80', '#132a1c', 'HP ' + pHp + ' / ' + pMax);
+        var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
+        var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
+        battleBar(ctx, g.enemyCx, barY, mobHp / mobMax, '#e24a4a', '#3a1218',
+          'HP ' + mobHp + ' / ' + mobMax + (state.enraged ? '  ⚡狂暴' : ''));
+      }
+
+      /* 指令提示（P4 才搬指令条；本阶段保留原提示行与位置） */
+      if (!dying) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#9bbbf4';
+        ctx.font = '13px monospace';
+        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药', W / 2, H - 30);
+        ctx.restore();
+      }
+      try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
+      try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
+      this._drawHud();
+    },
+
     /* 战斗画面（M2）：敌人 + 玩家 + 战斗日志 + 指令
      * M9-3：怪物死亡消散（渐隐+上浮+缩小）、攻击前摇帧、粒子特效
      * D-16 重排（消除中段约 240px 空白）：双血条（带数值）/ 回合与段提示 / 伤害分级 /
@@ -1894,6 +2065,11 @@
       var ctx = this._ctx;
       if (!ctx || !state) return;
       this._applyDpr(); /* M9-5 */
+      /* D-94：布局分派。纵置以下代码路径原样保留（默认 'vertical'，横置不改其一行）。 */
+      if (resolveBattleLayout(this.cssW, this.cssH) === 'horizontal') {
+        this._drawBattleHorizontal(state);
+        return;
+      }
       var W = this.cssW, H = this.cssH;
       var Fx = Game.Fx;
       /* D-16：动作/特效统一取 Fx 时钟（顿帧期间不前进），Fx 缺失时退回真实时钟 */

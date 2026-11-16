@@ -1,0 +1,33 @@
+# D-94 全量回归记录（preflight/selfcheck/run-all.ps1）
+
+日期：2026-11-16 · 基线 `page-baseline.json` count = 122（未增删验证页）
+
+| 轮次 | TOTAL | PASS | FAIL | NONE | MIXED | GUARD | 备注 |
+|---|---|---|---|---|---|---|---|
+| 第 1 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 改动后首轮即全绿（后台运行，日志见命令输出） |
+| 第 2 轮 | 122 | 119 | 3 | 0 | 0 | OK expected=122 actual=122 | d06 / d09 / d22：台账来源判定（读上一轮 `current-run.json`） |
+| 第 3 轮 | 122 | 116 | 6 | 0 | 0 | OK expected=122 actual=122 | d05–d09 / d60：上一轮 d22 属实质页，连带元页面 |
+| 第 4 轮 | 122 | 121 | 1 | 0 | 0 | OK expected=122 actual=122 | 仅 d60（读上一轮汇总，允许 1 个自身红） |
+| 第 5 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 连续全绿第 1 轮 |
+| 第 6 轮 | 122 | 122 | 0 | 0 | 0 | OK expected=122 actual=122 | 连续全绿第 2 轮 |
+
+## 红页性质（都不是产品回归）
+
+- 第 2 轮的 d06/d09 报 `d05Source=previous-run`、`runId=null`，d22 报台账 `myRun` 与页名清单不一致；
+  三者都只读 `selfcheck/current-run.json` 的本轮台账，属**启动期台账来源判定**。
+- 第 3 轮 d05–d09/d60 读的是第 2 轮结果；第 2 轮唯一的实质页红是 d22（d22 不声明 `preflight-meta`），
+  因此 d05 的「实质页必须全 PASS」不成立，连带元页面全红。
+- 第 4 轮只剩 d60 读第 3 轮汇总（fail=6），第 5 轮起收敛。
+- 单页复跑：`verify_d05.html` 独立运行 PASS（上一轮实质页 83/83 PASS）；d06/d09 单页因缺 `?run=`
+  必然判 `previous-run`（批量运行才有本轮 runId），不是代码问题。
+- 6 轮中实质页（非元页面）失败数：0。
+
+## 四策略逐局一致（50 局/策略 × 4 = 200 局）
+
+```
+b1: 50/50 games, 15 fields/game, diffs=0
+s1: 50/50 games, 15 fields/game, diffs=0
+g2: 50/50 games, 15 fields/game, diffs=0
+m1: 50/50 games, 15 fields/game, diffs=0
+TOTAL_DIFF=0
+```

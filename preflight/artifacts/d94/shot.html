@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-94 横置战斗实拍台</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<pre id="err"></pre>
+<!-- D-94 横置战斗实拍台（artifacts 内部页，不登记 page-baseline.json）
+     参数：?w=1024&h=640&f=1&m=slime&layout=vertical|horizontal&gk=2x
+       layout  → 调 Render._setBattleLayout（P1 之后存在；之前为空操作）
+       gk=2x   → 仅本页：把骑士按 48×84（2×）重绘，脚底不变，用于整数倍对照
+     时钟全部注入固定值，同一参数出图可复算：同种子（种子即参数）同帧。
+     出图后 window.__D94_GEO = { cssW, cssH, layout, player, monster }；window.__D94_HASH = 像素哈希。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  var W = +(q.w || 1024), H = +(q.h || 640);
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+  } catch (e) {}
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+  var R = Game.Core.Render, S = Game.Core.Sprites, Fx = Game.Fx, PT = Game.Particles;
+
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d94fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d94fps = true;
+  })();
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../../../assets/sprites/'); };
+
+  var f = Math.max(1, Math.min(5, +(q.f || 1)));
+  var mid = q.m || 'slime';
+  var layout = (q.layout === 'horizontal') ? 'horizontal' : (q.layout === 'vertical' ? 'vertical' : '');
+  var gk2x = (q.gk === '2x');
+  var T = 0;
+  var sceneReady = false;
+  var drawn = 0;
+
+  function allReady() {
+    var i, k;
+    /* getFrame 在单张图 onload 后即可返回，但 isReady()（全部素材到齐）才是 drawBattle
+     * 走精灵分支的开关；只查帧会让着色块与真精灵两种画面混进同一参数。 */
+    if (!S.isReady()) return false;
+    for (i = 1; i <= 8; i++) {
+      if (!S.get((f === 1 ? 'floor_' : 't' + f + '_floor_') + i)) return false;
+    }
+    /* 四帧全到齐：animIndex 的相位偏移会让同一参数取到 f0~f3 中任一帧，
+     * 只查 f0 会让"第一张图恰好缺帧"退化成色块，出图不可复算。 */
+    var groups = ['knight_m_idle', 'knight_m_hit'];
+    var set = R.MONSTER_ANIM[mid];
+    if (set) {
+      groups.push(set.idle);
+      if (set.run && set.run !== set.idle) groups.push(set.run);
+      if (set.attack) groups.push(set.attack);
+      if (set.hurt) groups.push(set.hurt);
+    }
+    for (k = 0; k < groups.length; k++) {
+      for (i = 0; i < 4; i++) {
+        var im = S.getFrame(groups[k], i);
+        if (!im || !(im.naturalWidth > 0)) return false;
+      }
+    }
+    return true;
+  }
+
+  /* gk=2x：只在本页把骑士重绘到 48×84（2× 整数倍），脚底与中心不变。
+   * 依据：骑士原生 24×42 → 84 = 42×2；宽 48 = 24×2。其余 drawImage 原样放行。 */
+  function patchKnight2x() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d94k2) return;
+    var orig = proto.drawImage;
+    proto.drawImage = function (img, dx, dy, dw, dh) {
+      if (arguments.length >= 5 && img && img.naturalWidth === 24 && img.naturalHeight === 42 && dh === 90) {
+        var cx = dx + dw / 2;
+        return orig.call(this, img, Math.round(cx - 24), dy + 6, 48, 84);
+      }
+      return orig.apply(this, arguments);
+    };
+    proto.__d94k2 = true;
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      Map.setFloor(f);
+      P.floor = f;
+      P.level = 5;
+      P.exp = 24;
+      P.gold = 268;
+      P.hp = 100;
+      P.maxHp = 140;
+      P.mp = 30;
+      P.maxMp = 30;
+      P.atk = 14;
+      P.def = 6;
+      B._setClock(function () { return T; });
+      Fx._setClock(function () { return T; });
+      Fx._reset();
+      PT.clear();
+      B.start(mid);
+      M.switchScene('battle');
+      R.resize();
+      if (layout && typeof R._setBattleLayout === 'function') R._setBattleLayout(layout);
+      if (gk2x) patchKnight2x();
+      if (Game.hud && Game.hud.update) {
+        Game.hud.update({
+          hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+          floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, status: []
+        });
+      }
+      R._animNow = function () { return 1234; };
+      sceneReady = true;
+      window.__d94Booted = true;
+    } catch (e) {
+      document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+      document.title = 'ERR ' + e;
+    }
+  }
+
+  function pixelHash() {
+    var cv = document.getElementById('game');
+    var c = cv.getContext('2d');
+    var d = c.getImageData(0, 0, cv.width, cv.height).data;
+    var h = 2166136261;
+    for (var i = 0; i < d.length; i += 4) {
+      h ^= d[i]; h = Math.imul(h, 16777619);
+      h ^= d[i + 1]; h = Math.imul(h, 16777619);
+      h ^= d[i + 2]; h = Math.imul(h, 16777619);
+      h ^= d[i + 3]; h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  S.load();
+  (function frame() {
+    try {
+      if (!window.__d94Booted && allReady()) boot();
+      if (sceneReady) {
+        R.drawBattle(B.getState());
+        drawn++;
+        if (drawn === 3) {
+          var dbg = R._lastBattleBox || {};
+          window.__D94_GEO = {
+            cssW: R.cssW, cssH: R.cssH,
+            layout: (typeof R._battleLayoutMode === 'function') ? R._battleLayoutMode() : (R._battleLayout || ''),
+            player: dbg.player || null, monster: dbg.monster || null,
+            hash: pixelHash()
+          };
+          document.getElementById('geo').textContent = JSON.stringify(window.__D94_GEO);
+          document.title = 'READY D94';
+          sceneReady = 'done';
+        }
+      }
+    } catch (e) { /* 降级 */ }
+    window.requestAnimationFrame(frame);
+  })();
+})();
+</script>
+<pre id="geo" style="display:none"></pre>
+</body>
+</html>
