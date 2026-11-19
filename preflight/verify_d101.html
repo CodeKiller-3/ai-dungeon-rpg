@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d101</title>
+</head>
+<body>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640" style="position:fixed;left:-9999px"></canvas>
+<!-- D-101 反馈几何收口：
+     A) 冲击圈 / 死亡粒子 / 飘字锚点 圆心 == contactMonster / contactPlayer（纵置 + 横置各一次）
+     B) 横置命中 shakeOffset 非零；玩家受击红闪生效（Feedback 账本 + 像素实测）
+     C) 同帧同侧飘字 y 两两差 ≥12px
+     D) Juice 的 battlePoint / 安全带随布局重算（不再写死 w/2、h−145、236/410）
+     E) 源码守卫：横置走 shakeOffset + tintSprite，受击闪白统一从 Feedback 取 alpha -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  Game.Core.Render._setBattleLayout('vertical');
+
+  var out = { protocol: 'D-101', ok: true, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function near(a, b) { return typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 0.01; }
+  function eqPt(a, b) { return !!a && !!b && near(a.x, b.x) && near(a.y, b.y); }
+  function readText(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 640, configurable: true });
+  } catch (e) {}
+
+  var cv = document.getElementById('game');
+  var R = Game.Core.Render, S = Game.Core.Sprites, M = Game.Core.Main;
+  var B = Game.Systems.Battle, Fx = Game.Fx, PT = Game.Particles, J = Game.Systems.Juice;
+  var Fb = Game.Feedback, P = Game.Data.Player;
+  var W = 1024, H = 640, c = null, T = 0;
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  function setupBattle(floor, mid) {
+    Fx._reset();
+    PT.clear();
+    if (Fb && Fb._clear) Fb._clear();
+    T = 0;
+    B._setClock(function () { return T; });
+    Fx._setClock(function () { return T; });
+    P.floor = floor; P.level = 5; P.exp = 24; P.gold = 268;
+    P.hp = 100; P.maxHp = 140; P.mp = 30; P.maxMp = 30;
+    P.atk = 14; P.def = 6;
+    Game.Systems.Map.setFloor(floor);
+    B.start(mid);
+    M.switchScene('battle');
+    R.resize();
+    if (Game.hud && Game.hud.update) {
+      Game.hud.update({
+        hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, status: []
+      });
+    }
+  }
+  function draw() { R.drawBattle(B.getState()); return R._lastBattleBox; }
+
+  /* Feedback.spawn 捕获（用于断言飘字锚点与车道） */
+  var cap = null, realSpawn = Fb.spawn;
+  function capStart() {
+    cap = [];
+    Fb.spawn = function (o) { cap.push(o); return realSpawn.call(Fb, o); };
+  }
+  function capEnd() { Fb.spawn = realSpawn; }
+
+  function partsAt(pt, kinds) {
+    var list = PT._list().filter(function (p) { return kinds.indexOf(p.kind) >= 0; });
+    return { n: list.length, ok: list.length > 0 && list.every(function (p) { return eqPt(p, pt); }), list: list.slice(0, 3) };
+  }
+
+  /* 依次跑纵置 / 横置两套锚点断言 */
+  function anchors(layout, floor, mid) {
+    R._setBattleLayout(layout);
+    setupBattle(floor, mid);
+    var b = draw();
+    var ctM = B._contact('monster');
+    var ctP = B._contact('player');
+
+    T = 0; capStart(); B.playerAction('attack'); capEnd();
+    var st = Fx._state();
+    var ring = st.ringPos;
+    var sparks = partsAt(ctM, ['impact', 'spark']);
+    var tOpts = cap.filter(function (o) { return o.who === 'monster' && o.text; });
+    var tBase = B._text('monster');
+    var lane0 = (B.getState().roundNo - 1) % 3 * 12;
+    var textOk = tOpts.length === 1 && near(tOpts[0].x, tBase.x) &&
+      near(tOpts[0].y, tBase.y - lane0);
+    var hitItem = Fb._items().filter(function (it) { return it.type === 'hit' && it.who === 'monster'; });
+
+    /* 怪物死亡粒子（把 hp 压到 1，一击必杀） */
+    R._setBattleLayout(layout);
+    setupBattle(floor, mid);
+    B.getState().monster.hp = 1;
+    var ctM2 = B._contact('monster');
+    T = 0; B.playerAction('attack');
+    var death = partsAt(ctM2, ['soul', 'shard']);
+
+    return {
+      layout: layout,
+      ring: ring, contactM: ctM, contactP: ctP, ringOk: eqPt(ring, ctM),
+      sparks: sparks, text: tOpts[0] || null, textBase: tBase, textOk: textOk,
+      hitItem: hitItem.length, death: death,
+      box: { monster: b.monster, player: b.player }
+    };
+  }
+
+  function fakeCtx() {
+    var n = { ops: 0 };
+    function f() { n.ops++; }
+    var c2 = { _n: n, _arcs: [], save: f, restore: f, beginPath: f, closePath: f,
+      moveTo: f, lineTo: f, stroke: f, fill: f, fillRect: f, strokeRect: f,
+      fillText: f, strokeText: f, quadraticCurveTo: f, translate: f, rotate: f, scale: f,
+      setTransform: f, clearRect: f,
+      createRadialGradient: function () { return { addColorStop: f }; },
+      measureText: function () { return { width: 100 }; } };
+    c2.arc = function (x, y, r) { n.ops++; c2._arcs.push({ x: x, y: y, r: r }); };
+    return c2;
+  }
+  /* 截 Juice 冲击圈圆心：levelUp→玩家、crushKill→怪物 */
+  function juicePoint(who) {
+    J._reset();
+    var ctx = fakeCtx();
+    var realCtx = R._ctx, realDpr = R._applyDpr;
+    R._ctx = ctx;
+    R._applyDpr = function () {};
+    try {
+      if (who === 'player') {
+        J.levelUp({ from: 1, to: 2, levels: 1, atkFrom: 10, atkTo: 11, defFrom: 5, defTo: 6, hpFrom: 100, hpTo: 110 });
+      } else {
+        J.crushKill({ rounds: 1, name: '史莱姆' });
+      }
+      J.draw();
+    } finally {
+      R._ctx = realCtx;
+      R._applyDpr = realDpr;
+    }
+    return ctx._arcs[0] || null;
+  }
+
+  function redness(box) {
+    if (!box) return -1;
+    var x0 = Math.max(0, Math.round(box.x)), y0 = Math.max(0, Math.round(box.y));
+    var x1 = Math.min(W, x0 + box.w), y1 = Math.min(H, y0 + box.h);
+    if (x1 <= x0 || y1 <= y0) return -1;
+    var d = c.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+    var n = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i] > 140 && d[i] - d[i + 1] > 40 && d[i] - d[i + 2] > 40) n++;
+    }
+    return n;
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      R._animNow = function () { return 1234; };
+      R.resize();
+      c = cv.getContext('2d');
+      c.imageSmoothingEnabled = false;
+
+      /* ══ A：锚点统一（纵置 / 横置各一套）════════════════════ */
+      var av = anchors('vertical', 1, 'slime');
+      var ah = anchors('horizontal', 1, 'slime');
+      rec('A1_anchorVertical', av.ringOk && av.sparks.ok && av.textOk && av.death.ok && av.hitItem > 0, {
+        rule: '纵置：冲击圈圆心 / 命中火花 / 伤害飘字锚点 / 死亡粒子 全部等于 contactMonster()',
+        ring: av.ring, contact: av.contactM, sparks: av.sparks, text: av.text, textBase: av.textBase,
+        death: av.death, hitFeedback: av.hitItem
+      });
+      rec('A2_anchorHorizontal', ah.ringOk && ah.sparks.ok && ah.textOk && ah.death.ok && ah.hitItem > 0, {
+        rule: '横置：同一组特效圆心等于 enemyCx/groundY 推出的 contactMonster()，不再用 w/2、135',
+        ring: ah.ring, contact: ah.contactM, sparks: ah.sparks, text: ah.text, textBase: ah.textBase,
+        death: ah.death, hitFeedback: ah.hitItem,
+        bodyExpected: { x: Math.round(W * 0.76), y: Math.round(H * 0.766) - 45 }
+      });
+
+      /* ══ B：横置震屏 + 玩家受击红闪 ══════════════════════════ */
+      R._setBattleLayout('horizontal');
+      setupBattle(1, 'slime');
+      T = 0;
+      B.playerAction('attack');
+      var shH = Fx.shakeOffset();
+      var shakeHOk = (Math.abs(shH.x) + Math.abs(shH.y)) > 0;
+      R._setBattleLayout('vertical');
+      setupBattle(1, 'slime');
+      T = 0;
+      B.playerAction('attack');
+      var shV = Fx.shakeOffset();
+      var shakeVOk = (Math.abs(shV.x) + Math.abs(shV.y)) > 0;
+      rec('B1_shakeBothLayouts', shakeHOk && shakeVOk && shH.x === shV.x && shH.y === shV.y, {
+        rule: '横置命中时 Fx.shakeOffset() 非零，且与纵置同参数（同帧同值）',
+        horizontal: shH, vertical: shV
+      });
+
+      R._setBattleLayout('horizontal');
+      setupBattle(1, 'slime');
+      T = 0;
+      B.playerAction('attack');
+      T = 110; B.tick(110);        /* 推进到怪物段：真实 spawnHurtPlayer */
+      var hurtItems = Fb._items().filter(function (it) { return it.type === 'hurt' && it.who === 'player'; });
+      var flash = Fb.flashOf('player');
+      T = 120;
+      var bh1 = draw();
+      var red1 = redness(bh1.player);
+      Fx._reset(); Fb._clear();
+      T = 120;
+      var bh2 = draw();
+      var red2 = redness(bh2.player);
+      rec('B2_playerHurtFlash', hurtItems.length > 0 && !!flash && flash.alpha > 0.01 &&
+        red1 >= red2 + 20, {
+        rule: '玩家受击：Feedback 有 hurt/player 账本 + tintSprite 红闪像素真实生效（同帧清闪前后红像素差 ≥20）',
+        hurtItems: hurtItems.length, alpha: flash && flash.alpha,
+        redWithFlash: red1, redNoFlash: red2, playerBox: bh1.player
+      });
+
+      /* ══ C：同侧飘字只留一条（合并播报） ═════════════════════ */
+      /* D-107：合并播报——同侧连续命中只在一条飘字上累加，不新增第二条；
+       * 寿命不刷新（窗口有界），消散后的下一次命中重新起一条。
+       * 判据：同帧同侧新生成 ≤1 条；若同侧同时存活多条，两两 y 差 ≥12px。
+       * 负例：旧行为（同侧 3 条同锚点同时存活）与同帧两条新生成都必须判负。 */
+      R._setBattleLayout('horizontal');
+      setupBattle(5, 'dragon');
+      P.hp = P.maxHp;               /* 4 回合不死：只看播报，不让战斗提前结束 */
+      capStart();
+      var dmgSum = 0;
+      var spawnCount = 0;
+      var spawnTimes = [];
+      var origSpawn = Fb.spawn;
+      Fb.spawn = function (o) {
+        if (o && o.text != null && o.who === 'monster') { spawnCount++; spawnTimes.push(T); }
+        return origSpawn.call(Fb, o);
+      };
+      for (var ci = 0; ci < 3; ci++) {
+        T = 1000 + ci * 180;        /* 真实节奏：一轮 180ms */
+        B.playerAction('attack');
+        var evs = B.getState().events.filter(function (e) { return e.kind === 'player-hit'; });
+        if (evs.length) dmgSum += evs[evs.length - 1].dmg;
+        B.flush();
+        Fb.update(180);             /* 飘字按真实寿命衰减 */
+      }
+      var liveM = Fb.liveTexts('monster');
+      Fb.update(900);               /* 超过 620/760ms 寿命 → 本条消散 */
+      var clearedAfterLife = Fb.liveTexts('monster').length === 0;
+      T = 1600;                     /* 消散后再命中：必须重新起一条，不是继续累加 */
+      B.playerAction('attack');
+      B.flush();
+      var liveNext = Fb.liveTexts('monster');
+      Fb.spawn = origSpawn;
+      capEnd();
+      function laneRule(ys) {
+        for (var a = 0; a < ys.length; a++) {
+          for (var b = a + 1; b < ys.length; b++) if (Math.abs(ys[a] - ys[b]) < 12) return false;
+        }
+        return true;
+      }
+      function liveRule(list) { return list.length <= 1 && laneRule(list.map(function (o) { return o.y; })); }
+      /* 同帧新生成 ≤1 条：同一毫秒时间戳不允许出现两条同侧新飘字 */
+      function sameFrameRule(times) {
+        var seen = {};
+        for (var i = 0; i < times.length; i++) {
+          if (seen[times[i]]) return false;
+          seen[times[i]] = true;
+        }
+        return true;
+      }
+      var mergeOk = liveM.length === 1 && liveM[0].hits === 3 &&
+        liveM[0].val === dmgSum && liveM[0].text === ('-' + dmgSum);
+      var resetOk = clearedAfterLife && liveNext.length === 1 && liveNext[0].hits === 1 &&
+        spawnCount === 2 && liveNext[0].val > 0;
+      var fakeOld = [{ y: 467 }, { y: 467 }, { y: 467 }];   /* 旧：三回合各一条、同锚点 */
+      var fakeSameFrame = [0, 0];                            /* 负例：同帧两条新生成 */
+      rec('C1_textMerge', mergeOk && resetOk && !liveRule(fakeOld) &&
+        !sameFrameRule(fakeSameFrame) && sameFrameRule(spawnTimes), {
+        rule: 'D-107：同侧连续命中只在一条飘字上累加（3 回合 hits=3、数值=三回合之和、只生成 1 条）；同帧同侧新生成 ≤1 条；旧同锚点多条/同帧两条必须判负',
+        live: liveM, sum: dmgSum, mergeOk: mergeOk, spawnCount: spawnCount,
+        spawnTimes: spawnTimes, sameFrameOk: sameFrameRule(spawnTimes),
+        clearedAfterLife: clearedAfterLife, liveNext: liveNext, resetOk: resetOk,
+        oldStackRejected: !liveRule(fakeOld), sameFrameNegRejected: !sameFrameRule(fakeSameFrame),
+        laneGapOk: laneRule(liveM.map(function (o) { return o.y; }))
+      });
+
+      /* ══ F：D-107 两段三拍节点管线（每帧最多推进一个节点） ═══════ */
+      R._setBattleLayout('horizontal');
+      setupBattle(5, 'dragon');
+      T = 0;
+      B.playerAction('attack');
+      var stF = B.getState();
+      var planF = stF.beats ? stF.beats.map(function (b) { return { id: b.id, at: b.at }; }) : [];
+      var needF = ['player-act', 'player-settle', 'monster-windup', 'monster-hit', 'monster-settle', 'round-end'];
+      function pipelineOk(pl) {
+        if (!pl || pl.length !== needF.length) return false;
+        var ids = pl.map(function (b) { return b.id; });
+        var order = true, minGap = 9999;
+        for (var i = 0; i < pl.length; i++) {
+          if (ids[i] !== needF[i]) order = false;
+          if (i > 0) minGap = Math.min(minGap, pl[i].at - pl[i - 1].at);
+        }
+        return order && minGap >= 16;
+      }
+      var shapeOkF = pipelineOk(planF);
+      /* 1ms 步进 240 帧：每帧最多执行一个节点，且顺序与计划一致 */
+      var maxDelta = 0, lastLen = stF.beatLog.length;
+      for (var ft = 1; ft <= 240; ft++) {
+        T = ft;
+        B.tick(ft);
+        var lenNow = B.getState() ? B.getState().beatLog.length : lastLen;
+        maxDelta = Math.max(maxDelta, lenNow - lastLen);
+        lastLen = lenNow;
+      }
+      var stEnd = B.getState();
+      var firedIds = stEnd.beatLog.map(function (b) { return b.id; });
+      var firedOk = firedIds.join('|') === needF.join('|');
+      var evF = stEnd.events.filter(function (e) { return e.kind === 'player-hit' || e.kind === 'monster-hit'; });
+      var evOrder = evF.length >= 2 && evF[0].kind === 'player-hit' &&
+        evF[1].kind === 'monster-hit' && evF[1].at - evF[0].at >= 16;
+      var windupOk = stEnd.monsterActionAt === 60;
+      var legacyPlan = [{ id: 'player-act', at: 0 }, { id: 'monster-hit', at: 100 }, { id: 'round-end', at: 180 }];
+      rec('F_beatPipeline', shapeOkF && maxDelta <= 1 && firedOk && evOrder && windupOk && !pipelineOk(legacyPlan), {
+        rule: 'D-107：两段各三拍（玩家 出手/落定，怪物 起手/命中/落定）+ 回合收束；节点间隔 ≥16ms（一帧），tick 每帧最多推进 1 个；旧 180ms 单段（仅 3 节点）必须判负',
+        plan: planF, shapeOk: shapeOkF, maxNodesPerFrame: maxDelta, fired: firedIds,
+        firedOk: firedOk, eventOrderOk: evOrder, windupAt: stEnd.monsterActionAt,
+        legacyRejected: !pipelineOk(legacyPlan)
+      });
+
+
+      /* ══ D：Juice 的 battlePoint / 安全带随布局重算 ═══════════ */
+      R._setBattleLayout('vertical');
+      setupBattle(1, 'slime');
+      T = 0;
+      var bv = draw();
+      var bodyV = B._body('player');
+      var bodyMV = B._body('monster');
+      function boxCenter(r) { return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+      /* _lastBattleBox 是同一对象，下一次 draw 会改写它；先把纵置框中心快照下来。 */
+      var bcV = { p: boxCenter(bv.player), m: boxCenter(bv.monster) };
+      var vInfo = ['pipeline', 'log', 'stat', 'player', 'monster'].map(function (k) {
+        return bv[k] ? { x: bv[k].x, y: bv[k].y, w: bv[k].w, h: bv[k].h } : null;
+      }).filter(Boolean);
+      var boxVSnap = {
+        W: W, H: H, layout: 'vertical',
+        hudBand: bv.hudBand ? { x: bv.hudBand.x, y: bv.hudBand.y, w: bv.hudBand.w, h: bv.hudBand.h } : null,
+        pipeline: bv.pipeline ? { x: bv.pipeline.x, y: bv.pipeline.y, w: bv.pipeline.w, h: bv.pipeline.h } : null,
+        log: bv.log ? { x: bv.log.x, y: bv.log.y, w: bv.log.w, h: bv.log.h } : null,
+        stat: bv.stat ? { x: bv.stat.x, y: bv.stat.y, w: bv.stat.w, h: bv.stat.h } : null,
+        player: { x: bv.player.x, y: bv.player.y, w: bv.player.w, h: bv.player.h },
+        monster: { x: bv.monster.x, y: bv.monster.y, w: bv.monster.w, h: bv.monster.h },
+        commandBar: bv.commandBar ? { x: bv.commandBar.x, y: bv.commandBar.y, w: bv.commandBar.w, h: bv.commandBar.h } : null,
+        commandBarDrawn: bv.commandBarDrawn
+      };
+      var jv = juicePoint('player');
+      var jmV = juicePoint('monster');
+      var layV = J._layout(W, H);
+      R._setBattleLayout('horizontal');
+      setupBattle(1, 'slime');
+      T = 0;
+      var bh = draw();
+      var bodyH = B._body('player');
+      var bodyMH = B._body('monster');
+      var bcH = { p: boxCenter(bh.player), m: boxCenter(bh.monster) };
+      var jh = juicePoint('player');
+      var jmH = juicePoint('monster');
+      var layH = J._layout(W, H);
+      var hg = R._battleLayoutGeo(W, H);
+      var vg = R._verticalBattleGeo(W, H);
+      /* 横置安全带：与两张身份卡矩形都不交（允许 y 上高于普通卡，只要 x 不重叠），且不压指令条 */
+      function disjointRect(a, b) {
+        return a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+      }
+      var cardsH = [bh.playerPlate, bh.monsterPlate].filter(Boolean).map(function (c) {
+        return { x: c.x, y: c.y, w: c.w, h: c.h };
+      });
+      var bandOk = (layH.cards || []).every(function (jc) {
+        return cardsH.every(function (c) { return disjointRect(jc, c); });
+      }) && layH.bottom <= bh.commandBar.y - 6 && layH.top >= 46;
+      /* D-109 N1：纵置安全带改为"信息元素并集之外"的空白区间表。
+       * 判据从"等于旧的固定上下界"升级为：Juice 选中的区间必须来自 Render 给出的 free 表，
+       * 且结果卡与管线/战报/属性行/玩家精灵/敌人精灵全部零相交。 */
+      var bandVR = R._battleSafeBand(W, H, 'vertical', boxVSnap);
+      var bandVOk = (bandVR.free || []).some(function (iv) {
+        return iv.top === layV.top && iv.bottom === layV.bottom;
+      }) && (layV.cards || []).every(function (jc) {
+        return jc.y >= layV.top && jc.y + jc.h <= layV.bottom &&
+          vInfo.every(function (r) { return disjointRect(jc, r); });
+      });
+      rec('D1_juiceFollowsLayout', eqPt(jv, bodyV) && eqPt(jh, bodyH) &&
+        eqPt(jmV, bodyMV) && eqPt(jmH, bodyMH) &&
+        eqPt(bodyV, bcV.p) && eqPt(bodyMV, bcV.m) &&
+        eqPt(bodyH, bcH.p) && eqPt(bodyMH, bcH.m) &&
+        bandVOk && bandOk, {
+        rule: 'Juice 冲击圈 = Battle._body = 当前绘制框中心（D-104 起精灵 2× 整数倍，框高随素材变；' +
+          '不再是写死的 playerGround−45 / enemyTop+45 / 246/445）；' +
+          '横置安全带 = 最坏卡下沿之后 .. 指令条上沿−6，纵置 = 五类信息元素并集之外的空白区间',
+        vertical: { body: bodyV, monster: bodyMV, box: bcV, playerBurst: jv, monsterBurst: jmV, band: [layV.top, layV.bottom], vg: vg },
+        horizontal: { body: bodyH, monster: bodyMH, box: bcH, playerBurst: jh, monsterBurst: jmH, band: [layH.top, layH.bottom] },
+        plate: bh.playerPlate, commandBarY: bh.commandBar && bh.commandBar.y
+      });
+      /* 负例：旧写死锚点 (W/2, H−145) 与旧的 ±45 偏移都必须不等于新框中心，
+       * 证明 D1 跟的是"实际绘制框"，不是任何固定像素常量。 */
+      var oldV = { x: W / 2, y: H - 145 };
+      var oldVBody = { x: W / 2, y: vg.playerGround - 45 };
+      var oldVMob = { x: W / 2, y: vg.enemyTopMin + 45 };
+      rec('D1n_oldFixedAnchor', !eqPt(bodyV, oldV) && !eqPt(bodyH, oldV) &&
+        !eqPt(bodyV, oldVBody) && !eqPt(bodyMV, oldVMob), {
+        rule: '旧写死锚点 (W/2, H−145) 与旧固定偏移 playerGround−45 / enemyTopMin+45 均不得等于新框中心',
+        old: oldV, oldBody: oldVBody, oldMob: oldVMob,
+        verticalBody: bodyV, verticalMob: bodyMV, horizontalBody: bodyH
+      });
+
+      /* ══ E：源码守卫 ═══════════════════════════════════════ */
+      var rSrc = readText('../js/core/render.js');
+      var bSrc = readText('../js/systems/battle.js');
+      var jSrc = readText('../js/systems/juice.js');
+      var segA = rSrc.indexOf('_drawBattleHorizontal');
+      var segB = rSrc.indexOf('drawBattle: function');
+      var hSeg = (segA >= 0 && segB > segA) ? rSrc.slice(segA, segB) : '';
+      var guard = {
+        shake: hSeg.indexOf('shakeOffset') >= 0,
+        tint: hSeg.indexOf('tintSprite') >= 0 && hSeg.indexOf("battleFlashOf('player')") >= 0,
+        flashSource: rSrc.indexOf('function battleFlashOf') >= 0 &&
+          rSrc.indexOf("Fb.flashOf(who)") >= 0,
+        anchors: bSrc.indexOf('function textMonster') >= 0 && bSrc.indexOf('function textPlayer') >= 0 &&
+          bSrc.indexOf('function bodyPoint') >= 0,
+        deathContact: bSrc.indexOf('function spawnDeathParticles') >= 0 &&
+          bSrc.slice(bSrc.indexOf('function spawnDeathParticles'), bSrc.indexOf('function spawnDeathParticles') + 400)
+            .indexOf('contactMonster()') >= 0,
+        hitHurt: bSrc.indexOf("kind: (who === 'monster') ? 'hit' : 'hurt'") >= 0,
+        juiceDelegates: jSrc.indexOf('B._body') >= 0 && jSrc.indexOf('function battleBand') >= 0,
+        noHardcode: bSrc.indexOf('w / 2, 135') < 0 && jSrc.indexOf('h - 145') < 0
+      };
+      var guardOk = Object.keys(guard).every(function (k) { return guard[k]; });
+      rec('E1_sourceGuards', guardOk, { rule: '横置走 shakeOffset/tintSprite；闪白 alpha 来自 Feedback；锚点/车道/安全带各自只有一份实现', detail: guard });
+
+      /* ══ F：页数基线 ═══════════════════════════════════════ */
+      var pb = null;
+      try { pb = JSON.parse(readText('selfcheck/page-baseline.json')); } catch (e) { pb = null; }
+      rec('F1_pageBaseline', !!pb && pb.count === 128 && pb.pages.indexOf('verify_d101') >= 0 &&
+        pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0, {
+        rule: 'page-baseline.json count=128 且登记 verify_d101 / verify_d102 / verify_d104 / verify_d108',
+        count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d101') >= 0
+      });
+    } catch (e) {
+      out.ok = false;
+      out.error = String(e && (e.stack || e.message) || e);
+    }
+    finish();
+  }
+
+  function finish() {
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = txt;
+    document.getElementById('result').textContent = txt;
+  }
+
+  S.load();
+  (function poll() {
+    if (S.isReady() && S.get('t5_floor_1') && S.get('dragon_idle_anim_f0') && S.get('knight_m_idle_anim_f0')) {
+      boot();
+      return;
+    }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>
