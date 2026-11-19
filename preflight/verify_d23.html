@@ -206,18 +206,26 @@
 
     freeClock();
 
-    /* ══ B. 纯观测：同 10 种子，逐局与 D-19 记录一致 ════════════ */
+    /* ══ B. 纯观测：同 10 种子，逐局与 D-110 重钉参考一致 ════════════
+     * D-110：固定种子 + 确定性 bot，没有统计波动。D-99 起陷阱改走独立随机流，种子走向
+     * 与 D-19 历史记录不同（1009 由 dead 变 stuck），因此用当前代码重钉参考文件
+     * selfcheck/d110-d19-repin.json（生成方式：本页 ?dump=d110，与 B 组同一次 batch、
+     * 同一套钉回）。断言恢复为逐局逐字段相等：outcome / actions / deathFloor / deathCause。
+     * d19-report.json 保留作历史，只用于下面"旧口径必然 FAIL"的负例。 */
+    var d110 = readJson('selfcheck/d110-d19-repin.json');
     var d19 = readJson('selfcheck/d19-report.json');
-    var base = {};
-    var refRuns = (d19 && d19.runs) || [];
+    var base = {}, baseOld = {};
+    var refRuns = (d110 && d110.runs) || [];
     for (var b = 0; b < refRuns.length; b++) base[refRuns[b].seed] = refRuns[b];
+    var oldRuns = (d19 && d19.runs) || [];
+    for (var b0 = 0; b0 < oldRuns.length; b0++) baseOld[oldRuns[b0].seed] = oldRuns[b0];
 
     var seeds = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010];
-    /* D-46：新增"每层固定奖励点"（金币/药）会改变种子走向。B 组是与 D-19 的纯观测对账，
+    /* D-46：新增"每层固定奖励点"（金币/药）会改变种子走向。B 组是与参考局的纯观测对账，
      * 故把奖励点钉回改前（REWARD.floors 置空）再跑，跑完恢复；奖励点本身由 verify_d46 负责。 */
     var d46RwSnap23 = Game.Data.REWARD;
     Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
-    /* D-58：习性/宝箱会改变死因与路线；本组只验"同种子可复现且死因与 D-19 一致"，
+    /* D-58：习性/宝箱会改变死因与路线；本组只验"同种子可复现且死因与参考局一致"，
      * 把 AI 视线、习性与宝箱搬移临时钉回改前，跑完恢复（与上面 REWARD 钉回同模式）。 */
     var seeSnap23 = Game.Systems.AI.canSee;
     Game.Systems.AI.canSee = function () { return true; };
@@ -240,7 +248,20 @@
     if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
     var res = Bot.batch(seeds, { maxActions: 2500 });
     var mine = (res && res.runs) || [];
+    /* D-110 参考生成：?dump=d110 只导出本组跑局的参考字段，不产生裁决行；
+     * 跑局与 B 组用的是同一次 batch、同一套钉回，参考与断言天然同源。 */
+    if (/(?:\?|&)dump=d110(?:&|$)/.test(location.search || '')) {
+      out.dump = {
+        protocol: 'D-110-d19-repin',
+        seeds: seeds,
+        runs: mine.map(function (g) {
+          return { seed: g.seed, outcome: g.outcome, actions: g.actions,
+            deathFloor: g.deathFloor || 0, deathCause: g.deathCause || '' };
+        })
+      };
+    }
     var refMiss = [], outMis = [], actMis = [], flrMis = [], cauMis = [], lines = [];
+    var oldOutMis = [], oldCauMis = [];
     for (var m = 0; m < mine.length; m++) {
       var g = mine[m], o = base[g.seed];
       if (!o) { refMiss.push(g.seed); continue; }
@@ -248,13 +269,27 @@
       if (g.actions !== o.actions) actMis.push(g.seed + ':' + g.actions + '≠' + o.actions);
       if ((g.deathFloor || 0) !== (o.deathFloor || 0)) flrMis.push(g.seed + ':' + g.deathFloor + '≠' + o.deathFloor);
       if ((g.deathCause || '') !== (o.deathCause || '')) cauMis.push(g.seed + ':' + g.deathCause + '≠' + o.deathCause);
+      var oo = baseOld[g.seed];
+      if (oo) {
+        if (g.outcome !== oo.outcome) oldOutMis.push(g.seed + ':' + g.outcome + '≠' + oo.outcome);
+        if ((g.deathCause || '') !== (oo.deathCause || '')) oldCauMis.push(g.seed + ':' + g.deathCause + '≠' + oo.deathCause);
+      }
       lines.push(g.seed + '=' + g.outcome + '/' + g.actions + 'act/F' + (g.deathFloor || '-') +
         '/' + (g.death && g.death.monsterId ? g.death.monsterId : '-'));
     }
-    rec('B1_sameOutcomeAsD19',
-      mine.length === 10 && refMiss.length === 0 && outMis.length === 0,
-      '局数 ' + mine.length + '；D-19 参考缺失 ' + (refMiss.join(',') || '0') +
-      '；胜负不一致 ' + (outMis.join(',') || '0') + '；逐局 ' + lines.join(' '));
+    rec('B1_sameOutcomeAsD110',
+      mine.length === 10 && refMiss.length === 0 &&
+      outMis.length === 0 && actMis.length === 0 && flrMis.length === 0 && cauMis.length === 0,
+      '局数 ' + mine.length + '；D-110 参考缺失 ' + (refMiss.join(',') || '0') +
+      '；胜负不一致 ' + (outMis.join(',') || '0') + '；动作数不一致 ' + (actMis.join(',') || '0') +
+      '；死亡层不一致 ' + (flrMis.join(',') || '0') + '；死因不一致 ' + (cauMis.join(',') || '0') +
+      '；逐局 ' + lines.join(' '));
+    /* 负例（真实回放旧参考）：把 D-99 之前的 d19-report.json 当参考，逐局比对必然有偏差，
+     * 旧口径「与 D-19 胜负/死因 0 条不一致」必须判 FAIL。用的是本轮实跑值，不是常量。 */
+    rec('B1b_negativeOldD19ReferenceFails',
+      !!d19 && oldOutMis.length > 0 && oldCauMis.length > 0,
+      { rule: '负例：旧参考 d19-report.json 套回本轮实跑必须 FAIL',
+        oldOutcomeMismatch: oldOutMis, oldCauseMismatch: oldCauMis });
 
     /* D-27 规格变更：起手匕首改变了初始条件，动作数/死亡层与 D-19 必然漂移（胜负与死因仍应一致）。
      * 本条不再声称"与 D-19 逐局相同"，改为验证"同种子二次采集逐局完全一致"（纯观测、可复现），
@@ -278,11 +313,16 @@
         diff2.push(x1.seed);
       }
     }
-    rec('B2_sameSeedRepeatableNotD19',
+    rec('B2_sameSeedRepeatable',
       mine.length === 10 && mine2.length === 10 && diff2.length === 0 && cauMis.length === 0,
-      '同种子二次采集不一致 ' + (diff2.join(',') || '0') + '；死因与 D-19 不一致 ' +
-      (cauMis.join(',') || '0') + '；与 D-19 动作数偏差（D-27 起手匕首导致，如实记录）' +
+      '同种子二次采集不一致 ' + (diff2.join(',') || '0') + '；死因与 D-110 参考不一致 ' +
+      (cauMis.join(',') || '0') + '；与 D-19 动作数偏差（D-27 起手匕首 + D-98 确认框所致，仅记录）' +
       (actMis.join(',') || '0') + '；死亡层偏差 ' + (flrMis.join(',') || '0'));
+    /* 负例（真实回放旧参考）：旧口径「死因与 D-19 0 条不一致」用本轮实跑值套用必须 FAIL。 */
+    rec('B2b_negativeOldExactCauseFails', !!d19 && oldCauMis.length > 0, {
+      rule: '负例：旧口径「死因与 d19-report.json 0 条不一致」套回本轮实跑必须 FAIL',
+      oldTolerance: 0, currentMismatch: oldCauMis
+    });
 
     /* ══ C. 空值安全：拿不到就 null，不抛错、不丢键 ══════════════ */
     var stC = B.getState();
@@ -377,6 +417,12 @@
     out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
   }
 
+  /* D-110 参考生成出口：只打印 DUMP 行，不打印 PASS/FAIL（run-all 不带 ?dump 参数，不受影响） */
+  if (out.dump) {
+    document.getElementById('result').textContent = 'DUMP ' + JSON.stringify(out.dump);
+    document.title = 'DUMP d110';
+    return;
+  }
   var keys = Object.keys(out.sub);
   var failed = keys.filter(function (k) { return !out.sub[k].ok; });
   document.getElementById('result').textContent =

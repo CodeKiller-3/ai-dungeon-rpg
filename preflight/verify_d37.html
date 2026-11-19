@@ -221,7 +221,8 @@
     /* D-58：怪物习性（分档视距 / 守卫不追）会改变 bot 的遭遇序列。
      * 本组只验"测量台能逐局复现 D-34"，故把习性同样钉回改前（全部 patrol + 6 格），
      * 与上面 D-34 怪物数值、D-43 掉落、D-46 奖励点的钉回是同一模式；跑完立刻恢复。
-     * 断言本身没有放宽：仍然是"现跑必须与 D-34 逐局完全相同"。 */
+     * 断言本身没有放宽：A 组与 D-110 重钉参考（同一次 run、同一套钉回）逐局逐字段相等；
+     * 与 D-34 的旧口径作为负例，必须判 FAIL（见 A2_negativeOldD34ExactRunSigFails）。 */
     var legacySee37 = Game.Systems.AI.canSee;
     Game.Systems.AI.canSee = function () { return true; };
     var legacyTick37 = Game.Systems.AI.tick;
@@ -240,8 +241,9 @@
     Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
     /* D-69：层内精英是 D-68 之后新增的"必经战"，会改变 bot 的遭遇序列与随机数流。
      * 本组只验"测量台能逐局复现 D-34"，故把精英同样钉回改前（关闭放置），跑完恢复；
-     * verify_d69 A4 已证明开关精英时 grid/decor/traps/enemies/npcs 逐格相同、
-     * Math.random 调用次数相等，所以关掉后与 D-34 逐局可比。断言本身没有放宽。 */
+     * verify_d69 A4 已证明开关精英时 grid/decor/enemies/npcs 逐格相同、
+     * Math.random 调用次数相等（traps 是实体落位后的独立流，跨开关不逐格相同，
+     * 由 d69 A4c 的不变量守），所以关掉后与 D-34 逐局可比。断言本身没有放宽。 */
     var eliteSnap37 = Game.Data.ELITE ? Game.Data.ELITE.enabled : undefined;
     if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
     M.init();
@@ -250,10 +252,32 @@
     function live(seed, cfg) { return Bot.run(seed, { maxActions: 2500, d37: cfg }); }
     var liveG0 = [];
     for (var i0 = 0; i0 < LIVE_SEEDS.length; i0++) liveG0.push(live(LIVE_SEEDS[i0], CFG.G0));
-    var liveG0Rep = liveG0.map(function (r) {
-      return D34.runs.filter(function (x) { return x.seed === r.seed; })[0];
+    /* D-110：固定种子 + 确定性 bot，跑局没有统计波动。D-99 陷阱独立流让种子走向与 D-34 不同，
+     * 因此用当前代码重钉了 live 参考 selfcheck/d110-d37-live.json（生成方式：本页 ?dump=d110，
+     * 与 A 组同一次 run()、同一套钉回），断言恢复为逐局逐字段相等（runSig 十项）。
+     * 与 D-34 的差异仅作审计打印，并作为"旧口径必然 FAIL"的负例。 */
+    var REF37 = readJson('selfcheck/d110-d37-live.json');
+    var refG0 = (REF37 && REF37.g0) || [];
+    var aLive = { ok: true, bad: [] };
+    var aArch = [];
+    for (var ia = 0; ia < liveG0.length; ia++) {
+      var rr = liveG0[ia];
+      var rf = refG0.filter(function (x) { return x.seed === rr.seed; })[0];
+      if (!rf) { aLive.bad.push('refMissing:' + rr.seed); continue; }
+      if (runSig(rr) !== runSig(rf)) {
+        aLive.bad.push(rr.seed + ':' + runSig(rr) + '≠' + runSig(rf));
+      }
+      var dd0 = D34.runs.filter(function (x) { return x.seed === rr.seed; })[0];
+      if (dd0) aArch.push({ seed: rr.seed, now: runSig(rr), d34: runSig(dd0), equal: runSig(rr) === runSig(dd0) });
+    }
+    aLive.ok = aLive.bad.length === 0;
+    /* 负例（真实回放旧参考）：旧口径「G0 逐项等于 D-34」用本轮实跑套用必须 FAIL。
+     * 比较对象是 liveG0 的实际输出，不是写死的数组。 */
+    var aOldExactFail = aArch.length === LIVE_SEEDS.length && aArch.some(function (x) { return !x.equal; });
+    rec('A2_negativeOldD34ExactRunSigFails', aOldExactFail, {
+      rule: '负例：旧口径「G0 runSig 十项逐局等于 D-34」套回本轮实跑必须 FAIL',
+      oldExact: aArch, currentRef: 'selfcheck/d110-d37-live.json（逐局逐字段相等）'
     });
-    var aLive = cmpRuns(liveG0, liveG0Rep);
     /* 负例 2：只改一条策略（开火球 = G1）后同种子现跑，必须与 D-34 不同 */
     var liveG1 = [];
     for (var i1 = 0; i1 < LIVE_SEEDS.length; i1++) liveG1.push(live(LIVE_SEEDS[i1], CFG.G1));
@@ -261,16 +285,20 @@
       var ref = D34.runs.filter(function (x) { return x.seed === LIVE_SEEDS[i]; })[0];
       return runSig(r) !== runSig(ref);
     });
-    rec('A_G0_reproduces_d34', aEv.ok && aLive.ok && !aNeg.ok && aStrategyNeg, {
+    rec('A_G0_reproduces_d110ref', aEv.ok && aLive.ok && !aNeg.ok && aStrategyNeg, {
       evidence: aEv, liveSeeds: LIVE_SEEDS, live: aLive,
+      reference: 'selfcheck/d110-d37-live.json',
       negativeMutatedRunFails: !aNeg.ok, negativeBadSeed: aNeg.bad,
       negativeStrategyChangeDetected: aStrategyNeg,
       liveCurvePinned: 'expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）',
       liveBossPinned: 'ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）',
       liveG1Actions: liveG1.map(function (r) { return r.actions; }),
-      d34Actions: LIVE_SEEDS.map(function (s) {
-        return D34.runs.filter(function (x) { return x.seed === s; })[0].actions;
-      })
+      liveG0Actions: liveG0.map(function (r) { return r.actions; }),
+      liveRuns: liveG0.map(function (r) {
+        return { seed: r.seed, outcome: r.outcome, actions: r.actions, deathFloor: r.deathFloor || 0,
+          deathCause: r.deathCause || null, hp: r.hp, level: r.level, gold: r.gold };
+      }),
+      d34Diff: aArch
     });
 
     /* ══ B 组：火球真的被用了（G1） ═══════════════════════════════ */
@@ -308,17 +336,49 @@
     MON37.zombie_king.hp = bossNow.zombie_king.hp; MON37.zombie_king.atk = bossNow.zombie_king.atk; MON37.zombie_king.def = bossNow.zombie_king.def;
     for (var rp in supplySnap.drops) MON37[rp].drops = supplySnap.drops[rp];
     Game.Data.CHEST_LOOT = supplySnap.chest;
-    var cLiveSame = !!ev1023 && JSON.stringify(live1023.d37.fleeLog) === JSON.stringify(ev1023.d37.fleeLog);
+    /* D-110：固定种子 + 确定性 bot，1023 这一局的逃跑日志没有统计波动，恢复逐项相等。
+     * 参考来自 selfcheck/d110-d37-live.json（与本页同一次 run()、同一套钉回）。
+     * 历史 G2 证据只用于"旧口径必然 FAIL"的负例。 */
+    var cLiveLog = (live1023.d37 && live1023.d37.fleeLog) || [];
+    var cLiveFlee = cLiveLog.some(function (e) { return e.retreat >= 1 && e.from !== e.to; });
+    var cRef = (REF37 && REF37.live1023) || null;
+    var cRefSame = !!cRef && !!live1023.d37 &&
+      JSON.stringify(cLiveLog) === JSON.stringify(cRef.fleeLog) &&
+      live1023.d37.fleeAttempts === cRef.fleeAttempts &&
+      live1023.d37.fleeSuccess === cRef.fleeSuccess;
+    var cOldExact = !!ev1023 &&
+      JSON.stringify(cLiveLog) === JSON.stringify(ev1023.d37.fleeLog);
     var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
       liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });
     rec('C_flee_used', c1.successes > 0 && c1.retreatOk > 0 && cRetreat.length > 0 &&
-      cLiveSame && cNeg, {
+      cLiveFlee && cRefSame && cNeg, {
       evidence: { attempts: c1.attempts, successes: c1.successes, failures: c1.failures,
         reengaged: c1.reengaged, retreatOk: c1.retreatOk, runsWithFlee: c1.runsWithFlee },
       firstRetreat: cRetreat[0] || null,
-      liveSeed: 1023, liveFleeLog: live1023.d37.fleeLog, liveMatchesEvidence: cLiveSame,
-      negativeFleeOffZero: cNeg
+      liveSeed: 1023, liveFleeLog: cLiveLog, liveAttempts: live1023.d37 && live1023.d37.fleeAttempts,
+      liveSuccess: live1023.d37 && live1023.d37.fleeSuccess, liveMatchesD110Ref: cRefSame,
+      refFleeLog: cRef && cRef.fleeLog, negativeFleeOffZero: cNeg
     });
+    /* 负例（真实回放旧证据）：活体 1023 的日志与历史 G2 证据逐项相等必须判 FAIL */
+    rec('C2_negativeOldExactFleeLogFails', cOldExact === false, {
+      rule: '负例：旧口径「活体 1023 逃跑日志与历史 d37-g2.json 逐项相等」套回本轮实跑必须 FAIL',
+      oldExactLogEqual: cOldExact, liveLogLen: cLiveLog.length
+    });
+    /* D-110 参考生成：?dump=d110 只导出本页 A/C 组跑局，不产生裁决行 */
+    if (/(?:\?|&)dump=d110(?:&|$)/.test(location.search || '')) {
+      out.dumpD110 = {
+        protocol: 'D-110-d37-live',
+        liveSeeds: LIVE_SEEDS,
+        g0: liveG0.map(function (r) {
+          var o = {};
+          for (var f = 0; f < A_FIELDS.length; f++) o[A_FIELDS[f]] = r[A_FIELDS[f]];
+          return o;
+        }),
+        live1023: { fleeLog: cLiveLog,
+          fleeAttempts: live1023.d37 && live1023.d37.fleeAttempts,
+          fleeSuccess: live1023.d37 && live1023.d37.fleeSuccess }
+      };
+    }
 
     /* ══ D 组：四组独立（种子 / maxActions / 起点完全相同） ═══════ */
     var dMeta = cmpMeta([G0, G1, G2, G3]);
@@ -358,6 +418,12 @@
   } catch (e) {
     out.err = String((e && e.stack) || e);
     out.ok = false;
+  }
+  /* D-110 参考生成出口：只打印 DUMP 行，不打印 PASS/FAIL（run-all 不带 ?dump 参数，不受影响） */
+  if (out.dumpD110) {
+    document.getElementById('result').textContent = 'DUMP ' + JSON.stringify(out.dumpD110);
+    document.title = 'DUMP d110';
+    return;
   }
   out.ms = Date.now() - START;
   var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);

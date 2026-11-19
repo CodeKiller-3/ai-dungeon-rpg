@@ -165,6 +165,7 @@
     var degDown = { 1: 0, 2: 0, 3: 0, 4: 0 }, degUp = { 1: 0, 2: 0, 3: 0, 4: 0 };
     var openedRows = [];
     var nan = 0;
+    var trapFpRows = [], trapOnStair = [];
     for (var s = 0; s < 50; s++) {
       var seed = 1001 + s;
       Math.random = Bot.mulberry32(seed);
@@ -200,12 +201,24 @@
         for (ei = 0; ei < ls.length; ei++) ent.push('e' + ls[ei].id + '@' + ls[ei].x + ',' + ls[ei].y);
         for (var yy = 0; yy < g.length; yy++) for (var xx = 0; xx < g[0].length; xx++) {
           var dec = Map.getDecor(xx, yy); if (dec) ent.push('d' + dec + '@' + xx + ',' + yy);
-          var tr = Map.getTrap(xx, yy); if (tr) ent.push('t' + tr.id + '@' + xx + ',' + yy);
+          /* D-99：陷阱位置由独立随机流重排（D-98 起刻意改变），不参与"开门前后实体不动"的指纹；
+           * 墙/地/楼梯/敌/精英/NPC/装饰/巡逻仍逐字对比。 */
         }
         var ps = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? (Game.Systems.AI.getPatrols() || []) : [];
         for (ei = 0; ei < ps.length; ei++) ent.push('p@' + ps[ei].x + ',' + ps[ei].y);
+        /* D-110：陷阱不参与"修复前 vs 现在"的历史指纹（历史参考 bf.ent 从未记录陷阱，
+         * 且 D-99 把陷阱改成实体落位后的独立流），但必须参与本轮重钉指纹：
+         * entPlus = 历史实体 + 陷阱格，与 selfcheck/d110-d77-fingerprints.json 逐张相等（A6）。 */
+        var trapCells = [], trapOnStair = [];
+        for (var ty7 = 0; ty7 < g.length; ty7++) for (var tx7 = 0; tx7 < g[ty7].length; tx7++) {
+          var tr7 = Map.getTrap(tx7, ty7);
+          if (!tr7) continue;
+          trapCells.push('t' + tr7.id + '@' + tx7 + ',' + ty7);
+          if (g[ty7][tx7] === 2 || g[ty7][tx7] === 3) trapOnStair.push(seed + 'F' + f + '@' + tx7 + ',' + ty7);
+        }
         var entStr = ent.sort().join('|');
         var entMatch = (fnv(entStr) === bf.ent);
+        trapFpRows.push({ seed: seed, f: f, entPlus: fnv(entStr + '|' + trapCells.sort().join('|')) });
 
         /* A2：逐格对比 */
         var bg = bf.grid.split('/'), diffs = [];
@@ -270,6 +283,13 @@
     if (!before) {
       rec('A0_baseline_present', false, '缺少 selfcheck/d77-before-grids.json（D-77 修复前的 250 张图指纹）');
     }
+    /* D-110 参考生成：?dump=d110 只导出 250 张图的"实体+陷阱"指纹，不产生裁决行 */
+    if (/(?:\?|&)dump=d110(?:&|$)/.test(location.search || '')) {
+      document.getElementById('result').textContent =
+        'DUMP ' + JSON.stringify({ protocol: 'D-110-d77', floors: trapFpRows });
+      document.title = 'DUMP d110';
+      return;
+    }
     rec('A1_no_single_entrance_stair', singleDown.length === 0 && singleUp.length === 0 && nan === 0,
       '250 张图：下行梯 deg<2 → ' + singleDown.length + '，上行梯 deg<2 → ' + singleUp.length +
       '（必须都为 0）；下行分布 ' + JSON.stringify(degDown) + '，上行分布 ' + JSON.stringify(degUp) +
@@ -281,7 +301,7 @@
       (unexpected.length ? ' → ' + unexpected.slice(0, 5).join(' ') : '') +
       (notAdjacent.length ? ' → ' + notAdjacent.slice(0, 5).join(' ') : ''));
     rec('A3_entity_fingerprint_unchanged', entBadUnchanged.length === 0 && sameFingerprint === 250,
-      '实体指纹（敌/精英/NPC/装饰/陷阱/巡逻）与修复前逐字相同：' + sameFingerprint + '/250。' +
+      '实体指纹（敌/精英/NPC/装饰/巡逻，D-99 起不含陷阱）与修复前逐字相同：' + sameFingerprint + '/250。' +
       '打开格发生在 genDetailsAndDecor 之后，所以随机流一格没动，也没有任何实体被移动 —— ' +
       '这是"不消耗随机数、不搬动实体"的直接证据。');
     rec('A4_elite_gate_preserved', cutLie.length === 0 && gateLost.length === 0 && weakenBad.length === 0, {
@@ -295,14 +315,36 @@
       bad: cutLie.concat(gateLost, weakenBad).slice(0, 8)
     });
     rec('A5_entity_fingerprint_unchanged', entBadUnchanged.length === 0 && unchangedFloors === 250 - changedFloors,
-      '实体指纹（敌/精英/NPC/装饰/陷阱/巡逻）在"没被开门的 ' + unchangedFloors + ' 张图"上必须与修复前逐字相同：异常 ' +
+      '实体指纹（敌/精英/NPC/装饰/巡逻，D-99 起不含陷阱）在"没被开门的 ' + unchangedFloors + ' 张图"上必须与修复前逐字相同：异常 ' +
       entBadUnchanged.length + '。' +
-      '被开门的 ' + changedFloors + ' 张图里，敌/装饰/陷阱/巡逻在开门之前就已落位（不可能变），' +
+      '被开门的 ' + changedFloors + ' 张图里，敌/装饰/巡逻在开门之前就已落位（不可能变），' +
       '只有精英/NPC 是开门后确定性取点，可能挪一格：实测指纹有差异的 ' + changedEntDiff + '/' + changedFloors +
       ' 张（挪动是否仍在规则内由 verify_d69 A3 复核）。');
     rec('A5_opening_trace_matches', noTrace.length === 0,
       'getLastStairMouths() 的记录数与实际差异格数一致：异常 ' + noTrace.length +
       (noTrace.length ? ' → ' + noTrace.slice(0, 5).join(' ') : ''));
+
+    /* ── A6：本轮重钉指纹（含陷阱）─────────────────────────────────
+     * 历史参考 d77-before-grids.json 从未记录陷阱，且 D-99 把陷阱改成实体落位后的
+     * 独立流，故"修复前 vs 现在"的逐字对比不能含陷阱（A3/A5 保持原口径）。
+     * 但"当前代码的生成结果是否稳定"必须含陷阱：这里用本轮重钉的
+     * selfcheck/d110-d77-fingerprints.json，对 250 张图的
+     * (敌/精英/NPC/装饰/巡逻 + 陷阱格) 指纹逐张相等；另判陷阱不得落在楼梯格。 */
+    var d110fp = readJson('selfcheck/d110-d77-fingerprints.json');
+    var fpAssigned = {}, fpBad6 = [];
+    var refFloors = (d110fp && d110fp.floors) || [];
+    for (var rf7 = 0; rf7 < refFloors.length; rf7++) fpAssigned[refFloors[rf7].seed + 'F' + refFloors[rf7].f] = refFloors[rf7].entPlus;
+    for (var cf7 = 0; cf7 < trapFpRows.length; cf7++) {
+      var row7 = trapFpRows[cf7], key7 = row7.seed + 'F' + row7.f;
+      if (!fpAssigned.hasOwnProperty(key7) || fpAssigned[key7] !== row7.entPlus) fpBad6.push(key7);
+    }
+    rec('A6_trapIncludedFingerprint',
+      refFloors.length === 250 && trapFpRows.length === 250 && fpBad6.length === 0 && trapOnStair.length === 0, {
+      rule: '250 张图的（实体 + 陷阱）指纹与 selfcheck/d110-d77-fingerprints.json 逐张相等；陷阱不得落在楼梯格',
+      reference: 'selfcheck/d110-d77-fingerprints.json', refFloors: refFloors.length,
+      currentFloors: trapFpRows.length, mismatch: fpBad6.slice(0, 8).length,
+      trapOnStair: trapOnStair.slice(0, 6)
+    });
 
     /* ═══ B) 触发侧 ═══════════════════════════════════════════ */
     var tick0 = Game.Systems.AI.tick; Game.Systems.AI.tick = function () { };
@@ -320,6 +362,11 @@
       return o;
     }
     function gen(seed, f) { Math.random = Bot.mulberry32(seed); Map.setFloor(f); return Map.getGrid(); }
+    /* D-98：下行改确认框，弹窗只认真实 KeyboardEvent；这里补一个真实按键的 tap */
+    function tap(code) {
+      try { window.dispatchEvent(new KeyboardEvent('keydown', { code: code })); } catch (e) { }
+      try { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); } catch (e) { }
+    }
     function press(key) {
       var st = In.getState();
       for (var k in st) delete st[k];
@@ -342,11 +389,15 @@
             g2 = gen(sd, f2);
             dn = findTiles(g2, 2)[0];
             P.x = dn.x + o.dx; P.y = dn.y + o.dy; P.floor = f2;
+            /* D-98：踩下行梯只弹确认框（默认「取消」），不立刻换层 */
             var err2 = press(o.key);
+            var modalOk = Game.Modal.isOpen() && Game.Modal.current() === 'stairconfirm';
+            var heldOk = Map.getFloor() === f2 && P.floor === f2;
+            if (modalOk) { tap('ArrowRight'); tap('Enter'); }
             stepCases++; dirStat[o.s][1]++;
-            var ok2 = !err2 && Map.getFloor() === f2 + 1 && P.floor === f2 + 1;
+            var ok2 = !err2 && modalOk && heldOk && Map.getFloor() === f2 + 1 && P.floor === f2 + 1;
             if (ok2) { stepOk++; dirStat[o.s][0]++; }
-            else stepFail.push(sd + 'F' + f2 + ':' + o.s + (err2 ? ' THROW' : ' floor=' + Map.getFloor()));
+            else stepFail.push(sd + 'F' + f2 + ':' + o.s + (err2 ? ' THROW' : ' modal=' + modalOk + '/held=' + heldOk + ' floor=' + Map.getFloor()));
           }
         } else {
           /* 最深层的下行梯：空转，不换层、不抛错 */
@@ -378,7 +429,8 @@
       }
     }
     rec('B1_any_direction_descends', stepCases > 0 && stepOk === stepCases && stepFail.length === 0,
-      '从下行梯的每个可走邻格、按"朝楼梯"的方向键走一步：' + stepOk + '/' + stepCases + ' 立即换层；' +
+      '从下行梯的每个可走邻格、按"朝楼梯"的方向键走一步：' + stepOk + '/' + stepCases +
+      ' 先弹确认框（默认「取消」）→ →+Enter 后换层；' +
       '分方向 ' + JSON.stringify(dirStat) + (stepFail.length ? ' → ' + stepFail.slice(0, 5).join(' ') : '') +
       '。换层判定只看 tile 值（main.js 里 t===2），与按键方向无关。');
     rec('B2_deepest_down_stair_noop', deepestCases === 10 && deepestBad.length === 0,
@@ -426,7 +478,9 @@
       return r;
     };
     P.x = dCell.x + oo.dx; P.y = dCell.y + oo.dy; P.floor = 1;
+    /* D-98：先确认（→ + Enter）才真正 changeFloor；落盘时序仍只看 changeFloor 内部那一次 */
     press(oo.key);
+    tap('ArrowRight'); tap('Enter');
     Map.generate = genOrig;
     localStorage.setItem = origSet;
     spawnNew = Map.getSpawn();
@@ -509,8 +563,10 @@
 
     /* ═══ E) 页数基线 ═════════════════════════════════════════ */
     var pb2 = readJson('selfcheck/page-baseline.json');
-    rec('E1_page_baseline', !!pb2 && pb2.count === 122,
-      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-93 新增 verify_d93 后应为 122）');
+    rec('E1_page_baseline', !!pb2 && pb2.count === 128 && pb2.pages.indexOf('verify_d98') >= 0 &&
+      pb2.pages.indexOf('verify_d100') >= 0 && pb2.pages.indexOf('verify_d101') >= 0 &&
+      pb2.pages.indexOf('verify_d104') >= 0 && pb2.pages.indexOf('verify_d108') >= 0,
+      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-108 新增 verify_d108 后应为 128）');
     out.ms = Date.now() - START;
   } catch (e) {
     out.err = String(e && (e.stack || e.message) || e);

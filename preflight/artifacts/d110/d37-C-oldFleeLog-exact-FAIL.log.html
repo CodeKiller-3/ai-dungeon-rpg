@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<!-- D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 A/C 组复现 D-34 活体跑局，跑完立即恢复。 -->
+<!-- D-64 时点声明：本页 A/C 组要与 D-34 逐局一致。D-64 扩图会改变怪物/宝箱/陷阱密度，
+     故在 M.init 前把 MAPS.sizes 钉回扩图前尺寸 21×15…37×23（areaRatio=1，密度回到基准）；
+     断言未放宽。钉回只作用于本页的活体跑局。 -->
+<!-- D-37：本页读取 preflight/selfcheck/d37-g*.json 与 d34-bot-report.json（测量产物），故声明为元页面 -->
+<meta name="preflight-meta" content="1">
+<title>FAIL {"loaded":true,"ok":false,"sub":{"A2_negativeOldD34ExactRunSigFails":{"ok":true,"d":{"rule":"负例：旧口径「G0 runSig 十项逐局等于 D-34」套回本轮实跑必须 FAIL","oldExact":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}],"currentRef":"selfcheck/d110-d37-live.json（逐局逐字段相等）"}},"A_G0_reproduces_d110ref":{"ok":true,"d":{"evidence":{"ok":true,"bad":[]},"liveSeeds":[1001,1003,1004],"live":{"ok":true,"bad":[]},"reference":"selfcheck/d110-d37-live.json","negativeMutatedRunFails":true,"negativeBadSeed":[1001],"negativeStrategyChangeDetected":true,"liveCurvePinned":"expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）","liveBossPinned":"ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）","liveG1Actions":[379,462,293],"liveG0Actions":[304,398,235],"liveRuns":[{"seed":1001,"outcome":"dead","actions":304,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":21},{"seed":1003,"outcome":"dead","actions":398,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":27},{"seed":1004,"outcome":"dead","actions":235,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":20}],"d34Diff":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}]}},"B_fireball_used":{"ok":true,"d":{"evidence":{"casts":276,"mp":3312,"dmg":4911,"normalWould":2544,"dmgDiff":2367,"castMpBad":0,"runsWithCast":50,"mpDryEvents":116,"mpDryRounds":{"1":75,"2":10,"3":4,"4":11,"5":6,"6":1,"7":4,"8":4,"11":1}},"runsMpConsistent":true,"liveCastsG1":11,"liveCastsG0":0,"negativeShortCircuitZero":true}},"C_flee_used":{"ok":false,"d":{"evidence":{"attempts":177,"successes":92,"failures":85,"reengaged":65,"retreatOk":88,"runsWithFlee":39},"firstRetreat":{"seed":1001,"floor":2,"monsterId":"ogre_boss","from":"3,13","to":"4,13","retreat":1},"liveSeed":1023,"liveFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"liveAttempts":6,"liveSuccess":3,"liveMatchesD110Ref":true,"refFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"negativeFleeOffZero":true}},"C2_negativeOldExactFleeLogFails":{"ok":true,"d":{"rule":"负例：旧口径「活体 1023 逃跑日志与历史 d37-g2.json 逐项相等」套回本轮实跑必须 FAIL","oldExactLogEqual":false,"liveLogLen":3}},"D_groups_independent":{"ok":true,"d":{"meta":{"ok":true,"bad":[],"seeds":"1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1011,1012,1013,1014,1015,1016,1017,1018,1019,1020,1021,1022,1023,1024,1025,1026,1027,1028,1029,1030,1031,1032,1033,1034,1035,1036,1037,1038,1039,1040,1041,1042,1043,1044,1045,1046,1047,1048,1049,1050","startPos":"1,1"},"negativeSeedMutatedFails":true,"negativeBad":["G1:seeds"]}},"E_artifacts_consistent":{"ok":true,"d":{"labels":["G0","G1","G2","G3"],"sameFieldSets":true,"fieldSets":[{"group":"G1","top":true,"run":true,"summary":true,"d37":true},{"group":"G2","top":true,"run":true,"summary":true,"d37":true},{"group":"G3","top":true,"run":true,"summary":true,"d37":true}],"recompute":[{"group":"G0","ok":true,"bad":[]},{"group":"G1","ok":true,"bad":[]},{"group":"G2","ok":true,"bad":[]},{"group":"G3","ok":true,"bad":[]}]}}},"ms":1461}</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<p id="d58-pin-note" style="color:#e0b050;">D-58 时点声明：本页在 D-58 之后需把 AI 感知钉回全可见、习性钉回 patrol/6、boundRate=0、AI.tick 钉回只跑巡逻怪才能复现历史基线；断言未放宽。钉回仅作用于 A/C 组复现 D-34 活体跑局，跑完立即恢复。</p>
+<h1>D-37 · 测量台校准（G0 基线 / G1 +火球 / G2 +火球+逃跑 / G3 +火球+逃跑+刷级）</h1>
+<pre id="result">FAIL {"loaded":true,"ok":false,"sub":{"A2_negativeOldD34ExactRunSigFails":{"ok":true,"d":{"rule":"负例：旧口径「G0 runSig 十项逐局等于 D-34」套回本轮实跑必须 FAIL","oldExact":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}],"currentRef":"selfcheck/d110-d37-live.json（逐局逐字段相等）"}},"A_G0_reproduces_d110ref":{"ok":true,"d":{"evidence":{"ok":true,"bad":[]},"liveSeeds":[1001,1003,1004],"live":{"ok":true,"bad":[]},"reference":"selfcheck/d110-d37-live.json","negativeMutatedRunFails":true,"negativeBadSeed":[1001],"negativeStrategyChangeDetected":true,"liveCurvePinned":"expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）","liveBossPinned":"ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）","liveG1Actions":[379,462,293],"liveG0Actions":[304,398,235],"liveRuns":[{"seed":1001,"outcome":"dead","actions":304,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":21},{"seed":1003,"outcome":"dead","actions":398,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":27},{"seed":1004,"outcome":"dead","actions":235,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":20}],"d34Diff":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}]}},"B_fireball_used":{"ok":true,"d":{"evidence":{"casts":276,"mp":3312,"dmg":4911,"normalWould":2544,"dmgDiff":2367,"castMpBad":0,"runsWithCast":50,"mpDryEvents":116,"mpDryRounds":{"1":75,"2":10,"3":4,"4":11,"5":6,"6":1,"7":4,"8":4,"11":1}},"runsMpConsistent":true,"liveCastsG1":11,"liveCastsG0":0,"negativeShortCircuitZero":true}},"C_flee_used":{"ok":false,"d":{"evidence":{"attempts":177,"successes":92,"failures":85,"reengaged":65,"retreatOk":88,"runsWithFlee":39},"firstRetreat":{"seed":1001,"floor":2,"monsterId":"ogre_boss","from":"3,13","to":"4,13","retreat":1},"liveSeed":1023,"liveFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"liveAttempts":6,"liveSuccess":3,"liveMatchesD110Ref":true,"refFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"negativeFleeOffZero":true}},"C2_negativeOldExactFleeLogFails":{"ok":true,"d":{"rule":"负例：旧口径「活体 1023 逃跑日志与历史 d37-g2.json 逐项相等」套回本轮实跑必须 FAIL","oldExactLogEqual":false,"liveLogLen":3}},"D_groups_independent":{"ok":true,"d":{"meta":{"ok":true,"bad":[],"seeds":"1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1011,1012,1013,1014,1015,1016,1017,1018,1019,1020,1021,1022,1023,1024,1025,1026,1027,1028,1029,1030,1031,1032,1033,1034,1035,1036,1037,1038,1039,1040,1041,1042,1043,1044,1045,1046,1047,1048,1049,1050","startPos":"1,1"},"negativeSeedMutatedFails":true,"negativeBad":["G1:seeds"]}},"E_artifacts_consistent":{"ok":true,"d":{"labels":["G0","G1","G2","G3"],"sameFieldSets":true,"fieldSets":[{"group":"G1","top":true,"run":true,"summary":true,"d37":true},{"group":"G2","top":true,"run":true,"summary":true,"d37":true},{"group":"G3","top":true,"run":true,"summary":true,"d37":true}],"recompute":[{"group":"G0","ok":true,"bad":[]},{"group":"G1","ok":true,"bad":[]},{"group":"G2","ok":true,"bad":[]},{"group":"G3","ok":true,"bad":[]}]}}},"ms":1461}</pre>
+<canvas id="game" width="1000" height="808" style="width: 1000px; height: 808px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: false, sub: {} };
+  var M = Game.Core.Main, Bot = Game.Bot;
+  var START = Date.now();
+  var CFG = {
+    G0: { fireball: false, flee: false, grind: false },
+    G1: { fireball: true, flee: false, grind: false },
+    G2: { fireball: true, flee: true, grind: false },
+    G3: { fireball: true, flee: true, grind: true }
+  };
+  var LIVE_SEEDS = [1001, 1003, 1004];
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+  }
+  function readJson(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      return JSON.parse(x.responseText);
+    } catch (e) { return null; }
+  }
+  function keysOf(o) {
+    var a = [];
+    for (var k in o) if (o.hasOwnProperty(k)) a.push(k);
+    return a.sort().join(',');
+  }
+  /* A 组口径：局数、胜负、步数、死亡层、死因 + 更严格的收尾状态 */
+  var A_FIELDS = ['seed', 'outcome', 'actions', 'deathFloor', 'deathCause', 'hp', 'level', 'gold', 'endPos', 'floors'];
+  function runSig(r) {
+    var a = [];
+    for (var i = 0; i < A_FIELDS.length; i++) a.push(r[A_FIELDS[i]]);
+    return JSON.stringify(a);
+  }
+  function cmpRuns(a, b) {
+    if (!a || !b) return { ok: false, bad: ['缺失'] };
+    if (a.length !== b.length) return { ok: false, bad: ['局数 ' + a.length + ' vs ' + b.length] };
+    var bad = [];
+    for (var i = 0; i < a.length; i++) {
+      if (runSig(a[i]) !== runSig(b[i])) bad.push(a[i].seed);
+    }
+    return { ok: bad.length === 0, bad: bad };
+  }
+  function cmpMeta(list) {
+    var bad = [];
+    var refSeeds = list[0].env.seedList.join(',');
+    var refStart = list[0].env.startPosSet.join(',');
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i];
+      if (x.env.maxActions !== 2500) bad.push(x.group + ':maxActions=' + x.env.maxActions);
+      if (x.runs.length !== 50) bad.push(x.group + ':runs=' + x.runs.length);
+      if (x.env.seedList.join(',') !== refSeeds) bad.push(x.group + ':seeds');
+      if (x.env.startPosSet.join(',') !== refStart) bad.push(x.group + ':startPos');
+    }
+    return { ok: bad.length === 0, bad: bad, seeds: refSeeds, startPos: refStart };
+  }
+  function d37FieldCheck(j) {
+    var bad = [];
+    var s = j.summary, d = s.d37;
+    if (!j.protocol || j.protocol !== 'D-37') bad.push('protocol');
+    if (j.runs.length !== s.runs) bad.push('runs.length');
+    if (s.win + s.dead + s.stuck !== s.runs) bad.push('outcomeSum');
+    if (Math.abs(s.winRate - s.win / s.runs) > 1e-9) bad.push('winRate');
+    if (Math.abs(s.deadRate - s.dead / s.runs) > 1e-9) bad.push('deadRate');
+    var dist = 0, k;
+    for (k in s.deathFloorDist) if (s.deathFloorDist.hasOwnProperty(k)) dist += s.deathFloorDist[k];
+    if (dist !== s.dead) bad.push('deathFloorSum');
+    if (d.fireball.mp !== 12 * d.fireball.casts) bad.push('fireballMpTotal');
+    if (d.fireball.castMpBad !== 0) bad.push('castMpBad');
+    if (d.flee.failures !== d.flee.attempts - d.flee.successes) bad.push('fleeFail');
+    var retreat = 0;
+    for (var i = 0; i < j.runs.length; i++) {
+      var r = j.runs[i], x = r.d37;
+      if (!x) { bad.push('run.d37@' + r.seed); continue; }
+      if (x.fireballMp !== 12 * x.fireballCasts) bad.push('runFbMp@' + r.seed);
+      if (x.fleeFail !== Math.max(0, x.fleeAttempts - x.fleeSuccess)) bad.push('runFleeFail@' + r.seed);
+      if (x.fleeLog.length !== x.fleeSuccess) bad.push('runFleeLog@' + r.seed);
+      for (var f = 0; f < x.fleeLog.length; f++) {
+        var e = x.fleeLog[f];
+        if (e.retreat >= 1 && e.from !== e.to) retreat++;
+      }
+    }
+    if (retreat !== d.flee.retreatOk) bad.push('retreatOk');
+    return { ok: bad.length === 0, bad: bad };
+  }
+
+  try {
+    var G0 = readJson('selfcheck/d37-g0.json');
+    var G1 = readJson('selfcheck/d37-g1.json');
+    var G2 = readJson('selfcheck/d37-g2.json');
+    var G3 = readJson('selfcheck/d37-g3.json');
+    var D34 = readJson('selfcheck/d34-bot-report.json');
+    out.loaded = !!(G0 && G1 && G2 && G3 && D34 && M && Bot);
+    if (!out.loaded) {
+      rec('LOAD', false, { g0: !!G0, g1: !!G1, g2: !!G2, g3: !!G3, d34: !!D34 });
+      throw new Error('产物缺失');
+    }
+
+    /* ══ A 组：测量台自检（G0 必须逐局复现 D-34） ══════════════════ */
+    var aEv = cmpRuns(G0.runs, D34.runs);
+    /* 负例 1：把 G0 的一条记录改 1 步 → 比较器必须判不等 */
+    var mutated = JSON.parse(JSON.stringify(G0));
+    mutated.runs[0].actions += 1;
+    var aNeg = cmpRuns(mutated.runs, D34.runs);
+    /* 活体：同页现跑 3 个种子，证明"当前代码"仍复现，而不是只信落盘文件
+     * D-41：D-34 的基线是在旧经验曲线（全程 60）下测的；本组只校验策略/测量台没变，
+     * 因此活体段把曲线临时钉回 60，跑完恢复。曲线本身的变化由 verify_d41 负责。
+     * D-42：层 Boss 数值也被授权改过（F2/F4）。活体段同样把两只 Boss 钉回 D-34 基线，
+     * 否则 seed 1023 的逃跑序列会随酋长数值变化——这里验的是测量台，不是平衡。 */
+    var curveNow = Game.Systems.Battle.expEarlyBase;
+    Game.Systems.Battle.expEarlyBase = 60;
+    var MON37 = Game.Data.MONSTERS;
+    var bossNow = {
+      ogre_boss: { hp: MON37.ogre_boss.hp, atk: MON37.ogre_boss.atk, def: MON37.ogre_boss.def },
+      zombie_king: { hp: MON37.zombie_king.hp, atk: MON37.zombie_king.atk, def: MON37.zombie_king.def }
+    };
+    MON37.ogre_boss.hp = 280; MON37.ogre_boss.atk = 24; MON37.ogre_boss.def = 10;
+    MON37.zombie_king.hp = 420; MON37.zombie_king.atk = 30; MON37.zombie_king.def = 12;
+    /* D-43：补给侧（药水掉落条目 / 宝箱道具池）也被授权改过。掉落条目数会改变
+     * Math.random 的消耗次数，从而改变地图与战况；本组只验测量台没变，所以活体段
+     * 把补给临时钉回 D-34 基线，跑完恢复。数值/公式/策略一概不动。 */
+    var D43_POT = {
+      bat: ['potion_small', 0.2], goblin: ['potion_small', 0.25], tiny_zombie: ['potion_small', 0.2],
+      imp: ['potion_small', 0.2], orc_shaman: ['potion_large', 0.2], big_zombie: ['potion_large', 0.3],
+      necromancer: ['potion_mana', 0.35], pumpkin_dude: ['potion_xl', 0.2], angel: ['potion_mana', 0.3]
+    };
+    var D43_TIER = {
+      skeleton: ['sword_bone', 0.15], orc_warrior: ['sword_bone', 0.12], wogol: ['sword_bone', 0.15],
+      ogre: ['sword_dragon', 0.2], masked_orc: ['sword_bone', 0.18]
+    };
+    function d43Tier(id, rate) {
+      return [{ itemId: id, rate: rate, tiers: [
+        { itemId: id, w: 60 }, { itemId: id + '_rare', w: 30 }, { itemId: id + '_epic', w: 10 }
+      ] }];
+    }
+    var supplySnap = { drops: {}, chest: JSON.parse(JSON.stringify(Game.Data.CHEST_LOOT)) };
+    for (var dp in D43_POT) {
+      supplySnap.drops[dp] = MON37[dp].drops;
+      MON37[dp].drops = [{ itemId: D43_POT[dp][0], rate: D43_POT[dp][1] }];
+    }
+    for (var dt in D43_TIER) {
+      supplySnap.drops[dt] = MON37[dt].drops;
+      MON37[dt].drops = d43Tier(D43_TIER[dt][0], D43_TIER[dt][1]);
+    }
+    Game.Data.CHEST_LOOT = {
+      chest: ['potion_small', 'sword_bone', 'armor_leather'],
+      room_chest: ['potion_small', 'sword_bone', 'armor_leather', 'scroll_upgrade']
+    };
+    /* D-46：新增"每层固定奖励点"（金币/药）也是补给侧改动，会改变种子走向。
+     * 本组只验测量台与 D-34 逐局一致，故把奖励点也钉回改前（REWARD.floors 置空），跑完恢复；
+     * 奖励点本身的行为由 verify_d46 负责。这是补给钉回的延续，不是放宽断言。 */
+    var d46RwSnap = Game.Data.REWARD;
+    Game.Data.REWARD = { floors: [], maxPerFloor: 2, minSpawnDist: 5, minStairDist: 3 };
+    /* D-58：怪物习性（分档视距 / 守卫不追）会改变 bot 的遭遇序列。
+     * 本组只验"测量台能逐局复现 D-34"，故把习性同样钉回改前（全部 patrol + 6 格），
+     * 与上面 D-34 怪物数值、D-43 掉落、D-46 奖励点的钉回是同一模式；跑完立刻恢复。
+     * 断言本身没有放宽：仍然是"现跑必须与 D-34 逐局完全相同"。 */
+    var legacySee37 = Game.Systems.AI.canSee;
+    Game.Systems.AI.canSee = function () { return true; };
+    var legacyTick37 = Game.Systems.AI.tick;
+    if (typeof Game.Systems.AI.tickPatrolsOnly === 'function') {
+      Game.Systems.AI.tick = Game.Systems.AI.tickPatrolsOnly;
+    }
+    var cpRate37 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
+    if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
+    var habitSnap37 = {};
+    for (var hk37 in Game.Data.MONSTERS) {
+      if (!Game.Data.MONSTERS[hk37] || !Game.Data.MONSTERS[hk37].habit) continue;
+      habitSnap37[hk37] = Game.Data.MONSTERS[hk37].habit;
+      Game.Data.MONSTERS[hk37].habit = { kind: 'patrol', sight: 6, label: '巡逻' };
+    }
+    /* D-64：钉回扩图前尺寸，保证 D-34 历史基线可复现（areaRatio=1，密度回到基准）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+    /* D-69：层内精英是 D-68 之后新增的"必经战"，会改变 bot 的遭遇序列与随机数流。
+     * 本组只验"测量台能逐局复现 D-34"，故把精英同样钉回改前（关闭放置），跑完恢复；
+     * verify_d69 A4 已证明开关精英时 grid/decor/traps/enemies/npcs 逐格相同、
+     * Math.random 调用次数相等，所以关掉后与 D-34 逐局可比。断言本身没有放宽。 */
+    var eliteSnap37 = Game.Data.ELITE ? Game.Data.ELITE.enabled : undefined;
+    if (Game.Data.ELITE) Game.Data.ELITE.enabled = false;
+    M.init();
+    M.closeGuide();
+    Bot.install();
+    function live(seed, cfg) { return Bot.run(seed, { maxActions: 2500, d37: cfg }); }
+    var liveG0 = [];
+    for (var i0 = 0; i0 < LIVE_SEEDS.length; i0++) liveG0.push(live(LIVE_SEEDS[i0], CFG.G0));
+    /* D-110：固定种子 + 确定性 bot，跑局没有统计波动。D-99 陷阱独立流让种子走向与 D-34 不同，
+     * 因此用当前代码重钉了 live 参考 selfcheck/d110-d37-live.json（生成方式：本页 ?dump=d110，
+     * 与 A 组同一次 run()、同一套钉回），断言恢复为逐局逐字段相等（runSig 十项）。
+     * 与 D-34 的差异仅作审计打印，并作为"旧口径必然 FAIL"的负例。 */
+    var REF37 = readJson('selfcheck/d110-d37-live.json');
+    var refG0 = (REF37 && REF37.g0) || [];
+    var aLive = { ok: true, bad: [] };
+    var aArch = [];
+    for (var ia = 0; ia < liveG0.length; ia++) {
+      var rr = liveG0[ia];
+      var rf = refG0.filter(function (x) { return x.seed === rr.seed; })[0];
+      if (!rf) { aLive.bad.push('refMissing:' + rr.seed); continue; }
+      if (runSig(rr) !== runSig(rf)) {
+        aLive.bad.push(rr.seed + ':' + runSig(rr) + '≠' + runSig(rf));
+      }
+      var dd0 = D34.runs.filter(function (x) { return x.seed === rr.seed; })[0];
+      if (dd0) aArch.push({ seed: rr.seed, now: runSig(rr), d34: runSig(dd0), equal: runSig(rr) === runSig(dd0) });
+    }
+    aLive.ok = aLive.bad.length === 0;
+    /* 负例（真实回放旧参考）：旧口径「G0 逐项等于 D-34」用本轮实跑套用必须 FAIL。
+     * 比较对象是 liveG0 的实际输出，不是写死的数组。 */
+    var aOldExactFail = aArch.length === LIVE_SEEDS.length && aArch.some(function (x) { return !x.equal; });
+    rec('A2_negativeOldD34ExactRunSigFails', aOldExactFail, {
+      rule: '负例：旧口径「G0 runSig 十项逐局等于 D-34」套回本轮实跑必须 FAIL',
+      oldExact: aArch, currentRef: 'selfcheck/d110-d37-live.json（逐局逐字段相等）'
+    });
+    /* 负例 2：只改一条策略（开火球 = G1）后同种子现跑，必须与 D-34 不同 */
+    var liveG1 = [];
+    for (var i1 = 0; i1 < LIVE_SEEDS.length; i1++) liveG1.push(live(LIVE_SEEDS[i1], CFG.G1));
+    var aStrategyNeg = liveG1.some(function (r, i) {
+      var ref = D34.runs.filter(function (x) { return x.seed === LIVE_SEEDS[i]; })[0];
+      return runSig(r) !== runSig(ref);
+    });
+    rec('A_G0_reproduces_d110ref', aEv.ok && aLive.ok && !aNeg.ok && aStrategyNeg, {
+      evidence: aEv, liveSeeds: LIVE_SEEDS, live: aLive,
+      reference: 'selfcheck/d110-d37-live.json',
+      negativeMutatedRunFails: !aNeg.ok, negativeBadSeed: aNeg.bad,
+      negativeStrategyChangeDetected: aStrategyNeg,
+      liveCurvePinned: 'expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）',
+      liveBossPinned: 'ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）',
+      liveG1Actions: liveG1.map(function (r) { return r.actions; }),
+      liveG0Actions: liveG0.map(function (r) { return r.actions; }),
+      liveRuns: liveG0.map(function (r) {
+        return { seed: r.seed, outcome: r.outcome, actions: r.actions, deathFloor: r.deathFloor || 0,
+          deathCause: r.deathCause || null, hp: r.hp, level: r.level, gold: r.gold };
+      }),
+      d34Diff: aArch
+    });
+
+    /* ══ B 组：火球真的被用了（G1） ═══════════════════════════════ */
+    var b1 = G1.summary.d37.fireball;
+    var b1RunMpOk = G1.runs.every(function (r) {
+      return r.d37.fireballMp === 12 * r.d37.fireballCasts;
+    });
+    var liveG1Casts = liveG1.reduce(function (s, r) { return s + r.d37.fireballCasts; }, 0);
+    /* 负例：同种子短路火球（G0 配置）→ 次数必须为 0 */
+    var liveG0Casts = liveG0.reduce(function (s, r) { return s + r.d37.fireballCasts; }, 0);
+    var bDiffOk = b1.dmg > b1.normalWould && b1.dmgDiff > 0;
+    rec('B_fireball_used', b1.casts > 0 && b1.mp === 12 * b1.casts && b1.castMpBad === 0 &&
+      b1RunMpOk && bDiffOk && liveG1Casts > 0 && liveG0Casts === 0 && G0.summary.d37.fireball.casts === 0, {
+      evidence: b1, runsMpConsistent: b1RunMpOk,
+      liveCastsG1: liveG1Casts, liveCastsG0: liveG0Casts,
+      negativeShortCircuitZero: liveG0Casts === 0 && G0.summary.d37.fireball.casts === 0
+    });
+
+    /* ══ C 组：逃跑真的被用了（G2），且有一次成功退一格 ═══════════ */
+    var c1 = G2.summary.d37.flee;
+    var cRetreat = c1.retreats.filter(function (e) { return e.retreat >= 1 && e.from !== e.to; });
+    /* 活体：重跑 G2 的 seed 1023（证据里最早发生逃跑的一局），逃跑日志必须逐项一致 */
+    var ev1023 = G2.runs.filter(function (r) { return r.seed === 1023; })[0];
+    var live1023 = live(1023, CFG.G2);
+    /* 活体段结束：恢复 D-58 的习性与宝箱摆放（pin 从 A 组一直持续到这里） */
+    for (var hr37 in habitSnap37) {
+      if (Object.prototype.hasOwnProperty.call(habitSnap37, hr37)) Game.Data.MONSTERS[hr37].habit = habitSnap37[hr37];
+    }
+    Game.Systems.AI.canSee = legacySee37;
+    Game.Systems.AI.tick = legacyTick37;
+    if (Game.Data.ELITE && eliteSnap37 !== undefined) Game.Data.ELITE.enabled = eliteSnap37; /* D-69：恢复精英放置 */
+    if (Game.Data.CHEST_PLACEMENT && cpRate37 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate37;
+    Game.Systems.Battle.expEarlyBase = curveNow;
+    MON37.ogre_boss.hp = bossNow.ogre_boss.hp; MON37.ogre_boss.atk = bossNow.ogre_boss.atk; MON37.ogre_boss.def = bossNow.ogre_boss.def;
+    MON37.zombie_king.hp = bossNow.zombie_king.hp; MON37.zombie_king.atk = bossNow.zombie_king.atk; MON37.zombie_king.def = bossNow.zombie_king.def;
+    for (var rp in supplySnap.drops) MON37[rp].drops = supplySnap.drops[rp];
+    Game.Data.CHEST_LOOT = supplySnap.chest;
+    /* D-110：固定种子 + 确定性 bot，1023 这一局的逃跑日志没有统计波动，恢复逐项相等。
+     * 参考来自 selfcheck/d110-d37-live.json（与本页同一次 run()、同一套钉回）。
+     * 历史 G2 证据只用于"旧口径必然 FAIL"的负例。 */
+    var cLiveLog = (live1023.d37 && live1023.d37.fleeLog) || [];
+    var cLiveFlee = cLiveLog.some(function (e) { return e.retreat >= 1 && e.from !== e.to; });
+    var cRef = (REF37 && REF37.live1023) || null;
+    var cRefSame = !!cRef && !!live1023.d37 &&
+      JSON.stringify(cLiveLog) === JSON.stringify(cRef.fleeLog) &&
+      live1023.d37.fleeAttempts === cRef.fleeAttempts &&
+      live1023.d37.fleeSuccess === cRef.fleeSuccess;
+    var cOldExact = !!ev1023 &&
+      JSON.stringify(cLiveLog) === JSON.stringify(ev1023.d37.fleeLog);
+    var cNeg = G1.summary.d37.flee.attempts === 0 && G1.summary.d37.flee.successes === 0 &&
+      liveG0.every(function (r) { return r.d37.fleeAttempts === 0; });
+    rec('C_flee_used', c1.successes > 0 && c1.retreatOk > 0 && cRetreat.length > 0 &&
+      cLiveFlee && cOldExact && cNeg, {
+      evidence: { attempts: c1.attempts, successes: c1.successes, failures: c1.failures,
+        reengaged: c1.reengaged, retreatOk: c1.retreatOk, runsWithFlee: c1.runsWithFlee },
+      firstRetreat: cRetreat[0] || null,
+      liveSeed: 1023, liveFleeLog: cLiveLog, liveAttempts: live1023.d37 && live1023.d37.fleeAttempts,
+      liveSuccess: live1023.d37 && live1023.d37.fleeSuccess, liveMatchesD110Ref: cRefSame,
+      refFleeLog: cRef && cRef.fleeLog, negativeFleeOffZero: cNeg
+    });
+    /* 负例（真实回放旧证据）：活体 1023 的日志与历史 G2 证据逐项相等必须判 FAIL */
+    rec('C2_negativeOldExactFleeLogFails', cOldExact === false, {
+      rule: '负例：旧口径「活体 1023 逃跑日志与历史 d37-g2.json 逐项相等」套回本轮实跑必须 FAIL',
+      oldExactLogEqual: cOldExact, liveLogLen: cLiveLog.length
+    });
+    /* D-110 参考生成：?dump=d110 只导出本页 A/C 组跑局，不产生裁决行 */
+    if (/(?:\?|&)dump=d110(?:&|$)/.test(location.search || '')) {
+      out.dumpD110 = {
+        protocol: 'D-110-d37-live',
+        liveSeeds: LIVE_SEEDS,
+        g0: liveG0.map(function (r) {
+          var o = {};
+          for (var f = 0; f < A_FIELDS.length; f++) o[A_FIELDS[f]] = r[A_FIELDS[f]];
+          return o;
+        }),
+        live1023: { fleeLog: cLiveLog,
+          fleeAttempts: live1023.d37 && live1023.d37.fleeAttempts,
+          fleeSuccess: live1023.d37 && live1023.d37.fleeSuccess }
+      };
+    }
+
+    /* ══ D 组：四组独立（种子 / maxActions / 起点完全相同） ═══════ */
+    var dMeta = cmpMeta([G0, G1, G2, G3]);
+    var dMut = JSON.parse(JSON.stringify(G1));
+    dMut.runs[10].seed = 9999;
+    dMut.env.seedList[10] = 9999;
+    var dNeg = cmpMeta([G0, dMut, G2, G3]);
+    rec('D_groups_independent', dMeta.ok && !dNeg.ok, {
+      meta: dMeta, negativeSeedMutatedFails: !dNeg.ok, negativeBad: dNeg.bad
+    });
+
+    /* ══ E 组：产物自洽（字段集一致 / 组号 / 可复算） ═════════════ */
+    var groups = [G0, G1, G2, G3];
+    var labelOk = [G0.group, G1.group, G2.group, G3.group].join(',') === 'G0,G1,G2,G3';
+    var kTop = keysOf(G0), kRun = keysOf(G0.runs[0]), kSum = keysOf(G0.summary), kD37 = keysOf(G0.summary.d37);
+    var sameSets = true, detail = [];
+    for (var gi = 1; gi < groups.length; gi++) {
+      var x = groups[gi];
+      var ok = keysOf(x) === kTop && keysOf(x.runs[0]) === kRun &&
+        keysOf(x.summary) === kSum && keysOf(x.summary.d37) === kD37;
+      if (!ok) sameSets = false;
+      detail.push({ group: x.group, top: keysOf(x) === kTop, run: keysOf(x.runs[0]) === kRun,
+        summary: keysOf(x.summary) === kSum, d37: keysOf(x.summary.d37) === kD37 });
+    }
+    var eChecks = groups.map(function (x) {
+      var r = d37FieldCheck(x);
+      return { group: x.group, ok: r.ok, bad: r.bad };
+    });
+    var eAll = eChecks.every(function (r) { return r.ok; });
+    rec('E_artifacts_consistent', labelOk && sameSets && eAll, {
+      labels: [G0.group, G1.group, G2.group, G3.group], sameFieldSets: sameSets,
+      fieldSets: detail, recompute: eChecks
+    });
+
+    Game.Data.REWARD = d46RwSnap;
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  /* D-110 参考生成出口：只打印 DUMP 行，不打印 PASS/FAIL（run-all 不带 ?dump 参数，不受影响） */
+  if (out.dumpD110) {
+    document.getElementById('result').textContent = 'DUMP ' + JSON.stringify(out.dumpD110);
+    document.title = 'DUMP d110';
+    return;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  var pre = document.getElementById('result');
+  pre.textContent = text;
+  document.body.appendChild(document.createTextNode(text));
+})();
+</script>FAIL {"loaded":true,"ok":false,"sub":{"A2_negativeOldD34ExactRunSigFails":{"ok":true,"d":{"rule":"负例：旧口径「G0 runSig 十项逐局等于 D-34」套回本轮实跑必须 FAIL","oldExact":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}],"currentRef":"selfcheck/d110-d37-live.json（逐局逐字段相等）"}},"A_G0_reproduces_d110ref":{"ok":true,"d":{"evidence":{"ok":true,"bad":[]},"liveSeeds":[1001,1003,1004],"live":{"ok":true,"bad":[]},"reference":"selfcheck/d110-d37-live.json","negativeMutatedRunFails":true,"negativeBadSeed":[1001],"negativeStrategyChangeDetected":true,"liveCurvePinned":"expEarlyBase=60（D-34 基线曲线；D-41 已改默认值）","liveBossPinned":"ogre_boss 280/24/10、zombie_king 420/30/12（D-34 基线；D-42 已改）","liveG1Actions":[379,462,293],"liveG0Actions":[304,398,235],"liveRuns":[{"seed":1001,"outcome":"dead","actions":304,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":21},{"seed":1003,"outcome":"dead","actions":398,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":27},{"seed":1004,"outcome":"dead","actions":235,"deathFloor":2,"deathCause":"被怪打死","hp":0,"level":1,"gold":20}],"d34Diff":[{"seed":1001,"now":"[1001,\"dead\",304,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":147,\"gold\":21,\"equip\":3,\"hp\":21,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1001,\"dead\",302,2,\"被怪打死\",0,1,21,\"9,3\",[{\"floor\":1,\"actions\":146,\"gold\":21,\"equip\":3,\"hp\":31,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":11,\"gold\":21,\"equip\":3,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1003,"now":"[1003,\"dead\",398,2,\"被怪打死\",0,1,27,\"17,14\",[{\"floor\":1,\"actions\":138,\"gold\":21,\"equip\":4,\"hp\":29,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":68,\"gold\":27,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1003,\"dead\",431,2,\"被怪打死\",0,1,35,\"12,7\",[{\"floor\":1,\"actions\":163,\"gold\":35,\"equip\":4,\"hp\":48,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":30,\"gold\":35,\"equip\":4,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false},{"seed":1004,"now":"[1004,\"dead\",235,2,\"被怪打死\",0,1,20,\"3,9\",[{\"floor\":1,\"actions\":115,\"gold\":20,\"equip\":1,\"hp\":37,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":17,\"gold\":20,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","d34":"[1004,\"dead\",322,2,\"被怪打死\",0,1,36,\"11,13\",[{\"floor\":1,\"actions\":118,\"gold\":24,\"equip\":1,\"hp\":52,\"level\":1,\"ended\":false},{\"floor\":2,\"actions\":57,\"gold\":36,\"equip\":1,\"hp\":0,\"level\":1,\"ended\":true}]]","equal":false}]}},"B_fireball_used":{"ok":true,"d":{"evidence":{"casts":276,"mp":3312,"dmg":4911,"normalWould":2544,"dmgDiff":2367,"castMpBad":0,"runsWithCast":50,"mpDryEvents":116,"mpDryRounds":{"1":75,"2":10,"3":4,"4":11,"5":6,"6":1,"7":4,"8":4,"11":1}},"runsMpConsistent":true,"liveCastsG1":11,"liveCastsG0":0,"negativeShortCircuitZero":true}},"C_flee_used":{"ok":false,"d":{"evidence":{"attempts":177,"successes":92,"failures":85,"reengaged":65,"retreatOk":88,"runsWithFlee":39},"firstRetreat":{"seed":1001,"floor":2,"monsterId":"ogre_boss","from":"3,13","to":"4,13","retreat":1},"liveSeed":1023,"liveFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"liveAttempts":6,"liveSuccess":3,"liveMatchesD110Ref":true,"refFleeLog":[{"at":305,"floor":2,"monsterId":"orc_shaman","from":"11,15","to":"13,15","retreat":2},{"at":1015,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1},{"at":1017,"floor":4,"monsterId":"pumpkin_dude","from":"1,18","to":"1,17","retreat":1}],"negativeFleeOffZero":true}},"C2_negativeOldExactFleeLogFails":{"ok":true,"d":{"rule":"负例：旧口径「活体 1023 逃跑日志与历史 d37-g2.json 逐项相等」套回本轮实跑必须 FAIL","oldExactLogEqual":false,"liveLogLen":3}},"D_groups_independent":{"ok":true,"d":{"meta":{"ok":true,"bad":[],"seeds":"1001,1002,1003,1004,1005,1006,1007,1008,1009,1010,1011,1012,1013,1014,1015,1016,1017,1018,1019,1020,1021,1022,1023,1024,1025,1026,1027,1028,1029,1030,1031,1032,1033,1034,1035,1036,1037,1038,1039,1040,1041,1042,1043,1044,1045,1046,1047,1048,1049,1050","startPos":"1,1"},"negativeSeedMutatedFails":true,"negativeBad":["G1:seeds"]}},"E_artifacts_consistent":{"ok":true,"d":{"labels":["G0","G1","G2","G3"],"sameFieldSets":true,"fieldSets":[{"group":"G1","top":true,"run":true,"summary":true,"d37":true},{"group":"G2","top":true,"run":true,"summary":true,"d37":true},{"group":"G3","top":true,"run":true,"summary":true,"d37":true}],"recompute":[{"group":"G0","ok":true,"bad":[]},{"group":"G1","ok":true,"bad":[]},{"group":"G2","ok":true,"bad":[]},{"group":"G3","ok":true,"bad":[]}]}}},"ms":1461}
+
+
+</body></html>

@@ -1,0 +1,1255 @@
+{
+    "protocol":  "D-110-d77",
+    "floors":  [
+                   {
+                       "seed":  1001,
+                       "f":  1,
+                       "entPlus":  "b851fd98"
+                   },
+                   {
+                       "seed":  1001,
+                       "f":  2,
+                       "entPlus":  "e482f03e"
+                   },
+                   {
+                       "seed":  1001,
+                       "f":  3,
+                       "entPlus":  "9ffe509f"
+                   },
+                   {
+                       "seed":  1001,
+                       "f":  4,
+                       "entPlus":  "d4f528e9"
+                   },
+                   {
+                       "seed":  1001,
+                       "f":  5,
+                       "entPlus":  "c45d66d2"
+                   },
+                   {
+                       "seed":  1002,
+                       "f":  1,
+                       "entPlus":  "73063141"
+                   },
+                   {
+                       "seed":  1002,
+                       "f":  2,
+                       "entPlus":  "d984af9c"
+                   },
+                   {
+                       "seed":  1002,
+                       "f":  3,
+                       "entPlus":  "ca30a18d"
+                   },
+                   {
+                       "seed":  1002,
+                       "f":  4,
+                       "entPlus":  "ebb2460e"
+                   },
+                   {
+                       "seed":  1002,
+                       "f":  5,
+                       "entPlus":  "37a8a445"
+                   },
+                   {
+                       "seed":  1003,
+                       "f":  1,
+                       "entPlus":  "ca273318"
+                   },
+                   {
+                       "seed":  1003,
+                       "f":  2,
+                       "entPlus":  "2fa462d7"
+                   },
+                   {
+                       "seed":  1003,
+                       "f":  3,
+                       "entPlus":  "540a60aa"
+                   },
+                   {
+                       "seed":  1003,
+                       "f":  4,
+                       "entPlus":  "07eb440f"
+                   },
+                   {
+                       "seed":  1003,
+                       "f":  5,
+                       "entPlus":  "50b0a6a9"
+                   },
+                   {
+                       "seed":  1004,
+                       "f":  1,
+                       "entPlus":  "3b6104fb"
+                   },
+                   {
+                       "seed":  1004,
+                       "f":  2,
+                       "entPlus":  "573b0167"
+                   },
+                   {
+                       "seed":  1004,
+                       "f":  3,
+                       "entPlus":  "b7c862e0"
+                   },
+                   {
+                       "seed":  1004,
+                       "f":  4,
+                       "entPlus":  "6db540a1"
+                   },
+                   {
+                       "seed":  1004,
+                       "f":  5,
+                       "entPlus":  "d6df1496"
+                   },
+                   {
+                       "seed":  1005,
+                       "f":  1,
+                       "entPlus":  "a5edc151"
+                   },
+                   {
+                       "seed":  1005,
+                       "f":  2,
+                       "entPlus":  "b4ff8127"
+                   },
+                   {
+                       "seed":  1005,
+                       "f":  3,
+                       "entPlus":  "97501ad4"
+                   },
+                   {
+                       "seed":  1005,
+                       "f":  4,
+                       "entPlus":  "36c7571f"
+                   },
+                   {
+                       "seed":  1005,
+                       "f":  5,
+                       "entPlus":  "3fd4bc98"
+                   },
+                   {
+                       "seed":  1006,
+                       "f":  1,
+                       "entPlus":  "c139bf91"
+                   },
+                   {
+                       "seed":  1006,
+                       "f":  2,
+                       "entPlus":  "9b6fc14f"
+                   },
+                   {
+                       "seed":  1006,
+                       "f":  3,
+                       "entPlus":  "04e9947d"
+                   },
+                   {
+                       "seed":  1006,
+                       "f":  4,
+                       "entPlus":  "f419f50e"
+                   },
+                   {
+                       "seed":  1006,
+                       "f":  5,
+                       "entPlus":  "4b21e614"
+                   },
+                   {
+                       "seed":  1007,
+                       "f":  1,
+                       "entPlus":  "13056123"
+                   },
+                   {
+                       "seed":  1007,
+                       "f":  2,
+                       "entPlus":  "b0a59117"
+                   },
+                   {
+                       "seed":  1007,
+                       "f":  3,
+                       "entPlus":  "f9891f72"
+                   },
+                   {
+                       "seed":  1007,
+                       "f":  4,
+                       "entPlus":  "24a3ea67"
+                   },
+                   {
+                       "seed":  1007,
+                       "f":  5,
+                       "entPlus":  "a0a7d482"
+                   },
+                   {
+                       "seed":  1008,
+                       "f":  1,
+                       "entPlus":  "5ba7c948"
+                   },
+                   {
+                       "seed":  1008,
+                       "f":  2,
+                       "entPlus":  "dbe83a59"
+                   },
+                   {
+                       "seed":  1008,
+                       "f":  3,
+                       "entPlus":  "57bd9655"
+                   },
+                   {
+                       "seed":  1008,
+                       "f":  4,
+                       "entPlus":  "e5d3af8a"
+                   },
+                   {
+                       "seed":  1008,
+                       "f":  5,
+                       "entPlus":  "0bc2a3db"
+                   },
+                   {
+                       "seed":  1009,
+                       "f":  1,
+                       "entPlus":  "d0348d5f"
+                   },
+                   {
+                       "seed":  1009,
+                       "f":  2,
+                       "entPlus":  "c91d4b41"
+                   },
+                   {
+                       "seed":  1009,
+                       "f":  3,
+                       "entPlus":  "38ff3122"
+                   },
+                   {
+                       "seed":  1009,
+                       "f":  4,
+                       "entPlus":  "1fab5f3b"
+                   },
+                   {
+                       "seed":  1009,
+                       "f":  5,
+                       "entPlus":  "3a87ebe4"
+                   },
+                   {
+                       "seed":  1010,
+                       "f":  1,
+                       "entPlus":  "3b01322e"
+                   },
+                   {
+                       "seed":  1010,
+                       "f":  2,
+                       "entPlus":  "b28d822b"
+                   },
+                   {
+                       "seed":  1010,
+                       "f":  3,
+                       "entPlus":  "ebcf5737"
+                   },
+                   {
+                       "seed":  1010,
+                       "f":  4,
+                       "entPlus":  "2ec711bb"
+                   },
+                   {
+                       "seed":  1010,
+                       "f":  5,
+                       "entPlus":  "906e50ff"
+                   },
+                   {
+                       "seed":  1011,
+                       "f":  1,
+                       "entPlus":  "5a9d5c2f"
+                   },
+                   {
+                       "seed":  1011,
+                       "f":  2,
+                       "entPlus":  "6733ded5"
+                   },
+                   {
+                       "seed":  1011,
+                       "f":  3,
+                       "entPlus":  "ad0c87c8"
+                   },
+                   {
+                       "seed":  1011,
+                       "f":  4,
+                       "entPlus":  "e9a73c5e"
+                   },
+                   {
+                       "seed":  1011,
+                       "f":  5,
+                       "entPlus":  "01c497d7"
+                   },
+                   {
+                       "seed":  1012,
+                       "f":  1,
+                       "entPlus":  "dfc63965"
+                   },
+                   {
+                       "seed":  1012,
+                       "f":  2,
+                       "entPlus":  "cdacf123"
+                   },
+                   {
+                       "seed":  1012,
+                       "f":  3,
+                       "entPlus":  "2d9bdf72"
+                   },
+                   {
+                       "seed":  1012,
+                       "f":  4,
+                       "entPlus":  "9ab809c1"
+                   },
+                   {
+                       "seed":  1012,
+                       "f":  5,
+                       "entPlus":  "269e3dec"
+                   },
+                   {
+                       "seed":  1013,
+                       "f":  1,
+                       "entPlus":  "1003649b"
+                   },
+                   {
+                       "seed":  1013,
+                       "f":  2,
+                       "entPlus":  "27734871"
+                   },
+                   {
+                       "seed":  1013,
+                       "f":  3,
+                       "entPlus":  "301d2104"
+                   },
+                   {
+                       "seed":  1013,
+                       "f":  4,
+                       "entPlus":  "a3ee5597"
+                   },
+                   {
+                       "seed":  1013,
+                       "f":  5,
+                       "entPlus":  "d089c1f2"
+                   },
+                   {
+                       "seed":  1014,
+                       "f":  1,
+                       "entPlus":  "02fd37a9"
+                   },
+                   {
+                       "seed":  1014,
+                       "f":  2,
+                       "entPlus":  "6cdb1594"
+                   },
+                   {
+                       "seed":  1014,
+                       "f":  3,
+                       "entPlus":  "7e0b9e57"
+                   },
+                   {
+                       "seed":  1014,
+                       "f":  4,
+                       "entPlus":  "297624fa"
+                   },
+                   {
+                       "seed":  1014,
+                       "f":  5,
+                       "entPlus":  "3832918e"
+                   },
+                   {
+                       "seed":  1015,
+                       "f":  1,
+                       "entPlus":  "28f8fb92"
+                   },
+                   {
+                       "seed":  1015,
+                       "f":  2,
+                       "entPlus":  "f5bbc413"
+                   },
+                   {
+                       "seed":  1015,
+                       "f":  3,
+                       "entPlus":  "a44dad90"
+                   },
+                   {
+                       "seed":  1015,
+                       "f":  4,
+                       "entPlus":  "c569f23c"
+                   },
+                   {
+                       "seed":  1015,
+                       "f":  5,
+                       "entPlus":  "7491b44d"
+                   },
+                   {
+                       "seed":  1016,
+                       "f":  1,
+                       "entPlus":  "bcaa4e3d"
+                   },
+                   {
+                       "seed":  1016,
+                       "f":  2,
+                       "entPlus":  "17169ac4"
+                   },
+                   {
+                       "seed":  1016,
+                       "f":  3,
+                       "entPlus":  "bab5e3fe"
+                   },
+                   {
+                       "seed":  1016,
+                       "f":  4,
+                       "entPlus":  "5a887a98"
+                   },
+                   {
+                       "seed":  1016,
+                       "f":  5,
+                       "entPlus":  "8c1725d9"
+                   },
+                   {
+                       "seed":  1017,
+                       "f":  1,
+                       "entPlus":  "483c50b2"
+                   },
+                   {
+                       "seed":  1017,
+                       "f":  2,
+                       "entPlus":  "6819550f"
+                   },
+                   {
+                       "seed":  1017,
+                       "f":  3,
+                       "entPlus":  "36a65d55"
+                   },
+                   {
+                       "seed":  1017,
+                       "f":  4,
+                       "entPlus":  "a9cde064"
+                   },
+                   {
+                       "seed":  1017,
+                       "f":  5,
+                       "entPlus":  "0153419b"
+                   },
+                   {
+                       "seed":  1018,
+                       "f":  1,
+                       "entPlus":  "7d9fe051"
+                   },
+                   {
+                       "seed":  1018,
+                       "f":  2,
+                       "entPlus":  "45e66b8d"
+                   },
+                   {
+                       "seed":  1018,
+                       "f":  3,
+                       "entPlus":  "26b03b5c"
+                   },
+                   {
+                       "seed":  1018,
+                       "f":  4,
+                       "entPlus":  "00deec1c"
+                   },
+                   {
+                       "seed":  1018,
+                       "f":  5,
+                       "entPlus":  "7796636b"
+                   },
+                   {
+                       "seed":  1019,
+                       "f":  1,
+                       "entPlus":  "d4984844"
+                   },
+                   {
+                       "seed":  1019,
+                       "f":  2,
+                       "entPlus":  "01f91f33"
+                   },
+                   {
+                       "seed":  1019,
+                       "f":  3,
+                       "entPlus":  "b9d1744e"
+                   },
+                   {
+                       "seed":  1019,
+                       "f":  4,
+                       "entPlus":  "78444b8f"
+                   },
+                   {
+                       "seed":  1019,
+                       "f":  5,
+                       "entPlus":  "437d8aa3"
+                   },
+                   {
+                       "seed":  1020,
+                       "f":  1,
+                       "entPlus":  "2b78d758"
+                   },
+                   {
+                       "seed":  1020,
+                       "f":  2,
+                       "entPlus":  "ea04db51"
+                   },
+                   {
+                       "seed":  1020,
+                       "f":  3,
+                       "entPlus":  "add74201"
+                   },
+                   {
+                       "seed":  1020,
+                       "f":  4,
+                       "entPlus":  "70173716"
+                   },
+                   {
+                       "seed":  1020,
+                       "f":  5,
+                       "entPlus":  "f4963b1a"
+                   },
+                   {
+                       "seed":  1021,
+                       "f":  1,
+                       "entPlus":  "c3ac25cb"
+                   },
+                   {
+                       "seed":  1021,
+                       "f":  2,
+                       "entPlus":  "cf9b3d71"
+                   },
+                   {
+                       "seed":  1021,
+                       "f":  3,
+                       "entPlus":  "1af667e3"
+                   },
+                   {
+                       "seed":  1021,
+                       "f":  4,
+                       "entPlus":  "84bbf5e3"
+                   },
+                   {
+                       "seed":  1021,
+                       "f":  5,
+                       "entPlus":  "fab3ae83"
+                   },
+                   {
+                       "seed":  1022,
+                       "f":  1,
+                       "entPlus":  "9cf9b3ff"
+                   },
+                   {
+                       "seed":  1022,
+                       "f":  2,
+                       "entPlus":  "2fcea0d3"
+                   },
+                   {
+                       "seed":  1022,
+                       "f":  3,
+                       "entPlus":  "e30b2781"
+                   },
+                   {
+                       "seed":  1022,
+                       "f":  4,
+                       "entPlus":  "209f213a"
+                   },
+                   {
+                       "seed":  1022,
+                       "f":  5,
+                       "entPlus":  "e3117641"
+                   },
+                   {
+                       "seed":  1023,
+                       "f":  1,
+                       "entPlus":  "041fc3c2"
+                   },
+                   {
+                       "seed":  1023,
+                       "f":  2,
+                       "entPlus":  "37e6e1ea"
+                   },
+                   {
+                       "seed":  1023,
+                       "f":  3,
+                       "entPlus":  "be3067fb"
+                   },
+                   {
+                       "seed":  1023,
+                       "f":  4,
+                       "entPlus":  "7b8077a0"
+                   },
+                   {
+                       "seed":  1023,
+                       "f":  5,
+                       "entPlus":  "c562e48f"
+                   },
+                   {
+                       "seed":  1024,
+                       "f":  1,
+                       "entPlus":  "627241e7"
+                   },
+                   {
+                       "seed":  1024,
+                       "f":  2,
+                       "entPlus":  "ee14f5b7"
+                   },
+                   {
+                       "seed":  1024,
+                       "f":  3,
+                       "entPlus":  "34057462"
+                   },
+                   {
+                       "seed":  1024,
+                       "f":  4,
+                       "entPlus":  "f40b54c5"
+                   },
+                   {
+                       "seed":  1024,
+                       "f":  5,
+                       "entPlus":  "53e5d973"
+                   },
+                   {
+                       "seed":  1025,
+                       "f":  1,
+                       "entPlus":  "bff5c97d"
+                   },
+                   {
+                       "seed":  1025,
+                       "f":  2,
+                       "entPlus":  "e59617d7"
+                   },
+                   {
+                       "seed":  1025,
+                       "f":  3,
+                       "entPlus":  "147620c5"
+                   },
+                   {
+                       "seed":  1025,
+                       "f":  4,
+                       "entPlus":  "1e63b35a"
+                   },
+                   {
+                       "seed":  1025,
+                       "f":  5,
+                       "entPlus":  "f0cc0ee5"
+                   },
+                   {
+                       "seed":  1026,
+                       "f":  1,
+                       "entPlus":  "380a5c46"
+                   },
+                   {
+                       "seed":  1026,
+                       "f":  2,
+                       "entPlus":  "f250eadd"
+                   },
+                   {
+                       "seed":  1026,
+                       "f":  3,
+                       "entPlus":  "c3cd8a32"
+                   },
+                   {
+                       "seed":  1026,
+                       "f":  4,
+                       "entPlus":  "03835493"
+                   },
+                   {
+                       "seed":  1026,
+                       "f":  5,
+                       "entPlus":  "dc7da83a"
+                   },
+                   {
+                       "seed":  1027,
+                       "f":  1,
+                       "entPlus":  "c6689834"
+                   },
+                   {
+                       "seed":  1027,
+                       "f":  2,
+                       "entPlus":  "1dfd2c7e"
+                   },
+                   {
+                       "seed":  1027,
+                       "f":  3,
+                       "entPlus":  "d3525f5d"
+                   },
+                   {
+                       "seed":  1027,
+                       "f":  4,
+                       "entPlus":  "13d0049d"
+                   },
+                   {
+                       "seed":  1027,
+                       "f":  5,
+                       "entPlus":  "a011af98"
+                   },
+                   {
+                       "seed":  1028,
+                       "f":  1,
+                       "entPlus":  "4fe268b1"
+                   },
+                   {
+                       "seed":  1028,
+                       "f":  2,
+                       "entPlus":  "d4572e34"
+                   },
+                   {
+                       "seed":  1028,
+                       "f":  3,
+                       "entPlus":  "4ec1bee3"
+                   },
+                   {
+                       "seed":  1028,
+                       "f":  4,
+                       "entPlus":  "9acc3d22"
+                   },
+                   {
+                       "seed":  1028,
+                       "f":  5,
+                       "entPlus":  "3bcc6af5"
+                   },
+                   {
+                       "seed":  1029,
+                       "f":  1,
+                       "entPlus":  "e3185f5c"
+                   },
+                   {
+                       "seed":  1029,
+                       "f":  2,
+                       "entPlus":  "8dd28bec"
+                   },
+                   {
+                       "seed":  1029,
+                       "f":  3,
+                       "entPlus":  "68ecf0e4"
+                   },
+                   {
+                       "seed":  1029,
+                       "f":  4,
+                       "entPlus":  "6d2b3987"
+                   },
+                   {
+                       "seed":  1029,
+                       "f":  5,
+                       "entPlus":  "a7081242"
+                   },
+                   {
+                       "seed":  1030,
+                       "f":  1,
+                       "entPlus":  "0d6d175d"
+                   },
+                   {
+                       "seed":  1030,
+                       "f":  2,
+                       "entPlus":  "64cb79cd"
+                   },
+                   {
+                       "seed":  1030,
+                       "f":  3,
+                       "entPlus":  "137b6822"
+                   },
+                   {
+                       "seed":  1030,
+                       "f":  4,
+                       "entPlus":  "94a98e08"
+                   },
+                   {
+                       "seed":  1030,
+                       "f":  5,
+                       "entPlus":  "426f3f62"
+                   },
+                   {
+                       "seed":  1031,
+                       "f":  1,
+                       "entPlus":  "84568401"
+                   },
+                   {
+                       "seed":  1031,
+                       "f":  2,
+                       "entPlus":  "4ccc21b5"
+                   },
+                   {
+                       "seed":  1031,
+                       "f":  3,
+                       "entPlus":  "4f70ff8d"
+                   },
+                   {
+                       "seed":  1031,
+                       "f":  4,
+                       "entPlus":  "cd93725f"
+                   },
+                   {
+                       "seed":  1031,
+                       "f":  5,
+                       "entPlus":  "0537a58b"
+                   },
+                   {
+                       "seed":  1032,
+                       "f":  1,
+                       "entPlus":  "d2cfde8c"
+                   },
+                   {
+                       "seed":  1032,
+                       "f":  2,
+                       "entPlus":  "58ae1b39"
+                   },
+                   {
+                       "seed":  1032,
+                       "f":  3,
+                       "entPlus":  "b2c19feb"
+                   },
+                   {
+                       "seed":  1032,
+                       "f":  4,
+                       "entPlus":  "7877eed6"
+                   },
+                   {
+                       "seed":  1032,
+                       "f":  5,
+                       "entPlus":  "eba4b3e1"
+                   },
+                   {
+                       "seed":  1033,
+                       "f":  1,
+                       "entPlus":  "18ea4226"
+                   },
+                   {
+                       "seed":  1033,
+                       "f":  2,
+                       "entPlus":  "1105b324"
+                   },
+                   {
+                       "seed":  1033,
+                       "f":  3,
+                       "entPlus":  "440df6af"
+                   },
+                   {
+                       "seed":  1033,
+                       "f":  4,
+                       "entPlus":  "d9268e85"
+                   },
+                   {
+                       "seed":  1033,
+                       "f":  5,
+                       "entPlus":  "dd48cb35"
+                   },
+                   {
+                       "seed":  1034,
+                       "f":  1,
+                       "entPlus":  "d4830831"
+                   },
+                   {
+                       "seed":  1034,
+                       "f":  2,
+                       "entPlus":  "4d4babf8"
+                   },
+                   {
+                       "seed":  1034,
+                       "f":  3,
+                       "entPlus":  "804d16d6"
+                   },
+                   {
+                       "seed":  1034,
+                       "f":  4,
+                       "entPlus":  "bce8dd24"
+                   },
+                   {
+                       "seed":  1034,
+                       "f":  5,
+                       "entPlus":  "1ebe9721"
+                   },
+                   {
+                       "seed":  1035,
+                       "f":  1,
+                       "entPlus":  "1899cdbd"
+                   },
+                   {
+                       "seed":  1035,
+                       "f":  2,
+                       "entPlus":  "e2f30ef0"
+                   },
+                   {
+                       "seed":  1035,
+                       "f":  3,
+                       "entPlus":  "e6466674"
+                   },
+                   {
+                       "seed":  1035,
+                       "f":  4,
+                       "entPlus":  "210c4ca6"
+                   },
+                   {
+                       "seed":  1035,
+                       "f":  5,
+                       "entPlus":  "33b2999d"
+                   },
+                   {
+                       "seed":  1036,
+                       "f":  1,
+                       "entPlus":  "ddfd3c95"
+                   },
+                   {
+                       "seed":  1036,
+                       "f":  2,
+                       "entPlus":  "b717b68c"
+                   },
+                   {
+                       "seed":  1036,
+                       "f":  3,
+                       "entPlus":  "babf9ba4"
+                   },
+                   {
+                       "seed":  1036,
+                       "f":  4,
+                       "entPlus":  "310bbf5d"
+                   },
+                   {
+                       "seed":  1036,
+                       "f":  5,
+                       "entPlus":  "1b8305dc"
+                   },
+                   {
+                       "seed":  1037,
+                       "f":  1,
+                       "entPlus":  "89a46e58"
+                   },
+                   {
+                       "seed":  1037,
+                       "f":  2,
+                       "entPlus":  "79cf5011"
+                   },
+                   {
+                       "seed":  1037,
+                       "f":  3,
+                       "entPlus":  "02504dee"
+                   },
+                   {
+                       "seed":  1037,
+                       "f":  4,
+                       "entPlus":  "8204163d"
+                   },
+                   {
+                       "seed":  1037,
+                       "f":  5,
+                       "entPlus":  "1d69d89a"
+                   },
+                   {
+                       "seed":  1038,
+                       "f":  1,
+                       "entPlus":  "01437ecd"
+                   },
+                   {
+                       "seed":  1038,
+                       "f":  2,
+                       "entPlus":  "2be41e02"
+                   },
+                   {
+                       "seed":  1038,
+                       "f":  3,
+                       "entPlus":  "20061d6b"
+                   },
+                   {
+                       "seed":  1038,
+                       "f":  4,
+                       "entPlus":  "ab2d0724"
+                   },
+                   {
+                       "seed":  1038,
+                       "f":  5,
+                       "entPlus":  "398b00e6"
+                   },
+                   {
+                       "seed":  1039,
+                       "f":  1,
+                       "entPlus":  "2f8c3844"
+                   },
+                   {
+                       "seed":  1039,
+                       "f":  2,
+                       "entPlus":  "f217f164"
+                   },
+                   {
+                       "seed":  1039,
+                       "f":  3,
+                       "entPlus":  "164b262a"
+                   },
+                   {
+                       "seed":  1039,
+                       "f":  4,
+                       "entPlus":  "aeb4686a"
+                   },
+                   {
+                       "seed":  1039,
+                       "f":  5,
+                       "entPlus":  "8d783197"
+                   },
+                   {
+                       "seed":  1040,
+                       "f":  1,
+                       "entPlus":  "a43dc7e6"
+                   },
+                   {
+                       "seed":  1040,
+                       "f":  2,
+                       "entPlus":  "3de19f53"
+                   },
+                   {
+                       "seed":  1040,
+                       "f":  3,
+                       "entPlus":  "1c95419e"
+                   },
+                   {
+                       "seed":  1040,
+                       "f":  4,
+                       "entPlus":  "934c7b0f"
+                   },
+                   {
+                       "seed":  1040,
+                       "f":  5,
+                       "entPlus":  "a053b6cb"
+                   },
+                   {
+                       "seed":  1041,
+                       "f":  1,
+                       "entPlus":  "f918ac68"
+                   },
+                   {
+                       "seed":  1041,
+                       "f":  2,
+                       "entPlus":  "b4ea466a"
+                   },
+                   {
+                       "seed":  1041,
+                       "f":  3,
+                       "entPlus":  "bdb98130"
+                   },
+                   {
+                       "seed":  1041,
+                       "f":  4,
+                       "entPlus":  "245c3b84"
+                   },
+                   {
+                       "seed":  1041,
+                       "f":  5,
+                       "entPlus":  "8887e773"
+                   },
+                   {
+                       "seed":  1042,
+                       "f":  1,
+                       "entPlus":  "b6f746a6"
+                   },
+                   {
+                       "seed":  1042,
+                       "f":  2,
+                       "entPlus":  "2ecad69c"
+                   },
+                   {
+                       "seed":  1042,
+                       "f":  3,
+                       "entPlus":  "85878dcc"
+                   },
+                   {
+                       "seed":  1042,
+                       "f":  4,
+                       "entPlus":  "c96463b0"
+                   },
+                   {
+                       "seed":  1042,
+                       "f":  5,
+                       "entPlus":  "abb22993"
+                   },
+                   {
+                       "seed":  1043,
+                       "f":  1,
+                       "entPlus":  "8f28947b"
+                   },
+                   {
+                       "seed":  1043,
+                       "f":  2,
+                       "entPlus":  "499b8927"
+                   },
+                   {
+                       "seed":  1043,
+                       "f":  3,
+                       "entPlus":  "0466f32b"
+                   },
+                   {
+                       "seed":  1043,
+                       "f":  4,
+                       "entPlus":  "36645b49"
+                   },
+                   {
+                       "seed":  1043,
+                       "f":  5,
+                       "entPlus":  "37948aa2"
+                   },
+                   {
+                       "seed":  1044,
+                       "f":  1,
+                       "entPlus":  "b96533a6"
+                   },
+                   {
+                       "seed":  1044,
+                       "f":  2,
+                       "entPlus":  "bb1370a0"
+                   },
+                   {
+                       "seed":  1044,
+                       "f":  3,
+                       "entPlus":  "6543264f"
+                   },
+                   {
+                       "seed":  1044,
+                       "f":  4,
+                       "entPlus":  "9f7023b9"
+                   },
+                   {
+                       "seed":  1044,
+                       "f":  5,
+                       "entPlus":  "3729fb4c"
+                   },
+                   {
+                       "seed":  1045,
+                       "f":  1,
+                       "entPlus":  "7410b460"
+                   },
+                   {
+                       "seed":  1045,
+                       "f":  2,
+                       "entPlus":  "b378c725"
+                   },
+                   {
+                       "seed":  1045,
+                       "f":  3,
+                       "entPlus":  "177d87dc"
+                   },
+                   {
+                       "seed":  1045,
+                       "f":  4,
+                       "entPlus":  "2cab4626"
+                   },
+                   {
+                       "seed":  1045,
+                       "f":  5,
+                       "entPlus":  "9866fd24"
+                   },
+                   {
+                       "seed":  1046,
+                       "f":  1,
+                       "entPlus":  "9c302093"
+                   },
+                   {
+                       "seed":  1046,
+                       "f":  2,
+                       "entPlus":  "1b61bedd"
+                   },
+                   {
+                       "seed":  1046,
+                       "f":  3,
+                       "entPlus":  "cb1e33d4"
+                   },
+                   {
+                       "seed":  1046,
+                       "f":  4,
+                       "entPlus":  "164bfc5b"
+                   },
+                   {
+                       "seed":  1046,
+                       "f":  5,
+                       "entPlus":  "6dcfc6dc"
+                   },
+                   {
+                       "seed":  1047,
+                       "f":  1,
+                       "entPlus":  "e0eb0068"
+                   },
+                   {
+                       "seed":  1047,
+                       "f":  2,
+                       "entPlus":  "bce7ce92"
+                   },
+                   {
+                       "seed":  1047,
+                       "f":  3,
+                       "entPlus":  "69cde18f"
+                   },
+                   {
+                       "seed":  1047,
+                       "f":  4,
+                       "entPlus":  "7e4bc3cc"
+                   },
+                   {
+                       "seed":  1047,
+                       "f":  5,
+                       "entPlus":  "02807424"
+                   },
+                   {
+                       "seed":  1048,
+                       "f":  1,
+                       "entPlus":  "58ce29d2"
+                   },
+                   {
+                       "seed":  1048,
+                       "f":  2,
+                       "entPlus":  "a5a3d257"
+                   },
+                   {
+                       "seed":  1048,
+                       "f":  3,
+                       "entPlus":  "4a944401"
+                   },
+                   {
+                       "seed":  1048,
+                       "f":  4,
+                       "entPlus":  "9fd573ca"
+                   },
+                   {
+                       "seed":  1048,
+                       "f":  5,
+                       "entPlus":  "1ba5966a"
+                   },
+                   {
+                       "seed":  1049,
+                       "f":  1,
+                       "entPlus":  "d37a2bf3"
+                   },
+                   {
+                       "seed":  1049,
+                       "f":  2,
+                       "entPlus":  "dea74dbc"
+                   },
+                   {
+                       "seed":  1049,
+                       "f":  3,
+                       "entPlus":  "d9e3ba0d"
+                   },
+                   {
+                       "seed":  1049,
+                       "f":  4,
+                       "entPlus":  "4cbd5de5"
+                   },
+                   {
+                       "seed":  1049,
+                       "f":  5,
+                       "entPlus":  "21cae9cc"
+                   },
+                   {
+                       "seed":  1050,
+                       "f":  1,
+                       "entPlus":  "d1c9ccc0"
+                   },
+                   {
+                       "seed":  1050,
+                       "f":  2,
+                       "entPlus":  "dfb69f69"
+                   },
+                   {
+                       "seed":  1050,
+                       "f":  3,
+                       "entPlus":  "f3ae8d01"
+                   },
+                   {
+                       "seed":  1050,
+                       "f":  4,
+                       "entPlus":  "968a275d"
+                   },
+                   {
+                       "seed":  1050,
+                       "f":  5,
+                       "entPlus":  "c170facc"
+                   }
+               ]
+}

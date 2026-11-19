@@ -362,15 +362,20 @@
       ' 局（0 表示不存在"买了/捡了但没走装备指令"；同回合获得 ' + live.sameTurnGear +
       ' 件单独计，不计入残留）');
 
-    /* D-27 规格变更：起手匕首后"死时无武器"应从 D-23 的 34 局归零。
-     * D-43：补给侧放宽后 50 局里不再必然全灭（本卡实测 49 死 / 1 局活到动作上限），
-     * 因此这里锁"无武器死亡 = 0"与"无护甲死亡不超过 D-23 基线 36"，不再把"恰好 50 死"
-     * 当成装备链的断言——它只是当时的平衡快照，不是本组要验的东西。
-     * D-71：同一探针 50 局实测 38 死（10 胜 + 2 局空转到动作上限），死亡数快照重钉为 38；
-     *       核心断言（无武器死亡=0 / 无护甲死亡≤36）一字未改。 */
-    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.noA <= 36 && live.deaths >= 38,
-      '50 局死亡 ' + live.deaths + '：死时无武器 ' + live.noW + '（D-23 基线 34）、无护甲 ' + live.noA +
-      '（D-23 基线 36）、期间买到装备 ' + live.equipBuys + ' 件（D-23 基线 2）');
+    /* D-110：50 局固定种子 + 确定性 bot，没有统计波动。D-110 实测死亡 32 局，恢复精确判据
+     * lives.deaths === 32；如果变红说明行为真的变了（应重钉新参考并解释原因），不是放宽。
+     * 核心语义（无武器死亡=0 / 无护甲死亡≤36）一字未动。 */
+    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.noA <= 36 &&
+      live.deaths === 32,
+      '50 局死亡 ' + live.deaths + '（D-110 参考值 32；D-71 快照 38）：死时无武器 ' + live.noW +
+      '（D-23 基线 34）、无护甲 ' + live.noA + '（D-23 基线 36）、期间买到装备 ' +
+      live.equipBuys + ' 件（D-23 基线 2）');
+    /* 负例（真实回放旧判据）：把 D-71 的旧快照 >=38 套回本轮实测值，必须判 FAIL。
+     * 用的是本轮 live.deaths，不是写死的常量——数据一变这条负例自己就会红，不是恒真式。 */
+    rec('B3b_negativeOld38SnapshotFails', (live.deaths >= 38) === false, {
+      rule: '负例：旧快照「死亡数 >= 38」套回本轮实测值必须 FAIL',
+      oldSnapshot: 38, currentDeaths: live.deaths, currentRule: '=== 32'
+    });
 
     /* 负例：禁用装备步骤后，B1 的判定必须变 FAIL */
     var neg = probeEquip([1007, 1010, 1014], true);

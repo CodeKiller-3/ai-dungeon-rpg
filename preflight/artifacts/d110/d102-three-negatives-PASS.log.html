@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>PASS d102 215/215</title>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script>
+/* D-102：每帧 canvas 调用计数（口径同 _d102_probe：包裹会触达画布的 ctx 调用，不含 measureText/属性赋值）。
+ * 同时记录 font 赋值，用于字号阶梯审计。 */
+(function () {
+  var names = ['save', 'restore', 'translate', 'rotate', 'scale', 'setTransform',
+    'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+    'arc', 'ellipse', 'rect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'clip',
+    'fillText', 'strokeText', 'drawImage', 'createRadialGradient', 'createLinearGradient',
+    'createPattern', 'setLineDash'];
+  var P = CanvasRenderingContext2D.prototype;
+  /* D-103：逐元素分桶。__DCMARK 由 render.js 在每个元素边界调用（未装时生产代码只多一次 null 判断），
+   * 计数口径不变：仍然只数触达 ctx 的方法调用，标签仅决定这次调用记在哪个元素名下。 */
+  window.__DC = { n: 0, by: {}, elem: {}, cur: 'init' };
+  window.__DCMARK = function (label) { window.__DC.cur = label; };
+  window.__FONTS = {};
+  names.forEach(function (nm) {
+    var orig = P[nm];
+    if (typeof orig !== 'function') return;
+    P[nm] = function () {
+      var d = window.__DC;
+      d.n++;
+      d.by[nm] = (d.by[nm] || 0) + 1;
+      d.elem[d.cur] = (d.elem[d.cur] || 0) + 1;
+      return orig.apply(this, arguments);
+    };
+  });
+  var fd = Object.getOwnPropertyDescriptor(P, 'font');
+  if (fd && fd.set) {
+    Object.defineProperty(P, 'font', {
+      configurable: true,
+      get: fd.get,
+      set: function (v) {
+        var m = /(\d+(?:\.\d+)?)px/.exec(String(v));
+        if (m) window.__FONTS[m[1]] = 1;
+        return fd.set.call(this, v);
+      }
+    });
+  }
+})();
+</script>
+</head>
+<body>
+<pre id="result">PASS {"page":"d102","total":215,"pass":215,"fail":0,"geo":[{"id":"horizontal@960x540","cards":2,"cells":7,"cw":122,"ch":64,"barY":444,"logY":416,"logH":26,"pipeY":46,"overlap":0},{"id":"horizontal@1024x640","cards":2,"cells":7,"cw":132,"ch":64,"barY":526,"logY":492,"logH":26,"pipeY":52,"overlap":0},{"id":"vertical@320x568","cards":2,"cells":7,"cw":71,"ch":52,"barY":418,"logY":208,"logH":20,"pipeY":176,"overlap":0},{"id":"vertical@390x844","cards":2,"cells":7,"cw":88,"ch":52,"barY":694,"logY":291,"logH":20,"pipeY":259,"overlap":0},{"id":"vertical@960x540","cards":2,"cells":7,"cw":122,"ch":64,"barY":444,"logY":200,"logH":20,"pipeY":168,"overlap":0},{"id":"vertical@1024x640","cards":2,"cells":7,"cw":132,"ch":64,"barY":544,"logY":230,"logH":20,"pipeY":198,"overlap":0},{"id":"vertical@320x568+dragon","cards":2,"cells":7,"cw":71,"ch":52,"barY":418,"logY":288,"logH":20,"pipeY":256,"overlap":0},{"id":"horizontal@960x540+dragon","cards":2,"cells":7,"cw":122,"ch":64,"barY":444,"logY":416,"logH":26,"pipeY":46,"overlap":0}],"chip":[{"t":0,"chip":true,"onEnemy":false,"oldRule":true,"shieldChip":true},{"t":90,"chip":true,"onEnemy":false,"oldRule":true,"shieldChip":true},{"t":100,"chip":true,"onEnemy":false,"oldRule":false,"shieldChip":true},{"t":150,"chip":true,"onEnemy":false,"oldRule":false,"shieldChip":true},{"t":180,"chip":true,"onEnemy":false,"oldRule":false,"shieldChip":true},{"t":400,"chip":true,"onEnemy":false,"oldRule":false,"shieldChip":true}],"calls":[{"key":"horizontal@960x540","before":188,"after":171,"delta":-17,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":88,"backdrop":1,"sprite":15,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":19,"fillRect":41,"save":4,"beginPath":4,"ellipse":2,"fill":2,"restore":4,"strokeRect":4,"fillText":46,"strokeText":2,"moveTo":20,"lineTo":20,"stroke":2},"beforeD103":216},{"key":"horizontal@1024x640","before":200,"after":175,"delta":-25,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":92,"backdrop":1,"sprite":15,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":19,"fillRect":41,"save":4,"beginPath":4,"ellipse":2,"fill":2,"restore":4,"strokeRect":4,"fillText":46,"strokeText":2,"moveTo":22,"lineTo":22,"stroke":2},"beforeD103":220},{"key":"vertical@320x568","before":125,"after":122,"delta":-3,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":35,"backdrop":1,"sprite":18,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":2,"stat":3,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":12,"save":5,"beginPath":5,"ellipse":4,"fill":4,"restore":5,"fillRect":36,"strokeRect":5,"fillText":40,"strokeText":2,"moveTo":1,"lineTo":1,"stroke":1},"beforeD103":170},{"key":"vertical@390x844","before":127,"after":124,"delta":-3,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":37,"backdrop":1,"sprite":18,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":2,"stat":3,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":12,"save":5,"beginPath":5,"ellipse":4,"fill":4,"restore":5,"fillRect":36,"strokeRect":5,"fillText":42,"strokeText":2,"moveTo":1,"lineTo":1,"stroke":1},"beforeD103":172},{"key":"vertical@960x540","before":199,"after":175,"delta":-24,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":88,"backdrop":1,"sprite":18,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":2,"stat":3,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":19,"save":5,"beginPath":6,"ellipse":4,"fill":4,"restore":5,"fillRect":37,"strokeRect":4,"fillText":46,"strokeText":2,"moveTo":20,"lineTo":20,"stroke":2},"beforeD103":223},{"key":"vertical@1024x640","before":203,"after":179,"delta":-24,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":92,"backdrop":1,"sprite":18,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":2,"stat":3,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":19,"save":5,"beginPath":6,"ellipse":4,"fill":4,"restore":5,"fillRect":37,"strokeRect":4,"fillText":46,"strokeText":2,"moveTo":22,"lineTo":22,"stroke":2},"beforeD103":227},{"key":"vertical@320x568+dragon","before":null,"after":127,"delta":null,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":35,"backdrop":1,"sprite":26,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":2,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":12,"save":4,"beginPath":5,"ellipse":4,"fill":4,"createRadialGradient":1,"fillRect":43,"restore":4,"strokeRect":5,"fillText":39,"strokeText":2,"moveTo":1,"lineTo":1,"stroke":1}},{"key":"horizontal@960x540+dragon","before":null,"after":179,"delta":null,"budget":243,"drawn":4,"bgFrame":0,"elem":{"hud":88,"backdrop":1,"sprite":23,"card.bg":4,"card.text":2,"card.hp":8,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7},"by":{"setTransform":1,"drawImage":19,"fillRect":48,"save":4,"beginPath":4,"ellipse":2,"fill":2,"createRadialGradient":1,"restore":4,"strokeRect":4,"fillText":46,"strokeText":2,"moveTo":20,"lineTo":20,"stroke":2}}],"worstCalls":{"key":"horizontal@1024x640+chips","n":194,"budget":243,"elem":{"hud":92,"backdrop":1,"sprite":23,"card.bg":5,"card.text":2,"card.hp":8,"chip":10,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7}},"d103":{"before":{"horizontal@960x540":216,"horizontal@1024x640":220,"vertical@320x568":170,"vertical@390x844":172,"vertical@960x540":223,"vertical@1024x640":227},"beforeWorst":238,"afterWorst":194,"saved":[{"key":"horizontal@960x540","before":216,"after":171,"saved":45},{"key":"horizontal@1024x640","before":220,"after":175,"saved":45},{"key":"vertical@320x568","before":170,"after":122,"saved":48},{"key":"vertical@390x844","before":172,"after":124,"saved":48},{"key":"vertical@960x540","before":223,"after":175,"saved":48},{"key":"vertical@1024x640","before":227,"after":179,"saved":48}],"contrast":{"nominal":5.389676415731033,"worstBase":4.781777324242348,"alpha045":2.607555334195372,"gfxAlpha":0.45,"textAlpha":0.75}},"d109":{"n1":[{"id":"320","cards":1,"band":[409,568],"card":[437,541],"obs":["pipeline","log","stat","player","monster"],"bad":[]},{"id":"390","cards":1,"band":[311,502],"card":[355,459],"obs":["pipeline","log","stat","player","monster"],"bad":[]},{"id":"800","cards":1,"band":[268,398],"card":[281,385],"obs":["pipeline","log","stat","player","monster"],"bad":[]},{"id":"1024","cards":1,"band":[250,355],"card":[251,355],"obs":["pipeline","log","stat","player","monster"],"bad":[]}],"n2":[{"id":"vertical@320x568#1","texts":["护盾8"],"w":[[48,28]]},{"id":"vertical@320x568#2","texts":["防御1","护盾8"],"w":[[40,28],[40,28]]},{"id":"vertical@320x568#3","texts":["防1","盾8","毒3"],"w":[[29,17],[29,17],[29,17]]},{"id":"vertical@320x568#4","texts":["防1","盾8","+2"],"w":[[29,17],[29,17],[23,11]]},{"id":"vertical@390x844#1","texts":["护盾8"],"w":[[48,28]]},{"id":"vertical@390x844#2","texts":["防御1","护盾8"],"w":[[40,28],[40,28]]},{"id":"vertical@390x844#3","texts":["防1","盾8","毒3"],"w":[[29,17],[29,17],[29,17]]},{"id":"vertical@390x844#4","texts":["防1","盾8","+2"],"w":[[29,17],[29,17],[23,11]]},{"id":"horizontal@960x540#1","texts":["护盾8"],"w":[[48,28]]},{"id":"horizontal@960x540#2","texts":["防御1","护盾8"],"w":[[40,28],[40,28]]},{"id":"horizontal@960x540#3","texts":["防1","盾8","毒3"],"w":[[29,17],[29,17],[29,17]]},{"id":"horizontal@960x540#4","texts":["防1","盾8","+2"],"w":[[29,17],[29,17],[23,11]]},{"id":"horizontal@1024x640#1","texts":["护盾8"],"w":[[48,28]]},{"id":"horizontal@1024x640#2","texts":["防御1","护盾8"],"w":[[40,28],[40,28]]},{"id":"horizontal@1024x640#3","texts":["防1","盾8","毒3"],"w":[[29,17],[29,17],[29,17]]},{"id":"horizontal@1024x640#4","texts":["防1","盾8","+2"],"w":[[29,17],[29,17],[23,11]]}],"n3":[{"lay":"horizontal","w":1024,"h":640,"base":75,"hit":192,"late":152,"jump":117,"lateJump":77,"darkOn":51,"darkOff":0,"arcDiff":146,"slash":[769,468]},{"lay":"vertical","w":390,"h":844,"base":75,"hit":191,"late":142,"jump":116,"lateJump":67,"darkOn":5,"darkOff":0,"arcDiff":40,"slash":[203,246]},{"ui":{"n":196,"elem":{"hud":92,"backdrop":1,"sprite":23,"card.bg":5,"card.text":2,"card.hp":8,"chip":12,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7}},"flash":{"n":201,"elem":{"hud":92,"backdrop":1,"sprite":28,"card.bg":5,"card.text":2,"card.hp":8,"chip":12,"pipeline":7,"log":4,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7}},"slash":{"n":232,"elem":{"hud":92,"backdrop":1,"sprite":31,"card.bg":5,"card.text":2,"card.hp":8,"chip":12,"pipeline":7,"log":4,"fx.particles":2,"fx.slash":28,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7}}}]},"failed":[]}</pre>
+<canvas id="game" width="1024" height="640" style="position: fixed; left: -9999px; width: 1024px; height: 640px; cursor: default;"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/geom.js"></script>
+<script>
+(function () {
+  'use strict';
+  var G = window.PreflightGeom;
+  var R = Game.Core.Render, B = Game.Systems.Battle, P = Game.Data.Player, Fx = Game.Fx;
+  var M = Game.Core.Main;
+  var checks = [], meta = {};
+
+  /* D-102：素材替身——验证页在解析期同步执行，等不到 <img> 解码。
+   * 用 0 像素 canvas 顶替 Sprites.get/getFrame，尺寸按真实素材登记（骑士 24×42、龙 72×72 等），
+   * 保证「落屏尺寸 / 卡宽 / 绘制调用」口径与生产一致，且不依赖网络时序。 */
+  (function stubSprites() {
+    var S = Game.Core.Sprites, cache = {};
+    function dims(name) {
+      var n = String(name || '');
+      if (/dragon/.test(n)) return [72, 72];
+      if (/knight/.test(n)) return [24, 42];
+      if (/boss|demon/.test(n)) return [32, 36];
+      if (/ui_|heart|coin|icon/.test(n)) return [16, 16];
+      return [16, 23];
+    }
+    function fake(name) {
+      if (cache[name]) return cache[name];
+      var d = dims(name);
+      var cv = document.createElement('canvas');
+      cv.width = d[0]; cv.height = d[1];
+      /* D-109 N3：替身必须是"有亮度"的实心剪影，否则无法测受击白闪的亮度跃升。
+       * 颜色取中灰绿（≈90 亮度），白 tint 与背景可区分；不影响任何几何/调用口径。 */
+      var c2 = cv.getContext('2d');
+      c2.fillStyle = /knight/.test(String(name)) ? 'rgb(120,120,160)' : 'rgb(58,110,58)';
+      c2.fillRect(0, 0, d[0], d[1]);
+      Object.defineProperty(cv, 'naturalWidth', { value: d[0] });
+      Object.defineProperty(cv, 'naturalHeight', { value: d[1] });
+      cv.__base = 16;
+      cv.complete = true;
+      cv.src = '';
+      cache[name] = cv;
+      return cv;
+    }
+    S.get = function (name) { return fake(name); };
+    S.getFrame = function (name) { return fake(name); };
+    S.isReady = function () { return true; };
+  })();
+
+  function ck(id, ok, detail) {
+    checks.push({ id: id, ok: !!ok, detail: detail === undefined ? '' : detail });
+  }
+  function vp(w, h) {
+    try {
+      Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+    } catch (e) {}
+  }
+  function mk(layout, w, h, floor, mid) {
+    vp(w, h);
+    R._setBattleLayout(layout);
+    Fx._reset();
+    if (Game.Particles && Game.Particles.clear) Game.Particles.clear();
+    if (Game.Feedback && Game.Feedback._clear) Game.Feedback._clear();
+    P.floor = floor; P.level = 5; P.exp = 24; P.gold = 268;
+    P.hp = 100; P.maxHp = 140; P.mp = 30; P.maxMp = 30;
+    P.atk = 14; P.def = 6;
+    Game.Systems.Map.setFloor(floor);
+    B.start(mid || 'slime');
+    M.switchScene('battle');
+    R.resize();
+    if (Game.hud && Game.hud.update) {
+      Game.hud.update({ hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, kills: 1, killTarget: 10, status: [] });
+    }
+    B._setClock(null); Fx._setClock(null);
+    R.drawBattle(B.getState());
+    return R._lastBattleBox;
+  }
+  function rects(cards) {
+    var out = [];
+    (cards || []).forEach(function (c) {
+      if (!c) return;
+      out.push(c.l1, c.l2, c.l3);
+    });
+    return out;
+  }
+  function segsOk(cards) {
+    var one = [];
+    (cards || []).forEach(function (c) {
+      if (!c) return;
+      one.push(G.disjoint(c.l1, c.l2) && G.disjoint(c.l1, c.l3) && G.disjoint(c.l2, c.l3));
+    });
+    return one.length > 0 && one.every(Boolean);
+  }
+  function chipOf(card, text) {
+    if (!card || !card.chips) return null;
+    for (var i = 0; i < card.chips.length; i++) {
+      if (card.chips[i].text === text) return card.chips[i];
+    }
+    return null;
+  }
+  function hasChip(card, prefix) {
+    if (!card || !card.chips) return false;
+    for (var i = 0; i < card.chips.length; i++) {
+      if (card.chips[i].text.indexOf(prefix) === 0) return true;
+    }
+    return false;
+  }
+  function measureLabel(cell, compact) {
+    var c = document.getElementById('game').getContext('2d');
+    c.save();
+    c.font = (compact ? 'bold 12px ' : 'bold 13px ') + 'monospace';
+    var w = c.measureText(cell.label).width;
+    c.restore();
+    return w;
+  }
+  /* 规格 §6.2：格子几何下限。宽版 = floor((W−100)/7) ≥ 70、格高 = barH−32 ≥ 56；
+   * 紧凑档（320–589）= 4+3，格宽 ≥ 71、格高 52。A2 的 40×40 只是“可点”底线，
+   * 这里按 §6.2 的版式下限再卡一次。 */
+  function cellSpecMin(compact) { return compact ? [71, 52] : [70, 56]; }
+  function cellSpecOk(cell, compact) {
+    var m = cellSpecMin(compact);
+    return cell.w >= m[0] && cell.h >= m[1];
+  }
+  /* 运行期抓一次 drawBattle 的 fillText（只替换实例方法，结束后还原；属性赋值不计入绘制调用）。 */
+  function textsOf(fn) {
+    var c = document.getElementById('game').getContext('2d');
+    var old = c.fillText, out = [];
+    c.fillText = function (t, x, y) {
+      out.push({ t: String(t), x: x, y: y });
+      return old.apply(c, arguments);
+    };
+    try { fn(); } finally { c.fillText = old; }
+    return out;
+  }
+  /* 战斗信息字号审计：HUD（9/10px）与伤害飘字（18/26/36）属于其它层，按规格 §2.3/§3
+   * 不计入战斗信息阶梯；审计时临时停掉这两层，只留卡/条/战报/管线。 */
+  function auditBattleFonts(lay, w, h) {
+    mk(lay, w, h, 1, 'slime');
+    var oldHud = R._drawHud;
+    var F = Game.Feedback, oldF = F && F.draw;
+    var Pt = Game.Particles, oldP = Pt && Pt.draw;
+    R._drawHud = function () {};
+    if (F) F.draw = function () {};
+    if (Pt) Pt.draw = function () {};
+    window.__FONTS = {};
+    try { R.drawBattle(B.getState()); } finally {
+      R._drawHud = oldHud;
+      if (F) F.draw = oldF;
+      if (Pt) Pt.draw = oldP;
+    }
+    return Object.keys(window.__FONTS).map(Number);
+  }
+
+  /* ── 1. 八档几何：三段卡 / 7 格 / 六类不交 / 字号 ───────────────── */
+  M.init({ menu: false });
+  R._animNow = function () { return 1234; };
+  R.resize();
+  var SIZES = [[320, 568], [390, 844], [960, 540], [1024, 640]];
+  /* 「320/390/960/1024 × 横竖」：320/390 的横置会被 BATTLE_LAYOUT 判据回退纵置（不改判据），
+   * 所以横置只取 960/1024 两档，另用 auto 回退断言覆盖 320/390。 */
+  var CASES = [
+    { lay: 'horizontal', w: 960, h: 540 },
+    { lay: 'horizontal', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568 },
+    { lay: 'vertical', w: 390, h: 844 },
+    { lay: 'vertical', w: 960, h: 540 },
+    { lay: 'vertical', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568, mid: 'dragon', tag: 'dragon' },
+    { lay: 'horizontal', w: 960, h: 540, mid: 'dragon', tag: 'dragon' }
+  ];
+  var geoRows = [];
+  CASES.forEach(function (cs) {
+      var lay = cs.lay, w = cs.w, h = cs.h;
+      var id = lay + '@' + w + 'x' + h + (cs.tag ? '+' + cs.tag : '');
+      var box;
+      try {
+        box = mk(lay, w, h, cs.mid === 'dragon' ? 5 : 1, cs.mid || 'slime');
+      } catch (e) {
+        ck('geom.' + id + '.draw', false, String(e && e.message || e));
+        return;
+      }
+      var cards = [box.playerPlate, box.monsterPlate].filter(Boolean);
+      ck('geom.' + id + '.cards2', cards.length === 2, 'cards=' + cards.length);
+      ck('geom.' + id + '.segments', segsOk(cards), JSON.stringify(cards.map(function (c) {
+        return c ? [c.l1.y, c.l2.y, c.l3.y] : null;
+      })));
+      ck('geom.' + id + '.segInView', G.allInViewport(rects(cards), w, h).ok,
+        JSON.stringify(G.allInViewport(rects(cards), w, h).bad));
+      ck('geom.' + id + '.segDisjoint', segsOk(cards));
+
+      var cells = box.commandBar.cells;
+      var cellMin = box.commandBar.compact ? [40, 40] : [40, 40];
+      var badCells = cells.filter(function (c) {
+        return c.x < 0 || c.y < 0 || c.x + c.w > w || c.y + c.h > h ||
+          c.w < cellMin[0] || c.h < cellMin[1];
+      });
+      ck('geom.' + id + '.cell7', cells.length === 7 && badCells.length === 0,
+        'n=' + cells.length + ' bad=' + badCells.length + ' cw=' + cells[0].w + ' ch=' + cells[0].h);
+      var labelOut = cells.filter(function (c) {
+        var tw = measureLabel(c, box.commandBar.compact);
+        var lx = c.x + (box.commandBar.compact ? 28 : 34);
+        return lx < 0 || lx + tw > w || lx + tw > c.x + c.w;
+      });
+      ck('geom.' + id + '.cellLabels', labelOut.length === 0, 'out=' + labelOut.length);
+      var specBad = cells.filter(function (c) { return !cellSpecOk(c, box.commandBar.compact); });
+      var sm = cellSpecMin(box.commandBar.compact);
+      ck('geom.' + id + '.cellSpec', specBad.length === 0,
+        'min=' + sm.join('x') + ' got=' + cells[0].w + 'x' + cells[0].h);
+
+      var hpTexts = textsOf(function () { R.drawBattle(B.getState()); });
+      var hpBad = cards.filter(function (c) {
+        return !hpTexts.some(function (r) {
+          return /^\d+\/\d+$/.test(r.t) && r.y >= c.l2.y && r.y <= c.l2.y + c.l2.h &&
+            r.x >= c.x && r.x <= c.x + c.w;
+        });
+      });
+      ck('geom.' + id + '.hpNumeric', hpBad.length === 0,
+        'cards=' + cards.length + ' hpTexts=' + hpTexts.filter(function (r) { return /^\d+\/\d+$/.test(r.t); })
+          .map(function (r) { return r.t + '@' + Math.round(r.y); }).join(','));
+
+      var hpBars = cards.map(function (c) { return { x: c.barX, y: c.barY, w: c.barW, h: c.barH }; });
+      var groups = [
+        { name: 'hudBand', rects: [box.hudBand] },
+        { name: 'pipeline', rects: [box.pipeline] },
+        { name: 'cards', rects: cards.map(function (c) { return { x: c.x, y: c.y, w: c.w, h: c.h }; }) },
+        { name: 'hpBars', rects: hpBars },
+        { name: 'sprites', rects: [box.player, box.monster] },
+        { name: 'log', rects: [box.log] },
+        { name: 'commandBar', rects: [box.commandBar] }
+      ];
+      /* 规格 §5.1：HP 条内嵌在身份卡 L2，属于同一组；这是唯一写明的有意嵌套。 */
+      var pw = G.pairwise(groups, [['cards', 'hpBars']]);
+      ck('geom.' + id + '.noOverlap', pw.ok, JSON.stringify(pw.violations.slice(0, 4)));
+      var pwStrict = G.pairwise(groups, []);
+      ck('geom.' + id + '.noOverlapCount', pwStrict.violations.length - cards.length * 2,
+        'violations=' + pwStrict.violations.length + ' (card∩bar=' + cards.length * 2 + ' 已列为例外)');
+
+      geoRows.push({
+        id: id, cards: cards.length, cells: cells.length, cw: cells[0].w, ch: cells[0].h,
+        barY: box.commandBar.y, logY: box.log.y, logH: box.log.h, pipeY: box.pipeline.y,
+        overlap: pw.violations.length
+      });
+    });
+
+  /* 320 窄屏仍按比例回退纵置（不改 BATTLE_LAYOUT 判据） */
+  vp(320, 568);
+  R._setBattleLayout('auto');
+  R.resize();
+  var auto320 = R._battleLayoutNow();
+  ck('geom.auto320.vertical', auto320 === 'vertical', String(auto320));
+  vp(320, 568);
+  R._setBattleLayout('horizontal');          /* 明确要求横置也必须被比例判据回退 */
+  R.resize();
+  ck('geom.force320toVertical', R._battleLayoutNow() === 'vertical', String(R._battleLayoutNow()));
+  vp(390, 844);
+  R._setBattleLayout('horizontal');
+  R.resize();
+  ck('geom.force390toVertical', R._battleLayoutNow() === 'vertical', String(R._battleLayoutNow()));
+  vp(1024, 640);
+  R._setBattleLayout('auto');
+  R.resize();
+  ck('geom.auto1024.horizontal', R._battleLayoutNow() === 'horizontal', String(R._battleLayoutNow()));
+
+  /* 负例：重叠矩形必须被判负；边界相接不算相交（口径声明） */
+  var negOverlap = G.pairwise([
+    { name: 'a', rects: [{ x: 0, y: 0, w: 10, h: 10 }] },
+    { name: 'b', rects: [{ x: 5, y: 5, w: 10, h: 10 }] }
+  ], []);
+  ck('neg.overlapDetected', !negOverlap.ok && negOverlap.violations.length === 1, JSON.stringify(negOverlap));
+  var edge = G.pairwise([
+    { name: 'a', rects: [{ x: 0, y: 0, w: 10, h: 10 }] },
+    { name: 'b', rects: [{ x: 10, y: 0, w: 10, h: 10 }] }
+  ], []);
+  ck('neg.edgeIsDisjoint', edge.ok, JSON.stringify(edge));
+  ck('neg.cardSegOverlap', !(G.disjoint({ x: 0, y: 7, w: 100, h: 12 }, { x: 0, y: 18, w: 100, h: 12 })), 'L1/L2 应判负');
+  /* 负例（真实 guard）：把格宽压到 39 调真实的 cellSpecOk（规格下限 71/70），
+   * 必须判不合格；同一 guard 对合格尺寸必须判合格。旧的 `39 < 40` 常量比较已删除。 */
+  var nmCell = cellSpecMin(true);
+  ck('neg.cellTooNarrow',
+    !cellSpecOk({ w: 39, h: nmCell[1] }, true) &&
+    cellSpecOk({ w: nmCell[0], h: nmCell[1] }, true),
+    '39px vs 下限 ' + nmCell[0] + '；合格 ' + nmCell.join('x'));
+  var nm = cellSpecMin(true);
+  ck('neg.cellSpecTooSmall', !cellSpecOk({ w: nm[0] - 1, h: nm[1] - 1 }, true) &&
+    cellSpecOk({ w: nm[0], h: nm[1] }, true), 'compact min=' + nm.join('x'));
+
+  /* ── 2. chip 存活：整个回合（旧的 defending 只活到怪物段 100ms） ───────── */
+  function chipLifetime() {
+    mk('horizontal', 960, 540, 1, 'slime');
+    var T = 0;
+    B._setClock(function () { return T; });
+    Fx._setClock(function () { return T; });
+    B.playerAction('defend');
+    var ts = [0, 90, 100, 150, 180, 400];
+    var rows = [];
+    ts.forEach(function (t) {
+      T = t;
+      B.tick(t);
+      R.drawBattle(B.getState());
+      var b = R._lastBattleBox;
+      var oldRule = !!B.getState().defending;
+      rows.push({ t: t, chip: hasChip(b.playerPlate, '防御1'),
+        onEnemy: hasChip(b.monsterPlate, '防御1'), oldRule: oldRule,
+        shieldChip: !!chipOf(b.playerPlate, '防御1') });
+    });
+    ck('chip.fullTurn', rows.filter(function (r) { return r.t <= 180; }).every(function (r) { return r.chip; }),
+      JSON.stringify(rows));
+    ck('chip.survivesMonsterSeg', rows.filter(function (r) { return r.t >= 100; }).every(function (r) { return r.chip; }),
+      't>=100 仍须可见');
+    ck('chip.oldRuleWouldFail', rows.filter(function (r) { return r.t >= 100; }).every(function (r) { return !r.oldRule; }),
+      '旧判据 defending 在怪物段后为 false');
+    ck('chip.ownerPlayer', rows.every(function (r) { return !r.onEnemy; }), '敌方卡不应出现防御1');
+
+    /* chip 必须落在自己那张卡的矩形内 */
+    var b2 = R._lastBattleBox;
+    var ch = chipOf(b2.playerPlate, '防御1');
+    var card = b2.playerPlate;
+    ck('chip.insideCard', !!ch && ch.x >= card.x && ch.x + ch.w <= card.x + card.w &&
+      ch.y >= card.y && ch.y + ch.h <= card.y + card.h, JSON.stringify(ch));
+
+    /* 下一回合起拍：chip 退场 */
+    T = 500;
+    B.playerAction('attack');
+    R.drawBattle(B.getState());
+    var b3 = R._lastBattleBox;
+    ck('chip.goneNextRound', !hasChip(b3.playerPlate, '防御1'), JSON.stringify(b3.playerPlate &&
+      b3.playerPlate.chips));
+    return rows;
+  }
+  var chipRows;
+  try { chipRows = chipLifetime(); } catch (e) { ck('chip.run', false, String(e && e.stack || e)); }
+
+  /* 320 纵置下 chip 仍在本卡内且可见 */
+  try {
+    var vbox = mk('vertical', 320, 568, 1, 'slime');
+    B.playerAction('defend');
+    R.drawBattle(B.getState());
+    var vb = R._lastBattleBox;
+    var vch = chipOf(vb.playerPlate, '防御1');
+    ck('chip.vertical320', !!vch && vch.x >= vb.playerPlate.x && vch.x + vch.w <= vb.playerPlate.x + vb.playerPlate.w,
+      JSON.stringify(vch));
+  } catch (e2) { ck('chip.vertical320', false, String(e2 && e2.message || e2)); }
+
+  /* ── 3. 横置龙威播报：文本必须出现在战报区 ─────────────────────── */
+  try {
+    var dbox = mk('horizontal', 960, 540, 5, 'dragon');
+    var st = B.getState();
+    st.roundNo = 13;                 /* 龙威第 2 段（13–16），只改展示用回合号，不推进时钟 */
+    st.enraged = true;
+    R.drawBattle(st);
+    var db = R._lastBattleBox;
+    var txt = (db.log.lines || []).join(' | ');
+    ck('dragon.logHasDread', txt.indexOf('龙威 第 2 段') >= 0 && txt.indexOf('攻击 +') >= 0, txt);
+    ck('dragon.logInView', G.inViewport(db.log, 960, 540), JSON.stringify(db.log));
+    ck('dragon.logAboveBar', db.log.y + db.log.h <= db.commandBar.y, db.log.y + '+' + db.log.h + '<=' + db.commandBar.y);
+    ck('dragon.logBelowFeet', db.log.y >= db.player.y + db.player.h, db.log.y + '>=' + (db.player.y + db.player.h));
+    ck('dragon.chipOnEnemy', hasChip(db.monsterPlate, '龙威') && !hasChip(db.playerPlate, '龙威'),
+      JSON.stringify(db.monsterPlate.chips));
+    var before = R._battleSafeBand ? R._battleSafeBand(960, 540, 'horizontal') : null;
+    ck('dragon.safeBand', !!before && before.top < before.bottom, JSON.stringify(before));
+  } catch (e3) { ck('dragon.run', false, String(e3 && e3.stack || e3)); }
+
+  /* 负例：没有龙威时战报区不得出现「龙威」 */
+  try {
+    var nbox = mk('horizontal', 960, 540, 1, 'slime');
+    ck('dragon.negNoDread', (nbox.log.lines || []).join(' ').indexOf('龙威') < 0, JSON.stringify(nbox.log.lines));
+  } catch (e4) { ck('dragon.negNoDread', false, String(e4 && e4.message || e4)); }
+
+  /* ── 4. 字号阶梯 ─────────────────────────────────────────────── */
+  ck('font.ladder', R._fontLadder.join(',') === '11,12,13,16,18,20', R._fontLadder.join(','));
+  var badFonts = [];
+  Object.keys(R._fonts).forEach(function (k) {
+    var v = R._fonts[k];
+    if (R._fontLadder.indexOf(v) < 0 || v < 11) badFonts.push(k + '=' + v);
+  });
+  ck('font.battleText', badFonts.length === 0, badFonts.join(','));
+  ck('font.min11', Object.keys(R._fonts).every(function (k) { return R._fonts[k] >= 11; }), '');
+
+  /* 运行期审计：真正交给 ctx.font 的字号（去掉 HUD 9/10px 与伤害飘字 18/26/36 两层）。 */
+  function fontBad(sz) {
+    return sz.filter(function (v) { return R._fontLadder.indexOf(v) < 0 || v < 11; });
+  }
+  var fH = auditBattleFonts('horizontal', 960, 540);
+  var fV = auditBattleFonts('vertical', 320, 568);
+  ck('font.runtimeHorizontal', fH.length > 0 && fontBad(fH).length === 0, fH.join(','));
+  ck('font.runtimeVertical', fV.length > 0 && fontBad(fV).length === 0, fV.join(','));
+  ck('neg.fontOutOfLadder', fontBad([9, 10, 14, 15, 36]).length === 5, '阶梯外字号必须全部判负');
+
+  /* ── 5. 每帧 canvas 调用：改动前实测 vs 改动后实测（预算 243） ────── */
+  var BEFORE = {
+    'horizontal@960x540': 188, 'horizontal@1024x640': 200,
+    'vertical@320x568': 125, 'vertical@390x844': 127,
+    'vertical@960x540': 199, 'vertical@1024x640': 203
+  };
+  var callRows = [];
+  var realDrawBattle = R.drawBattle, drawN = 0;
+  R.drawBattle = function (s) { drawN++; return realDrawBattle.call(R, s); };
+  function measureCalls(lay, w, h, floor, mid, decorate) {
+    mk(lay, w, h, floor, mid);
+    var st = B.getState();
+    if (decorate) {
+      st.defending = true; st.defendRound = st.roundNo; st.shieldValue = 30;
+      st.enraged = true; st.roundNo = 13;
+    }
+    var seq = [];
+    drawN = 0;
+    for (var i = 0; i < 4; i++) {
+      window.__DC.n = 0; window.__DC.by = {}; window.__DC.elem = {};
+      window.__BGN = 0;
+      R.drawBattle(B.getState());
+      seq.push(window.__DC.n);
+      if (i === 3) { window.__BGFRAME = window.__BGN; window.__LASTELEM = window.__DC.elem; }
+    }
+    window.__LASTBY = window.__DC.by;
+    window.__DRAWN = drawN;
+    window.__BG = window.__BGBUILD;
+    return seq[3];
+  }
+  CASES.forEach(function (cs) {
+      var lay = cs.lay, w = cs.w, h = cs.h;
+      var key = lay + '@' + w + 'x' + h + (cs.tag ? '+' + cs.tag : '');
+      try {
+        var n = measureCalls(lay, w, h, cs.mid === 'dragon' ? 5 : 1, cs.mid || 'slime', false);
+        callRows.push({ key: key, before: cs.tag ? null : (BEFORE[key] || null), after: n,
+          delta: (cs.tag || BEFORE[key] == null) ? null : n - BEFORE[key], budget: 243,
+          drawn: window.__DRAWN, bgFrame: window.__BGFRAME,
+          elem: Object.assign({}, window.__LASTELEM), by: Object.assign({}, window.__LASTBY) });
+        ck('calls.' + key + '.bgStable', window.__BGFRAME === 0, String(window.__BGFRAME));
+        if (lay === 'horizontal') ck('calls.' + key + '.budget', n <= 243, n + ' > 243');
+      } catch (e5) { ck('calls.' + key, false, String(e5 && e5.message || e5)); }
+    });
+  var worst = 0, worstKey = '', worstElem = null;
+  try {
+    var wc = measureCalls('horizontal', 1024, 640, 5, 'dragon', true);
+    worst = wc; worstKey = 'horizontal@1024x640+chips';
+    worstElem = Object.assign({}, window.__LASTELEM);
+    ck('calls.worstChips.budget', wc <= 243, wc + ' > 243');
+    ck('d103.worstBudget', wc <= 215, wc + ' > 215');
+  } catch (e6) { ck('calls.worstChips', false, String(e6 && e6.message || e6)); }
+
+  /* ── 6. D-103：清账前后（同口径双向实测） ─────────────────────────
+   * 前一组 BEFORE_D103 是清账前用**同一套包裹**（28 个 ctx 方法、4 帧取第 4 帧、
+   * 包含 backdrop/HUD/反馈层）实拍的稳态值；后一组是本轮实测。
+   * 计数包裹范围：CanvasRenderingContext2D.prototype 上的 save/restore/translate/…
+   * 共 28 个方法；不含 measureText、不含属性赋值（font/fillStyle 不计）。
+   * 每帧背景缓存命中要求 __BGN === 0，否则该档不计入。 */
+  var BEFORE_D103 = {
+    'horizontal@960x540': 216, 'horizontal@1024x640': 220,
+    'vertical@320x568': 170, 'vertical@390x844': 172,
+    'vertical@960x540': 223, 'vertical@1024x640': 227
+  };
+  var BEFORE_D103_WORST = 238;
+  var savedRows = [];
+  callRows.forEach(function (r) {
+    if (r.beforeD103 === undefined && BEFORE_D103[r.key] !== undefined) r.beforeD103 = BEFORE_D103[r.key];
+    if (r.beforeD103 != null) {
+      savedRows.push({ key: r.key, before: r.beforeD103, after: r.after, saved: r.beforeD103 - r.after });
+      ck('d103.less.' + r.key, r.after < r.beforeD103, r.beforeD103 + ' -> ' + r.after);
+      ck('d103.saveGe30.' + r.key, r.beforeD103 - r.after >= 30, String(r.beforeD103 - r.after));
+    }
+  });
+  ck('d103.worstLess', worst < BEFORE_D103_WORST,
+    BEFORE_D103_WORST + ' -> ' + worst);
+  ck('d103.worstSavedGe30', BEFORE_D103_WORST - worst >= 30, String(BEFORE_D103_WORST - worst));
+
+  /* 逐元素表：每个元素都必须出现，且总额 == 该档总调用数（分桶不丢账） */
+  var ELEMS = ['backdrop', 'sprite', 'card.bg', 'card.text', 'card.hp', 'chip', 'stat', 'pipeline',
+    'log', 'bar.frame', 'cell.bg', 'cell.icon', 'cell.key', 'cell.label', 'cell.sub', 'cell.hover',
+    'fx.float', 'fx.particles', 'fx.slash', 'hud'];
+  var elemBad = [];
+  callRows.forEach(function (r) {
+    var sum = 0;
+    Object.keys(r.elem || {}).forEach(function (k) { sum += r.elem[k]; });
+    if (sum !== r.after) elemBad.push(r.key + ':sum=' + sum + '!=n=' + r.after);
+    if (r.elem['cell.key'] !== 7) elemBad.push(r.key + ':cell.key=' + r.elem['cell.key']);
+    if (r.elem['cell.label'] !== 7 || r.elem['cell.sub'] !== 7) elemBad.push(r.key + ':cell.text!=7');
+  });
+  ck('d103.elemSum', elemBad.length === 0, elemBad.join(';'));
+  ck('d103.elemKeyOnce', worstElem && worstElem['cell.key'] === 7 && worstElem['cell.label'] === 7 &&
+    worstElem['cell.sub'] === 7, JSON.stringify(worstElem));
+  ck('d103.elemAllNamed', worstElem && Object.keys(worstElem).every(function (k) {
+    return ELEMS.indexOf(k) >= 0;
+  }) && ['backdrop', 'sprite', 'card.bg', 'card.hp', 'cell.bg', 'cell.key', 'cell.label',
+    'cell.sub', 'pipeline', 'log', 'hud'].every(function (k) { return worstElem[k] > 0; }),
+    JSON.stringify(worstElem));
+  /* 清账的主项：键位框由 3 次（填 + 描边 + 字）降为 1 次 */
+  ck('d103.keyBoxMerged', worstElem && worstElem['cell.key'] === 7,
+    'cell.key=' + (worstElem && worstElem['cell.key']) + '（7 格 × 1 次 fillText）');
+
+  /* ── 7. D-103 S2：禁用格对比度 ≥4.5（含负例） ───────────────────── */
+  var CS = R._cmdStyle();
+  function cmdCellBg(style, base) {
+    var bar = G.composite(G.parseColor(style.barBg), G.parseColor(base));
+    var cell = G.parseColor(style.cellBg);
+    cell.a = cell.a * style.gfxAlpha;      /* 格底随"图形 alpha"一起压暗 */
+    return G.composite(cell, bar);
+  }
+  function cmdTextOn(style, base, alpha) {
+    var t = G.parseColor(style.sub);
+    t.a = (typeof alpha === 'number') ? alpha : style.textAlpha;
+    return G.composite(t, cmdCellBg(style, base));
+  }
+  var crNominal = G.contrastRatio(cmdTextOn(CS, '#0f0f1a'), cmdCellBg(CS, '#0f0f1a'));
+  var crWorst = G.contrastRatio(cmdTextOn(CS, '#ffffff'), cmdCellBg(CS, '#ffffff'));
+  var cr45 = G.contrastRatio(cmdTextOn(CS, '#ffffff', 0.45), cmdCellBg(CS, '#ffffff'));
+  ck('d103.contrast.nominal', crNominal >= 4.5, crNominal.toFixed(2));
+  ck('d103.contrast.worstBase', crWorst >= 4.5, crWorst.toFixed(2));
+  ck('d103.contrast.alpha045Neg', cr45 < 4.5, 'alpha0.45=' + cr45.toFixed(2) + ' 必须判负');
+  ck('d103.contrast.gfxAlpha', CS.gfxAlpha === 0.45 && CS.textAlpha >= 0.72,
+    'gfx=' + CS.gfxAlpha + ' text=' + CS.textAlpha);
+  /* 负例：低于阈值的判定必须自己失效（防止阈值写反） */
+  ck('d103.contrast.negThreshold', !(cr45 >= 4.5) && (crNominal >= 4.5), '');
+
+  /* ── 8. D-103 S2：代价贴按钮 / 不足禁用 / 键盘焦点 == hover ───────── */
+  try {
+    var costBox = mk('horizontal', 1024, 640, 1, 'slime');
+    var P0 = Game.Data.Player;
+    P0.mp = 30;
+    R.drawBattle(B.getState());
+    var rich = R._lastBattleBox.commandBar.cells.slice();
+    P0.mp = 0;
+    R.drawBattle(B.getState());
+    var poor = R._lastBattleBox.commandBar.cells.slice();
+    var skillRich = rich.filter(function (c) { return c.cost > 0; });
+    var skillPoor = poor.filter(function (c) { return c.cost > 0; });
+    ck('d103.cost.onCell', rich.every(function (c) { return typeof c.sub === 'string' && c.sub.length > 0; }),
+      rich.map(function (c) { return c.key + ':' + c.sub; }).join(','));
+    ck('d103.cost.skillShowsMp', skillRich.length === 3 && skillRich.every(function (c) {
+      return c.sub === 'MP ' + c.cost && !c.disabled;
+    }), JSON.stringify(skillRich.map(function (c) { return c.sub + '/' + c.disabled; })));
+    ck('d103.cost.insufficientDisabled', skillPoor.length === 3 && skillPoor.every(function (c) {
+      return c.disabled && c.sub === 'MP 不足' && c.reason === 'MP 不足';
+    }), JSON.stringify(skillPoor.map(function (c) { return c.sub + '/' + c.disabled; })));
+    ck('d103.cost.nonSkillAlwaysEnabled', poor.filter(function (c) { return c.cost === 0; })
+      .every(function (c) { return !c.disabled; }), '');
+    /* 负例：MP 充足时不得把技能格判禁用（否则"不足"判据失效） */
+    ck('d103.cost.negRichNotDisabled', skillRich.every(function (c) { return !c.disabled; }), '');
+
+    /* 键盘 1–7 与鼠标 hover 的高亮：同一状态、同一绘制序列 */
+    var focusBox = mk('horizontal', 1024, 640, 1, 'slime');
+    var focusCell = focusBox.commandBar.cells[3];
+    function drawAndRecord(setFocus) {
+      var c = document.getElementById('game').getContext('2d');
+      var oldF = c.fillRect, oldS = c.strokeRect, rec = [];
+      c.fillRect = function (x, y, w, h) {
+        if (x === focusCell.x + 1 && y === focusCell.y + 1 &&
+          w === focusCell.w - 2 && h === focusCell.h - 2) rec.push(['f', x, y, w, h, String(c.fillStyle)]);
+        return oldF.apply(c, arguments);
+      };
+      c.strokeRect = function (x, y, w, h) {
+        if (x === focusCell.x + 0.5 && y === focusCell.y + 0.5 &&
+          w === focusCell.w - 1 && h === focusCell.h - 1) rec.push(['s', x, y, w, h, String(c.strokeStyle)]);
+        return oldS.apply(c, arguments);
+      };
+      try { setFocus(); R.drawBattle(B.getState()); } finally { c.fillRect = oldF; c.strokeRect = oldS; }
+      return rec;
+    }
+    var recNone = drawAndRecord(function () { R._setHover(null); });
+    var recKey = drawAndRecord(function () { R._commandFocus('skill:fireball'); });
+    var recHover = drawAndRecord(function () { R._setHover('battle:4'); });
+    ck('d103.focus.keyboardSets', R._cmdFocus() === 'battle:4', String(R._cmdFocus()));
+    ck('d103.focus.sameState', recKey.length === recHover.length && JSON.stringify(recKey) === JSON.stringify(recHover),
+      'key=' + JSON.stringify(recKey) + ' hover=' + JSON.stringify(recHover));
+    ck('d103.focus.twoExtraCalls', recKey.length === recNone.length + 2,
+      'none=' + recNone.length + ' focus=' + recKey.length);
+    ck('d103.focus.noneHasNoHighlight', recNone.every(function (r) {
+      return r[0] === 's';
+    }), JSON.stringify(recNone));
+    /* 键盘路径：Digit4 经真实输入表进入，焦点落在第 4 格 */
+    Game.Core.Input.clear();
+    Game.Core.Input.getState()['Digit4'] = true;
+    M._updateBattle();
+    ck('d103.focus.viaInput', R._cmdFocus() === 'battle:4', String(R._cmdFocus()));
+    var expectKeys = ['attack', 'defend', 'run', 'skill:fireball', 'skill:dash', 'skill:shield', 'item']
+      .map(function (c2) { return R._commandFocus(c2); }).join(',');
+    ck('d103.focus.map17', expectKeys === '1,2,3,4,5,6,7', expectKeys);
+    R._setHover(null);
+  } catch (e7) { ck('d103.s2.run', false, String(e7 && e7.stack || e7)); }
+
+  /* ── 9. D-103 裁定：指令格高 64（不采用 barH−32=82） ─────────────── */
+  try {
+    CASES.forEach(function (cs) {
+      var id = cs.lay + '@' + cs.w + 'x' + cs.h + (cs.tag ? '+' + cs.tag : '');
+      var b = mk(cs.lay, cs.w, cs.h, cs.mid === 'dragon' ? 5 : 1, cs.mid || 'slime');
+      var bar = b.commandBar, c0 = bar.cells[0];
+      var want = bar.compact ? 52 : 64;
+      ck('d103.cellH.' + id, c0.h === want && bar.cells.every(function (c) { return c.h === want; }),
+        'h=' + c0.h + ' want=' + want);
+      if (!bar.compact) {
+        ck('d103.cellY.' + id, c0.y === bar.y + 18 && c0.y + c0.h <= bar.y + bar.h,
+          'y=' + c0.y + ' barY=' + bar.y);
+      }
+    });
+    /* 1024×640：barH=114，barH−32=82；实际格高必须是 64，且落点 544–608 */
+    var bb = mk('horizontal', 1024, 640, 1, 'slime');
+    ck('d103.ruling64', bb.commandBar.h - 32 === 82 && bb.commandBar.cells[0].h === 64,
+      'barH=' + bb.commandBar.h + ' barH-32=82 cells.h=' + bb.commandBar.cells[0].h);
+    ck('d103.ruling544_608', bb.commandBar.cells[0].y === 544 &&
+      bb.commandBar.cells[0].y + bb.commandBar.cells[0].h === 608,
+      bb.commandBar.cells[0].y + '..' + (bb.commandBar.cells[0].y + bb.commandBar.cells[0].h));
+  } catch (e8) { ck('d103.ruling.run', false, String(e8 && e8.stack || e8)); }
+
+  /* ── 10. D-109 N1：纵置结果卡落在"信息元素并集之外" ───────────── */
+  var n1Rows = [];
+  try {
+    var N1_CASES = [
+      ['vertical', 320, 568, '320'],
+      ['vertical', 390, 844, '390'],
+      ['vertical', 800, 700, '800'],
+      ['vertical', 1024, 640, '1024']
+    ];
+    var n1Obs = ['pipeline', 'log', 'stat', 'player', 'monster'];
+    function iArea(a, b) {
+      var ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+      var iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      return ix * iy;
+    }
+    function dyingSetup() {
+      var st = B.getState();
+      st.dying = true;
+      st.dyingAt = performance.now() - 100;
+      st.dyingMs = 700;
+    }
+    N1_CASES.forEach(function (cs) {
+      var id = cs[3];
+      mk(cs[0], cs[1], cs[2], 1, 'slime');
+      var J = Game.Systems.Juice;
+      J._reset();
+      J._setClock(1000);
+      dyingSetup();
+      R.drawBattle(B.getState());
+      var box = R._lastBattleBox;
+      var obs = n1Obs.filter(function (k) { return !!box[k]; });
+      J.levelUp({ from: 4, to: 5, atkFrom: 14, atkTo: 16, defFrom: 6, defTo: 7, hpFrom: 140, hpTo: 150 });
+      var lay = J._layout(cs[1], cs[2]);
+      var bad = [];
+      lay.cards.forEach(function (c) {
+        obs.forEach(function (k) {
+          var ar = iArea(c, box[k]);
+          if (ar > 0) bad.push(k + '=' + ar);
+        });
+      });
+      var inside = lay.cards.every(function (c) { return c.y >= lay.top && c.y + c.h <= lay.bottom; });
+      n1Rows.push({ id: id, cards: lay.cards.length, band: [lay.top, lay.bottom],
+        card: lay.cards[0] ? [lay.cards[0].y, lay.cards[0].y + lay.cards[0].h] : null,
+        obs: obs, bad: bad });
+      ck('d109.n1.' + id, lay.cards.length > 0 && bad.length === 0, JSON.stringify(n1Rows[n1Rows.length - 1]));
+      ck('d109.n1.band.' + id, inside, JSON.stringify([lay.top, lay.bottom]));
+      /* 无结果卡：同一 dying 状态，布局为空、五类矩形仍在（不靠隐藏信息过关） */
+      J._reset();
+      var lay0 = J._layout(cs[1], cs[2]);
+      var obs0 = n1Obs.filter(function (k) { return !!R._lastBattleBox[k]; });
+      ck('d109.n1.nocard.' + id, lay0.cards.length === 0 && obs0.length === obs.length,
+        'cards=' + lay0.cards.length + ' obs=' + obs0.join(','));
+    });
+    /* 负例：旧口径（top = max(0.30H,250)+8）在 320 必须压到五类里的至少两类 */
+    mk('vertical', 320, 568, 1, 'slime');
+    var JN = Game.Systems.Juice;
+    JN._reset(); JN._setClock(1000);
+    dyingSetup(); R.drawBattle(B.getState());
+    var boxN = R._lastBattleBox;
+    JN.levelUp({ from: 4, to: 5, atkFrom: 14, atkTo: 16, defFrom: 6, defTo: 7, hpFrom: 140, hpTo: 150 });
+    var cardN = JN._layout(320, 568).cards[0];
+    var oldCard = { x: cardN.x, y: Math.max(Math.round(568 * 0.30), 250) + 8, w: cardN.w, h: cardN.h };
+    var negHit = n1Obs.filter(function (k) {
+      return boxN[k] && iArea(oldCard, boxN[k]) > 0;
+    });
+    ck('d109.n1.oldBandNeg', negHit.length >= 2, '旧口径相交: ' + negHit.join(','));
+  } catch (eN1) { ck('d109.n1.run', false, String(eN1 && eN1.stack || eN1)); }
+
+  /* ── 11. D-109 N2：chip 必须是真实数字，宽度自适应 ─────────────── */
+  var n2Rows = [];
+  try {
+    var N2_CASES = [
+      ['vertical', 320, 568], ['vertical', 390, 844],
+      ['horizontal', 960, 540], ['horizontal', 1024, 640]
+    ];
+    function setChips(n) {
+      var st = B.getState();
+      st.defending = (n >= 2);
+      st.defendRound = (n >= 2) ? st.roundNo : 0;
+      st.shieldValue = 8;
+      Game.Systems.Status.clearAll();
+      if (n >= 3) Game.Systems.Status.apply('poison', 3);
+      if (n >= 4) Game.Systems.Status.apply('bleed', 2);
+    }
+    function textW(t) {
+      var c2 = document.getElementById('game').getContext('2d');
+      c2.save(); c2.font = '11px monospace';
+      var w = c2.measureText(t).width;
+      c2.restore();
+      return w;
+    }
+    N2_CASES.forEach(function (cs) {
+      for (var n = 1; n <= 4; n++) {
+        mk(cs[0], cs[1], cs[2], 1, 'slime');
+        setChips(n);
+        R.drawBattle(B.getState());
+        var card = R._lastBattleBox.cards.player;
+        var chips = (card && card.chips) || [];
+        var texts = textsOf(function () { R.drawBattle(B.getState()); });
+        var chipTexts = texts.filter(function (t) {
+          return t.x >= card.x && t.x <= card.x + card.w &&
+            t.y >= card.l3.y - 2 && t.y <= card.l3.y + card.l3.h + 2;
+        }).map(function (t) { return t.t; });
+        var digitsOk = chips.length > 0 && chips.every(function (ch) { return /[0-9]/.test(ch.text); });
+        var drawnOk = chips.length === chipTexts.length && chips.every(function (ch) {
+          return chipTexts.indexOf(ch.text) >= 0;
+        });
+        var widthOk = chips.every(function (ch) {
+          return textW(ch.text) <= ch.w - 4 && ch.x + ch.w <= card.x + card.w;
+        });
+        var noPlusN = chipTexts.every(function (t) { return t.indexOf('+n') < 0; });
+        var id = cs[0] + '@' + cs[1] + 'x' + cs[2] + '#' + n;
+        n2Rows.push({ id: id, texts: chipTexts, w: chips.map(function (c) { return [c.w, Math.round(textW(c.text))]; }) });
+        ck('d109.n2.' + id, digitsOk && drawnOk && widthOk && noPlusN,
+          JSON.stringify(n2Rows[n2Rows.length - 1]));
+      }
+    });
+    /* 负例（真实 chip 生成路径）：把 Status.list 临时改成返回一个"无数字回合数"的状态，
+     * 让 cardChips → drawCardChips 真的产出无数字文本；用与正例完全相同的 fillText 抓取
+     * 与 digit 判据，必须判负；还原后同一路径必须判正。旧写法只对字符串跑正则，
+     * 从未经过真实 chip 生成（恒真式），已删除。 */
+    function chipTextsOfPlayerCard() {
+      mk('horizontal', 960, 540, 1, 'slime');
+      var st = B.getState();
+      st.defending = false; st.defendRound = 0; st.shieldValue = 8;
+      Game.Systems.Status.clearAll();
+      R.drawBattle(B.getState());
+      var card = R._lastBattleBox.cards.player;
+      var texts = textsOf(function () { R.drawBattle(B.getState()); });
+      return texts.filter(function (t) {
+        return t.x >= card.x && t.x <= card.x + card.w &&
+          t.y >= card.l3.y - 2 && t.y <= card.l3.y + card.l3.h + 2;
+      }).map(function (t) { return t.t; });
+    }
+    var realStatusList = Game.Systems.Status.list;
+    Game.Systems.Status.list = function () { return [{ name: '无', turns: NaN, color: '#ef4444' }]; };
+    var negChipTexts = chipTextsOfPlayerCard();
+    var negDigitsOk = negChipTexts.length > 0 && negChipTexts.every(function (t) { return /[0-9]/.test(t); });
+    Game.Systems.Status.list = realStatusList;
+    var posChipTexts = chipTextsOfPlayerCard();
+    var posDigitsOk = posChipTexts.length > 0 && posChipTexts.every(function (t) { return /[0-9]/.test(t); });
+    ck('d109.n2.plusNneg', negDigitsOk === false && posDigitsOk === true,
+      '无数字回合数 → ' + JSON.stringify(negChipTexts) + '；还原后 → ' + JSON.stringify(posChipTexts));
+  } catch (eN2) { ck('d109.n2.run', false, String(eN2 && eN2.stack || eN2)); }
+
+  /* ── 12. D-109 N3：横纵受击白闪同源 + 斩击弧不被同色吃掉 ───────── */
+  var n3Rows = [];
+  try {
+    function lumBox(box, inset) {
+      var cv = document.getElementById('game');
+      var c2 = cv.getContext('2d');
+      var k = cv.width / R.cssW;
+      var x0 = Math.max(0, Math.floor((box.x + inset) * k));
+      var y0 = Math.max(0, Math.floor((box.y + inset) * k));
+      var x1 = Math.min(cv.width, Math.ceil((box.x + box.w - inset) * k));
+      var y1 = Math.min(cv.height, Math.ceil((box.y + box.h - inset) * k));
+      if (x1 <= x0 || y1 <= y0) return { mean: 0, dark: 0, n: 0, data: null };
+      var d = c2.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      var sum = 0, n = 0, dark = 0;
+      for (var i = 0; i < d.length; i += 4) {
+        var l = (d[i] + d[i + 1] + d[i + 2]) / 3;
+        sum += l; n++;
+        if (l < 100) dark++;
+      }
+      return { mean: sum / n, dark: dark, n: n, data: d };
+    }
+    function pixDiff(a, b, thr) {
+      if (!a || !b || !a.data || !b.data || a.data.length !== b.data.length) return -1;
+      var cnt = 0;
+      for (var i = 0; i < a.data.length; i += 4) {
+        var la = (a.data[i] + a.data[i + 1] + a.data[i + 2]) / 3;
+        var lb = (b.data[i] + b.data[i + 1] + b.data[i + 2]) / 3;
+        if (Math.abs(la - lb) > thr) cnt++;
+      }
+      return cnt;
+    }
+    function n3Scene(lay, w, h) {
+      mk(lay, w, h, 1, 'slime');
+      var T = 100000;
+      Fx._setClock(function () { return T; });
+      B._setClock(function () { return T; });
+      var F = Game.Feedback;
+      F._clear();
+      Fx._reset();
+      return { lay: lay, w: w, h: h, T: T, F: F };
+    }
+    function n3Run(lay, w, h) {
+      var s = n3Scene(lay, w, h);
+      var baseBox = R._lastBattleBox.monster;
+      var base = lumBox(baseBox, 2);
+      var ct = B._contact('monster');
+      var a0 = (lay === 'horizontal') ? (Math.PI / 2 - 0.5) : -0.15;
+      /* 命中帧：Feedback 白闪（唯一账本）+ 斩击弧 */
+      var live = R._lastBattleBox.monster;
+      s.F.spawn({ kind: 'hit', who: 'monster', x: live.x, y: live.y, w: live.w, h: live.h,
+        life: 110, alpha: 0.6 });
+      Fx.hit({ who: 'monster', dir: -1, slash: { x: ct.x, y: ct.y, r: 34, a0: a0, color: '#ffffff' } });
+      R.drawBattle(B.getState());
+      var hitBox = R._lastBattleBox.monster;
+      var hitOn = lumBox(hitBox, 2);
+      /* 同一帧换回旧描边（仅验证用），其余状态完全不变 */
+      Fx._setSlashOutline(false);
+      R.drawBattle(B.getState());
+      var hitOff = lumBox(R._lastBattleBox.monster, 2);
+      Fx._setSlashOutline(true);
+      /* +60ms：白闪衰减，仍须有可测跃升 */
+      s.T = 100060;
+      s.F.update(60);
+      R.drawBattle(B.getState());
+      var late = lumBox(R._lastBattleBox.monster, 2);
+      return {
+        lay: lay, w: w, h: h,
+        base: Math.round(base.mean), hit: Math.round(hitOn.mean), late: Math.round(late.mean),
+        jump: Math.round(hitOn.mean - base.mean),
+        lateJump: Math.round(late.mean - base.mean),
+        darkOn: hitOn.dark, darkOff: hitOff.dark,
+        arcDiff: pixDiff(hitOn, hitOff, 20),
+        slash: [ct.x, ct.y]
+      };
+    }
+    /* D-110：白闪贡献必须单独测出来——见下面的 n3TintDelta。 */
+    var n3H = n3Run('horizontal', 1024, 640);
+    var n3V = n3Run('vertical', 390, 844);
+    n3Rows = [n3H, n3V];
+    /* D-110：白闪贡献单独测——同一帧「弧 + 白闪」与「弧 + 旧行为(无白闪)」的像素差，
+     * 才不会被白色斩击弧冒充。旧行为用真实路径回放：给 Feedback 账本压一条 alpha=0 的
+     * monster 受击记录，battleFlashOf 会优先取它（alpha 0.01 以下不着色），
+     * 于是横置怪物回到 D-109 之前的"只切 hurt 帧、不刷白"，斩击弧照常绘制。 */
+    function n3FlashFrame(lay, w, h, mode) {
+      var s = n3Scene(lay, w, h);
+      var base0 = lumBox(R._lastBattleBox.monster, 2).mean;
+      var ct0 = B._contact('monster');
+      var a00 = (lay === 'horizontal') ? (Math.PI / 2 - 0.5) : -0.15;
+      if (mode === 'old') {
+        var live0 = R._lastBattleBox.monster;
+        s.F.spawn({ kind: 'hit', who: 'monster', x: live0.x, y: live0.y, w: live0.w, h: live0.h,
+          life: 1, alpha: 0 });
+      }
+      if (mode !== 'base') {
+        Fx.hit({ who: 'monster', dir: -1, slash: { x: ct0.x, y: ct0.y, r: 34, a0: a00, color: '#ffffff' } });
+      }
+      R.drawBattle(B.getState());
+      var f = (Game.Feedback && Game.Feedback.flashOf('monster')) ||
+        (Game.Fx && Game.Fx.flashOf('monster')) || null;
+      return { lay: lay, mode: mode, base: Math.round(base0),
+        mean: Math.round(lumBox(R._lastBattleBox.monster, 2).mean),
+        alpha: f ? Math.round(f.alpha * 1000) / 1000 : 0 };
+    }
+    var flBaseH = n3FlashFrame('horizontal', 1024, 640, 'base');
+    var flOnH = n3FlashFrame('horizontal', 1024, 640, 'on');
+    var flOldH = n3FlashFrame('horizontal', 1024, 640, 'old');
+    var flOnV = n3FlashFrame('vertical', 390, 844, 'on');
+    var flOldV = n3FlashFrame('vertical', 390, 844, 'old');
+    /* 两套都有白闪（账本 alpha > 0）、都有可测跃升，且旧行为确实更暗 */
+    ck('d109.n3.hTint', flOnH.alpha > 0.01 && flOnH.mean - flBaseH.mean >= 20 &&
+      flOnH.mean - flOldH.mean >= 10,
+      JSON.stringify([flBaseH, flOnH, flOldH]));
+    ck('d109.n3.vTint', flOnV.alpha > 0.01 && flOnV.mean - flOnV.base >= 20 &&
+      flOnV.mean - flOldV.mean >= 10,
+      JSON.stringify([flOnV, flOldV]));
+    ck('d109.n3.sameDelta', Math.abs(n3H.jump - n3V.jump) <= 8,
+      'H=' + n3H.jump + ' V=' + n3V.jump);
+    ck('d109.n3.hLate', n3H.lateJump >= 8, String(n3H.lateJump));
+    ck('d109.n3.vLate', n3V.lateJump >= 8, String(n3V.lateJump));
+    /* 斩击弧：同一帧只换描边，受击主体内"暗轮廓像素差"必须可数；旧纯白弧为 0 */
+    ck('d109.n3.hSlash', n3H.arcDiff >= 20 && n3H.darkOn >= 20,
+      'diff=' + n3H.arcDiff + ' darkOn=' + n3H.darkOn + ' darkOff=' + n3H.darkOff);
+    ck('d109.n3.vSlash', n3V.arcDiff >= 12 && n3V.darkOn >= 3,
+      'diff=' + n3V.arcDiff + ' darkOn=' + n3V.darkOn + ' darkOff=' + n3V.darkOff);
+    /* 负例（真实回放旧横置行为）：压入 alpha=0 的受击记录后，账本 alpha 必须 <0.01，
+     * 且同一帧必须比现行白闪帧暗 ≥10——两件事任一不成立就红。 */
+    ck('d109.n3.tintNeg', flOldH.alpha < 0.01 && flOldH.mean < flOnH.mean - 10,
+      JSON.stringify([flOnH, flOldH]));
+    ck('d109.n3.slashNeg', n3H.darkOff === 0 && n3V.darkOff === 0,
+      '旧描边 H=' + n3H.darkOff + ' V=' + n3V.darkOff);
+
+    /* D-109 绘制账：214 是"静态战斗 UI 最坏帧"（D-108 口径，不含 FX）；
+     * 受击帧加白闪后也必须 ≤214。斩击/冲击环属于既有 FX 层，沿用 D-102 的 243 预算。 */
+    function decorated() {
+      mk('horizontal', 1024, 640, 5, 'dragon');
+      var stC = B.getState();
+      stC.defending = true; stC.defendRound = stC.roundNo; stC.shieldValue = 30;
+      stC.enraged = true; stC.roundNo = 13;
+      Game.Systems.Status.apply('poison', 3);
+      Game.Systems.Status.apply('bleed', 2);
+      var TC = 100000;
+      Fx._setClock(function () { return TC; });
+      B._setClock(function () { return TC; });
+      Game.Feedback._clear();
+      Fx._reset();
+    }
+    function drawFour() {
+      var mx = 0, el = null;
+      for (var fc = 0; fc < 4; fc++) {
+        window.__DC.n = 0; window.__DC.by = {}; window.__DC.elem = {};
+        R.drawBattle(B.getState());
+        if (window.__DC.n > mx) { mx = window.__DC.n; el = Object.assign({}, window.__DC.elem); }
+      }
+      return { n: mx, elem: el };
+    }
+    decorated();
+    var uiW = drawFour();
+    ck('d109.calls.uiWorst', uiW.n <= 214, uiW.n + ' > 214 ' + JSON.stringify(uiW.elem));
+    ck('d109.calls.cellBgMerged', uiW.elem && uiW.elem['cell.bg'] === 7,
+      'cell.bg=' + (uiW.elem && uiW.elem['cell.bg']));
+    /* 受击白闪帧（横置 + 纵置同源）：只多 tintSprite 的 5 次 */
+    decorated();
+    var ctm = B._contact('monster');
+    Game.Feedback.spawn({ kind: 'hit', who: 'monster', x: ctm.x - 16, y: ctm.y - 23,
+      w: 32, h: 46, life: 110, alpha: 0.6 });
+    var flashW = drawFour();
+    ck('d109.calls.flashWorst', flashW.n <= 214, flashW.n + ' > 214 ' + JSON.stringify(flashW.elem));
+    ck('d109.calls.flashTint5', flashW.elem['sprite'] - uiW.elem['sprite'] === 5,
+      'ui=' + uiW.elem['sprite'] + ' flash=' + flashW.elem['sprite']);
+    /* 斩击帧（既有 FX 层）：报账用，预算仍是 D-102 的 243 */
+    Fx.hit({ who: 'monster', dir: -1, slash: { x: ctm.x, y: ctm.y, r: 34, a0: Math.PI / 2 - 0.5, color: '#ffffff' } });
+    var slashW = drawFour();
+    ck('d109.calls.slashFrame', slashW.n <= 243, slashW.n + ' > 243 ' + JSON.stringify(slashW.elem));
+    n3Rows.push({ ui: uiW, flash: flashW, slash: slashW });
+  } catch (eN3) { ck('d109.n3.run', false, String(eN3 && eN3.stack || eN3)); }
+
+  /* ── 汇总 ───────────────────────────────────────────────────── */
+  var failed = checks.filter(function (c) { return !c.ok; });
+  var out = {
+    page: 'd102',
+    total: checks.length,
+    pass: checks.length - failed.length,
+    fail: failed.length,
+    geo: geoRows,
+    chip: chipRows || null,
+    calls: callRows,
+    worstCalls: { key: worstKey, n: worst, budget: 243, elem: worstElem },
+    d103: { before: BEFORE_D103, beforeWorst: BEFORE_D103_WORST, afterWorst: worst,
+      saved: savedRows, contrast: { nominal: crNominal, worstBase: crWorst, alpha045: cr45,
+        gfxAlpha: CS.gfxAlpha, textAlpha: CS.textAlpha } },
+    d109: { n1: n1Rows, n2: n2Rows, n3: n3Rows },
+    failed: failed.slice(0, 8)
+  };
+  var text = (failed.length ? 'FAIL ' : 'PASS ') + JSON.stringify(out);
+  document.getElementById('result').textContent = text;
+  document.title = (failed.length ? 'FAIL' : 'PASS') + ' d102 ' + (checks.length - failed.length) + '/' + checks.length;
+})();
+</script>
+
+
+</body></html>

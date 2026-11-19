@@ -219,8 +219,11 @@
       /* ══ F：接触点火花 + 血条保护 ═══════════════════════ */
       setupBattle(2, 'orc_warrior');
       T = 0;
-      B.playerAction('attack');
+      /* D-104：先画一帧，让 _lastBattleBox 是本次 setup 的 2× 精灵框；
+       * 否则 playerAction 里的 contact 会读到上一用例的旧框（尺寸变了，旧框不再等价）。 */
       var box0 = draw();
+      B.playerAction('attack');
+      box0 = R._lastBattleBox;
       var ctM = B._contact('monster');
       var pList = PT._list();
       var impacts = pList.filter(function (p) { return p.kind === 'impact' || p.kind === 'spark'; });
@@ -238,34 +241,60 @@
         contact: ctM, sparks: impacts.length, allAtContact: allAtContact, inBody: inBody, ring: st0.ringPos,
         monsterBox: box0.monster
       });
+      /* 负例：旧写死出生点（怪物矩形中心）必须判负，证明接触点确实换了口径 */
+      var oldAnchor = { x: box0.monster.x + box0.monster.w / 2, y: box0.monster.y + box0.monster.h / 2 };
+      var oldAtContact = Math.abs(ctM.x - oldAnchor.x) < 0.01 && Math.abs(ctM.y - oldAnchor.y) < 0.01;
+      rec('F1n_oldAnchor', !oldAtContact, {
+        rule: '旧锚点（怪物矩形中心）不得等于新接触点；相等说明锚点没跟着布局走',
+        contact: ctM, oldAnchor: oldAnchor
+      });
 
-      /* 血条保护：同一战斗状态、同一时刻，斩击存在 vs 斩击清空，两条血条矩形逐像素一致 */
+      /* 血条保护：同一战斗状态、同一时刻，斩击存在 vs 斩击清空，两条「卡内血条」逐像素一致。
+       * D-102：血条已并入身份卡 L2（9px），采样矩形从 _lastBattleBox 取，不再写死 344×26@210/412。 */
+      function barRect(plate) {
+        if (!plate) return null;
+        var pad = 2;
+        return [Math.max(0, plate.barX - pad), Math.max(0, plate.barY - pad),
+          plate.barW + pad * 2, plate.barH + pad * 2];
+      }
       Fx._reset(); PT.clear();
       T = 0;
       B.playerAction('attack');
       T = 0;
-      draw();
-      var ebA = rectData(W / 2 - 172, 210, 344, 26);
-      var pbA = rectData(W / 2 - 172, 412, 344, 26);
+      var bbHit = draw();
+      var eR = barRect(bbHit.monsterPlate), pR = barRect(bbHit.playerPlate);
+      var ebA = rectData(eR[0], eR[1], eR[2], eR[3]);
+      var pbA = rectData(pR[0], pR[1], pR[2], pR[3]);
       Fx._reset(); PT.clear();
       T = 0;
       draw();
-      var ebB = rectData(W / 2 - 172, 210, 344, 26);
-      var pbB = rectData(W / 2 - 172, 412, 344, 26);
+      var ebB = rectData(eR[0], eR[1], eR[2], eR[3]);
+      var pbB = rectData(pR[0], pR[1], pR[2], pR[3]);
       var dEb = diffRect(ebA, ebB), dPb = diffRect(pbA, pbB);
       /* 反击侧同样检查（玩家弧） */
       Fx._reset(); PT.clear();
       T = 0; B.playerAction('attack'); T = 100; B.tick(100);
-      draw();
-      var cbA = rectData(W / 2 - 172, 412, 344, 26);
+      var bbCnt = draw();
+      var pR2 = barRect(bbCnt.playerPlate);
+      var cbA = rectData(pR2[0], pR2[1], pR2[2], pR2[3]);
       Fx._reset(); PT.clear();
       T = 100;
       draw();
-      var cbB = rectData(W / 2 - 172, 412, 344, 26);
+      var cbB = rectData(pR2[0], pR2[1], pR2[2], pR2[3]);
       var dCb = diffRect(cbA, cbB);
-      rec('F2_hpBarSafe', dEb.n === 0 && dPb.n === 0 && dCb.n === 0, {
-        rule: '斩击弧不得覆盖任何 HP 读数：敌/我血条矩形（344×26）在斩击出现前后逐像素一致（差>12 视为覆盖）',
-        enemyBar: dEb, playerBarHit: dPb, playerBarCounter: dCb
+      rec('F2_hpBarSafe', !!eR && !!pR && dEb.n === 0 && dPb.n === 0 && dCb.n === 0, {
+        rule: '斩击弧不得覆盖任何 HP 读数：身份卡 L2 血条矩形（从 _lastBattleBox 取）在斩击出现前后逐像素一致（差>12 视为覆盖）',
+        enemyBar: dEb, playerBarHit: dPb, playerBarCounter: dCb,
+        rects: { enemy: eR, player: pR }
+      });
+      /* 负例：旧写死采样矩形 344×26 @ (210,412) 不得完整落在新卡内血条矩形里，
+       * 证明 F2 确实改用了 _lastBattleBox 的新口径，而不是旧常量。 */
+      var oldRect = [210, 412, 344, 26];
+      var oldInside = oldRect[0] >= pR[0] && oldRect[1] >= pR[1] &&
+        oldRect[0] + oldRect[2] <= pR[0] + pR[2] && oldRect[1] + oldRect[3] <= pR[1] + pR[3];
+      rec('F2n_oldSampleRect', !oldInside, {
+        rule: '旧固定采样矩形不得被新卡内血条矩形包含（旧 344×26@210/412 已废弃）',
+        oldRect: oldRect, playerBar: pR
       });
 
       /* ══ G：接触阴影（五层）+ 构件落地 ═══════════════════ */
@@ -348,6 +377,36 @@
       });
 
       /* ══ H：亮度全层复核 ═══════════════════════════════ */
+      /* D-110：恢复全屏判据。发光道具走白名单——按装饰类型逐条登记（坐标取自 render.js
+       * 各层 painter 的构件绘制位与 glow 半径），**不按亮度阈值自动豁免**。
+       * 扫描分两段，并集覆盖全屏除白名单外的每个 32×32 块：
+       *   - 主体舞台带 x∈[18%,82%]W → blockMax
+       *   - 舞台带之外（屏幕边缘）    → edgeMax
+       * 两段用同一明示阈值 minP90-5（与 D-89 原全屏口径一致），任一段越界即 FAIL；
+       * edgeMax 不再是"只记录不判"。独立边缘判据：edge 区任何块不得与怪物/玩家矩形
+       * 相交，白名单也不得覆盖主体矩形——否则白名单会替主体本身开脱。 */
+      var GLOW_PROPS = {
+        1: [{ type: '立地火把', x0: 64, y0: 184, x1: 272, y1: 380 },
+            { type: '立地火把', x0: 752, y0: 184, x1: 960, y1: 380 }],
+        2: [{ type: '篝火', x0: 32, y0: 344, x1: 288, y1: 592 }],
+        3: [{ type: '熔岩裂口', x0: 0, y0: 308, x1: 184, y1: 520 },
+            { type: '熔岩裂口', x0: 840, y0: 308, x1: 1024, y1: 520 }],
+        4: [{ type: '冷白烛台', x0: 64, y0: 384, x1: 224, y1: 544 },
+            { type: '冷白烛台', x0: 800, y0: 384, x1: 960, y1: 544 }],
+        5: [{ type: '立地火盆', x0: 56, y0: 184, x1: 272, y1: 392 },
+            { type: '立地火盆', x0: 752, y0: 184, x1: 960, y1: 392 }]
+      };
+      function glowPropAt(f, bx, by) {
+        var list = GLOW_PROPS[f] || [];
+        for (var gi = 0; gi < list.length; gi++) {
+          var r = list[gi];
+          if (bx < r.x1 && bx + 32 > r.x0 && by < r.y1 && by + 32 > r.y0) return r.type;
+        }
+        return null;
+      }
+      function rectsOverlap(a, b) {
+        return a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0;
+      }
       var hRows = [], hBad = [];
       for (var hf = 1; hf <= 5; hf++) {
         c.setTransform(1, 0, 0, 1, 0, 0);
@@ -355,11 +414,24 @@
         R._battleBackdrop(c, W, H, hf);
         var monRect = maxLumRect(W / 2 - 64, 60, W / 2 + 64, 190);
         var plyRect = maxLumRect(W / 2 - 60, 444, W / 2 + 60, 544);
-        var blockMax = 0, blockAt = null;
+        var monBox = { x0: W / 2 - 64, y0: 60, x1: W / 2 + 64, y1: 190 };
+        var plyBox = { x0: W / 2 - 60, y0: 444, x1: W / 2 + 60, y1: 544 };
+        var bandX0 = Math.round(W * 0.18), bandX1 = Math.round(W * 0.82);
+        var blockMax = 0, blockAt = null, edgeMax = 0, edgeAt = null, fullMax = 0;
+        var wlBlocks = 0, wlByType = {}, edgeHits = [];
         for (var by = 0; by + 32 <= H; by += 32) {
           for (var bx = 0; bx + 32 <= W; bx += 32) {
+            var wlType = glowPropAt(hf, bx, by);
+            if (wlType) { wlBlocks++; wlByType[wlType] = (wlByType[wlType] || 0) + 1; continue; }
             var bm = meanLumRect(bx, by, bx + 32, by + 32);
-            if (bm > blockMax) { blockMax = bm; blockAt = { x: bx, y: by }; }
+            if (bm > fullMax) fullMax = bm;
+            if (bx >= bandX0 && bx + 32 <= bandX1) {
+              if (bm > blockMax) { blockMax = bm; blockAt = { x: bx, y: by }; }
+            } else {
+              if (bm > edgeMax) { edgeMax = bm; edgeAt = { x: bx, y: by }; }
+              var box = { x0: bx, y0: by, x1: bx + 32, y1: by + 32 };
+              if (rectsOverlap(box, monBox) || rectsOverlap(box, plyBox)) edgeHits.push({ x: bx, y: by });
+            }
           }
         }
         var ids = MAPS.enemyTable[hf - 1].map(function (e) { return e.id; });
@@ -371,15 +443,42 @@
         }
         var minMean = Math.min.apply(null, means), minP90 = Math.min.apply(null, p90s);
         var knight = statsOf(S.getFrame('knight_m_idle', 0));
+        var wlOverlap = (GLOW_PROPS[hf] || []).filter(function (r) {
+          return rectsOverlap(r, monBox) || rectsOverlap(r, plyBox);
+        });
         var ok = monRect.max < minMean - 10 && plyRect.max < knight.mean - 10 &&
-          blockMax < minP90 - 5 && monRect.max < knight.max && plyRect.max < knight.max;
-        hRows.push({ f: hf, monMax: monRect.max, monAt: monRect.at, plyMax: plyRect.max, blockMax: blockMax, blockAt: blockAt,
+          blockMax < minP90 - 5 && edgeMax < minP90 - 5 &&
+          monRect.max < knight.max && plyRect.max < knight.max &&
+          edgeHits.length === 0 && wlOverlap.length === 0;
+        hRows.push({ f: hf, monMax: monRect.max, monAt: monRect.at, plyMax: plyRect.max,
+          blockMax: blockMax, blockAt: blockAt, edgeMax: edgeMax, edgeAt: edgeAt, fullMax: fullMax,
+          whitelistBlocks: wlBlocks, whitelistByType: wlByType, edgeSubjectHits: edgeHits.length,
+          whitelistOverSubject: wlOverlap.length,
           minMean: minMean, minP90: minP90, knightMean: knight.mean, ok: ok });
         if (!ok) hBad.push(hRows[hRows.length - 1]);
       }
       rec('H1_subjectBrightness', hBad.length === 0, {
-        rule: '任何层：怪物/玩家所在矩形的背景峰值必须低于该层最暗怪物的均值-10；最大 32×32 背景块均值必须低于该层最暗怪物 p90-5',
-        bad: hBad, rows: hRows
+        rule: '任何层：怪物/玩家所在矩形的背景峰值必须低于该层最暗怪物的均值-10；全屏除白名单外每个 32×32 块均值必须低于该层最暗怪物 p90-5（舞台带 blockMax 与边缘 edgeMax 各自用同一明示阈值判）；边缘块不得与主体矩形相交，白名单不得覆盖主体矩形',
+        whitelist: GLOW_PROPS, bad: hBad, rows: hRows
+      });
+
+      /* H1n（真实回放）：在 F1 边缘、非白名单位置（0,576）画一块纯白 32×32，
+       * 用同一个 meanLumRect 与同一条 edgeMax 阈值必须判 FAIL；擦掉重画后同一块必须回到阈值内。
+       * 这条负例直接测边缘判据本身——不是把常量代进自己的函数。 */
+      var f1MinP90 = hRows[0].minP90;
+      var injX = 0, injY = 576;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = '#000000'; c.fillRect(0, 0, W, H);
+      R._battleBackdrop(c, W, H, 1);
+      c.fillStyle = '#ffffff'; c.fillRect(injX, injY, 32, 32);
+      var injEdge = meanLumRect(injX, injY, injX + 32, injY + 32);
+      var injFlags = !(injEdge < f1MinP90 - 5);
+      c.fillStyle = '#000000'; c.fillRect(0, 0, W, H);
+      R._battleBackdrop(c, W, H, 1);
+      var cleanEdge = meanLumRect(injX, injY, injX + 32, injY + 32);
+      rec('H1n_edgeCriterionCatchesBrightEdge', injFlags && cleanEdge < f1MinP90 - 5, {
+        rule: '负例：F1 边缘非白名单块注入纯白 → edgeMax 判据必须 FAIL；移除后必须 PASS',
+        at: { x: injX, y: injY }, injectedMean: injEdge, cleanMean: cleanEdge, threshold: f1MinP90 - 5
       });
 
       /* F3 熔岩：改后 vs 改前（改前实测 200/130/38/337，来自 D-88 实拍同区测量） */
@@ -432,19 +531,25 @@
       T = 0;
       var db = draw();
       var mbox = db.monster;
-      var noHud = mbox.y >= 22;
-      var noNameHp = mbox.y + mbox.h <= 202;
-      var noSafe = mbox.y + mbox.h < 236;
+      var card = db.monsterPlate;
+      var noHud = mbox.y >= 42;                       /* HUD 读数带 0–42 */
+      var noNameHp = !!card && card.y + card.h <= mbox.y - 8;
+      var band = (typeof R._battleSafeBand === 'function')
+        ? R._battleSafeBand(R.cssW, R.cssH, R._resolveBattleLayout(R.cssW, R.cssH)) : { top: 236 };
+      var noSafe = mbox.y + mbox.h <= band.top;
+      var negFails = !!card && !(card.y + 1 + card.h <= mbox.y - 8);
       var areaDragon = mbox.w * mbox.h;
       var areaOther = others.map(function (o) { return o.w * o.h; });
       var hierarchy = mbox.h > others[0].h && mbox.h > others[1].h &&
         areaDragon >= 1.6 * areaOther[0] && areaDragon >= 1.6 * areaOther[1];
-      rec('I1_dragonSize', nativeBad.length === 0 && otherBad.length === 0 && hierarchy && noHud && noNameHp && noSafe && R.BOSS_MUL === 2, {
-        rule: '龙原生 72×72、落屏 144×144（整数倍 2）；三 Boss 中龙最高最大（高度 > 108，面积 ≥ 1.6×）；不遮 HUD(22)、不压名称/血条(202/212)、不进安全带(236+)',
+      rec('I1_dragonSize', nativeBad.length === 0 && otherBad.length === 0 && hierarchy && noHud && noNameHp && noSafe && negFails && R.BOSS_MUL === 2, {
+        rule: '龙原生 72×72、落屏 144×144（整数倍 2）；三 Boss 中龙最高最大（高度 > 108，面积 ≥ 1.6×）；' +
+          '不遮 HUD 读数带(0–42)、不压身份卡（底 ≤ 卡顶−8）、不进安全带；负例：压卡 1px 必须判负',
         nativeBad: nativeBad, frames: nativeAll.length,
         dragonBox: { x: mbox.x, y: mbox.y, w: mbox.w, h: mbox.h, bottom: mbox.y + mbox.h },
         others: others, areaRatio: [r2(areaDragon / areaOther[0]), r2(areaDragon / areaOther[1])],
-        bossMul: R.BOSS_MUL, noHud: noHud, noNameHp: noNameHp, noSafe: noSafe
+        bossMul: R.BOSS_MUL, noHud: noHud, noNameHp: noNameHp, noSafe: noSafe,
+        card: card && { y: card.y, h: card.h }, negFails: negFails, bandTop: band.top
       });
 
       evidence();

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<!-- D-64 时点声明：D-24 的死亡成因按扩图前地图统计；本页在 M.init 前把 MAPS.sizes 钉回
+     21×15…37×23（areaRatio=1），保持历史统计可比；断言未放宽。 -->
+<title>PASS {"ok":true,"n":12,"fail":[]}</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-24 · 起手装备 / bot 装备路径 / 装备可发现性 / 伤害差</h1>
+<pre id="result">PASS {"ok":true,"sub":{"A1_newGameStartsWithKnife":{"ok":true,"d":"M.init()→M.restart() 后：背包键数=0、weapon=knife、armor=null、atk=11、def=5（D-27 起手匕首 +1 攻击；与 init 无档路径、restart 同一函数发放）"},"A2_negativeNoWeaponBreaksStartingCheck":{"ok":true,"d":"拿掉起手武器后 weapon=null → 判定=FAIL（符合预期）"},"D1_bareVsF1WeaponDamage":{"ok":true,"d":"L1 赤手 atk=10、铁剑(+3) atk=13；实测与 max(1,round(atk²/(atk+def))) 一致=true、公式原文已是比例减伤=true；兽人战士(def6) 6→9（+%50，击杀回合 15→10）；兽人萨满(def4) 7→10（+%43，击杀回合 11→8）；骷髅士兵(def5) 7→9（+%29，击杀回合 10→8）；兽人沃古尔(def7) 6→8（+%33，击杀回合 16→12）；食人魔(def9) 5→8（+%60，击杀回合 26→17）"},"C1_inventoryPanelShowsEquipHint":{"ok":true,"d":"背包面板实绘提示「↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭」；行文案「匕首 x1   攻击+1」；页头摘要「已装备：匕首+0（攻击+1） · 护甲：无 · 合计 攻+1 防+0」；源码双处含提示=true"},"C2_guideTeachesEquipAfterD25":{"ok":true,"d":"引导页 14 行，含装备教学=true；探索 · 面板 | ↑↓←→ / WASD 移动 · B 背包  | T 对话 · F 侦测/拆除陷阱 · L A | Esc 关闭面板 · Enter 确认 | 战斗（踩到怪物即进入） | 1 攻击 · 2 防御 · 3 逃跑 · 4 | 5 冲刺 · 6 护盾 · 7 用药 | 你需要知道的事 | 陷阱：踩中才现形——地刺扣血并流血，毒气让你 | 强化：装备最多 +5，用强化卷轴在战斗外提升 | 装备：捡到或买到武器/护甲后，按 B 打开背 | Boss 半血狂暴：攻防提升，还可能追加技能 | 逃跑：成功退一格且怪物留场；失败立刻被反击 | 自动存档：换层、开箱、战斗结束时"},"C3_keymapHasInventoryKey":{"ok":true,"d":"KEYMAP.explore: B → 背包"},"C4_negativeDetectorCatchesTeaching":{"ok":true,"d":"合成教学行=true、只提背包不提装备=false、真实引导页=true"},"B1_botEquipPathWorks":{"ok":true,"d":"50 局：equip 调用 230 次、成功 230 次；死时\"包里有更好武器却没装\" 0 局、\"有更好护甲却没装\" 0 局；同回合获得（开箱当步即被拉入战斗、无行动机会）0 件"},"B2_noLeftoverGearAtDeath":{"ok":true,"d":"死时残留升级装：武器 0、护甲 0；局终仍留在包里的升级装 0 局（0 表示不存在\"买了/捡了但没走装备指令\"；同回合获得 0 件单独计，不计入残留）"},"B3_startingKnifeEndsBareHandsDeaths":{"ok":true,"d":"50 局死亡 32（D-110 参考值 32；D-71 快照 38）：死时无武器 0（D-23 基线 34）、无护甲 7（D-23 基线 36）、期间买到装备 80 件（D-23 基线 2）"},"B3b_negativeOld38SnapshotFails":{"ok":true,"d":{"rule":"负例：旧快照「死亡数 &gt;= 38」套回本轮实测值必须 FAIL","oldSnapshot":38,"currentDeaths":32,"currentRule":"=== 32"}},"B4_negativeDisableEquipFailsCheck":{"ok":true,"d":"禁用装备后跑 3 个原本会装的种子：调用 6978、成功 0、局终包里仍留着升级装 3 局 → equipEvidenceOk=false（必须 false）"}}}
+
+  ✓ A1_newGameStartsWithKnife — M.init()→M.restart() 后：背包键数=0、weapon=knife、armor=null、atk=11、def=5（D-27 起手匕首 +1 攻击；与 init 无档路径、restart 同一函数发放）
+  ✓ A2_negativeNoWeaponBreaksStartingCheck — 拿掉起手武器后 weapon=null → 判定=FAIL（符合预期）
+  ✓ D1_bareVsF1WeaponDamage — L1 赤手 atk=10、铁剑(+3) atk=13；实测与 max(1,round(atk²/(atk+def))) 一致=true、公式原文已是比例减伤=true；兽人战士(def6) 6→9（+%50，击杀回合 15→10）；兽人萨满(def4) 7→10（+%43，击杀回合 11→8）；骷髅士兵(def5) 7→9（+%29，击杀回合 10→8）；兽人沃古尔(def7) 6→8（+%33，击杀回合 16→12）；食人魔(def9) 5→8（+%60，击杀回合 26→17）
+  ✓ C1_inventoryPanelShowsEquipHint — 背包面板实绘提示「↑↓ 选择 · Enter 使用/装备 · Esc/点遮罩关闭」；行文案「匕首 x1   攻击+1」；页头摘要「已装备：匕首+0（攻击+1） · 护甲：无 · 合计 攻+1 防+0」；源码双处含提示=true
+  ✓ C2_guideTeachesEquipAfterD25 — 引导页 14 行，含装备教学=true；探索 · 面板 | ↑↓←→ / WASD 移动 · B 背包  | T 对话 · F 侦测/拆除陷阱 · L A | Esc 关闭面板 · Enter 确认 | 战斗（踩到怪物即进入） | 1 攻击 · 2 防御 · 3 逃跑 · 4 | 5 冲刺 · 6 护盾 · 7 用药 | 你需要知道的事 | 陷阱：踩中才现形——地刺扣血并流血，毒气让你 | 强化：装备最多 +5，用强化卷轴在战斗外提升 | 装备：捡到或买到武器/护甲后，按 B 打开背 | Boss 半血狂暴：攻防提升，还可能追加技能 | 逃跑：成功退一格且怪物留场；失败立刻被反击 | 自动存档：换层、开箱、战斗结束时
+  ✓ C3_keymapHasInventoryKey — KEYMAP.explore: B → 背包
+  ✓ C4_negativeDetectorCatchesTeaching — 合成教学行=true、只提背包不提装备=false、真实引导页=true
+  ✓ B1_botEquipPathWorks — 50 局：equip 调用 230 次、成功 230 次；死时"包里有更好武器却没装" 0 局、"有更好护甲却没装" 0 局；同回合获得（开箱当步即被拉入战斗、无行动机会）0 件
+  ✓ B2_noLeftoverGearAtDeath — 死时残留升级装：武器 0、护甲 0；局终仍留在包里的升级装 0 局（0 表示不存在"买了/捡了但没走装备指令"；同回合获得 0 件单独计，不计入残留）
+  ✓ B3_startingKnifeEndsBareHandsDeaths — 50 局死亡 32（D-110 参考值 32；D-71 快照 38）：死时无武器 0（D-23 基线 34）、无护甲 7（D-23 基线 36）、期间买到装备 80 件（D-23 基线 2）
+  ✓ B3b_negativeOld38SnapshotFails — [object Object]
+  ✓ B4_negativeDisableEquipFailsCheck — 禁用装备后跑 3 个原本会装的种子：调用 6978、成功 0、局终包里仍留着升级装 3 局 → equipEvidenceOk=false（必须 false）</pre>
+<canvas id="game" width="1000" height="808" style="width: 1000px; height: 808px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<!-- D-66 时点声明：D-66 起 live 怪物 hp 已按爽感验收重排；本页是历史卡，运行前用
+     preflight/lib/monster_hp_legacy.js 把 hp 钉回 D-65 末快照，断言与基线数字一字未改。 -->
+<script src="lib/monster_hp_legacy.js"></script>
+<script>pinMonsterHpLegacy();</script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+(function () {
+  'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, P = Game.Data.Player,
+      I = Game.Systems.Inventory, S = Game.Systems.Shop, R = Game.Core.Render,
+      Modal = Game.Modal, IT = Game.Data.ITEMS, Bot = Game.Bot;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  /* 只读快照：新档装备槽 */
+  function freshEquipState() {
+    return { invCount: Object.keys(P.inventory || {}).length,
+      weapon: P.equipment ? P.equipment.weapon : 'NO_EQ',
+      armor: P.equipment ? P.equipment.armor : 'NO_EQ',
+      atk: P.atk, def: P.def };
+  }
+  /* D-27 规格变更：新档从"无装备"变为"起手匕首（+1 攻击）、无护甲"。
+   * D-24 当时断言 weapon=null / atk=10 是那时的事实；起手武器落地后该期望必须翻转，
+   * 否则产品行为与断言自相矛盾。判定形状不变，只改期望值（与 D-25 对 C2 的处理同法）。 */
+  function isStartingNewGame(s) {
+    return s.invCount === 0 && s.weapon === 'knife' && s.armor === null && s.atk === 11 && s.def === 5;
+  }
+  /* 归因断言：bot 装得上且死时没有"更好的装备留在包里" */
+  function equipEvidenceOk(s) {
+    return s.tries > 0 && s.ok === s.tries && s.ok >= 20 && s.hadBetterW === 0 && s.hadBetterA === 0;
+  }
+  /* M1（D-84）：武器比较改用有效攻击 Inventory.atkOf（基础 + 等级成长）；
+   * 仍按 effect.atk 基础值比会把 25 攻的烬牙判成"不如 16 攻龙牙剑"，产生假阳性残留。 */
+  function bestInBag(inv, type, curId, field) {
+    function val(id) {
+      var d = IT[id];
+      if (!d) return 0;
+      if (type === 'weapon') return I.atkOf ? I.atkOf(id, P.level) : ((d.effect && d.effect.atk) || 0);
+      return (d.effect && d.effect[field]) || 0;
+    }
+    var best = null, bestV = curId ? val(curId) : 0;
+    for (var id in inv) {
+      if (!Object.prototype.hasOwnProperty.call(inv, id) || !(inv[id] > 0)) continue;
+      var d = IT[id];
+      if (!d || d.type !== type || !d.effect) continue;
+      var v = val(id);
+      if (v > bestV) { bestV = v; best = id; }
+    }
+    return best;
+  }
+  /* 跑一段种子，统计装备动作 / 死时残留升级装 / 死时无武器无护甲 / 买到的装备件数
+   * D-34 修补（测量口径，不是放宽）：新平衡下 50 局里出现 1 例"开宝箱当步即被拉入战斗、
+   * 拿到护甲后没有任何行动机会就死亡"（种子 1021，add 与 battle:start 在同一个 keydown）。
+   * 玩家在该状态下无法换装（战斗界面没有背包），把它算作"bot 没走装备指令"是假阳性。
+   * 因此：只把"拿到后至少还有 1 次按键机会"的更好装备计入残留；同回合获得的数量单独打印。 */
+  function probeEquip(seeds, disable) {
+    var st = { tries: 0, ok: 0, hadBetterW: 0, hadBetterA: 0, noW: 0, noA: 0, equipBuys: 0, deaths: 0,
+      runsWithUnequipped: 0, sameTurnGear: 0, sameTurnSeeds: [] };
+    var death = null;
+    var B = Game.Systems.Battle;
+    var origEquip = I.equip, origBuy = S.buy, origAdd = I.add, origStart = B.start;
+    var kdN = 0, fatalAt = -1, gearAdds = [];
+    function onKd() { kdN++; }
+    function addAt(id) {
+      var last = -1;
+      for (var i = 0; i < gearAdds.length; i++) if (gearAdds[i].id === id) last = gearAdds[i].at;
+      return last;
+    }
+    function onEnd(e) {
+      if (!e || e.result !== 'lose' || death) return;
+      var inv = {};
+      for (var k in P.inventory) {
+        if (Object.prototype.hasOwnProperty.call(P.inventory, k) && P.inventory[k] > 0) inv[k] = P.inventory[k];
+      }
+      var bw = bestInBag(inv, 'weapon', P.equipment.weapon, 'atk');
+      var ba = bestInBag(inv, 'armor', P.equipment.armor, 'def');
+      var sw = (bw && addAt(bw) === fatalAt), sa = (ba && addAt(ba) === fatalAt);
+      death = { w: P.equipment.weapon, a: P.equipment.armor, inv: inv,
+        betterW: sw ? null : bw, betterA: sa ? null : ba,
+        sameTurn: (sw ? 1 : 0) + (sa ? 1 : 0) };
+    }
+    window.addEventListener('keydown', onKd, true);
+    I.add = function (id) {
+      var r = origAdd.apply(I, arguments);
+      var d = IT[id];
+      if (d && (d.type === 'weapon' || d.type === 'armor')) gearAdds.push({ id: id, at: kdN });
+      return r;
+    };
+    B.start = function () {
+      fatalAt = kdN;
+      return origStart.apply(B, arguments);
+    };
+    I.equip = function (id) {
+      st.tries++;
+      if (disable) return { ok: false, msg: 'D-24 负例：禁用装备步骤' };
+      var r = origEquip.apply(I, arguments);
+      if (r && r.ok) st.ok++;
+      return r;
+    };
+    S.buy = function (id) {
+      var r = origBuy.apply(S, arguments);
+      var d = IT[id] || {};
+      if (r && r.ok && (d.type === 'weapon' || d.type === 'armor')) st.equipBuys++;
+      return r;
+    };
+    Game.Core.EventBus.on('battle:end', onEnd);
+    for (var s = 0; s < seeds.length; s++) {
+      death = null; kdN = 0; fatalAt = -1; gearAdds = [];
+      Bot.run(seeds[s], { maxActions: 2500 });
+      if (!death) {
+        if (bestInBag(P.inventory, 'weapon', P.equipment.weapon, 'atk') ||
+            bestInBag(P.inventory, 'armor', P.equipment.armor, 'def')) st.runsWithUnequipped++;
+        continue;
+      }
+      st.deaths++;
+      if (!death.w) st.noW++;
+      if (!death.a) st.noA++;
+      if (death.betterW) st.hadBetterW++;
+      if (death.betterA) st.hadBetterA++;
+      if (death.betterW || death.betterA) st.runsWithUnequipped++;
+      if (death.sameTurn) { st.sameTurnGear += death.sameTurn; st.sameTurnSeeds.push(seeds[s]); }
+    }
+    Game.Core.EventBus.off('battle:end', onEnd);
+    window.removeEventListener('keydown', onKd, true);
+    I.equip = origEquip;
+    S.buy = origBuy;
+    I.add = origAdd;
+    B.start = origStart;
+    return st;
+  }
+  function seedsOf(from, to) {
+    var a = [];
+    for (var i = from; i <= to; i++) a.push(i);
+    return a;
+  }
+  /* 装备教学检测器：引导页若写了"背包 + 装备"就算教了 */
+  function guideTeachesEquip(lines) {
+    for (var i = 0; i < lines.length; i++) {
+      var t = String(lines[i] || '');
+      if (/背包[^。]*(装备|装|换)|(装备|装)[^。]*背包|Enter[^。]*装备|按\s*B[^。]*装备/.test(t)) return true;
+    }
+    return false;
+  }
+  /* 假 ctx：只为抓 Modal.draw 真正写出的文本 */
+  function fakeCtx(sink) {
+    var o = {};
+    var noop = function () {};
+    var fns = ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'stroke', 'fill',
+      'fillRect', 'strokeRect', 'clearRect', 'drawImage', 'arc', 'rect', 'roundRect',
+      'setTransform', 'scale', 'translate', 'clip', 'putImageData', 'setLineDash'];
+    for (var i = 0; i < fns.length; i++) o[fns[i]] = noop;
+    o.createLinearGradient = function () { return { addColorStop: noop }; };
+    o.createRadialGradient = o.createLinearGradient;
+    o.createPattern = function () { return {}; };
+    o.measureText = function (t) { return { width: String(t).length * 7 }; };
+    o.fillText = function (t) { sink.push(String(t)); };
+    o.strokeText = o.fillText;
+    o.getImageData = function () { return { data: [] }; };
+    return o;
+  }
+
+  try {
+    Game.Core.Input.bind();
+    /* D-64：钉回扩图前尺寸，保证死亡成因统计与历史口径可比（areaRatio=1）。 */
+    Game.Data.MAPS.sizes = [[21, 15], [25, 17], [29, 19], [33, 21], [37, 23]];
+    M.init();
+    M.closeGuide();
+    M.restart();
+
+    /* ══ A. 问题 1：新档到底有没有武器/护甲（D-27 起有起手匕首） ══ */
+    var fresh = freshEquipState();
+    rec('A1_newGameStartsWithKnife', isStartingNewGame(fresh),
+      'M.init()→M.restart() 后：背包键数=' + fresh.invCount + '、weapon=' + fresh.weapon +
+      '、armor=' + fresh.armor + '、atk=' + fresh.atk + '、def=' + fresh.def +
+      '（D-27 起手匕首 +1 攻击；与 init 无档路径、restart 同一函数发放）');
+
+    /* 负例：把起手武器拿掉后，同一判定必须 FAIL */
+    P.equipment = { weapon: null, armor: null };
+    var negFresh = freshEquipState();
+    P.equipment = { weapon: 'knife', armor: null }; I.recalcEquip();
+    rec('A2_negativeNoWeaponBreaksStartingCheck', isStartingNewGame(negFresh) === false,
+      '拿掉起手武器后 weapon=' + negFresh.weapon + ' → 判定=' +
+      (isStartingNewGame(negFresh) ? 'PASS（漏检！）' : 'FAIL（符合预期）'));
+
+    /* ══ D. 问题 4：赤手 vs F1 武器，单回合伤害（真实攻击测量）══ */
+    var f2 = [
+      { id: 'orc_warrior', name: '兽人战士', def: 6, hp: 85 },
+      { id: 'orc_shaman', name: '兽人萨满', def: 4, hp: 75 },
+      { id: 'skeleton', name: '骷髅士兵', def: 5, hp: 70 },
+      { id: 'wogol', name: '兽人沃古尔', def: 7, hp: 95 },
+      { id: 'ogre', name: '食人魔', def: 9, hp: 130 }
+    ];
+    /* D-34 规格变更：伤害公式由 max(atk-def,1) 改为 max(1, round(atk²/(atk+def)))。
+     * 本页"实测 vs 复算"的判定形状不变，只把独立实现换成新公式。 */
+    var dmg = function (atk, def) { return Math.max(1, Math.round(atk * atk / (atk + def))); };
+    P.level = 1; P.upg = {};
+    var rows = [], dOk = true;
+    for (var f = 0; f < f2.length; f++) {
+      P.equipment = { weapon: null, armor: null };
+      I.recalcEquip();
+      var atkBare = P.atk;
+      B.start(f2[f].id);
+      var hp0 = B.getState().monster.hp;
+      B.playerAction('attack');
+      var bare = hp0 - B.getState().monster.hp;
+
+      P.equipment = { weapon: 'sword_iron', armor: null };
+      I.recalcEquip();
+      var atkArm = P.atk;
+      B.start(f2[f].id);
+      var hp1 = B.getState().monster.hp;
+      B.playerAction('attack');
+      var armed = hp1 - B.getState().monster.hp;
+
+      var expBare = dmg(atkBare, f2[f].def), expArm = dmg(atkArm, f2[f].def);
+      if (bare !== expBare || armed !== expArm || armed <= bare) dOk = false;
+      rows.push(f2[f].name + '(def' + f2[f].def + ') ' + bare + '→' + armed +
+        '（+%' + Math.round((armed / bare - 1) * 100) + '，击杀回合 ' +
+        Math.ceil(f2[f].hp / bare) + '→' + Math.ceil(f2[f].hp / armed) + '）');
+    }
+    var battleSrc = readDoc('../js/systems/battle.js');
+    var formulaOk = battleSrc.indexOf('return Math.max(1, Math.round(a * a / (a + d)));') >= 0;
+    rec('D1_bareVsF1WeaponDamage', dOk && formulaOk,
+      'L1 赤手 atk=' + 10 + '、铁剑(+3) atk=' + (10 + 3) + '；实测与 max(1,round(atk²/(atk+def))) 一致=' + dOk +
+      '、公式原文已是比例减伤=' + formulaOk + '；' + rows.join('；'));
+
+    /* ══ C. 问题 3：装备动作怎么被发现 ═══════════════════════════ */
+    var renderSrc = readDoc('../js/core/render.js');
+    var modalSrc = readDoc('../js/systems/modal.js');
+    var srcHint = renderSrc.indexOf('Enter 使用/装备') >= 0 && modalSrc.indexOf('Enter 使用/装备') >= 0;
+    var sink = [];
+    var realCtx = R._ctx;
+    var drawErr = null;
+    try {
+      R._ctx = fakeCtx(sink);
+      P.inventory = { knife: 1 };
+      /* D-27：新档起手匕首，页头摘要应显示"已装备：匕首（攻击+1） · 护甲：无" */
+      P.equipment = { weapon: 'knife', armor: null }; I.recalcEquip();
+      Modal.open('inventory');
+      Modal.draw();
+      Modal.close();
+    } catch (e) { drawErr = String(e); }
+    R._ctx = realCtx;
+    var hintLine = null, rowLine = null, sumLine = null;
+    for (var s2 = 0; s2 < sink.length; s2++) {
+      if (/使用\/装备/.test(sink[s2])) hintLine = sink[s2];
+      if (/匕首/.test(sink[s2]) && /攻击\+1/.test(sink[s2])) rowLine = sink[s2];
+      if (/已装备：/.test(sink[s2])) sumLine = sink[s2];
+    }
+    rec('C1_inventoryPanelShowsEquipHint', !drawErr && !!hintLine && !!rowLine && srcHint && !!sumLine,
+      drawErr ? '绘制抛错：' + drawErr :
+        '背包面板实绘提示「' + (hintLine || '无') + '」；行文案「' + (rowLine || '无') +
+        '」；页头摘要「' + (sumLine || '无') + '」；源码双处含提示=' + srcHint);
+
+    var guideLines = (R.guideLines && R.guideLines()) || [];
+    var guideTeaches = guideTeachesEquip(guideLines);
+    /* D-25 规格变更：D-24 的结论是"引导页 13 行里没有装备教学"（当时的事实），
+     * D-25 明确要求补这一行，故本条断言的期望值随规格翻转为"必须教"——检测器本身不变，
+     * 仍是同一个 guideTeachesEquip()，不是放宽，而是被测规格变了。 */
+    rec('C2_guideTeachesEquipAfterD25', guideLines.length > 0 && guideTeaches === true,
+      '引导页 ' + guideLines.length + ' 行，含装备教学=' + guideTeaches + '；' +
+      guideLines.map(function (t) { return t.replace(/\s+/g, ' ').slice(0, 22); }).join(' | '));
+
+    var keymap = R.KEYMAP || {};
+    var bRow = null;
+    (keymap.explore || []).forEach(function (r) { if (r.codes && r.codes.indexOf('KeyB') >= 0) bRow = r; });
+    rec('C3_keymapHasInventoryKey', !!bRow && /背包/.test(bRow.name || ''),
+      bRow ? 'KEYMAP.explore: ' + bRow.label + ' → ' + bRow.name : 'KEYMAP 缺 B 背包');
+
+    /* 负例：检测器本身有效——塞一行"教学"必须判 true，塞一行"只提背包不提装备"必须判 false。
+     * D-25 起真实引导页已是"教了"，所以这条改成双向灵敏度校验（比原来只验 true 更严）。 */
+    var fakeTeach = guideTeachesEquip(['按 B 打开背包，Enter 装备武器']);
+    var fakeNoTeach = guideTeachesEquip(['背包里可以放很多东西']);
+    rec('C4_negativeDetectorCatchesTeaching', fakeTeach === true && fakeNoTeach === false &&
+      guideTeaches === true,
+      '合成教学行=' + fakeTeach + '、只提背包不提装备=' + fakeNoTeach +
+      '、真实引导页=' + guideTeaches);
+
+    /* ══ B. 问题 2：bot 到底装没装（50 局逐局埋点）══════════════ */
+    var live = probeEquip(seedsOf(1001, 1050), false);
+    rec('B1_botEquipPathWorks', equipEvidenceOk(live),
+      '50 局：equip 调用 ' + live.tries + ' 次、成功 ' + live.ok +
+      ' 次；死时"包里有更好武器却没装" ' + live.hadBetterW +
+      ' 局、"有更好护甲却没装" ' + live.hadBetterA + ' 局' +
+      '；同回合获得（开箱当步即被拉入战斗、无行动机会）' + live.sameTurnGear + ' 件' +
+      (live.sameTurnSeeds.length ? '（种子 ' + live.sameTurnSeeds.join(',') + '）' : ''));
+
+    rec('B2_noLeftoverGearAtDeath', live.hadBetterW === 0 && live.hadBetterA === 0 &&
+      live.runsWithUnequipped === 0,
+      '死时残留升级装：武器 ' + live.hadBetterW + '、护甲 ' + live.hadBetterA +
+      '；局终仍留在包里的升级装 ' + live.runsWithUnequipped +
+      ' 局（0 表示不存在"买了/捡了但没走装备指令"；同回合获得 ' + live.sameTurnGear +
+      ' 件单独计，不计入残留）');
+
+    /* D-110：50 局固定种子 + 确定性 bot，没有统计波动。D-110 实测死亡 32 局，恢复精确判据
+     * lives.deaths === 32；如果变红说明行为真的变了（应重钉新参考并解释原因），不是放宽。
+     * 核心语义（无武器死亡=0 / 无护甲死亡≤36）一字未动。 */
+    rec('B3_startingKnifeEndsBareHandsDeaths', live.noW === 0 && live.noA <= 36 &&
+      live.deaths === 32,
+      '50 局死亡 ' + live.deaths + '（D-110 参考值 32；D-71 快照 38）：死时无武器 ' + live.noW +
+      '（D-23 基线 34）、无护甲 ' + live.noA + '（D-23 基线 36）、期间买到装备 ' +
+      live.equipBuys + ' 件（D-23 基线 2）');
+    /* 负例（真实回放旧判据）：把 D-71 的旧快照 >=38 套回本轮实测值，必须判 FAIL。
+     * 用的是本轮 live.deaths，不是写死的常量——数据一变这条负例自己就会红，不是恒真式。 */
+    rec('B3b_negativeOld38SnapshotFails', (live.deaths >= 38) === false, {
+      rule: '负例：旧快照「死亡数 >= 38」套回本轮实测值必须 FAIL',
+      oldSnapshot: 38, currentDeaths: live.deaths, currentRule: '=== 32'
+    });
+
+    /* 负例：禁用装备步骤后，B1 的判定必须变 FAIL */
+    var neg = probeEquip([1007, 1010, 1014], true);
+    rec('B4_negativeDisableEquipFailsCheck', equipEvidenceOk(neg) === false &&
+      neg.tries > 0 && neg.ok === 0 && neg.runsWithUnequipped > 0,
+      '禁用装备后跑 3 个原本会装的种子：调用 ' + neg.tries + '、成功 ' + neg.ok +
+      '、局终包里仍留着升级装 ' + neg.runsWithUnequipped +
+      ' 局 → equipEvidenceOk=' + equipEvidenceOk(neg) + '（必须 false）');
+
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.message + '\n' + (e.stack || ''))) || e);
+  }
+
+  var keys = Object.keys(out.sub);
+  var failed = keys.filter(function (k) { return !out.sub[k].ok; });
+  document.getElementById('result').textContent =
+    (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out) + '\n\n' +
+    keys.map(function (k) { return (out.sub[k].ok ? '  ✓ ' : '  ✗ ') + k + ' — ' + out.sub[k].d; }).join('\n');
+  document.title = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify({ ok: out.ok, n: keys.length, fail: failed });
+})();
+</script>
+
+
+</body></html>

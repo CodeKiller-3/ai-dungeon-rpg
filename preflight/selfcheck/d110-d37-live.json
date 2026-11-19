@@ -1,0 +1,133 @@
+{
+    "protocol":  "D-110-d37-live",
+    "liveSeeds":  [
+                      1001,
+                      1003,
+                      1004
+                  ],
+    "g0":  [
+               {
+                   "seed":  1001,
+                   "outcome":  "dead",
+                   "actions":  304,
+                   "deathFloor":  2,
+                   "deathCause":  "被怪打死",
+                   "hp":  0,
+                   "level":  1,
+                   "gold":  21,
+                   "endPos":  "9,3",
+                   "floors":  [
+                                  {
+                                      "floor":  1,
+                                      "actions":  147,
+                                      "gold":  21,
+                                      "equip":  3,
+                                      "hp":  21,
+                                      "level":  1,
+                                      "ended":  false
+                                  },
+                                  {
+                                      "floor":  2,
+                                      "actions":  11,
+                                      "gold":  21,
+                                      "equip":  3,
+                                      "hp":  0,
+                                      "level":  1,
+                                      "ended":  true
+                                  }
+                              ]
+               },
+               {
+                   "seed":  1003,
+                   "outcome":  "dead",
+                   "actions":  398,
+                   "deathFloor":  2,
+                   "deathCause":  "被怪打死",
+                   "hp":  0,
+                   "level":  1,
+                   "gold":  27,
+                   "endPos":  "17,14",
+                   "floors":  [
+                                  {
+                                      "floor":  1,
+                                      "actions":  138,
+                                      "gold":  21,
+                                      "equip":  4,
+                                      "hp":  29,
+                                      "level":  1,
+                                      "ended":  false
+                                  },
+                                  {
+                                      "floor":  2,
+                                      "actions":  68,
+                                      "gold":  27,
+                                      "equip":  4,
+                                      "hp":  0,
+                                      "level":  1,
+                                      "ended":  true
+                                  }
+                              ]
+               },
+               {
+                   "seed":  1004,
+                   "outcome":  "dead",
+                   "actions":  235,
+                   "deathFloor":  2,
+                   "deathCause":  "被怪打死",
+                   "hp":  0,
+                   "level":  1,
+                   "gold":  20,
+                   "endPos":  "3,9",
+                   "floors":  [
+                                  {
+                                      "floor":  1,
+                                      "actions":  115,
+                                      "gold":  20,
+                                      "equip":  1,
+                                      "hp":  37,
+                                      "level":  1,
+                                      "ended":  false
+                                  },
+                                  {
+                                      "floor":  2,
+                                      "actions":  17,
+                                      "gold":  20,
+                                      "equip":  1,
+                                      "hp":  0,
+                                      "level":  1,
+                                      "ended":  true
+                                  }
+                              ]
+               }
+           ],
+    "live1023":  {
+                     "fleeLog":  [
+                                     {
+                                         "at":  305,
+                                         "floor":  2,
+                                         "monsterId":  "orc_shaman",
+                                         "from":  "11,15",
+                                         "to":  "13,15",
+                                         "retreat":  2
+                                     },
+                                     {
+                                         "at":  1015,
+                                         "floor":  4,
+                                         "monsterId":  "pumpkin_dude",
+                                         "from":  "1,18",
+                                         "to":  "1,17",
+                                         "retreat":  1
+                                     },
+                                     {
+                                         "at":  1017,
+                                         "floor":  4,
+                                         "monsterId":  "pumpkin_dude",
+                                         "from":  "1,18",
+                                         "to":  "1,17",
+                                         "retreat":  1
+                                     }
+                                 ],
+                     "fleeAttempts":  6,
+                     "fleeSuccess":  3
+                 }
+}

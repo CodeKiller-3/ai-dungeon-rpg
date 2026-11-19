@@ -1,0 +1,87 @@
+{
+    "protocol":  "D-110-d19-repin",
+    "seeds":  [
+                  1001,
+                  1002,
+                  1003,
+                  1004,
+                  1005,
+                  1006,
+                  1007,
+                  1008,
+                  1009,
+                  1010
+              ],
+    "runs":  [
+                 {
+                     "seed":  1001,
+                     "outcome":  "dead",
+                     "actions":  2283,
+                     "deathFloor":  5,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1002,
+                     "outcome":  "dead",
+                     "actions":  1832,
+                     "deathFloor":  5,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1003,
+                     "outcome":  "dead",
+                     "actions":  2429,
+                     "deathFloor":  5,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1004,
+                     "outcome":  "dead",
+                     "actions":  334,
+                     "deathFloor":  2,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1005,
+                     "outcome":  "dead",
+                     "actions":  229,
+                     "deathFloor":  3,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1006,
+                     "outcome":  "dead",
+                     "actions":  2070,
+                     "deathFloor":  5,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1007,
+                     "outcome":  "dead",
+                     "actions":  993,
+                     "deathFloor":  4,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1008,
+                     "outcome":  "dead",
+                     "actions":  2152,
+                     "deathFloor":  5,
+                     "deathCause":  "被怪打死"
+                 },
+                 {
+                     "seed":  1009,
+                     "outcome":  "stuck",
+                     "actions":  2500,
+                     "deathFloor":  5,
+                     "deathCause":  ""
+                 },
+                 {
+                     "seed":  1010,
+                     "outcome":  "dead",
+                     "actions":  347,
+                     "deathFloor":  2,
+                     "deathCause":  "被怪打死"
+                 }
+             ]
+}

@@ -237,17 +237,45 @@
 
     /* ── A4：地图指纹零改动（精英开/关，同种子逐格相同） ────────── */
     var fpBad = [], rngBad = [];
+    var trapCntBad = [], trapTypeBad = [], trapDetermBad = [], trapEliteOverlap = [];
+    var trapDiffPairs = 0, trapDiffCells = 0;
     for (var sj = 0; sj < 20; sj++) {
       for (var fj = 1; fj <= 5; fj++) {
         var off = gen(1001 + sj * 13, fj, false);
         var on = gen(1001 + sj * 13, fj, true);
         if (JSON.stringify(off.grid) !== JSON.stringify(on.grid) ||
             JSON.stringify(off.decor) !== JSON.stringify(on.decor) ||
-            JSON.stringify(off.traps) !== JSON.stringify(on.traps) ||
             JSON.stringify(off.enemies) !== JSON.stringify(on.enemies) ||
             JSON.stringify(off.npcs) !== JSON.stringify(on.npcs)) {
           fpBad.push(1001 + sj * 13 + ':F' + fj);
         }
+        /* D-110 实测：traps 跨精英开关**不**逐格相同（根因：map.js trapPool 用
+         * eliteAtCell 剔除精英格，开关改变了候选池）。故 traps 不纳入零差异指纹，
+         * 改用 A4c 的独立不变量（数量/类型多重集/确定性/不压精英）来守。 */
+        var tOff = [], tOn = [];
+        for (var ty0 = 0; ty0 < off.traps.length; ty0++) for (var tx0 = 0; tx0 < off.traps[ty0].length; tx0++) {
+          if (off.traps[ty0][tx0]) tOff.push(off.traps[ty0][tx0]);
+          if (on.traps[ty0][tx0]) tOn.push(on.traps[ty0][tx0]);
+        }
+        var fpKey = (1001 + sj * 13) + ':F' + fj;
+        if (tOff.length !== tOn.length) trapCntBad.push(fpKey + ' off=' + tOff.length + ' on=' + tOn.length);
+        if (tOff.map(function (t) { return t.id; }).sort().join(',') !==
+            tOn.map(function (t) { return t.id; }).sort().join(',')) {
+          trapTypeBad.push(fpKey);
+        }
+        if (JSON.stringify(off.traps) !== JSON.stringify(on.traps)) {
+          trapDiffPairs++;
+          for (var ty1 = 0; ty1 < off.traps.length; ty1++) for (var tx1 = 0; tx1 < off.traps[ty1].length; tx1++) {
+            var a0 = off.traps[ty1][tx1], b0 = on.traps[ty1][tx1];
+            if ((a0 && a0.id) !== (b0 && b0.id)) trapDiffCells++;
+          }
+        }
+        for (var ei0 = 0; ei0 < (on.elites || []).length; ei0++) {
+          var el0 = on.elites[ei0];
+          if (on.traps[el0.y] && on.traps[el0.y][el0.x]) trapEliteOverlap.push(fpKey);
+        }
+        var off2 = gen(1001 + sj * 13, fj, false);
+        if (JSON.stringify(off2.traps) !== JSON.stringify(off.traps)) trapDetermBad.push(fpKey);
         /* 随机数消耗次数：开关精英必须一样 */
         var nOff = 0, nOn = 0, real = Math.random;
         var rOff = mulberry32(4242);
@@ -264,11 +292,62 @@
       }
     }
     rec('A4_fingerprint', fpBad.length === 0 && rngBad.length === 0, {
-      rule: '同种子（100 组 种子×层）精英开/关两次生成：grid / decor / traps / enemies / npcs 逐格相同，且 Math.random 调用次数完全相等 —— 精英是"生成后加一层实体"，不吃随机数、不改指纹',
+      rule: '同种子（100 组 种子×层）精英开/关两次生成：grid / decor / enemies / npcs 逐格相同，且 Math.random 调用次数完全相等 —— 精英是"生成后加一层实体"，不吃随机数、不改指纹。陷阱不纳入零差异指纹（D-110 实测差异根因：map.js trapPool 用 eliteAtCell 剔除精英格，候选池随开关变化），改由 A4c 守独立不变量',
       mismatch: fpBad, rngMismatch: rngBad
     });
 
-    /* ── A5：确定性 —— 同种子两次生成，精英坐标完全相同 ─────────── */
+    /* ── A4c：陷阱层的替代判据（D-110）──────────────────────────────
+     * 事实：traps 跨精英开关**不**逐格相同。根因是 map.js trapPool() 里
+     * `if (eliteAtCell(x, y)) continue;`——精英本身占据的格不进候选池，开关精英
+     * 改变候选池，独立流的抽样必然位移（不是主随机流被污染）。
+     * 因此用不随开关变化、但能抓住回归的不变量代替"逐格相等"：
+     *   ① 同开关重复生成，traps 逐格相同（确定性）；
+     *   ② 跨开关陷阱数量相等（count 来自主随机流，主流过一格都会变）；
+     *   ③ 跨开关陷阱类型多重集相等（每次成功落位抽一次类型）；
+     *   ④ 陷阱永不压精英格（与 A4b 同一硬约束）；
+     * 差异规模如实打印（diffPairs / diffCells），只审计不设阈值。 */
+    rec('A4c_trapStreamInvariant',
+      trapDetermBad.length === 0 && trapCntBad.length === 0 &&
+      trapTypeBad.length === 0 && trapEliteOverlap.length === 0,
+      { rule: '同开关重复生成 traps 逐格相同；跨开关陷阱数量与类型多重集相等；不压精英格',
+        determinismBad: trapDetermBad, countBad: trapCntBad, typeBad: trapTypeBad,
+        eliteOverlap: trapEliteOverlap,
+        diffPairs: trapDiffPairs, diffCells: trapDiffCells,
+        rootCause: 'map.js trapPool(): eliteAtCell 剔除精英格 → 候选池随开关变化' });
+
+    /* ── A4b：陷阱层硬约束（D-99：派生层也不能破坏可玩性） ───────── */
+    var trapCutBad = [], trapOverlapBad = [], trapTotal = 0;
+    for (var sr = 0; sr < 20; sr++) {
+      for (var fr = 1; fr <= 5; fr++) {
+        var srd = 1001 + sr * 13;
+        var sn = gen(srd, fr, true);
+        var gr = sn.grid;
+        for (var ty = 0; ty < gr.length; ty++) {
+          for (var tx = 0; tx < gr[0].length; tx++) {
+            var tr = sn.traps[ty] && sn.traps[ty][tx];
+            if (!tr) continue;
+            trapTotal++;
+            var key = srd + ':F' + fr + '@' + tx + ',' + ty;
+            if (gr[ty][tx] !== 1) trapOverlapBad.push('notFloor:' + key);
+            if (!reachDown({ x: tx, y: ty })) trapCutBad.push(key);
+            var dc = sn.decor[ty] && sn.decor[ty][tx];
+            if (dc === 'chest' || dc === 'room_chest') trapOverlapBad.push('chest:' + key);
+            for (var ei2 = 0; ei2 < sn.elites.length; ei2++) {
+              if (sn.elites[ei2].x === tx && sn.elites[ei2].y === ty) { trapOverlapBad.push('elite:' + key); break; }
+            }
+            for (var ni2 = 0; ni2 < sn.npcs.length; ni2++) {
+              if (sn.npcs[ni2].indexOf('@' + tx + ',' + ty) > 0) { trapOverlapBad.push('npc:' + key); break; }
+            }
+          }
+        }
+      }
+    }
+    rec('A4b_trapLegality', trapCutBad.length === 0 && trapOverlapBad.length === 0, {
+      rule: '100 组 种子×层：陷阱只落在地板格，既不是「移掉后出生点→下行梯断开」的割点，也不与精英 / NPC / 宝箱 / 楼梯重叠',
+      traps: trapTotal, cut: trapCutBad.slice(0, 6), overlap: trapOverlapBad.slice(0, 6)
+    });
+
+
     var detBad = [];
     for (var sk = 0; sk < 20; sk++) {
       for (var fk = 1; fk <= 5; fk++) {

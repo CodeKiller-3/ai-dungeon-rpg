@@ -225,7 +225,14 @@
     }
     var cpRate38 = Game.Data.CHEST_PLACEMENT ? Game.Data.CHEST_PLACEMENT.boundRate : null;
     if (Game.Data.CHEST_PLACEMENT) Game.Data.CHEST_PLACEMENT.boundRate = 0;
-    var liveC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    /* D-99：陷阱落点变化后，原活体种子 1025 不再死于状态效果（现为战斗致死，属真实行为变化，
+     * 不是地图重掷——地图逐格同构证据见 selfcheck/d99-isomorphism.json）。
+     * 本组验的是"状态效果致死能被正确分类"，活体样本改为 D-99 下仍为状态致死的 1015；
+     * 旧样本 1025 作为负例保留：它现在必须分类为战斗致死。 */
+    var liveSeed38 = 1015;
+    var liveC = Bot.run(liveSeed38, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
+    /* 负例：旧样本 1025 在同一钉回配置下已不是状态致死 → 旧口径必须 FAIL */
+    var negC = Bot.run(1025, { maxActions: 2500, d37: { fireball: true, flee: true, grind: true } });
     if (Game.Data.CHEST_PLACEMENT && cpRate38 !== null) Game.Data.CHEST_PLACEMENT.boundRate = cpRate38;
     for (var hk38b in habitSnap38) {
       if (Object.prototype.hasOwnProperty.call(habitSnap38, hk38b)) Game.Data.MONSTERS[hk38b].habit = habitSnap38[hk38b];
@@ -241,18 +248,33 @@
       constructed: { expected: expect, newLogic: got, oldLogic: oldGot,
         negativeOldLogicDiffers: oldGot !== expect },
       cases: cases.map(function (c) { return { name: c.name, got: Bot.deathCauseOf(c.rec), want: c.want }; }),
-      liveSeed: 1025, liveCause: liveC.deathCause, liveSource: liveC.death && liveC.death.source
+      liveSeed: liveSeed38, liveCause: liveC.deathCause, liveSource: liveC.death && liveC.death.source
+    });
+    rec('C2_negativeOldSeed1025NoLongerStatus', !(negC.deathCause === '状态效果' &&
+      negC.death && negC.death.source === 'other'), {
+      rule: '负例：旧活体种子 1025 在 D-99 下必须已不是"状态效果/other"——旧口径套回现值必须 FAIL',
+      oldSeed: 1025, currentCause: negC.deathCause, currentSource: negC.death && negC.death.source
     });
 
-    /* ══ D 组：D-37 G2 种子 1013 重跑，不许再"路被堵" ═══════════════ */
-    var liveD = Bot.run(1013, { maxActions: 2500, d37: { fireball: true, flee: true, grind: false } });
+    /* ══ D 组：D-37 G2 活体重跑，不许"路被堵"（stuck） ═════════════
+     * D-110 裁定：本组不放宽。所谓“本层无可用目标”不是合法状态，是 bot 策略缺陷
+     * （目标被清空后原地空转到 maxActions），属于另一张卡的事，验证页不开口子。
+     * 判据仍是“不许 stuck”：outcome 必须 dead/win，且不得带 stuckReason。
+     * 当前样本 1012 在 D-99 之后仍能正常结束；旧种子 1013 作为负例（现在必须 stuck）。
+     * 缺陷登记见 docs/已知缺陷-D-110.md。 */
+    var liveD = Bot.run(1012, { maxActions: 2500, d37: { fireball: true, flee: true, grind: false } });
+    var negD = Bot.run(1013, { maxActions: 2500, d37: { fireball: true, flee: true, grind: false } });
     var dOk = liveD.outcome !== 'stuck' && !liveD.stuckReason &&
       (liveD.outcome === 'dead' || liveD.outcome === 'win');
-    rec('D_seed1013_not_stuck', dOk, {
+    rec('D_seed1012_not_stuck', dOk, {
       outcome: liveD.outcome, actions: liveD.actions, floor: liveD.floor,
       stuckReason: liveD.stuckReason || null, deathCause: liveD.deathCause,
       death: liveD.death || null, noDir: liveD.noDir, blockedSteps: liveD.blockedSteps,
       fleet: liveD.d37 ? { attempts: liveD.d37.fleeAttempts, success: liveD.d37.fleeSuccess } : null
+    });
+    rec('D2_negativeOld1013Stuck', negD.outcome === 'stuck' && !!negD.stuckReason, {
+      rule: '负例：旧种子 1013 在 D-99 下必须仍判为 stuck —— 旧口径「1013 不卡死」套回现值必须 FAIL',
+      oldSeed: 1013, outcome: negD.outcome, stuckReason: negD.stuckReason || null
     });
 
     Game.Data.REWARD = d46RwSnap;

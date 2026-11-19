@@ -395,13 +395,36 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
 
     /* ── E 组：隔离（可通行 / 不触发战斗 / 不占怪物格 / 不影响宝箱与奖励点） ── */
     var isoBad = [], rewardBad = [], isoSample = [];
+    var trapCntBad = [], trapTypeBad = [], trapNpcOverlap = [], trapDetermBad = [];
+    var trapDiffPairs = 0, trapDiffCells = 0;
     for (var ei = 0; ei < 10; ei++) {
       var s1 = genFloor1(seedsA[ei], true);
       var s2 = genFloor1(seedsA[ei], false);
+      /* D-110：traps 跨 NPC 开关**不**逐格相同（根因：map.js trapPool 用 npcs 列表剔除
+       * NPC 格，开关改变了候选池）。零差异指纹继续不含 traps，改由下面四条不变量守：
+       * 同开关重复生成逐格相同 / 跨开关数量相等 / 类型多重集相等 / 永不压 NPC 格。 */
+      var t1 = [], t2 = [];
+      for (var ty = 0; ty < s1.traps.length; ty++) for (var tx = 0; tx < s1.traps[ty].length; tx++) {
+        if (s1.traps[ty][tx]) t1.push(s1.traps[ty][tx]);
+        if (s2.traps[ty][tx]) t2.push(s2.traps[ty][tx]);
+      }
+      if (t1.length !== t2.length) trapCntBad.push({ seed: s1.seed, on: t1.length, off: t2.length });
+      if (t1.slice().sort().join(',') !== t2.slice().sort().join(',')) trapTypeBad.push({ seed: s1.seed });
+      if (JSON.stringify(s1.traps) !== JSON.stringify(s2.traps)) {
+        trapDiffPairs++;
+        for (var ty2 = 0; ty2 < s1.traps.length; ty2++) for (var tx2 = 0; tx2 < s1.traps[ty2].length; tx2++) {
+          if ((s1.traps[ty2][tx2] || null) !== (s2.traps[ty2][tx2] || null)) trapDiffCells++;
+        }
+      }
+      if (s1.npcs[0] && s1.traps[s1.npcs[0].y] && s1.traps[s1.npcs[0].y][s1.npcs[0].x]) {
+        trapNpcOverlap.push({ seed: s1.seed });
+      }
+      var s1b = genFloor1(seedsA[ei], true);
+      if (JSON.stringify(s1b.traps) !== JSON.stringify(s1.traps)) trapDetermBad.push({ seed: s1.seed });
       var f1 = fnv1a(s1.grid.map(function (r) { return r.join(''); }).join('|') + '#' +
-        JSON.stringify(s1.decor) + '#' + JSON.stringify(s1.enemies) + '#' + JSON.stringify(s1.traps));
+        JSON.stringify(s1.decor) + '#' + JSON.stringify(s1.enemies));
       var f2 = fnv1a(s2.grid.map(function (r) { return r.join(''); }).join('|') + '#' +
-        JSON.stringify(s2.decor) + '#' + JSON.stringify(s2.enemies) + '#' + JSON.stringify(s2.traps));
+        JSON.stringify(s2.decor) + '#' + JSON.stringify(s2.enemies));
       var rewardCells = 0, rewardCellsOff = 0;
       for (var ry = 0; ry < s1.decor.length; ry++) {
         for (var rx = 0; rx < s1.decor[ry].length; rx++) {
@@ -434,9 +457,13 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var battle = (M._scene === 'battle');
     var trapAt = Map.getTrap(npcE.x, npcE.y);
     rec('E_isolation', isoBad.length === 0 && rewardBad.length === 0 && stepped && !battle &&
-      Map.enemyAt(npcE.x, npcE.y) === null && !trapAt && Map.isWalkable(npcE.x, npcE.y), {
-      rule: 'NPC 格可通行（真实按键走上去）、不触发战斗、不占怪物格；NPC 开关不改变地图/宝箱/敌人/陷阱指纹，F1 奖励点数量与关 NPC 时逐格一致',
+      Map.enemyAt(npcE.x, npcE.y) === null && !trapAt && Map.isWalkable(npcE.x, npcE.y) &&
+      trapDetermBad.length === 0 && trapCntBad.length === 0 &&
+      trapTypeBad.length === 0 && trapNpcOverlap.length === 0, {
+      rule: 'NPC 格可通行（真实按键走上去）、不触发战斗、不占怪物格；NPC 开关不改变地图/宝箱/敌人指纹；陷阱不纳入零差异指纹（根因：trapPool 剔除 NPC 格），改由不变量守：同开关重复生成逐格相同 / 跨开关数量相等 / 类型多重集相等 / 永不压 NPC 格；F1 奖励点数量与关 NPC 时逐格一致',
       fingerprintBad: isoBad.slice(0, 6), rewardBad: rewardBad.slice(0, 6), sample: isoSample,
+      trapDeterminismBad: trapDetermBad, trapCountBad: trapCntBad, trapTypeBad: trapTypeBad,
+      trapNpcOverlap: trapNpcOverlap, trapDiffPairs: trapDiffPairs, trapDiffCells: trapDiffCells,
       stepped: stepped, battle: battle, enemyAt: !!Map.enemyAt(npcE.x, npcE.y), trap: trapAt
     });
 
