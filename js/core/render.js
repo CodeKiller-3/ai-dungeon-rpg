@@ -9,6 +9,10 @@
 
   var TILE = 24; /* 瓦片像素尺寸 */
   var cam = { x: 0, y: 0 };
+  /* D-100：统一鼠标热区——每次顶层绘制前清空，绘制时登记当前可见的可点矩形；
+   * 命中一律用逻辑坐标（toLogical），hover 只在 id 变化时写一次 canvas.style.cursor。 */
+  var HOT = [];
+  var HOVER_ID = null;
 
   /* D-12：静态图层离屏缓存。
    * 地板/墙/楼梯/细节/装饰/陷阱/记忆覆盖/主题 tint 都是"只在换步、换层、resize 时变化"
@@ -21,6 +25,11 @@
     grid: null, floor: 0, camX: 0, camY: 0,
     dpr: 0, scale: 0, cvW: 0, cvH: 0
   };
+
+  /* D-106：主菜单场景是纯静态画面（无逐帧动画），按 W/H/DPR 缓存到离屏画布，
+   * 每帧只做一次 1:1 blit；把菜单单帧调用从 ~480 压到 ~120。
+   * 素材未就绪时用兜底色块直绘且不写缓存，全部到齐后 key 变化自动重绘。 */
+  var menuSceneCache = { cv: null, ctx: null, key: '' };
 
   /* 自适应缩放（2026-11）：设计基准 960×540，等比缩放系数 scale∈[1,2]，按 0.25 步进取整。
    * 逻辑视口 = 窗口 CSS 尺寸 / scale；所有绘制与命中判定仍用逻辑坐标（像素风 TILE=24 不变），
@@ -103,6 +112,24 @@
     return w;
   }
 
+  /* D-104：战斗精灵整数倍硬线——落屏高 = 素材原生高 × 整数（普通怪/Boss/玩家一律 2×）。
+   * 旧口径固定 90px，骑士 24×42 → 2.143×、兽人 24×35 → 2.571×，像素被非整数采样拉糊；
+   * 现在不再用"绝对高度 90"反推倍率，而是由原生高正推目标高，宽 = round(原生宽 × 2) 恰为整数倍。
+   * 素材缺失（naturalHeight=0）才退回旧兜底高度，该分支是纯色方块，不属于精灵缩放口径。 */
+  var BATTLE_SPRITE_MUL = 2;
+  function battleSpriteH(img, fallback) {
+    var nh = img && (img.naturalHeight || 0);
+    return (nh > 0) ? nh * BATTLE_SPRITE_MUL : (fallback || 108);
+  }
+  /* D-105：濒死缩小也必须走整数档（旧 1−prog×0.5 → 1.5× 等中间倍率会把像素插值糊）。
+   * 前 50% 保持 2×，后 50% 跳到 1×；透明度仍连续衰减，跳档被渐隐掩住，不需要额外闪烁。
+   * 纯函数，验证页直接采样 0..1 断言返回值恒为整数。 */
+  var DYING_SWITCH = 0.5;
+  function battleDyingMul(prog) {
+    var p = (typeof prog === 'number' && isFinite(prog)) ? prog : 0;
+    return (p < DYING_SWITCH) ? 2 : 1;
+  }
+
   /* 美学整改 A1：命中闪白按精灵 alpha 裁剪。
    * 旧实现用 90×90 的 fillRect 直接盖在战斗精灵上，史莱姆这种 90 格里只占 40 格的
    * 剪影会被整块方片罩住——命中瞬间主体消失。这里改为：把精灵画进离屏画布 →
@@ -133,6 +160,18 @@
     tintCtx.globalCompositeOperation = 'source-over';
     ctx.drawImage(tintCv, cx - Math.floor(w / 2), bottom - targetH, w, targetH);
     return true;
+  }
+
+  /* D-101：受击闪白的统一来源——Feedback 是唯一账本（谁被打、闪多久），
+   * 像素仍由这里的 tintSprite 按精灵轮廓着色；没有 Feedback 的底层页面回退到 Fx 既有闪白。 */
+  function battleFlashOf(who) {
+    var Fb = Game.Feedback;
+    if (Fb && typeof Fb.flashOf === 'function') {
+      var f = Fb.flashOf(who);
+      if (f) return f;
+    }
+    var Fx = Game.Fx;
+    return (Fx && typeof Fx.flashOf === 'function') ? Fx.flashOf(who) : null;
   }
 
   /* D-35：地图层尺寸口径——素材原生像素高 × (TILE/16)，脚底锚定格底。
@@ -201,7 +240,7 @@
   function contactShadow(ctx, cx, groundY, w, alpha) {
     var rx = Math.max(8, Math.round((w || 90) * 0.58));
     var ry = Math.max(3, Math.round(rx * 0.13));
-    ctx.save();
+    /* D-103 清账：只设 fillStyle，不再 save/restore（每帧两侧各一次，省 2×2 次） */
     /* 外圈一点点环境反光：纯黑地面（站台带）上也能看出"这里有一块地面" */
     ctx.fillStyle = 'rgba(210,215,255,0.055)';
     ctx.beginPath();
@@ -212,7 +251,6 @@
     ctx.beginPath();
     ctx.ellipse(cx, groundY, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
   }
 
   /* D-16：战斗血条（敌方/我方同款）——带数值标签，文字 11px（不低于 HUD 最小字号） */
@@ -240,63 +278,304 @@
     ctx.restore();
   }
 
-  /* D-16：回合与出手段提示——把"玩家段 → 怪物段"的时间轴画出来（纯 state 驱动） */
-  function battleSegments(ctx, cx, y, round, phase) {
-    var w = 320, h = 26;
-    var x = Math.round(cx - w / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    var monsterActing = (phase === 'monster');
-    /* 段 1：玩家出手 */
-    ctx.fillStyle = monsterActing ? 'rgba(255,255,255,0.04)' : 'rgba(120,200,255,0.20)';
-    ctx.fillRect(x + 96, y + 3, 104, h - 6);
-    /* 段 2：怪物反击 */
-    ctx.fillStyle = monsterActing ? 'rgba(255,140,120,0.22)' : 'rgba(255,255,255,0.04)';
-    ctx.fillRect(x + 204, y + 3, 112, h - 6);
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 13px monospace';
-    ctx.fillStyle = '#ffcf6e';
-    ctx.fillText('第 ' + round + ' 回合', x + 48, y + h / 2 + 1);
-    ctx.fillStyle = monsterActing ? '#8d8f9e' : '#bfe6ff';
-    ctx.fillText('① 你出手', x + 148, y + h / 2 + 1);
-    ctx.fillStyle = monsterActing ? '#ffb1a1' : '#8d8f9e';
-    ctx.fillText('② 怪物反击', x + 260, y + h / 2 + 1);
-    ctx.restore();
+  /* D-102：旧 battleSegments（静态两段提示）由 battlePipeline 取代（带进度、横竖共用） */
+
+  /* ── D-102 S1：身份卡 / 行动管线 / 战报 的共用绘制 ─────────────────────
+   * 规格 §5.1 / §7.2 / §8.2：横置与纵置共用同一套字号、行高与三段顺序，
+   * 只有卡片的落点不同（横置在头顶、纵置在左侧）。所有坐标由调用方给出。 */
+  var CARD_H = 52;
+  var CHIP_H = 14;
+  var FONT_STACK = 'monospace';
+
+  /* D-103：逐元素绘制记账钩子。验证页在脚本加载前装 window.__DCMARK 时，
+   * 每到一个元素边界就把"归属标签"推给它；未装时是一次 null 判断，零绘制开销。
+   * 计数口径仍是"触达 ctx 的方法调用次数"，标签只负责把同一帧的调用分桶，
+   * 不改变任何绘制顺序、坐标或数值。 */
+  var DC_MARK = (typeof window !== 'undefined' && typeof window.__DCMARK === 'function')
+    ? window.__DCMARK : null;
+  function dcMark(label) { if (DC_MARK) DC_MARK(label); }
+
+  /* D-103 S2：指令格配色与禁用态的唯一来源。验证页按同一组常量算对比度，
+   * 避免"页面算一套、渲染用另一套"的口径漂移。 */
+  var CMD_STYLE = {
+    barBg: 'rgba(8,8,16,0.92)',
+    barLine: '#2a2a44',
+    cellBg: 'rgba(255,255,255,0.05)',
+    keyText: '#dfe9ff',
+    label: '#eef2ff',
+    sub: '#9fb0d8',
+    hoverFill: 'rgba(255,207,110,0.12)',
+    hoverStroke: '#ffcf6e',
+    gfxAlpha: 0.45,     /* §6.5：图形（格底/描边/键位）alpha */
+    textAlpha: 0.75     /* §6.5：禁用文字 alpha；0.72 在白色底最坏档只有 4.52，留余量取 0.75 */
+  };
+
+  function cardFit(ctx, text, maxW) {
+    var s = String(text == null ? '' : text);
+    if (ctx.measureText(s).width <= maxW) return s;
+    var cut = s;
+    while (cut.length > 1 && ctx.measureText(cut + '…').width > maxW) cut = cut.slice(0, -1);
+    return cut + '…';
   }
 
-  /* D-16：状态 chips（狂暴/护盾/防御）——随战斗变化的中段信息 */
-  function battleChips(ctx, cx, y, state) {    var list = [];
-    if (state.enraged) list.push({ t: '⚡狂暴', c: '#ff7b6b' });
-    if (state.shieldValue > 0) list.push({ t: '护盾 ' + state.shieldValue, c: '#7dffb0' });
-    if (state.defending) list.push({ t: '防御中', c: '#9bbbf4' });
-    if (!list.length) return;
-    ctx.save();
-    ctx.font = 'bold 11px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    var gap = 8, padX = 10, h = 20;
-    var total = 0, i;
-    for (i = 0; i < list.length; i++) {
-      list[i].w = Math.round(ctx.measureText(list[i].t).width) + padX * 2;
-      total += list[i].w + (i ? gap : 0);
+  /* D-102：状态 chip 的归属——玩家卡只放玩家状态，敌人卡只放敌人状态。
+   * 防御 chip 不直接读 state.defending（怪物段 100ms 后就被清），而是读
+   * defendRound === roundNo：整个回合可见，下一次行动起拍才退场。
+   * D-109 N2：每枚 chip 必须带真实数字，不再出现无信息占位符。
+   * full = 宽档写法（"护盾8"），short = 窄档写法（"盾8"），两者都含数字；
+   * 防御的数字 1 = 本回合剩余回合数（与 defendRound 同源，不引入新数值）。 */
+  function cardChips(who, state) {
+    var out = [];
+    if (!state) return out;
+    if (who === 'player') {
+      /* 防御/护盾优先：空间不足时先被折叠的应是后面的持续状态 */
+      if (state.defending || (state.defendRound > 0 && state.defendRound === state.roundNo)) {
+        out.push({ full: '防御1', short: '防1', c: '#9bbbf4' });
+      }
+      if (state.shieldValue > 0) {
+        out.push({ full: '护盾' + state.shieldValue, short: '盾' + state.shieldValue, c: '#7dffb0' });
+      }
+      var S = Game.Systems && Game.Systems.Status;
+      if (S && typeof S.list === 'function') {
+        var arr = S.list();
+        for (var i = 0; i < arr.length; i++) {
+          var nm = String(arr[i].name || '状态');
+          var tn = (typeof arr[i].turns === 'number') ? arr[i].turns : 0;
+          out.push({ full: nm + tn, short: nm.charAt(nm.length - 1) + tn, c: arr[i].color || '#ef4444' });
+        }
+      }
+    } else {
+      if (state.enraged) {
+        var eatk = (typeof state.enrageAtk === 'number') ? state.enrageAtk : 0;
+        out.push({ full: '狂暴' + eatk, short: '暴' + eatk, c: '#ff7b6b' });
+      }
+      var B = Game.Systems && Game.Systems.Battle;
+      var dd = (B && typeof B.dragonDread === 'function') ? B.dragonDread() : null;
+      if (dd && dd.tier > 0) out.push({ full: '龙威' + dd.tier, short: '威' + dd.tier, c: '#ffcf6e' });
     }
-    var x = Math.round(cx - total / 2);
-    for (i = 0; i < list.length; i++) {
-      ctx.fillStyle = 'rgba(255,255,255,0.07)';
-      ctx.fillRect(x, y, list[i].w, h);
-      ctx.strokeStyle = list[i].c;
+    return out;
+  }
+
+  /* 渲染 chip（D-109 N2）：按可用宽度自动选写法，绝不出现 "＋n" 这类无数字占位。
+   * 候选顺序：宽档带色块 → 宽档去色块 → 窄档去色块 → 窄档紧凑间距；
+   * 每种写法先试 3 枚，装不下再减到 1 枚，并把隐藏数量写成 "+N"（N 一定是数字）。
+   * chip 宽度由文本实测宽度反推，因此文本永远落在自己的 chip 内。 */
+  function drawCardChips(ctx, x0, y, maxW, list) {
+    if (!list || !list.length) return [];
+    dcMark('chip');
+    ctx.font = '11px ' + FONT_STACK;
+    var PAD_FULL = 20, PAD_BARE = 12;
+    function tw(t) { return Math.round(ctx.measureText(t).width); }
+    function wFull(t) { return PAD_FULL + tw(t); }
+    function wBare(t) { return PAD_BARE + tw(t); }
+    function sum(ws, gap) {
+      var s = 0;
+      for (var i = 0; i < ws.length; i++) s += ws[i] + (i ? gap : 0);
+      return s;
+    }
+    var STYLES = [
+      { bare: false, short: false, gap: 4 },
+      { bare: true, short: false, gap: 4 },
+      { bare: true, short: true, gap: 4 },
+      { bare: true, short: true, gap: 2 }
+    ];
+    var plan = null, style = null;
+    var maxC = Math.min(3, list.length);
+    /* D-109 N2：先保"能看见几枚"，再选写法——早期版本先选写法会把
+     * "防御1 + 护盾8"折叠成 "防御1 +1"，护盾反被藏掉。 */
+    for (var k = maxC; k >= 1 && !plan; k--) {
+      for (var si = 0; si < STYLES.length && !plan; si++) {
+        style = STYLES[si];
+        var labels = [];
+        for (var li = 0; li < list.length; li++) labels.push(style.short ? list[li].short : list[li].full);
+        var shown = [];
+        for (var j = 0; j < k; j++) shown.push({ t: labels[j], c: list[j].c });
+        if (k < list.length) shown.push({ t: '+' + (list.length - k), c: '#8a8aa0' });
+        var ws = [], tot = 0;
+        for (var m = 0; m < shown.length; m++) {
+          ws.push(style.bare ? wBare(shown[m].t) : wFull(shown[m].t));
+          tot += ws[m] + (m ? style.gap : 0);
+        }
+        if (tot <= maxW) { plan = { shown: shown, ws: ws }; break; }
+      }
+    }
+    if (!plan) {
+      /* 兜底：单枚窄档（maxW ≥ 94 的正常卡永远不会走到这里） */
+      var one = [{ t: list[0].short, c: list[0].c }];
+      if (list.length > 1) one.push({ t: '+' + (list.length - 1), c: '#8a8aa0' });
+      var w1 = [];
+      for (var q = 0; q < one.length; q++) w1.push(wBare(one[q].t));
+      plan = { shown: one, ws: w1 };
+      style = { bare: true, gap: 2 };
+    }
+    var out = [], x = x0;
+    for (var i2 = 0; i2 < plan.shown.length; i2++) {
+      var ch = plan.shown[i2], cw = plan.ws[i2];
+      /* D-102 预算：chip 底色就是卡底，不再单独铺一层（省 3 次/帧），只留描边 + 色块 + 文字 */
+      ctx.strokeStyle = ch.c;
       ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, list[i].w - 1, h - 1);
-      ctx.fillStyle = list[i].c;
-      ctx.fillText(list[i].t, x + list[i].w / 2, y + h / 2 + 1);
-      x += list[i].w + gap;
+      ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, CHIP_H - 1);
+      var tx = x + 5;
+      if (!style.bare) {
+        ctx.fillStyle = ch.c;
+        ctx.fillRect(x + 4, y + 3, 8, 8);
+        tx = x + 15;
+      }
+      ctx.fillStyle = ch.c;
+      ctx.fillText(ch.t, tx, y + CHIP_H / 2 + 1);
+      out.push({ text: ch.t, x: x, y: y, w: cw, h: CHIP_H });
+      x += cw + style.gap;
     }
-    ctx.restore();
+    return out;
+  }
+
+  /* D-102：三段式身份卡（替换 hNamePlate 的两段式铭牌）
+   * L1 名字 7–19 / L2 HP 条 20–29（数值叠在条内右端）/ L3 chip 33–47。
+   * HP 条与数值是三段卡的一部分，不再在战场别处单画一条大血条（G15）。 */
+  function battleCard(ctx, cx, topY, w, spec) {
+    var h = CARD_H;
+    var x = Math.round(cx - w / 2);
+    var top = Math.round(topY);
+    /* D-103 清账：不再 save/restore（每卡省 2 次），样式在末尾显式复位；
+     * HP 条描边与条底/填充重复表达同一条边界，删掉描边省 1 次（卡底已提供对比）。 */
+    dcMark('card.bg');
+    ctx.fillStyle = 'rgba(8,8,16,0.78)';
+    ctx.fillRect(x, top, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
+    if (spec.enraged) {
+      ctx.fillStyle = '#ff9a4a';
+      ctx.fillRect(x + 1, top + 1, 3, h - 2);
+    }
+    /* L1 名字：超宽省略，不缩字号 */
+    var textW = w - 18;
+    dcMark('card.text');
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 13px ' + FONT_STACK;
+    ctx.fillStyle = spec.enraged ? '#ffb37a' : '#e8ecff';
+    ctx.fillText(cardFit(ctx, spec.name, textW), x + 9, top + 13);
+    /* L2 HP 条 + 数值（数值带 1px 黑描边，压在条内右端） */
+    var bx = x + 8, bw = w - 16, by = top + 20, bh = 9;
+    dcMark('card.hp');
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(bx, by, bw, bh);
+    var r = (spec.hpMax > 0) ? Math.max(0, Math.min(1, spec.hp / spec.hpMax)) : 0;
+    if (r > 0) {
+      ctx.fillStyle = spec.hpColor;
+      ctx.fillRect(bx, by, Math.round(bw * r), bh);
+    }
+    var hpText = spec.hp + '/' + spec.hpMax;
+    ctx.textAlign = 'right';
+    ctx.font = '11px ' + FONT_STACK;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(hpText, bx + bw - 4, by + bh / 2 + 1);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(hpText, bx + bw - 4, by + bh / 2 + 1);
+    /* L3 状态 chip */
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    var chips = drawCardChips(ctx, x + 9, top + 33, w - 18, spec.chips || []);
+    /* 显式复位被本函数改过的状态（替代 save/restore） */
+    ctx.lineWidth = 1;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    return {
+      x: x, y: top, w: w, h: h,
+      barX: bx, barY: by, barW: bw, barH: bh,
+      l1: { x: x + 9, y: top + 7, w: textW, h: 12 },
+      l2: { x: bx, y: by, w: bw, h: bh },
+      l3: { x: x + 9, y: top + 33, w: textW, h: CHIP_H },
+      chips: chips, name: spec.name, hp: spec.hp, hpMax: spec.hpMax
+    };
+  }
+
+  /* D-102：两节点行动管线（规格 §7.2）。320×26：回合号 0–96 / 节点① 96–200 / 节点② 204–316。
+   * 进度只读 turnRec + Fx 时钟，不推进任何时钟；timeRec 缺失时退化为静态框。 */
+  function battlePipeline(ctx, cx, y, state, nowMs) {
+    dcMark('pipeline');
+    var w = 320, h = 26;
+    var x = Math.round(cx - w / 2), top = Math.round(y);
+    var phase = (state && state.phase) || 'idle';
+    var roundNo = (state && state.roundNo) || ((state && state.turn | 0) + 1);
+    var B = Game.Systems && Game.Systems.Battle;
+    var tl = (B && typeof B.getTimeline === 'function') ? B.getTimeline() : null;
+    var rec = tl && tl.rec;
+    var seg1 = (tl && tl.plan && tl.plan.seg1) ? tl.plan.seg1 : 100;
+    var total = (tl && tl.plan && tl.plan.total) ? tl.plan.total : 180;
+    function clamp01(v) { return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(1, v)) : 0; }
+    var p1 = 0, p2 = 0;
+    if (rec) {
+      p1 = (phase === 'player') ? clamp01((nowMs - rec.playerAt) / seg1) : (phase === 'monster' || phase === 'idle') ? 1 : 0;
+      p2 = (phase === 'monster') ? clamp01((nowMs - rec.monsterAt) / Math.max(1, total - seg1)) : (phase === 'idle' && rec.monsterAt) ? 1 : 0;
+    }
+    var n1 = { x: x + 96, y: top + 2, w: 104, h: h - 4 };
+    var n2 = { x: x + 204, y: top + 2, w: 112, h: h - 4 };
+    var s1 = (phase === 'player') ? 'act' : (p1 >= 1 && rec ? 'done' : 'idle');
+    var s2 = (phase === 'monster') ? 'mon' : (p2 >= 1 && rec ? 'done' : 'idle');
+    ctx.fillStyle = 'rgba(8,8,16,0.72)';
+    ctx.fillRect(x, top, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 13px ' + FONT_STACK;
+    ctx.fillStyle = '#ffcf6e';
+    ctx.fillText('第 ' + roundNo + ' 回合', x + 8, top + 14);
+    ctx.fillStyle = s1 === 'act' ? 'rgba(120,200,255,0.20)' : 'rgba(255,255,255,0.04)';
+    ctx.fillRect(n1.x, n1.y, n1.w, n1.h);
+    ctx.fillStyle = s2 === 'mon' ? 'rgba(255,140,120,0.22)' : 'rgba(255,255,255,0.04)';
+    ctx.fillRect(n2.x, n2.y, n2.w, n2.h);
+    ctx.textAlign = 'center';
+    ctx.font = '13px ' + FONT_STACK;
+    ctx.fillStyle = s1 === 'act' ? '#bfe6ff' : (s1 === 'done' ? '#6b7280' : '#8d8f9e');
+    ctx.fillText('① 你出手', n1.x + n1.w / 2, n1.y + n1.h / 2 + 1);
+    ctx.fillStyle = s2 === 'mon' ? '#ffb1a1' : (s2 === 'done' ? '#6b7280' : '#8d8f9e');
+    ctx.fillText('② 怪物反击', n2.x + n2.w / 2, n2.y + n2.h / 2 + 1);
+    ctx.fillStyle = 'rgba(120,200,255,0.85)';
+    if (p1 > 0) ctx.fillRect(n1.x, n1.y + n1.h - 2, Math.round(n1.w * p1), 2);
+    ctx.fillStyle = 'rgba(255,140,120,0.85)';
+    if (p2 > 0) ctx.fillRect(n2.x, n2.y + n2.h - 2, Math.round(n2.w * p2), 2);
+    /* D-103 清账：省掉 save/restore，显式复位本函数改过的排版状态 */
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    return { x: x, y: top, w: w, h: h, roundText: '第 ' + roundNo + ' 回合', nodes: [n1, n2], progress: [p1, p2] };
+  }
+
+  /* D-102：龙威播报行——终局机制必须看得见（横置以前完全不画日志）。
+   * 只读 Battle.dragonDread()，不再写第二份分段常量。 */
+  function dreadBroadcast() {
+    var B = Game.Systems && Game.Systems.Battle;
+    var dd = (B && typeof B.dragonDread === 'function') ? B.dragonDread() : null;
+    if (!dd || dd.tier <= 0) return null;
+    return '龙威 第 ' + dd.tier + ' 段 · 攻击 +' + dd.bonus;
+  }
+
+  /* 战报行（自上而下）：龙威播报固定在第一行，其后是从新到旧截取的最近日志。
+   * 返回最多 max 行；max=1 时横置取“龙威优先，否则最新一条”。 */
+  function battleLogLines(state, max) {
+    var out = [];
+    var br = dreadBroadcast();
+    if (br) out.push(br);
+    var log = (state && state.log) || [];
+    var picked = [];
+    for (var i = log.length - 1; i >= 0 && picked.length < Math.max(0, max - out.length); i--) {
+      var s = String(log[i] == null ? '' : log[i]);
+      if (br && s.indexOf('系统：龙威') === 0) continue;
+      picked.unshift(s);
+    }
+    return out.concat(picked);
+  }
+
+  /* D-102：每帧状态 chip（旧版只画在纵置中段）。保留函数名给旧验证页调用，
+   * 现在按归属分流到两侧身份卡。 */
+  function battleChips(ctx, cx, y, state) {
+    var list = cardChips('player', state);
+    if (!list.length) return [];
+    return drawCardChips(ctx, Math.round(cx - 60), Math.round(y), 120, list);
   }
 
   /* 第三拨 D-88：战斗背景——五层各自的"空间语义"，不再共用一套骨架。
@@ -854,11 +1133,86 @@
       W: w, H: h,
       groundY: Math.round(h * 0.766),
       playerCx: Math.round(w * 0.24),
-      enemyCx: Math.round(w * 0.76),
-      nameY: Math.round(h * 0.447),
-      barY: Math.round(h * 0.466),
-      chipY: Math.round(h * 0.506)
+      enemyCx: Math.round(w * 0.76)
     };
+  }
+
+  /* D-102：纵置几何纯函数（渲染 / Battle 锚点回退 / 验证页共用同一份比例式） */
+  function verticalBattleGeo(W, H) {
+    var w = (typeof W === 'number' && W > 0) ? W : BASE_W;
+    var h = (typeof H === 'number' && H > 0) ? H : BASE_H;
+    var barH = verticalBarH(w);
+    var pg = Math.min(h - barH - 8, Math.round(h * 0.72));
+    return { W: w, H: h, barH: barH, playerGround: pg, playerCardTop: pg - 60,
+      playerTop: pg - 90, enemyGround: Math.round(h * 0.30), enemyCardTop: 46,
+      enemyTopMin: 46 + CARD_H + 8 };
+  }
+
+  /* D-109 N1：纵置安全带的输入不再只有"敌人精灵"——管线、战报、属性行、
+   * 玩家精灵、敌人精灵（以及仍在画面上的身份卡/指令条）全部参与求并集，
+   * 结果卡只能落在并集之外的空白区间里。纯几何，不含卡片尺寸。 */
+  function verticalFreeIntervals(W, H, box) {
+    var cardW = Math.max(160, Math.min(252, W - 24));
+    var cx0 = Math.round((W - cardW) / 2), cx1 = cx0 + cardW;
+    function xOverlap(r) {
+      var rx = (typeof r.x === 'number') ? r.x : 0;
+      var rw = (typeof r.w === 'number') ? r.w : W;
+      return rx < cx1 && cx0 < rx + rw;
+    }
+    var obs = [];
+    function add(r) {
+      if (!r || !(r.h > 0)) return;
+      if (!xOverlap(r)) return;
+      obs.push({ y: r.y, b: r.y + r.h });
+    }
+    add(box.hudBand);
+    add(box.monsterPlate);
+    add(box.monster);
+    add(box.pipeline);
+    add(box.log);
+    add(box.stat);
+    add(box.playerPlate);
+    add(box.player);
+    if (box.commandBarDrawn !== false) add(box.commandBar);
+    obs.sort(function (a, b) { return a.y - b.y; });
+    var free = [], cur = 0;
+    for (var i = 0; i < obs.length; i++) {
+      if (obs[i].y > cur) free.push({ top: cur, bottom: Math.min(H, obs[i].y) });
+      if (obs[i].b > cur) cur = obs[i].b;
+    }
+    if (cur < H) free.push({ top: cur, bottom: H });
+    return free.filter(function (f) { return f.bottom - f.top >= 24; });
+  }
+
+  /* D-102：战斗「安全带」的唯一来源——Juice 结果卡与验证页都读这里。
+   * 横置：身份卡下沿 +6 到地面战报上沿 −6（结果卡不压卡、不压战报、不压指令条）。
+   * 纵置：传入本帧实际绘制框时，返回"信息元素并集之外"的空白区间表（free），
+   *       top/bottom 仍给出其中最大的一段，供只读 top/bottom 的旧调用方使用；
+   *       没有实拍框（纯函数直调）时沿用旧的几何口径，保证 d78/d101 的判据不变。 */
+  function battleSafeBand(W, H, layout, box) {
+    var lay = layout || resolveBattleLayout(W, H);
+    if (lay === 'horizontal') {
+      var g = horizontalBattleGeo(W, H);
+      var plateTop = Math.min(g.groundY - 90, g.groundY - 144) - 14 - CARD_H;
+      return { top: plateTop + CARD_H + 6, bottom: g.groundY + 2 - 6 };
+    }
+    if (box && box.W === W && box.H === H && box.layout === 'vertical' &&
+        box.pipeline && box.log && box.player && box.monster) {
+      var free = verticalFreeIntervals(W, H, box);
+      if (free.length) {
+        var best = free[0];
+        for (var fi = 1; fi < free.length; fi++) {
+          if (free[fi].bottom - free[fi].top > best.bottom - best.top) best = free[fi];
+        }
+        return { top: best.top, bottom: best.bottom, free: free };
+      }
+    }
+    var vg2 = verticalBattleGeo(W, H);
+    var pg = vg2.playerGround;
+    /* 敌方精灵可能是 144 高的龙：竖置下它的脚底最坏到 250（eyBase 160 + 90），
+     * 安全带从这条最坏脚底再 +8 起，结果卡就不会压到任何体型的敌人。 */
+    var eBottom = Math.max(Math.round(H * 0.30), 250);
+    return { top: eBottom + 8, bottom: pg - 60 - 6, free: [] };
   }
 
   /* ── D-94 P2：横置五层背景（与纵置 painter 并存；纵置 painter 一行不改）────────
@@ -908,20 +1262,48 @@
     c.fillStyle = 'rgba(0,0,0,' + a + ')';
     c.fillRect(0, 0, W, bwY);
   }
+  /* D-111：横置后墙的砌块层。底色先铺砖缝色，再逐块盖砖面；砖面按 3 档色阶 +
+   * 逐块确定性偏移取色，让 100×150 的样本里同时有砖缝（暗）与砖面（亮）。
+   * 只做"一块砖一个实心矩形"，不引入逐像素噪声；全部发生在离屏构建期，
+   * 每帧仍然只有一次背景 blit（调用账不变）。 */
+  /* D-111：砖面照度向两侧回落（舞台中央是亮的，转角沉入暗部）。只在砖面上叠加，
+   * 拱门/火把/熔岩随后绘制，峰值不受影响；左右各 30% 才起效，中央砖面不被压。 */
+  function hWallFalloff(c, W, bwY, a) {
+    if (!(a > 0)) return;
+    var lg = c.createLinearGradient(0, 0, W, 0);
+    lg.addColorStop(0, 'rgba(0,0,0,' + a + ')');
+    lg.addColorStop(0.30, 'rgba(0,0,0,0)');
+    lg.addColorStop(0.70, 'rgba(0,0,0,0)');
+    lg.addColorStop(1, 'rgba(0,0,0,' + a + ')');
+    c.fillStyle = lg;
+    c.fillRect(0, 0, W, bwY);
+  }
+  function hBrickWall(c, x0, y0, w, hgt, bw, bh, tones, mortar, seed) {
+    bgRect(c, x0, y0, w, hgt, mortar);
+    var rowN = 0;
+    for (var y = y0; y < y0 + hgt; y += bh, rowN++) {
+      var off = (rowN % 2) ? -Math.round(bw / 2) : 0;
+      var colN = 0;
+      for (var x = x0 + off; x < x0 + w; x += bw, colN++) {
+        var k = (colN * 3 + rowN * 5 + seed) % tones.length;
+        if (k < 0) k += tones.length;
+        var ww = Math.min(bw - 2, x0 + w - x - 1);
+        var hh = Math.min(bh - 2, y0 + hgt - y - 1);
+        if (ww > 0 && hh > 0) bgRect(c, x + 1, y + 1, ww, hh, tones[k]);
+      }
+    }
+  }
 
   /* F1 石厅：错缝石墙 + 左窄拱/右宽拱（两侧构件）+ 中央只留远端暗 + 湿石板 */
   function hbgStoneHall(c, W, H, sc, cols, canTile) {
     var g = hSceneGeom(W, H, sc), bwY = g.bwY, G = g.G;
     var bw = Math.max(40, Math.round(W * 0.047)), bh = Math.max(18, Math.round(H * 0.034));
-    for (var y = 0, row = 0; y < bwY; y += bh, row++) {
-      var off = (row % 2) ? -bw / 2 : 0;
-      for (var x = off; x < W + bw; x += bw) {
-        var k = (Math.floor(x / bw) + row * 2) % 3; if (k < 0) k += 3;
-        bgRect(c, x + 1, y + 1, bw - 2, Math.min(bh - 2, bwY - y - 2),
-          k === 0 ? '#131320' : (k === 1 ? '#101018' : '#161625'));
-      }
-    }
-    hCenterDark(c, W, bwY, W * 0.5, W * 0.34, 0.62);
+    /* D-111：砖面本身要读得出是墙。底色改为砖缝色，砖面用 3 档色阶 + 逐块偏移；
+     * 只改砖面，不动拱门/火把/边缘构件，峰值由它们决定、保持不变。 */
+    hBrickWall(c, 0, 0, W, bwY, bw, bh,
+      ['#121217', '#14141a', '#17171e'], '#0a0a10', 1);
+    hWallFalloff(c, W, bwY, 0.23);
+    hCenterDark(c, W, bwY, W * 0.5, W * 0.34, 0.18);
     /* 侧拱：左窄右宽，不做镜像 */
     var lx = Math.round(W * 0.155), rx = Math.round(W * 0.885);
     /* P7.6：拱龛加宽压矮（68×269 像石碑），现在宽高比≈1:2.4，读成能走进去的门洞 */
@@ -934,8 +1316,9 @@
       bgRect(c, px2 - 22, bwY - 12, 44, 20, '#171722');
       bgRect(c, px2 - 22, bwY - 12, 44, 3, '#242435');
     }
-    /* P7.5：墙压 0.28、地板洗到 ≈37（改前 0.72 黑洗 → 20.5，比墙的砖面还暗） */
-    hWallDim(c, W, bwY, 0.28);
+    /* P7.5：墙压 0.28、地板洗到 ≈37（改前 0.72 黑洗 → 20.5，比墙的砖面还暗）
+     * D-104：0.28 → 0.08，后墙均值 11.4 → 目标 ≥14（仍是五层里最低照度的大面）。 */
+    hWallDim(c, W, bwY, 0.08);
     hFloorTiles(c, W, H, bwY, 1, cols, canTile, 'rgba(22,24,26,0.60)', '#08080f');
     bgRect(c, 0, bwY - 5, W, 5, '#191928');
     /* P7.6：两座拱龛落地——底缘压暗 + 接地影 + 断口（底边不再是一条直线切在亮地上） */
@@ -966,13 +1349,16 @@
   /* F2 营地：夜岩后墙 + 左帐篷/右木栅与木箱（不镜像）+ 中央空出的营道 + 踩实泥地 */
   function hbgOrcCamp(c, W, H, sc, cols, canTile) {
     var g = hSceneGeom(W, H, sc), bwY = g.bwY, G = g.G;
-    bgRect(c, 0, 0, W, bwY, '#0b0907');
+    /* D-111：岩壁改成粗砌块（72×40），砖缝暗、块面三档；只改后墙，不动帐篷/栅栏/木箱。 */
+    hBrickWall(c, 0, 0, W, bwY, Math.max(48, Math.round(W * 0.07)), Math.max(26, Math.round(H * 0.062)),
+      ['#15120b', '#18150c', '#1a180d'], '#080604', 2);
+    hWallFalloff(c, W, bwY, 0.26);
     for (var i = 0; i < 22; i++) {
       var wx = (i * 157 + 33) % Math.max(1, W);
       var wy = 14 + (i * 61) % Math.max(24, bwY - 70);
       bgLine(c, wx, wy, wx + Math.round(W * 0.04), wy + Math.round(H * 0.02), 'rgba(62,50,36,0.15)', 2);
     }
-    hCenterDark(c, W, bwY, W * 0.5, W * 0.30, 0.55);
+    hCenterDark(c, W, bwY, W * 0.5, W * 0.30, 0.14);
     /* 左：帐篷（三角帐面 + 脊线 + 门洞），底边落在地面交界 */
     var tw = Math.round(W * 0.14), apexX = Math.round(tw * 0.55), apexY = Math.round(H * 0.26);
     bgPoly(c, [[0, bwY - 4], [apexX, apexY], [tw, bwY - 4]], '#332518');
@@ -1041,9 +1427,12 @@
     var rEdge = [[Math.round(W * 0.705), 0], [Math.round(W * 0.675), Math.round(bwY * 0.28)],
       [Math.round(W * 0.665), Math.round(bwY * 0.52)], [Math.round(W * 0.678), y1],
       [Math.round(W * 0.700), bwY]];
-    bgRect(c, 0, 0, W, bwY, '#0c0a10');
-    bgPoly(c, [[0, 0]].concat(lEdge).concat([[0, bwY]]), '#100d13');
-    bgPoly(c, [[W, 0]].concat(rEdge).concat([[W, bwY]]), '#100d13');
+    /* D-104：后墙/崖壁底色抬到 #15121b（≈20）与 #181521（≈23），
+     * 中央远缝仍由黑渐变压住，空间层次不是"整块提亮"。 */
+    /* D-111：两侧崖壁改成砌块层（砖缝 14、块面 23/26/29），中央黑缝随后覆盖中段，
+     * 崖壁读成"石砌的一堵墙"而不是两块平涂多边形。 */
+    hBrickWall(c, 0, 0, W, bwY, Math.max(44, Math.round(W * 0.062)), Math.max(24, Math.round(H * 0.056)),
+      ['#191521', '#1c1826', '#1f1b2b'], '#100e16', 3);
     bgLine(c, lEdge[0][0], lEdge[0][1], lEdge[1][0], lEdge[1][1], 'rgba(96,86,124,0.18)', 2);
     bgLine(c, lEdge[3][0], lEdge[3][1], lEdge[4][0], lEdge[4][1], 'rgba(96,86,124,0.18)', 2);
     bgLine(c, rEdge[0][0], rEdge[0][1], rEdge[1][0], rEdge[1][1], 'rgba(96,86,124,0.18)', 2);
@@ -1069,7 +1458,7 @@
         ly + Math.round(H * 0.024), 'rgba(86,78,110,0.10)', 3);
     }
     bgRect(c, 0, bwY - 4, W, 4, '#141119');
-    hWallDim(c, W, bwY, 0.22);
+    hWallDim(c, W, bwY, 0.16);
     /* P7.5：地板洗到 ≈37 并降对比（改前 0.80 黑洗 → 21，暖棕砖纹又亮又密压过角色） */
     hFloorTiles(c, W, H, bwY, 3, cols, canTile, 'rgba(28,16,10,0.60)', '#07070c');
     /* 两侧崖脚压地线：画在地板之后才不会被地砖盖住，崖壁才读成"落在地上" */
@@ -1107,14 +1496,11 @@
   function hbgFrostCrypt(c, W, H, sc, cols, canTile) {
     var g = hSceneGeom(W, H, sc), bwY = g.bwY, G = g.G;
     var bw = Math.max(44, Math.round(W * 0.055)), bh = Math.max(20, Math.round(H * 0.040));
-    for (var y = 0, row = 0; y < bwY; y += bh, row++) {
-      var off = (row % 2) ? -bw / 2 : 0;
-      for (var x = off; x < W + bw; x += bw) {
-        var k = (Math.floor(x / bw) + row) % 2;
-        bgRect(c, x + 1, y + 1, bw - 2, Math.min(bh - 2, bwY - y - 2), k ? '#101d26' : '#0d1820');
-      }
-    }
-    hCenterDark(c, W, bwY, W * 0.5, W * 0.32, 0.60);
+    /* D-111：冰石砖面改成 3 档色阶 + 砖缝暗底，砖缝与砖面在样本里能分开。 */
+    hBrickWall(c, 0, 0, W, bwY, bw, bh,
+      ['#101a22', '#121c25', '#14202a'], '#080c11', 4);
+    hWallFalloff(c, W, bwY, 0.22);
+    hCenterDark(c, W, bwY, W * 0.5, W * 0.32, 0.16);
     /* 左侧两根细柱 / 右侧一根粗柱：不镜像 */
     var pil = [Math.round(W * 0.115), Math.round(W * 0.325), Math.round(W * 0.90)];
     for (var pi = 0; pi < pil.length; pi++) {
@@ -1126,8 +1512,9 @@
       bgRect(c, px - pw / 2 - 6, ptop - 10, pw + 12, 11, '#243744');
       bgRect(c, px - pw / 2 - 6, bwY, pw + 12, 10, '#22323d');
     }
-    /* P7.5：冰石后墙砖面实测 19.6（五层最高），压 0.30；地板洗到 ≈39 */
-    hWallDim(c, W, bwY, 0.30);
+    /* P7.5：冰石后墙砖面实测 19.6（五层最高），压 0.30；地板洗到 ≈39
+     * D-104：0.30 → 0.28，只把后墙从临界值 14.0 抬到 14.4，避免断言在浮点边界抖动。 */
+    hWallDim(c, W, bwY, 0.24);
     hFloorTiles(c, W, H, bwY, 4, cols, canTile, 'rgba(12,18,24,0.60)', '#060d14');
     bgRect(c, 0, bwY - 5, W, 5, '#16242e');
     /* P7.6：右：倾斜棺盖——必须画在地砖之后（与 F2 木箱同一个坑），否则整个棺盖被地板吞掉 */
@@ -1175,7 +1562,12 @@
   /* F5 王座前厅：黑曜石金脉后墙 + 左拱与垂旗/右王座（不就中）+ 中央空走道 */
   function hbgThroneHall(c, W, H, sc, cols, canTile) {
     var g = hSceneGeom(W, H, sc), bwY = g.bwY, G = g.G;
-    bgRect(c, 0, 0, W, bwY, '#0a0710');
+    /* D-104：黑曜石后墙底色 #0a0710（≈8）抬到 #131019（≈18），
+     * 压 0.10 后实测 ≈15；金脉与光源峰值不动。 */
+    /* D-111：黑曜石墙改成砌块（砖缝 13、块面 26/29/32），金脉仍画在砖面之上。 */
+    hBrickWall(c, 0, 0, W, bwY, Math.max(46, Math.round(W * 0.064)), Math.max(24, Math.round(H * 0.058)),
+      ['#18141d', '#1a1721', '#1e1926'], '#0c0a10', 5);
+    hWallFalloff(c, W, bwY, 0.30);
     for (var gi = 0; gi < 12; gi++) {
       var gx = (gi * 173 + 40) % Math.max(1, W);
       var gy0 = Math.round(H * 0.10) + (gi % 3) * Math.round(H * 0.07);
@@ -1185,7 +1577,7 @@
       var vx = Math.round(W * (0.06 + vi * 0.22));
       bgLine(c, vx, 0, vx + Math.round(W * 0.012), bwY, 'rgba(126,94,48,0.13)', 1);
     }
-    hCenterDark(c, W, bwY, W * 0.5, W * 0.30, 0.55);
+    hCenterDark(c, W, bwY, W * 0.5, W * 0.30, 0.46);
     /* 中央：空走道（地毯），尽头压暗；王座与台阶不占中线 */
     var cw = Math.round(W * 0.16);
     bgRect(c, Math.round(W * 0.5 - cw / 2), bwY, cw, H - bwY, '#150d16');
@@ -1206,7 +1598,8 @@
     var tx = Math.round(W * 0.925), tb = Math.round(H * 0.69);
     var hw2 = Math.round(W * 0.046);
     var bH = Math.round(H * 0.15), spH = Math.round(H * 0.05);
-    /* P7.5：黑曜石后墙压 0.10（本就 8.1）；地板洗到 ≈36 并降纹理对比 */
+    /* P7.5：黑曜石后墙压 0.10（本就 8.1）；地板洗到 ≈36 并降纹理对比
+     * D-104：保持 0.10，只抬底色，后墙从 7.5 抬到 ≈15。 */
     hWallDim(c, W, bwY, 0.10);
     hFloorTiles(c, W, H, bwY, 5, cols, canTile, 'rgba(32,22,28,0.60)', '#09050f');
     for (var fi = 0; fi < 8; fi++) {
@@ -1265,61 +1658,19 @@
   function hContactShadow(ctx, cx, groundY, footW, alpha) {
     var rx = Math.max(16, Math.min(46, Math.round((footW || 90) * 0.30)));
     var ry = Math.max(2, Math.round(rx * 0.11));
-    ctx.save();
+    /* D-103 清账：只设 fillStyle，不再 save/restore */
     ctx.fillStyle = 'rgba(0,0,0,' + (typeof alpha === 'number' ? alpha : 0.55) + ')';
     ctx.beginPath();
     ctx.ellipse(cx, groundY - 1, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillRect(Math.round(cx - rx), groundY, Math.round(rx * 2), 1);
-    ctx.restore();
-  }
-
-  /* D-94 P4：紧凑铭牌——名字 + HP 数值 + 一条细血条，宽度按角色落屏尺寸走。
-   * 旧版固定 340 的条配 90 高的角色，视觉重量倒置（一眼是两条色块，不是两个人在对峙）。
-   * width = clamp(round(spriteW×1.5), 96, 240)：骑士 96、Boss 144、龙 216。
-   * 返回铭牌矩形，供 drawBattle 写进 _lastBattleBox 做几何断言。 */
-  function hNamePlate(ctx, cx, topY, spriteW, name, hp, hpMax, color, enraged) {
-    var w = Math.max(96, Math.min(240, Math.round((spriteW || 90) * 1.5)));
-    var h = 34;
-    var x = Math.round(cx - w / 2);
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,8,16,0.78)';
-    ctx.fillRect(x, topY, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.20)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, topY + 0.5, w - 1, h - 1);
-    if (enraged) {
-      /* 狂暴标记只占左沿 3px：文案永不溢出铭牌，颜色也够区分 */
-      ctx.fillStyle = '#ff9a4a';
-      ctx.fillRect(x + 1, topY + 1, 3, h - 2);
-    }
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = enraged ? '#ffb37a' : '#e8ecff';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(name, x + 9, topY + 10);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#cfd6ea';
-    ctx.font = '11px monospace';
-    ctx.fillText(hp + ' / ' + hpMax, x + w - 8, topY + 10);
-    var bx = x + 8, bw = w - 16, by = topY + 20, bh = 7;
-    ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    ctx.fillRect(bx, by, bw, bh);
-    var r = Math.max(0, Math.min(1, (hpMax > 0) ? hp / hpMax : 0));
-    if (r > 0) {
-      ctx.fillStyle = color;
-      ctx.fillRect(bx, by, Math.round(bw * r), bh);
-    }
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
-    ctx.restore();
-    return { x: x, y: topY, w: w, h: h, barX: bx, barY: by, barW: bw, barH: bh };
   }
 
   /* D-94 P4：7 格指令条（只显示、不接管输入；键盘 1–7 仍是唯一输入）。
    * 数值不抄第二份：技能名/MP 从 Game.Data.SKILLS 读，冷却从 Game.Skills.getCooldown 读。
-   * MP 不足或冷却中都把整格降到 alpha 0.45，不改变任何判定。 */
+   * D-102 S1：横/纵共用同一份格子外观与 4+3 紧凑档规则；条内分 header/cells/footer 三段，
+   * MP/HP 读数与「1–7 或点击」不再去顶栏找。 */
   var H_CMDS = [
     { key: 1, cmd: 'attack', label: '攻击', sub: function () { return '无消耗'; } },
     { key: 2, cmd: 'defend', label: '防御', sub: function () { return '无消耗'; } },
@@ -1327,72 +1678,190 @@
     { key: 4, cmd: 'skill:fireball', label: '火球', skill: 'fireball' },
     { key: 5, cmd: 'skill:dash', label: '冲刺', skill: 'dash' },
     { key: 6, cmd: 'skill:shield', label: '护盾', skill: 'shield' },
-    { key: 7, cmd: 'potion', label: '用药', sub: function (st) { return '×' + ((st && st.potionsLeft) | 0); } }
+    /* D-103：鼠标点击与键盘 1–7 必须落到同一个命令名——此前这里是 'potion'，
+     * 而 Battle.playerAction 只认 'item'，点第 7 格会走空一支分支。 */
+    { key: 7, cmd: 'item', label: '用药', sub: function (st) { return '×' + ((st && st.potionsLeft) | 0); } }
   ];
-  function hCommandBar(W, H, state) {
-    var barH = 96, y0 = H - barH;
-    var m = 26, gap = 8;
-    var cw = Math.floor((W - m * 2 - gap * (H_CMDS.length - 1)) / H_CMDS.length);
-    var total = cw * H_CMDS.length + gap * (H_CMDS.length - 1);
-    var x0 = Math.round((W - total) / 2);
-    var ch = 64, cy = y0 + 16;
-    var mp = (Game.Data.Player && typeof Game.Data.Player.mp === 'number') ? Game.Data.Player.mp : 0;
+  /* D-108 S4：七格指令图标——只从既有素材取（ITEM_ICONS 同源的 24×24 武器/道具图），
+   * 一格一个、每格 1 次 drawImage。语义严格对应，宁缺毋滥：
+   *   普攻=直剑、防御=板甲、逃跑=骑士奔跑帧、火球=红法杖、冲刺=长矛、护盾=法袍、用药=红药瓶。
+   * 没有"盾牌"素材，护盾用防具里最接近"法术护体"的法袍，而不是拿武器凑数。
+   * 绘制尺寸 = 素材原生尺寸（1:1，禁止放大到格高、禁止非整数倍），见 drawCommandCell。 */
+  var CMD_ICONS = {
+    attack: 'weapon_regular_sword',
+    defend: 'icon_armor_plate',
+    run: 'knight_m_run_anim_f0',
+    'skill:fireball': 'weapon_red_magic_staff',
+    'skill:dash': 'weapon_spear',
+    'skill:shield': 'icon_armor_robe',
+    item: 'flask_red'
+  };
+
+  /* D-97：指令格状态（技能 MP/CD 或静态副标签）——横置/纵置共用一份判定，不抄第二份。
+   * D-103：把 MP 代价从 HUD 挪到按钮上（§1.2/§6.3），并给出禁用原因词（§6.5）：
+   * 可用 → `MP n`；MP 不足 → `MP 不足`；冷却中 → `CD n`。 */
+  function commandCellInfo(c0, state) {
+    var sub = '', disabled = false, cost = 0, reason = '';
+    if (c0.skill && Game.Data.SKILLS && Game.Data.SKILLS[c0.skill]) {
+      var sk = Game.Data.SKILLS[c0.skill];
+      var mp = (Game.Data.Player && typeof Game.Data.Player.mp === 'number') ? Game.Data.Player.mp : 0;
+      var cdLeft = (Game.Skills && typeof Game.Skills.getCooldown === 'function')
+        ? Game.Skills.getCooldown(c0.skill) : 0;
+      cost = sk.mpCost;
+      if (cdLeft > 0) {
+        sub = 'CD ' + cdLeft;
+        disabled = true;
+        reason = 'CD ' + cdLeft;
+      } else if (mp < sk.mpCost) {
+        sub = 'MP 不足';
+        disabled = true;
+        reason = 'MP 不足';
+      } else {
+        sub = 'MP ' + sk.mpCost;
+      }
+    } else {
+      sub = c0.sub ? c0.sub(state) : '';
+    }
+    return { sub: sub, disabled: disabled, cost: cost, reason: reason };
+  }
+  /* D-102：条高——横置按 §4.1 clamp(0.178H, 88, 140)；纵置单行 96 / 4+3 两行 150。
+   * 4+3 的判据与 §6.2 一致：单行格宽 floor((W−100)/7) < 70 → W < 590。 */
+  function commandBarH(W, H) {
+    return Math.max(88, Math.min(140, Math.round(H * 0.178)));
+  }
+  function verticalBarH(W) { return (W < 590) ? 150 : 96; }
+
+  function buildCommandBar(W, H, state, layout) {
+    var compact = (layout !== 'horizontal') && W < 590;
+    var barH = (layout === 'horizontal') ? commandBarH(W, H) : verticalBarH(W);
+    var y0 = H - barH;
+    var m = compact ? 9 : 26;
+    var gap = compact ? 6 : 8;
+    var cellH = compact ? 52 : 64;
+    var cw = compact ? Math.floor((W - m * 2 - gap * 3) / 4)
+      : Math.floor((W - m * 2 - gap * 6) / 7);
     var cells = [];
     for (var i = 0; i < H_CMDS.length; i++) {
       var c0 = H_CMDS[i];
-      var cx = x0 + i * (cw + gap);
-      var sub = '', disabled = false;
-      if (c0.skill && Game.Data.SKILLS && Game.Data.SKILLS[c0.skill]) {
-        var sk = Game.Data.SKILLS[c0.skill];
-        var cdLeft = (Game.Skills && typeof Game.Skills.getCooldown === 'function')
-          ? Game.Skills.getCooldown(c0.skill) : 0;
-        sub = cdLeft > 0 ? ('CD ' + cdLeft) : ('MP ' + sk.mpCost);
-        disabled = (mp < sk.mpCost) || cdLeft > 0;
-      } else {
-        sub = c0.sub ? c0.sub(state) : '';
-      }
-      cells.push({ x: cx, y: cy, w: cw, h: ch, key: c0.key, cmd: c0.cmd, label: c0.label,
-        sub: sub, disabled: disabled });
+      var ci = commandCellInfo(c0, state);
+      var r = compact ? (i < 4 ? 0 : 1) : 0;
+      var n = compact ? (r === 0 ? 4 : 3) : 7;
+      var idx = compact ? (r === 0 ? i : i - 4) : i;
+      var rowW = cw * n + gap * (n - 1);
+      var rx = Math.round((W - rowW) / 2);
+      var cy = compact ? (y0 + 16 + r * (cellH + 6)) : (y0 + 18);
+      cells.push({ x: rx + idx * (cw + gap), y: cy, w: cw, h: cellH, key: c0.key, cmd: c0.cmd,
+        label: c0.label, sub: ci.sub, disabled: ci.disabled, cost: ci.cost, reason: ci.reason,
+        iconName: CMD_ICONS[c0.cmd] || null, icon: null });
     }
-    return { x: 0, y: y0, w: W, h: barH, cells: cells };
+    return { x: 0, y: y0, w: W, h: barH, cells: cells, compact: compact,
+      headerY: y0 + 14, footerY: y0 + barH - 4, cellH: cellH };
   }
+  function hCommandBar(W, H, state) { return buildCommandBar(W, H, state, 'horizontal'); }
+  function vCommandBar(W, H, state) { return buildCommandBar(W, H, state, 'vertical'); }
+
+  /* D-103 S2：键盘焦点与鼠标 hover 共用同一个高亮绘制入口（同一套矩形、同一组颜色）。
+   * 两者都是"当前格"：FOCUS_ID 由 mousemove 或 1–7 键写入，后写的生效。
+   * 只画当前这一格：1 次填充 + 1 次描边，其余格零开销（沿用 D-100 的克制口径）。 */
+  var FOCUS_ID = null;
+  function drawCellFocus(ctx, cc) {
+    dcMark('cell.hover');
+    ctx.fillStyle = CMD_STYLE.hoverFill;
+    ctx.fillRect(cc.x + 1, cc.y + 1, cc.w - 2, cc.h - 2);
+    ctx.strokeStyle = CMD_STYLE.hoverStroke;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cc.x + 0.5, cc.y + 0.5, cc.w - 1, cc.h - 1);
+  }
+
+  function drawCommandCell(ctx, cc, compact) {
+    var dis = !!cc.disabled;
+    /* 禁用态不是整格变灰（§6.5）：图形 0.45、文字 0.75。
+     * 背景随图形一起压暗，文字用 0.75 覆盖在压暗后的格底上——对比度 ≥4.5（verify 里实算）。 */
+    ctx.globalAlpha = dis ? CMD_STYLE.gfxAlpha : 1;
+    dcMark('cell.bg');
+    /* D-109 清账：格底 fill+stroke 合并为 1 次填充（14 → 7）。
+     * 边框由 6px 格间距与条底提供对比；焦点格仍有独立描边（cell.hover）。
+     * 这笔预算让给 N3 的横置受击白闪（tintSprite 每帧 +5）。 */
+    ctx.fillStyle = CMD_STYLE.cellBg;
+    ctx.fillRect(cc.x, cc.y, cc.w, cc.h);
+    if (FOCUS_ID === 'battle:' + cc.key) {
+      drawCellFocus(ctx, cc);
+      ctx.globalAlpha = dis ? CMD_STYLE.textAlpha : 1;
+    }
+    var off = compact ? 0 : Math.max(0, Math.round((cc.h - 64) / 2));
+    /* D-108 S4：格内左侧图标位（D-103 删掉键位框时留出的位置）。
+     * 原生尺寸 1:1——drawImage 的 w/h 直接取 naturalWidth/naturalHeight，
+     * 不做任何缩放（禁止放大到格高、禁止非整数倍）；素材缺图就留空，不画占位块。
+     * 图标框存进 cc.icon，验证页据此断言「图标/名称/代价两两不交且在格内」。 */
+    cc.icon = null;
+    if (cc.iconName) {
+      var Sp = Game.Core && Game.Core.Sprites;
+      var iconImg = (Sp && typeof Sp.get === 'function') ? Sp.get(cc.iconName) : null;
+      var nw = iconImg && iconImg.naturalWidth, nh = iconImg && iconImg.naturalHeight;
+      if (nw > 0 && nh > 0) {
+        var iconX = cc.x + (compact ? 2 : 4);
+        var iconY = cc.y + off + Math.round((cc.h - nh) / 2);
+        dcMark('cell.icon');
+        ctx.globalAlpha = dis ? CMD_STYLE.gfxAlpha : 1;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(iconImg, iconX, iconY, nw, nh);
+        cc.icon = { x: iconX, y: iconY, w: nw, h: nh, name: cc.iconName };
+      }
+    }
+    /* D-103：「键位框」不再画两层（填 + 描边），键位数字直接落在原键位文字的位置上，
+     * 一次 fillText 完成；名称/代价的落点与字号完全不变（D-108 的图标只占左侧留白，不动这两行）。 */
+    var keyX = cc.x + (compact ? 29 : 34);
+    var keyTop = cc.y + off + (compact ? 9 : 11);
+    ctx.globalAlpha = dis ? CMD_STYLE.textAlpha : 1;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    dcMark('cell.key');
+    ctx.fillStyle = CMD_STYLE.keyText;
+    ctx.font = 'bold 11px ' + FONT_STACK;
+    ctx.fillText(String(cc.key), keyX, keyTop);
+    dcMark('cell.label');
+    ctx.fillStyle = CMD_STYLE.label;
+    ctx.font = (compact ? 'bold 12px ' : 'bold 13px ') + FONT_STACK;
+    ctx.fillText(cc.label, cc.x + (compact ? 28 : 34), cc.y + off + (compact ? 24 : 30));
+    dcMark('cell.sub');
+    ctx.fillStyle = CMD_STYLE.sub;
+    ctx.font = '11px ' + FONT_STACK;
+    ctx.fillText(cc.sub, cc.x + (compact ? 28 : 34), cc.y + off + (compact ? 41 : 48));
+    ctx.globalAlpha = 1;
+  }
+
+  /* D-102：横/纵共用同一套指令条外观：header（回合 / HP·MP）+ 7 格 + footer。 */
   function hDrawCommandBar(ctx, bar) {
     if (!bar) return;
-    ctx.save();
-    ctx.fillStyle = 'rgba(8,8,16,0.92)';
+    var p = Game.Data.Player || {};
+    var st = Game.Systems && Game.Systems.Battle;
+    var state = (st && typeof st.getState === 'function') ? st.getState() : null;
+    var roundNo = (state && state.roundNo) || 1;
+    dcMark('bar.frame');
+    ctx.fillStyle = CMD_STYLE.barBg;
     ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
-    ctx.fillStyle = '#2a2a44';
+    ctx.fillStyle = CMD_STYLE.barLine;
     ctx.fillRect(bar.x, bar.y, bar.w, 1);
-    for (var i = 0; i < bar.cells.length; i++) {
-      var cc = bar.cells[i];
-      ctx.globalAlpha = cc.disabled ? 0.45 : 1;
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
-      ctx.fillRect(cc.x, cc.y, cc.w, cc.h);
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cc.x + 0.5, cc.y + 0.5, cc.w - 1, cc.h - 1);
-      ctx.fillStyle = 'rgba(120,160,255,0.18)';
-      ctx.fillRect(cc.x + 10, cc.y + 10, 20, 20);
-      ctx.strokeStyle = 'rgba(150,180,255,0.45)';
-      ctx.strokeRect(cc.x + 10.5, cc.y + 10.5, 19, 19);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#dfe9ff';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText(String(cc.key), cc.x + 20, cc.y + 21);
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#eef2ff';
-      ctx.font = 'bold 13px monospace';
-      ctx.fillText(cc.label, cc.x + 38, cc.y + 22);
-      ctx.fillStyle = cc.disabled ? '#9aa3bd' : '#9fb0d8';
-      /* D-94 P7：副标签由 10px 提到 11px——D-16 的可读线是"战斗文字 ≥11px"，
-       * 横置上线后这行 10px 会被 verify_d16 的 E5 直接判负，不是放宽判据而是补回标准。 */
-      ctx.font = '11px monospace';
-      ctx.fillText(cc.sub, cc.x + 38, cc.y + 44);
-      ctx.globalAlpha = 1;
-    }
-    ctx.restore();
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '11px ' + FONT_STACK;
+    ctx.fillStyle = '#8a8aa0';
+    ctx.textAlign = 'left';
+    ctx.fillText('行动 · 第 ' + roundNo + ' 回合', bar.compact ? 9 : 29, bar.headerY);
+    ctx.textAlign = 'right';
+    var hp = (typeof p.hp === 'number') ? p.hp : 0, hpm = (p.maxHp > 0) ? p.maxHp : 1;
+    var mp = (typeof p.mp === 'number') ? p.mp : 0, mpm = (p.maxMp > 0) ? p.maxMp : 1;
+    ctx.fillText('HP ' + hp + '/' + hpm + ' · MP ' + mp + '/' + mpm, bar.w - (bar.compact ? 9 : 29), bar.headerY);
+    for (var i = 0; i < bar.cells.length; i++) drawCommandCell(ctx, bar.cells[i], bar.compact);
+    dcMark('bar.frame');
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5f6578';
+    ctx.font = '11px ' + FONT_STACK;
+    ctx.fillText('1–7 或点击', bar.w / 2, bar.footerY);
+    /* D-103 清账：省掉 save/restore，显式复位排版状态 */
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   }
+  function vDrawCommandBar(ctx, bar) { hDrawCommandBar(ctx, bar); }
 
 
 
@@ -1456,6 +1925,7 @@
     if (!c) return;
     if (bgCache.floor !== f || bgCache.W !== W || bgCache.H !== H ||
       bgCache.k !== k || bgCache.tile !== tileFlag || bgCache.layout !== lay) {
+      if (typeof window !== 'undefined' && window.__BGN !== undefined) window.__BGN++;
       bgCache.cv.width = Math.max(1, Math.round(W * k));
       bgCache.cv.height = Math.max(1, Math.round(H * k));
       c.setTransform(k, 0, 0, k, 0, 0);
@@ -1489,8 +1959,8 @@
   /* P2-1：怪物视觉映射集中表——id → { idle, run } 帧组名（10 种怪物全覆盖）。
    * 未登记的 id 由调用方回退 monster_chort（现状）；imp 只作 bat 的视觉帧组，不占怪物 id。 */
   var MONSTER_ANIM = {
-    slime: { idle: 'tiny_slug', run: 'tiny_slug' },
-    bat: { idle: 'imp_idle', run: 'imp_run' },
+    slime: { idle: 'slime_idle', run: 'slime_run' },
+    bat: { idle: 'bat_idle', run: 'bat_run' },
     skeleton: { idle: 'skelet_idle', run: 'skelet_run' },
     dragon: { idle: 'dragon_idle', run: 'dragon_idle', attack: 'dragon_attack', hurt: 'dragon_hurt' },
     goblin: { idle: 'goblin_idle', run: 'goblin_run' },
@@ -1512,6 +1982,15 @@
     ogre_boss: { idle: 'ogre_boss_idle', run: 'ogre_boss_idle', attack: 'ogre_boss_attack', hurt: 'ogre_boss_hurt' },
     zombie_king: { idle: 'zombie_king_idle', run: 'zombie_king_idle', attack: 'zombie_king_attack', hurt: 'zombie_king_hurt' }
   };
+
+  /* D-98：战斗侧帧组解析——精英只登记了基怪贴图 id（elite_goblin→goblin），
+   * 优先按 sprite 查 MONSTER_ANIM；未登记 sprite 时退回怪物 id；两者都查不到才由
+   * 调用方落 chort 兜底（兜底保留，不删）。 */
+  function monsterAnimId(monster) {
+    if (!monster) return '';
+    if (monster.sprite && MONSTER_ANIM[monster.sprite]) return monster.sprite;
+    return monster.id;
+  }
 
   /* P2-1：按 id + 状态取动画帧；未登记 id / 素材未就绪 / 帧缺失一律返回 null（调用方回退）。
    * 第二拨：第三参 mode = 'attack' | 'hurt' 时优先取专属态；未登记该态则回退 idle/run。 */
@@ -1537,6 +2016,7 @@
       { label: 'E', act: 'shop', name: '商店', line: 0, codes: ['KeyE'] },
       { label: 'M', act: 'quests', name: '任务', line: 0, codes: ['KeyM'] },
       { label: 'T', act: 'npc', name: '对话', line: 1, codes: ['KeyT'] },
+      { label: 'F', act: 'trap', name: '侦测/拆除陷阱', line: 1, codes: ['KeyF'] },
       { label: 'L', act: 'learner', name: 'AI 演示', line: 1, codes: ['KeyL'] },
       { label: 'Q', act: 'settings', name: '设置', line: 1, codes: ['KeyQ'] },
       { label: 'K', act: 'mute', name: '静音', line: 1, codes: ['KeyK'] },
@@ -1625,6 +2105,335 @@
     return { box: b, frame: st.frame, facing: st.facing, flip: st.flip };
   }
 
+  /* D-113：探索层墙的压暗参数。
+   * top/body = 墙顶/墙身叠黑 alpha（旧值 0.40 / 0.45）；edge/edgePx = 墙侧内缘那条暗边；
+   * guard = 负例专用（>0 时只压墙体内圈，交界像素保持旧亮度）。
+   * 只在静态层构建期使用，不进每帧调用账；改布局会走 invalidateStatic 重建。 */
+  var WALL_STYLE = { top: 0.62, body: 0.70, edge: 0.90, edgePx: 3, guard: 0 };
+
+  /* D-115：可交互物统一语法（只加标识，不改地图/碰撞/数值）。
+   * 语法 = 类别色 + 格内类别标记；标记只画在已探明格，不铺满整格，也不进 FOV 黑场。
+   *   楼梯：青白 #cae6f5 2px 内框 + 方向三角（▼ 下行 / ▲ 上行；同色同类，靠箭头方向区分）
+   *   宝箱：沿用既有金色边框（D-115 明确"金边与金币色已够"，不重绘）
+   *   陷阱：红 #d44e52 1px 内框（只在 tr.seen 时画）
+   *   NPC ：绿 #79b85a 1px 内框（画在人形之前，脚下格）
+   * 层级：静态层内（高于墙内缘暗边）→ 实体层（玩家/NPC 精灵覆盖它），不抢人。
+   * 颜色全部取自 84 色板。 */
+  var INTERACT = {
+    stair: { color: '#cae6f5', ink: '#16222e', w: 2, inset: 2.5 },
+    trap: { color: '#d44e52', ink: '#16222e', w: 1, inset: 2 },
+    npc: { color: '#79b85a', ink: '#16222e', w: 1, inset: 1 },
+    on: true
+  };
+
+  /* D-116：地图边界之外的"地牢外面"。
+   * 选型：只做场外岩框（不做相机重构图）——硬约束禁止缩放，地图占视口比例在改动前后
+   * 必须保持不变；能修的是"空白被读成画面没画完"。所以把场外做成有纵深、有岩层结构的
+   * 地牢外侧，并用 3px 接触阴影把地图"压"进岩体里。
+   * 纪律：场外整体比地图暗（最亮岩层也低于地板均值）；不出现 24px 网格/走廊；不画任何
+   * 可走质感；纹理只依赖屏幕坐标哈希，不掷 Math.random；静态缓存随镜头失效，不会停在旧帧。 */
+  var OUTER = {
+    on: true,
+    base: '#08070e',       /* 最远：洞窟深处的黑 */
+    far: '#0b0813',        /* 远景岩层 */
+    mid: '#120e21',        /* 中景岩层 */
+    near: '#191330',       /* 贴地图的岩壁（最近、最亮，仍远低于地板） */
+    ink: '#040407',        /* 地图沿口 4px 接触阴影 */
+    rim: '#2b2440'         /* 地图边界 1px 沿口线（暗紫，不抢青白楼梯） */
+  };
+
+  function hashXY(x, y) {
+    var n = (x | 0) * 374761393 + (y | 0) * 668265263;
+    n = (n ^ (n >> 13)) * 1274126177;
+    return ((n ^ (n >> 16)) >>> 0) / 4294967296;
+  }
+
+  /* D-116：场外岩壁 = 不规则石块层（不是条纹、不是 24px 网格）。
+   * 石块按 60×34 的抖动网格铺、行列错缝，缝宽 3~5px 露出洞窟黑；
+   * 石块色只在 near/mid/far 三档暗紫里取值，最亮 near 也远低于任何地板色，
+   * 且色相偏紫、与地板/墙的棕紫拉开，不会被读成可走地面。
+   * 纹理烘成 240×240 的无缝贴图（石块跨边时在四周各补一份，接缝不可见）：
+   * 静态层每次重建只做 1 次 pattern 填充，不再逐块逐粒重画——镜头每走一步都要重建，
+   * 逐块重画实测 9.2ms/次，烘成贴图后回到 1ms 量级。 */
+  var outerTex = { cv: null };
+  var FADE_LEN = 150, FADE_ALPHA = 0.62, fadeTex = {};
+
+  /* 预烘的"向内收光"条：reverse=true 表示起点不透明、终点透明。
+   * 4 条各 150×1 / 1×150，只在第一次用到时生成，之后每次重建只是 4 次 drawImage。 */
+  function fadeStrip(key, w, h, reverse) {
+    if (fadeTex[key]) return fadeTex[key];
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    var c = cv.getContext('2d');
+    var g = (w >= h) ? c.createLinearGradient(0, 0, w, 0) : c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(0,0,0,' + (reverse ? FADE_ALPHA : 0) + ')');
+    g.addColorStop(1, 'rgba(0,0,0,' + (reverse ? 0 : FADE_ALPHA) + ')');
+    c.fillStyle = g;
+    c.fillRect(0, 0, w, h);
+    fadeTex[key] = cv;
+    return cv;
+  }
+
+  function outerStone(c, px, py, pw, ph, color, t) {
+    c.fillStyle = color;
+    var k = 3;
+    c.beginPath();
+    c.moveTo(px + k, py);
+    c.lineTo(px + pw - k, py);
+    c.lineTo(px + pw, py + k);
+    c.lineTo(px + pw, py + ph - k);
+    c.lineTo(px + pw - k, py + ph);
+    c.lineTo(px + k, py + ph);
+    c.lineTo(px, py + ph - k);
+    c.lineTo(px, py + k);
+    c.closePath();
+    c.fill();
+    /* 上沿 1px 受光：石块有厚度，不是平涂色块（约 7 成石块有） */
+    if (t > 0.30) {
+      c.fillStyle = 'rgba(178,158,220,0.06)';
+      c.fillRect(px + k, py, pw - k * 2, 1);
+    }
+  }
+
+  function buildOuterTile() {
+    if (outerTex.cv) return outerTex.cv;
+    /* 480 贴图内恰好 12 行 × 6 列（40 / 80 整除、行数为偶），错缝相位在贴图边界一致；
+     * 重复周期足够大（1024 宽只铺 2.1 次），肉眼读不出"同一块石头又出现"。 */
+    var S = 480;
+    var cv = document.createElement('canvas');
+    cv.width = S; cv.height = S;
+    var c = cv.getContext('2d');
+    c.fillStyle = OUTER.base;
+    c.fillRect(0, 0, S, S);
+    var rowH = 40, colW = 80, r = 0, y, x, dx, dy;
+    for (y = -rowH; y < S + rowH; y += rowH) {
+      var off = (r % 2) ? Math.round(colW * 0.5) : 0;
+      for (x = -colW; x < S + colW; x += colW) {
+        var jx = (hashXY(x, y) - 0.5) * 12;
+        var jy = (hashXY(x + 3, y + 9) - 0.5) * 8;
+        var pw = Math.round(colW - 9 + hashXY(x + 11, y) * 7);
+        var ph = Math.round(rowH - 9 + hashXY(x, y + 13) * 6);
+        var px = Math.round(x + off + jx), py = Math.round(y + jy);
+        var t = hashXY(px + 41, py + 17);
+        var col = t < 0.46 ? OUTER.near : (t < 0.82 ? OUTER.mid : OUTER.far);
+        /* 无缝：跨边石块在 ±S 方向各补一份 */
+        for (dy = -1; dy <= 1; dy++) {
+          for (dx = -1; dx <= 1; dx++) {
+            if (px + dx * S + pw < 0 || px + dx * S > S || py + dy * S + ph < 0 || py + dy * S > S) continue;
+            outerStone(c, px + dx * S, py + dy * S, pw, ph, col, t);
+          }
+        }
+      }
+      r++;
+    }
+    /* 岩面碎屑与裂隙：2~3px 碎屑 + 1px 裂隙，铺满贴图（不做 24px 对齐） */
+    for (var i = 0; i < 420; i++) {
+      var gx = Math.floor(hashXY(i * 7 + 1, 3) * S);
+      var gy = Math.floor(hashXY(i * 13 + 5, 11) * S);
+      var r1 = hashXY(gx, gy);
+      c.fillStyle = r1 < 0.5 ? 'rgba(176,156,218,0.10)' : 'rgba(126,108,166,0.055)';
+      c.fillRect(gx, gy, 3, 2);
+      if (r1 < 0.22) {
+        c.fillStyle = 'rgba(0,0,0,0.42)';
+        c.fillRect(gx + 1, gy + 2, 2, 2 + ((r1 * 100) | 0) % 5);
+      }
+    }
+    outerTex.cv = cv;
+    return cv;
+  }
+
+  function drawOuterFrame(ctx, W, H, mx, my, mw, mh) {
+    if (!OUTER.on) {
+      ctx.fillStyle = '#14142a'; /* D-116 之前：整块平背景（负例回放用） */
+      ctx.fillRect(0, 0, W, H);
+      return;
+    }
+    /* 1) 最远层：整屏洞窟黑 */
+    ctx.fillStyle = OUTER.base;
+    ctx.fillRect(0, 0, W, H);
+    /* 2) 岩壁贴图 / 向内收光：全部裁在"地图矩形之外"，地图内部零改动 */
+    try {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H);
+      ctx.rect(mx, my, mw, mh);
+      ctx.clip('evenodd');
+      var pat = ctx.createPattern(buildOuterTile(), 'repeat');
+      if (pat) {
+        ctx.fillStyle = pat;
+        ctx.fillRect(0, 0, W, H);
+      }
+      /* 向内收光：按"到地图边的距离"逐侧衰减（不是全屏径向），
+       * 地图沿口的岩壁最亮、越往外越沉进黑暗，视觉重心被压回地图。
+       * 衰减条是 150px 的预烘贴图（同 FADE_LEN），比每次现算 4 条渐变快得多。 */
+      if (my > 0) ctx.drawImage(fadeStrip('vOpaque', 1, FADE_LEN, true), 0, my - FADE_LEN, W, FADE_LEN);
+      if (my + mh < H) ctx.drawImage(fadeStrip('vClear', 1, FADE_LEN, false), 0, my + mh, W, FADE_LEN);
+      if (mx > 0) ctx.drawImage(fadeStrip('hOpaque', FADE_LEN, 1, true), mx - FADE_LEN, 0, FADE_LEN, H);
+      if (mx + mw < W) ctx.drawImage(fadeStrip('hClear', FADE_LEN, 1, false), mx + mw, 0, FADE_LEN, H);
+      ctx.restore();
+    } catch (e) {
+      /* 不支持 evenodd 裁剪的内核：只保留整屏底色，绝不让岩壁越过地图边界 */
+    }
+    /* 3) 沿口接触阴影：地图像被嵌进岩体里，而不是浮在纹理上 */
+    ctx.fillStyle = OUTER.ink;
+    ctx.fillRect(mx - 4, my - 4, mw + 8, 4);
+    ctx.fillRect(mx - 4, my + mh, mw + 8, 4);
+    ctx.fillRect(mx - 4, my, 4, mh);
+    ctx.fillRect(mx + mw, my, 4, mh);
+    /* 4) 地图沿口 1px 线：把"地图边界"和"岩体"钉成两条可分的结构线 */
+    ctx.fillStyle = OUTER.rim;
+    ctx.fillRect(mx - 1, my - 1, mw + 2, 1);
+    ctx.fillRect(mx - 1, my + mh, mw + 2, 1);
+    ctx.fillRect(mx - 1, my, 1, mh);
+    ctx.fillRect(mx + mw, my, 1, mh);
+  }
+
+
+  /* D-117：F1 / F2 的"这是哪一层"构图层。
+   * 复判归因"配色 40% / 构图 60%"，所以差异必须落在结构上，而不是把颜色调艳：
+   *   F1 地牢 = 人工砌筑：48px 大石板的通缝 + 错缝半缝 + 凿痕，全部正交感；
+   *   F2 营地 = 兽人踩踏：45° 斜向刮痕 / 木板 / 骨屑 / 贴墙木桩影，没有一条正交长线。
+   * 无新素材也成立的原因：石缝/刮痕/木桩影都是 canvas 直线与矩形，靠**梯度方向**
+   * 而不是靠色相区分——把画面压到只剩亮度轮廓时，正交网格与斜向乱纹仍然可分。
+   * 颜色只做同向加强：F1 冷灰石粉（低饱和，不进色相统计），F2 暖褐土（顺 F2 的
+   * 营地 tint）。只加深、只加 1px 低 alpha 受光，地板均值不抬。
+   * 纪律：只画 t===1 且当前可见的格；四周留 ≥4px 不碰 D-113 的交界取样带；
+   *       楼梯/宝箱/陷阱/NPC/装饰格不画（不进 _ambientAt 的避让口径，纯跳过）。 */
+  var LAYER_SIG = {
+    on: true,
+    f1: { groove: 'rgba(9,11,20,0.42)', bevel: 'rgba(150,168,205,0.07)', chisel: 'rgba(0,0,0,0.24)' },
+    f2: { scuff: 'rgba(26,15,7,0.34)', board: 'rgba(44,26,12,0.36)',
+      bone: 'rgba(226,206,170,0.10)', stake: 'rgba(20,12,6,0.32)' }
+  };
+
+  function sigHash(x, y, k) {
+    return hashXY(x * 17 + k * 7 + 11, y * 23 + k * 13 + 5);
+  }
+
+  /* F1：画"砌筑石板"在本格内的那一部分。
+   * 不用 2×2 房间模块对齐——实测 F1 地图里偶数格起点、四格全地板的模块几乎不存在
+   * （走廊多为奇数坐标）。改成绝对坐标的砌筑规则，任何地板格都成立：
+   *   横缝：绝对 y = 48k + 7（每两行一条，局部 7px，避开 D-113 的顶部 3px 取样带）
+   *   竖缝：每个 48px 砌层内 X = 48k + 7 / 48k + 31 交替 → running bond 错缝
+   * 只在本格内落笔，与绘制顺序无关；无长斜线，梯度方向统计是纯正交感。 */
+  function drawSigF1(ctx, grid, x, y, px, py) {
+    var gy = y * TILE, gx = x * TILE;
+    /* 横缝：本格局部 y（48px 一条，只会落在偶数行的 7px 处） */
+    var seam = (7 - (gy % 48) + 48) % 48;
+    if (seam + 3 <= TILE) {
+      ctx.fillStyle = LAYER_SIG.f1.groove;
+      ctx.fillRect(px, py + seam, TILE, 3);
+      /* 下沿受光 1px：石缝有厚度，不是纯描边 */
+      ctx.fillStyle = LAYER_SIG.f1.bevel;
+      ctx.fillRect(px, py + seam + 3, TILE, 1);
+    }
+    /* 竖缝：所属 48px 砌层的错缝相位，局部只会是 7 或 31（31 出格则本格不画） */
+    var band = Math.floor(gy / 48);
+    var jointOff = (band % 2) ? 31 : 7;
+    var jx = (jointOff - (gx % 48) + 48) % 48;
+    if (jx + 3 <= TILE) {
+      ctx.fillStyle = LAYER_SIG.f1.groove;
+      ctx.fillRect(px + jx, py, 3, TILE);
+    }
+    /* 凿痕：少数格 2×1 的深点，把表面读成被加工过的石材 */
+    if (sigHash(x, y, 1) > 0.84) {
+      ctx.fillStyle = LAYER_SIG.f1.chisel;
+      var qx = px + 9 + ((sigHash(x, y, 5) * 7) | 0);
+      var qy = py + 9 + ((sigHash(x + 2, y, 6) * 7) | 0);
+      ctx.fillRect(qx, qy, 2, 1);
+      ctx.fillRect(qx + 3, qy + 4, 1, 2);
+    }
+  }
+
+  /* F2：斜向踩踏痕 + 木板 + 骨屑 + 贴墙木桩影。全部 45° 或近 45°，没有正交长线。 */
+  function drawSigF2(ctx, grid, x, y, px, py) {
+    var h = sigHash(x, y, 2);
+    var wallUp = !!(grid[y - 1] && grid[y - 1][x] === 0);
+    /* 1) 刮痕：3~5 条 45° 短划，起止都留在 [5,19]，不碰四边 4px */
+    var n = 3 + ((h * 97) | 0) % 3;
+    ctx.strokeStyle = LAYER_SIG.f2.scuff;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var a = 5 + ((sigHash(x + i * 31, y, 3) * 5) | 0);
+      var L = 5 + ((sigHash(x, y + i * 19, 4) * 5) | 0);
+      if (a + L > 19) L = 19 - a;
+      if (L <= 2) continue;
+      var flip = ((sigHash(x + i, y + i * 7, 7) * 1000) | 0) % 2 === 0;
+      var sy = 5 + ((sigHash(x - i, y + i, 8) * 5) | 0);
+      if (flip) {
+        ctx.moveTo(px + a, py + sy); ctx.lineTo(px + a + L, py + sy + L);
+      } else {
+        ctx.moveTo(px + a, py + sy + L); ctx.lineTo(px + a + L, py + sy);
+      }
+    }
+    ctx.stroke();
+    /* 2) 木板：少数格一条 3px 粗的长斜板（营地建材散落） */
+    if (h > 0.90) {
+      ctx.strokeStyle = LAYER_SIG.f2.board;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(px + 6, py + 18);
+      ctx.lineTo(px + 19, py + 6);
+      ctx.stroke();
+    }
+    /* 3) 骨屑：极少数格两粒淡骨色短划（不亮过地板高光） */
+    if (h > 0.965) {
+      ctx.fillStyle = LAYER_SIG.f2.bone;
+      ctx.fillRect(px + 7, py + 8, 3, 1);
+      ctx.fillRect(px + 12, py + 11, 2, 1);
+    }
+    /* 4) 贴墙木桩影：墙在正上方时，离墙 4px 起一条 2×8 的深色短柱 */
+    if (wallUp && x % 3 === 1) {
+      ctx.fillStyle = LAYER_SIG.f2.stake;
+      ctx.fillRect(px + 11, py + 4, 2, 8);
+    }
+  }
+
+  function drawLayerSig(ctx, grid, pf, x, y, px, py) {
+    if (!LAYER_SIG.on) return;
+    if (pf === 1) drawSigF1(ctx, grid, x, y, px, py);
+    else if (pf === 2) drawSigF2(ctx, grid, x, y, px, py);
+  }
+
+  /* 类别内框：先 1px 深墨外描边，再压类别色，保证亮地板/暗墙上都有确定边界 */
+  function interactBorder(ctx, px, py, s) {
+    if (!INTERACT.on || !ctx) return;
+    var side = TILE - s.inset * 2;
+    if (typeof ctx.save === 'function') ctx.save();
+    ctx.lineWidth = s.w + 1;
+    ctx.strokeStyle = s.ink;
+    ctx.strokeRect(px + s.inset - 0.5, py + s.inset - 0.5, side, side);
+    ctx.lineWidth = s.w;
+    ctx.strokeStyle = s.color;
+    ctx.strokeRect(px + s.inset - 0.5, py + s.inset - 0.5, side, side);
+    if (typeof ctx.restore === 'function') ctx.restore();
+  }
+
+  /* 楼梯：内框 + 方向三角（三角 10×8，中心对称，箭头朝向即上下行） */
+  function drawStairMark(ctx, px, py, down) {
+    if (!INTERACT.on) return;
+    var s = INTERACT.stair;
+    interactBorder(ctx, px, py, s);
+    var cx = px + TILE / 2, cy = py + TILE / 2, w = 5, h = 4;
+    if (typeof ctx.save === 'function') ctx.save();
+    ctx.beginPath();
+    if (down) {
+      ctx.moveTo(cx - w, cy - h); ctx.lineTo(cx + w, cy - h); ctx.lineTo(cx, cy + h);
+    } else {
+      ctx.moveTo(cx - w, cy + h); ctx.lineTo(cx + w, cy + h); ctx.lineTo(cx, cy - h);
+    }
+    ctx.closePath();
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = s.ink;
+    ctx.stroke();
+    ctx.fillStyle = s.color;
+    ctx.fill();
+    if (typeof ctx.restore === 'function') ctx.restore();
+  }
+
+
   Game.Core.Render = {
     /* D-90：地块尺寸只读入口（系统层按同一 TILE 换算，避免第二份 24） */
     TILE: TILE,
@@ -1642,6 +2451,77 @@
     },
     TILE: TILE,  /* M9-2：暴露瓦片尺寸供 Lighting 等模块复用 */
     MONSTER_ANIM: MONSTER_ANIM,  /* P2-1：怪物 id → {idle,run} 帧组（验证/调试可读，运行时只读） */
+    /* D-113：探索墙压暗参数。传对象为设置（只覆盖已知键），返回当前快照；
+     * 验证页用旧值 / 负例值回放时仍走同一条 drawMap 绘制路径。 */
+    _wallStyle: function (o) {
+      if (o && typeof o === 'object') {
+        for (var k in o) {
+          if (Object.prototype.hasOwnProperty.call(o, k) && WALL_STYLE.hasOwnProperty(k)) {
+            WALL_STYLE[k] = o[k];
+          }
+        }
+      }
+      var snap = {};
+      for (var k2 in WALL_STYLE) if (WALL_STYLE.hasOwnProperty(k2)) snap[k2] = WALL_STYLE[k2];
+      return snap;
+    },
+    /* D-115：可交互物统一语法的只读快照与总开关（验证页做负例回放）。
+     * 关闭后楼梯回到 D-113 的原样（只剩贴图），用于证明断言会真红。 */
+    _interactStyle: function () {
+      return {
+        stair: { color: INTERACT.stair.color, w: INTERACT.stair.w, inset: INTERACT.stair.inset },
+        trap: { color: INTERACT.trap.color, w: INTERACT.trap.w, inset: INTERACT.trap.inset },
+        npc: { color: INTERACT.npc.color, w: INTERACT.npc.w, inset: INTERACT.npc.inset },
+        on: INTERACT.on
+      };
+    },
+    _interactMarks: function (on) {
+      if (typeof on === 'boolean') {
+        INTERACT.on = on;
+        staticCache.valid = false; /* 标识变化 → 静态层必须重建，不能停旧图 */
+      }
+      return INTERACT.on;
+    },
+    /* D-116：场外岩框的快照 / 设置（传对象只覆盖已知键，同 _wallStyle 口径）与回放开关。
+     * 验证页用两处：_outerFrame(false) 回放改动前的平背景；_outerStyle(地板棕) 造
+     * "场外长成可走地面"的反例，证明可分性断言会真红。 */
+    _outerStyle: function (o) {
+      if (o && typeof o === 'object') {
+        for (var k in o) {
+          if (Object.prototype.hasOwnProperty.call(o, k) && OUTER.hasOwnProperty(k) && k !== 'on') {
+            OUTER[k] = o[k];
+          }
+        }
+        outerTex.cv = null; /* 颜色变了 → 烘好的岩壁贴图作废 */
+        staticCache.valid = false;
+      }
+      return { on: OUTER.on, base: OUTER.base, far: OUTER.far, mid: OUTER.mid,
+        near: OUTER.near, ink: OUTER.ink, rim: OUTER.rim };
+    },
+    _outerFrame: function (on) {
+      if (typeof on === 'boolean') {
+        OUTER.on = on;
+        staticCache.valid = false;
+      }
+      return OUTER.on;
+    },
+    /* D-117：层辨识构图的总开关（验证页回放"改动前"）。关闭后 F1/F2 只剩贴图与 tint，
+     * 与 D-116 末的快照逐像素一致；F3–F5 无论开关都必须完全一致。 */
+    _layerSig: function (on) {
+      if (typeof on === 'boolean') {
+        LAYER_SIG.on = on;
+        staticCache.valid = false;
+      }
+      return LAYER_SIG.on;
+    },
+    _layerSigStyle: function () {
+      return {
+        on: LAYER_SIG.on,
+        f1: { groove: LAYER_SIG.f1.groove, bevel: LAYER_SIG.f1.bevel, chisel: LAYER_SIG.f1.chisel },
+        f2: { scuff: LAYER_SIG.f2.scuff, board: LAYER_SIG.f2.board,
+          bone: LAYER_SIG.f2.bone, stake: LAYER_SIG.f2.stake }
+      };
+    },
     /* 第三拨 D-88：五层背景的空间语义表（只读）与纯背景绘制入口（验证页逐像素裁决用）。
      * 绘制入口只画背景，不画怪/文字/HUD，因此验证页可以把"背景亮度分布"和"战斗内容"分开测。 */
     _battleScene: BATTLE_SCENE,
@@ -1655,13 +2535,30 @@
     _battleLayoutNow: function () {
       return resolveBattleLayout(this.cssW || BASE_W, this.cssH || BASE_H);
     },
+    /* D-102：把判据函数本身作为唯一出口——Juice / 验证页按传入 W/H 取布局，不再各写一份比例式 */
+    _resolveBattleLayout: function (W, H) { return resolveBattleLayout(W, H); },
     _battleLayoutGeo: function (W, H) { return horizontalBattleGeo(W, H); },
+    /* D-102：布局安全带（Juice 结果卡 / 验证页共用；见 battleSafeBand 注释） */
+    _battleSafeBand: function (W, H, layout, box) { return battleSafeBand(W, H, layout, box); },
+    _verticalBattleGeo: function (W, H) { return verticalBattleGeo(W, H); },
+    _cardH: CARD_H,
+    /* D-102：字号阶梯唯一来源（规格 §4.3：11/12/13/16/18/20） */
+    _fontLadder: [11, 12, 13, 16, 18, 20],
+    /* D-102：战斗信息实际用到的字号（全部取自阶梯；HUD 的 9/10px 装饰不在战斗信息口径内） */
+    _fonts: { cardName: 13, cardHp: 11, chip: 11, log: 12, pipelineRound: 13,
+      pipelineNode: 13, cellName: 13, cellNameCompact: 12, cellCost: 11, barHeader: 11, barFooter: 11 },
     _battleBackdrop: function (c2, W2, H2, floor, layout) { drawBattleBackdrop(c2, W2, H2, floor, layout); },
     _battleSceneH: HORIZONTAL_SCENE,  /* D-94 P2：横置五层场景表（只读，验证页取 backWall 实数） */
     /* 第三拨 D-88：龙眼绘制单元（验证页在纯画布上量"双瞳/间距/是否落在头部"） */
     _drawDragonEyes: drawDragonEyes,
     /* 第二拨：Boss 落屏高度口径（原生高 × 2，整数倍），验证页与 drawBattle 共用同一公式 */
     BOSS_MUL: 2,
+    /* D-104：战斗精灵整数倍口径——所有稳定帧的落屏高 == 原生高 × BATTLE_SPRITE_MUL。
+     * 验证页据此断言（旧 90/42=2.143、90/35=2.571 必须判负）。 */
+    BATTLE_SPRITE_MUL: BATTLE_SPRITE_MUL,
+    battleSpriteHeight: battleSpriteH,
+    /* D-105：濒死整数档纯函数——验证页采样 0..1，断言返回值只能是 2 或 1。 */
+    battleDyingMul: battleDyingMul,
     bossDrawHeight: function (img) {
       var nh = img && (img.naturalHeight || 0);
       return nh > 0 ? nh * 2 : 108;
@@ -1758,6 +2655,69 @@
       var sx = (r.width > 0) ? (this.cssW / r.width) : 1;
       var sy = (r.height > 0) ? (this.cssH / r.height) : 1;
       return { x: (clientX - r.left) * sx, y: (clientY - r.top) * sy };
+    },
+
+    /* ── D-100：鼠标热区注册表 ─────────────────────────────────────
+     * 绘制层只负责"把这一帧真的画出来的可点矩形登记进来"，命中层不再另算一份坐标。
+     * 逆序遍历：后画的（弹窗）优先于先画的（地图/菜单）。 */
+    _hotReset: function () { HOT.length = 0; },
+    _hotAdd: function (id, x, y, w, h) {
+      if (!id || !isFinite(x) || !isFinite(y) || !(w > 0) || !(h > 0)) return;
+      HOT.push({ id: id, x: x, y: y, w: w, h: h });
+    },
+    _hotAt: function (x, y) {
+      for (var i = HOT.length - 1; i >= 0; i--) {
+        var r = HOT[i];
+        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r.id;
+      }
+      return null;
+    },
+    _hotList: function () { return HOT.slice(); },
+    _hoverId: function () { return HOVER_ID; },
+    /* D-103：键盘焦点与鼠标 hover 共用一个状态（FOCUS_ID），绘制只认这一份——
+     * 因此"按 1–7"与"鼠标停在该格"画出来的高亮必然逐像素一致（同一函数、同一组颜色）。 */
+    _cmdFocus: function () { return FOCUS_ID; },
+    _cmdStyle: function () { return CMD_STYLE; },
+    _commandFocus: function (cmd) {
+      for (var i = 0; i < H_CMDS.length; i++) {
+        if (H_CMDS[i].cmd === cmd) {
+          FOCUS_ID = 'battle:' + H_CMDS[i].key;
+          return H_CMDS[i].key;
+        }
+      }
+      return 0;
+    },
+    /* 只在热区 id 变化时改 cursor（不每帧写 DOM）；返回是否真的写了 */
+    _setHover: function (id) {
+      id = id || null;
+      FOCUS_ID = id;
+      if (id === HOVER_ID) return false;
+      HOVER_ID = id;
+      var cv = this._canvas;
+      if (cv && cv.style) cv.style.cursor = id ? 'pointer' : 'default';
+      return true;
+    },
+
+    /* D-100：验证/调试只读——当前地图相机偏移（与 _screenToTile 同一口径） */
+    _cam: function () { return { x: cam.x, y: cam.y }; },
+
+    /* D-100：逻辑坐标 → 地图格（与 drawMap 的 cam 同一口径）。
+     * 返回 null 表示落在可视地图之外。 */
+    _screenToTile: function (x, y) {
+      var grid = Game.Systems && Game.Systems.Map && typeof Game.Systems.Map.getGrid === 'function'
+        ? Game.Systems.Map.getGrid() : null;
+      if (!grid || !grid.length) return null;
+      var gx = Math.floor((x + cam.x) / TILE);
+      var gy = Math.floor((y + cam.y) / TILE);
+      if (gy < 0 || gy >= grid.length || gx < 0 || gx >= grid[0].length) return null;
+      return { x: gx, y: gy };
+    },
+
+    /* D-100：战斗七格指令条的几何——绘制与命中共用这一份（横/纵由同一布局解析决定）。 */
+    _battleBarInfo: function (state) {
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      return (resolveBattleLayout(W, H) === 'horizontal')
+        ? hCommandBar(W, H, state) : vCommandBar(W, H, state);
     },
 
     /* M9-5：是否窄窗口（<520px），HUD/底部提示用紧凑版 */
@@ -1968,6 +2928,8 @@
 
     /* S-04：已触发的陷阱——地刺画三根红尖刺，毒气画绿色雾团（触发后永久留在该格） */
     _drawTrap: function (ctx, id, px, py) {
+      /* D-115：已发现陷阱的统一类别内框（红 1px），压在符号之下 */
+      interactBorder(ctx, px, py, INTERACT.trap);
       if (id === 'gas') {
         ctx.fillStyle = 'rgba(132,204,22,0.35)';
         ctx.beginPath();
@@ -2022,6 +2984,7 @@
       var ctx = this._ctx;
       var cv = this._canvas;
       if (!ctx || !grid) return;
+      this._hotReset(); /* D-100：本帧热区从场景层开始登记（弹窗随后叠加） */
       this._applyDpr(); /* M9-5：每帧重置 DPR 变换 */
       var W = this.cssW, H = this.cssH;
       this._updateCam(grid, player);
@@ -2041,9 +3004,7 @@
         ctx.drawImage(staticCache.canvas, 0, 0);
         ctx.restore();
       }
-      /* D-90（X3）：系统底纹层（6 格网格残迹）——画在静态层之后、实体之前（z 序第 2 层）。
-       * 纯绘制，只读 Map.isSeen / FOV，不改任何地图数据。 */
-      try { if (Game.Sys && typeof Game.Sys.drawUnderlay === 'function') Game.Sys.drawUnderlay(ctx, grid, player); } catch (e) { /* 降级 */ }
+      /* D-114：X3 六格网格残迹已删除（实测只改 0.02–0.03% 像素，不可见），此处不再留绘制钩子。 */
       /* 敌人标记（M2/M7.5）：埋伏怪——chort 精灵（素材就绪时）+ 半透明红底 */
       var es = Game.Systems.Map.getEnemies();
       for (var i = 0; i < es.length; i++) {
@@ -2191,6 +3152,8 @@
         var ncx = no.x * TILE - cam.x + TILE / 2;
         var nbt = no.y * TILE - cam.y + TILE;
         if (ncx < -30 || nbt < -30 || ncx > W + 30 || nbt > H + 30) continue;
+        /* D-115：NPC 的绿色类别内框画在脚下格、人形之前（人覆盖框，优先级正确） */
+        interactBorder(ctx, no.x * TILE - cam.x, no.y * TILE - cam.y, INTERACT.npc);
         groundShadow(ctx, ncx, nbt, TILE - 8);
         /* 斗篷 + 腰带 + 头 + 提灯：4 个色块足够一眼认出"这里站着一个人" */
         ctx.fillStyle = '#46567f';
@@ -2331,8 +3294,9 @@
     /* D-12：静态场景层——原 drawMap 逐格部分原样迁入；直绘与离屏缓存共用这一份代码，
      * 保证"缓存命中"与"直绘"像素一致。ctx 为目标上下文（主画布或缓存画布）。 */
     _drawSceneStatic: function (ctx, grid, pf, W, H) {
-      ctx.fillStyle = '#14142a';
-      ctx.fillRect(0, 0, W, H);
+      /* D-116：场外岩框。地图矩形由相机偏移决定，静态缓存已把 cam 纳入失效键，
+       * 所以框随镜头重建，不会停在旧构图。 */
+      drawOuterFrame(ctx, W, H, -cam.x, -cam.y, grid[0].length * TILE, grid.length * TILE);
       /* S3-1 FOV：可见=正常绘制；记忆格=较暗覆盖；从未点亮=近黑不透露地形 */
       var fovOn = !!(Game.fov && Game.fov.isVisible);
       /* D-79：Boss 前室判定——距下行梯 ≤3 格，且下一层确实有 Boss（MAPS.bosses）。
@@ -2368,12 +3332,35 @@
             var wsp = this._hasSprites() ? Game.Core.Sprites.get(wspName) : null;
             if (wsp) {
               ctx.drawImage(wsp, px, py, TILE, TILE);
-              /* 美学整改 A3：墙身 ×0.55、墙顶 ×0.60（等效叠黑 0.45 / 0.40）。
+              /* 美学整改 A3：墙身 ×0.30、墙顶 ×0.38（等效叠黑 0.70 / 0.62）。
                * 原素材五层里有四层的墙顶比地板更亮——最亮的水平面成了不可走的墙。
-               * 压暗后地板恒为画面最亮的水平面；只改绘制，不动任何素材文件与地图数据。 */
-              ctx.fillStyle = (wspName.indexOf('wall_top') >= 0)
-                ? 'rgba(0,0,0,0.40)' : 'rgba(0,0,0,0.45)';
-              ctx.fillRect(px, py, TILE, TILE);
+               * 压暗后地板恒为画面最亮的水平面；只改绘制，不动任何素材文件与地图数据。
+               * D-113：旧值 0.45 / 0.40 只够 WCAG 1.16–1.47:1；现在整体压到 WALL_STYLE，
+               * 并在**与地板相邻的墙侧内缘**再压一条 edgePx 宽的暗边（地板像素一个不动）。
+               * 暗边只出现在交界墙块上，不给每块地砖描边；未探明区不绘制，不会泄露布局。 */
+              if (WALL_STYLE.guard > 0) {
+                /* 负例专用：只压墙体内圈、交界像素保持旧亮度 */
+                ctx.fillStyle = 'rgba(0,0,0,' + (wspName.indexOf('wall_top') >= 0
+                  ? WALL_STYLE.top : WALL_STYLE.body) + ')';
+                ctx.fillRect(px + WALL_STYLE.guard, py + WALL_STYLE.guard,
+                  TILE - WALL_STYLE.guard * 2, TILE - WALL_STYLE.guard * 2);
+              } else {
+                ctx.fillStyle = (wspName.indexOf('wall_top') >= 0)
+                  ? 'rgba(0,0,0,' + WALL_STYLE.top + ')'
+                  : 'rgba(0,0,0,' + WALL_STYLE.body + ')';
+                ctx.fillRect(px, py, TILE, TILE);
+              }
+              /* 交界暗边：只画墙侧（E/W/S/N 与地板相邻的边）。
+               * 颜色取 84 色板里最暗的一档 #1a1024（F5 暗紫），不引入色板外的纯黑；
+               * 只压墙侧 3px，地板像素一个不动。 */
+              if (WALL_STYLE.edge > 0) {
+                var ep = WALL_STYLE.edgePx;
+                ctx.fillStyle = 'rgba(26,16,36,' + WALL_STYLE.edge + ')';
+                if (y + 1 < grid.length && grid[y + 1][x] === 1) ctx.fillRect(px, py + TILE - ep, TILE, ep);
+                if (y - 1 >= 0 && grid[y - 1][x] === 1) ctx.fillRect(px, py, TILE, ep);
+                if (x - 1 >= 0 && grid[y][x - 1] === 1) ctx.fillRect(px, py, ep, TILE);
+                if (x + 1 < grid[0].length && grid[y][x + 1] === 1) ctx.fillRect(px + TILE - ep, py, ep, TILE);
+              }
             } else {
               /* 墙：砖纹 */
               ctx.fillStyle = '#3a2e5c';
@@ -2412,6 +3399,10 @@
               var dsp = this._hasSprites() ? Game.Core.Sprites.get((pf === 1 ? 't1' : 't' + pf) + '_door') : null;
               if (dsp) ctx.drawImage(dsp, px, py, TILE, TILE);
             }
+            /* D-117：F1/F2 层辨识构图层——只在地板格、只画可见格；F3–F5 零改动 */
+            if ((pf === 1 || pf === 2) && (!fovOn || Game.fov.isVisible(x, y))) {
+              drawLayerSig(ctx, grid, pf, x, y, px, py);
+            }
             /* 纯装饰层：不占格、不阻挡、不参与寻路，只画在可见格 */
             if (!fovOn || Game.fov.isVisible(x, y)) {
               var amb = this._ambientAt(grid, x, y, pf);
@@ -2433,6 +3424,8 @@
               ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
               ctx.fillRect(px, py + TILE - 12, TILE - 1, 2);
             }
+            /* D-115：下行楼梯标识（青白内框 + ▼），压在贴图之上、实体之下 */
+            drawStairMark(ctx, px, py, true);
           } else {
             /* P1-1：上行梯贴图；缺失回退绿台色块 */
             var stUp = this._hasSprites() ? Game.Core.Sprites.get('floor_ladder') : null;
@@ -2445,6 +3438,8 @@
               ctx.fillStyle = 'rgba(255,255,255,0.3)';
               ctx.fillRect(px, py + TILE - 6, TILE - 1, 2);
             }
+            /* D-115：上行楼梯标识（青白内框 + ▲），与下行同色同类，靠箭头方向区分 */
+            drawStairMark(ctx, px, py, false);
           }
           /* M9-1：细节层与装饰层——仅当前可见格绘制（FOV 外不画，与怪物隐藏规则一致） */
           if (!fovOn || Game.fov.isVisible(x, y)) {
@@ -2587,15 +3582,18 @@
       var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
       var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[monster.id] &&
         Game.Data.MONSTERS[monster.id].boss);
+      /* D-101：横置补震屏——与纵置同一个 Fx.shakeOffset、同一份参数，不另创数值 */
+      var shake = (Fx && typeof Fx.shakeOffset === 'function') ? Fx.shakeOffset() : { x: 0, y: 0 };
 
+      dcMark('backdrop');
       drawBattleBackdrop(ctx, W, H, (typeof p.floor === 'number' ? p.floor : 1), 'horizontal');
 
+      dcMark('sprite');
       /* 共享地面带：一条 2px 微亮横线钉住"两人同一块地"；接触阴影再压在它上面。
-       * 这是站位几何，不是背景重排（横置 painter 里另有各自的墙地交界）。 */
-      ctx.save();
+       * 这是站位几何，不是背景重排（横置 painter 里另有各自的墙地交界）。
+       * D-103 清账：省掉 save/restore（随后画精灵时会各自重设 fillStyle）。 */
       ctx.fillStyle = 'rgba(255,255,255,0.045)';
       ctx.fillRect(Math.round(W * 0.08), g.groundY - 1, Math.round(W * 0.84), 2);
-      ctx.restore();
 
       /* ===== 敌人（右） =====
        * P5：横置攻击轴为横——出手向左（forward=−1），受击沿 +x 弹开。
@@ -2612,21 +3610,19 @@
           if (mfl && mfl.alpha > 0.01) mMode = 'hurt';
         }
         if (!mMode && !dying && state.monsterActionAt && (now - state.monsterActionAt) < 320) mMode = 'attack';
-        sp2 = monsterFrame(monster.id, false, mMode);
+        sp2 = monsterFrame(monsterAnimId(monster), false, mMode);
         if (!sp2) sp2 = Game.Core.Sprites.get(isBoss ? 'boss_demon' : 'monster_chort');
       }
-      var mBaseH = 90;
-      if (sp2 && isBoss) {
-        var nhB = sp2.naturalHeight || 0;
-        mBaseH = nhB > 0 ? nhB * 2 : 108;
-      }
+      var mBaseH = battleSpriteH(sp2, isBoss ? 108 : 90);
       var mW = 90, mShadowW = 90;
       if (sp2) {
         var snw = sp2.naturalWidth || 90, snh = sp2.naturalHeight || 90;
         mShadowW = snh > 0 ? Math.round(snw * mBaseH / snh) : 90;
       }
-      var mH = dying ? Math.round(mBaseH * (1 - dieProg * 0.5)) : mBaseH;
+      /* D-105：濒死高度 = 原生 × 整数档（2 或 1），不再用 mBaseH×(1−prog/2) 的中间倍率。 */
+      var mH = dying ? Math.round(mBaseH * battleDyingMul(dieProg) / BATTLE_SPRITE_MUL) : mBaseH;
       ctx.save();
+      if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-101：震屏只作用于战场精灵 */
       if (dying) ctx.globalAlpha = 1 - dieProg;
       hContactShadow(ctx, g.enemyCx, g.groundY, mShadowW, dying ? 0.55 * (1 - dieProg) : 0.55);
       if (sp2) {
@@ -2636,12 +3632,25 @@
         ctx.fillRect(mDrawCx - 45, g.groundY - mH, 90, mH);
         mW = 90;
       }
-      /* D-88：龙眼随横置一起平移，仍是"最暗处的一双亮眼" */
+      /* D-109 N3：横置怪物受击也刷白——与纵置同一条 Feedback/Fx 账本、同一颜色与 alpha。
+       * 以前横置只切 hurt 帧，同一命中在宽屏是灰绿、在竖屏是白色，受击语义随窗口比例改变。
+       * tintSprite 按精灵 alpha 着色（轮廓重绘），闪白不吃掉本体剪影。 */
+      if (!dying) {
+        var mfl2 = battleFlashOf('monster');
+        if (mfl2 && mfl2.alpha > 0.01) {
+          if (sp2 && !tintSprite(ctx, sp2, mDrawCx, g.groundY, mBaseH, '#ffffff', mfl2.alpha)) {
+            ctx.fillStyle = 'rgba(255,255,255,' + mfl2.alpha.toFixed(3) + ')';
+            ctx.fillRect(mDrawCx - mW / 2, g.groundY - mBaseH, mW, mBaseH);
+          }
+        }
+      }
+      /* D-88：龙眼随横置一起平移，仍是"最暗处的一双亮眼"（画在闪白之后） */
       if (!dying && monster.id === 'dragon' && sp2 && typeof drawDragonEyes === 'function') {
         drawDragonEyes(ctx, mDrawCx, g.groundY, mBaseH, '', sp2);
       }
       ctx.restore();
       var dbg = this._lastBattleBox || (this._lastBattleBox = {});
+      dbg.layout = 'horizontal'; dbg.W = W; dbg.H = H;
       dbg.monster = { x: Math.round(mDrawCx - mW / 2), y: g.groundY - mBaseH, w: mW, h: mBaseH,
         baseTop: g.groundY - mBaseH, groundY: g.groundY,
         knockX: Math.round(-mKnock), lungeX: Math.round(mAtkOff), knock: Math.round(-mKnock) };
@@ -2658,68 +3667,119 @@
           animIndex(pActing ? 'knight_m_hit' : 'knight_m_idle', 4));
       }
       if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
-      var pW = 90, pShadowW = 90;
+      var pBaseH = battleSpriteH(psp, 90);
+      var pW = 48, pShadowW = 90;
       if (psp) {
         var pnw = psp.naturalWidth || 90, pnh = psp.naturalHeight || 90;
-        pShadowW = pnh > 0 ? Math.round(pnw * 90 / pnh) : 90;
+        pShadowW = pnh > 0 ? Math.round(pnw * pBaseH / pnh) : 90;
       }
       ctx.save();
+      if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-101：与怪物同一震屏 */
       hContactShadow(ctx, g.playerCx, g.groundY, pShadowW, 0.55);
       if (psp) {
-        pW = drawSpriteByHeight(ctx, psp, pDrawCx, g.groundY, 90);
+        pW = drawSpriteByHeight(ctx, psp, pDrawCx, g.groundY, pBaseH);
       } else {
         ctx.fillStyle = '#ffcf6e';
-        ctx.fillRect(pDrawCx - 45, g.groundY - 90, 90, 90);
+        ctx.fillRect(pDrawCx - 45, g.groundY - pBaseH, 90, pBaseH);
+      }
+      /* D-101：横置补玩家受击红闪——与纵置同参数（#ff5a5a + 同一 alpha 来源），
+       * 仍走 tintSprite 按精灵轮廓着色，不盖方块。 */
+      var fp = battleFlashOf('player');
+      if (fp && fp.alpha > 0.01) {
+        if (psp) {
+          tintSprite(ctx, psp, pDrawCx, g.groundY, pBaseH, '#ff5a5a', fp.alpha);
+        } else {
+          ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
+          ctx.fillRect(pDrawCx - 45, g.groundY - pBaseH, 90, pBaseH);
+        }
       }
       ctx.restore();
-      dbg.player = { x: Math.round(pDrawCx - pW / 2), y: g.groundY - 90, w: pW, h: 90,
-        baseTop: g.groundY - 90, groundY: g.groundY,
+      dbg.player = { x: Math.round(pDrawCx - pW / 2), y: g.groundY - pBaseH, w: pW, h: pBaseH,
+        baseTop: g.groundY - pBaseH, groundY: g.groundY,
         knockX: Math.round(-pKnock), lungeX: Math.round(pAtkOff), knock: Math.round(-pKnock) };
 
-      /* ===== 身份带：双方紧凑铭牌同一条带上，宽度按各自落屏尺寸走 =====
-       * 铭牌底边钉在"最高精灵顶 − 14"：龙顶 346（960×540 → 270），铭牌 298–332（222–256）。
-       * 960×540 下龙角尖与铭牌底留 14px，不再挤到 8px。 */
-      var plateBottom = Math.min(g.groundY - 90, g.groundY - mBaseH) - 14;
-      var plateTop = plateBottom - 34;
+      /* ===== 身份卡（三段式）+ 行动管线 + 地面战报带 =====
+       * D-102 S1：卡底仍钉在"最高精灵顶 − 14"，但卡高从 34 变 52（L1 名字 / L2 HP+数值 / L3 chip）。
+       * 战报带落在 groundY+2；960×540 是 416–442，指令条 444 起，恰好隔 2px。
+       * D-104：卡底改为按双方实际整数倍精灵顶取 min（不再写死 90）。 */
+      var plateBottom = Math.min(g.groundY - pBaseH, g.groundY - mBaseH) - 14;
+      var plateTop = plateBottom - CARD_H;
       var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
       var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
       var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
       var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
-      if (!dying) {
-        dbg.playerPlate = hNamePlate(ctx, g.playerCx, plateTop, pW, '勇者', pHp, pMax, '#4ade80', false);
-        dbg.monsterPlate = hNamePlate(ctx, g.enemyCx, plateTop, mW,
-          (isBoss ? '【BOSS】' : '') + (monster.name || '?'), mobHp, mobMax, '#e24a4a', !!state.enraged);
+      function cardW(spriteW) {
+        return Math.max(112, Math.min(280, Math.round((spriteW || 90) * 1.5 + 24)));
       }
-      /* 回合条：横置原本没有回合反馈，放在身份带上方居中（HUD 测量条 0–28 之下） */
-      var phase = state.phase || 'idle';
-      var roundNo = state.roundNo || ((state.turn | 0) + 1);
-      var phaseLabel = (phase === 'monster') ? '敌方行动' : (phase === 'player' ? '我方行动' : '待机');
-      var roundText = '第 ' + roundNo + ' 回合 · ' + phaseLabel;
-      ctx.save();
-      ctx.font = 'bold 12px monospace';
-      var rtW = Math.round(ctx.measureText(roundText).width) + 28;
-      var rtH = 24, rtY = Math.round(H * 0.082);
-      ctx.fillStyle = 'rgba(8,8,16,0.72)';
-      ctx.fillRect(Math.round(W / 2 - rtW / 2), rtY, rtW, rtH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(Math.round(W / 2 - rtW / 2) + 0.5, rtY + 0.5, rtW - 1, rtH - 1);
-      ctx.textAlign = 'center';
+      if (!dying) {
+        dbg.playerPlate = battleCard(ctx, g.playerCx, plateTop, cardW(pW), {
+          name: '勇者', hp: pHp, hpMax: pMax, hpColor: '#4ade80',
+          chips: cardChips('player', state)
+        });
+        dbg.monsterPlate = battleCard(ctx, g.enemyCx, plateTop, cardW(mW), {
+          name: (isBoss ? '【BOSS】' : '') + (monster.name || '?'),
+          hp: mobHp, hpMax: mobMax, hpColor: '#e24a4a',
+          enraged: !!state.enraged, chips: cardChips('monster', state)
+        });
+      }
+      dbg.cards = { player: dbg.playerPlate || null, monster: dbg.monsterPlate || null };
+
+      /* 行动管线：HUD 读数带下沿 42 + 4 起（G14：不再贴到 44） */
+      dbg.pipeline = battlePipeline(ctx, W / 2, Math.max(46, Math.round(H * 0.082)), state, now);
+      dbg.roundBar = { x: dbg.pipeline.x, y: dbg.pipeline.y, w: dbg.pipeline.w, h: dbg.pipeline.h,
+        text: dbg.pipeline.roundText };
+
+      /* 地面战报带：第 1 行 = 上次行动；第 2 行 = 龙威播报（优先）或最新一条战报。
+       * 横置以前完全没有战报区，龙威三句机制提示玩家一句也看不到（G4/G5/G17）。 */
+      var logY = g.groundY + 2, logH = 26;
+      var logX = Math.round(W * 0.08), logW = Math.round(W * 0.84);
+      var la = state.lastAction;
+      var line1 = '';
+      if (la && typeof la.dmg === 'number') {
+        line1 = (la.by === 'player')
+          ? ('你对 ' + (la.name || '') + ' 造成 ' + la.dmg + ' 伤害')
+          : ((la.name || '') + ' 反击，造成 ' + la.dmg + ' 伤害');
+        if (la.tier === 'crush') line1 = '【碾压】' + line1;
+        else if (la.heavy) line1 = '【高伤】' + line1;
+      }
+      var lb = battleLogLines(state, 1);
+      var line2 = lb.length ? lb[lb.length - 1] : '';
+      var br = dreadBroadcast();
+      dcMark('log');
+      ctx.fillStyle = 'rgba(8,8,16,0.62)';
+      ctx.fillRect(logX, logY, logW, logH);
+      ctx.fillStyle = 'rgba(255,255,255,0.10)';
+      ctx.fillRect(logX, logY, logW, 1);
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = phase === 'monster' ? '#ffb3a0' : '#a8c6ff';
-      ctx.fillText(roundText, W / 2, rtY + rtH / 2 + 1);
-      ctx.restore();
-      dbg.roundBar = { x: Math.round(W / 2 - rtW / 2), y: rtY, w: rtW, h: rtH, text: roundText };
+      ctx.font = 'bold 12px ' + FONT_STACK;
+      ctx.fillStyle = (la && la.tier === 'crush') ? '#ff6b3d' : ((la && la.heavy) ? '#ffb347' : '#cfcfcf');
+      ctx.fillText(cardFit(ctx, line1 || '战报将在交手后出现', logW - 16), logX + 8, logY + 9);
+      ctx.font = '12px ' + FONT_STACK;
+      ctx.fillStyle = (br && line2 === br) ? '#ffcf6e' : '#9fe08f';
+      if (line2) ctx.fillText(cardFit(ctx, line2, logW - 16), logX + 8, logY + 21);
+      dbg.log = { x: logX, y: logY, w: logW, h: logH, lines: [line1, line2].filter(Boolean) };
+      dbg.battleLog = dbg.log;
 
       /* 指令条：7 格只显示，不接管输入（键盘 1–7 仍是唯一输入） */
       dbg.commandBar = hCommandBar(W, H, state);
+      dbg.hudBand = { x: 0, y: 0, w: W, h: Math.min(42, H) };
+      dbg.safeBand = battleSafeBand(W, H, 'horizontal');
+      for (var hci = 0; hci < dbg.commandBar.cells.length; hci++) {
+        var hcc = dbg.commandBar.cells[hci];
+        this._hotAdd('battle:' + hcc.key, hcc.x, hcc.y, hcc.w, hcc.h);
+      }
 
+      dcMark('fx.float');
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
+      dcMark('fx.particles');
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
       /* P5：斩击弧以前只有纵置分支在画，横置从来没画过——补上，弧的朝向由 battle.fxHit 给 */
+      dcMark('fx.slash');
       try { if (Fx && typeof Fx.drawSlashes === 'function') Fx.drawSlashes(ctx); } catch (e) { /* 降级 */ }
       /* 指令条压在特效之上（UI 不被粒子穿过） */
       hDrawCommandBar(ctx, dbg.commandBar);
+      dcMark('hud');
       this._drawHud();
     },
 
@@ -2736,7 +3796,13 @@
     drawBattle: function (state) {
       var ctx = this._ctx;
       if (!ctx || !state) return;
+      this._hotReset();  /* D-100 */
       this._applyDpr(); /* M9-5 */
+      /* D-109 N1：每帧重置身份卡/属性行登记——消散期间它们不画，
+       * 安全带不能把上一帧的残影当作避让对象。 */
+      var dbg0 = this._lastBattleBox || (this._lastBattleBox = {});
+      dbg0.playerPlate = null; dbg0.monsterPlate = null; dbg0.stat = null;
+      dbg0.cards = { player: null, monster: null };
       /* D-94：布局分派。纵置以下代码路径原样保留（默认 'vertical'，横置不改其一行）。 */
       if (resolveBattleLayout(this.cssW, this.cssH) === 'horizontal') {
         this._drawBattleHorizontal(state);
@@ -2751,15 +3817,23 @@
       var dying = !!state.dying;
       var dieProg = dying ? Math.min((now - state.dyingAt) / (state.dyingMs || 700), 1) : 0;
       var CX = W / 2;
+      /* D-102 S1：纵置改为比例锚点（规格 §4.2），不再写死 244/300/326/378/414/562。
+       * 320/390 用 4+3 指令条（barH 150），≥590 单行（96）；敌方脚底 0.30H、我方 0.72H。 */
+      var vg = verticalBattleGeo(W, H);
+      var playerGround = vg.playerGround;
+      var enemyGround = vg.enemyGround;
+      var enemyCardTop = vg.enemyCardTop;
 
       /* 美学整改 A2：战斗背景按层换景（离屏缓存，见 drawBattleBackdrop） */
+      dcMark('backdrop');
       drawBattleBackdrop(ctx, W, H, (typeof p.floor === 'number' ? p.floor : 1));
 
       /* ===== 敌方 ===== */
+      dcMark('sprite');
       var ex = CX - 45;
       var ey = 90;
       /* M9-3：怪物攻击前摇帧偏移（向前=向下）；D-16：叠加受击挤退 */
-      var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1);
+      var mAtkOff = this._attackOffset(state.monsterActionAt, 320, 1, now);
       var mKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('monster') : 0;
       ey += mAtkOff + mKnock;
       var boss = monster.id === 'dragon';
@@ -2767,8 +3841,8 @@
       var isBoss = !!(Game.Data.MONSTERS && Game.Data.MONSTERS[monster.id] &&
         Game.Data.MONSTERS[monster.id].boss);
       /* 第二拨：Boss 落屏高度 = 素材原生高 × 2（整数倍硬线，24 基素材 → 108px）。
-       * 旧口径 90×1.25=112.5px 既非整数倍，又让 Boss 沦为"杂兵放大 1.25 倍"。 */
-      var BOSS_MUL = 2;
+       * 旧口径 90×1.25=112.5px 既非整数倍，又让 Boss 沦为"杂兵放大 1.25 倍"。
+       * D-104：普通怪同口径（原生高 × 2），不再固定 90px 反推分数倍。 */
       /* 三态取帧：受击闪白帧优先，其次怪物出手窗口（与 _attackOffset 同 320ms 口径） */
       var mMode = '';
       if (!dying && Fx && typeof Fx.flashOf === 'function') {
@@ -2779,14 +3853,15 @@
       var shake = (Fx && typeof Fx.shakeOffset === 'function') ? Fx.shakeOffset() : { x: 0, y: 0 };
       var sp2 = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady()) {
-        sp2 = monsterFrame(monster.id, false, mMode);
+        sp2 = monsterFrame(monsterAnimId(monster), false, mMode);
         if (!sp2) sp2 = Game.Core.Sprites.get(boss ? 'boss_demon' : 'monster_chort');
       }
-      var mBaseH = 90;
-      if (sp2 && isBoss) {
-        var nhB = sp2.naturalHeight || 0;
-        mBaseH = nhB > 0 ? nhB * BOSS_MUL : 108;
-      }
+      var mBaseH = battleSpriteH(sp2, isBoss ? 108 : 90);
+      /* D-97 P4：Boss/龙足底随身高下移，保证精灵顶 ≥44（HUD 读数带下沿 42 + 2）。
+       * D-102：纵置敌方脚底跟 0.30H 走；大体积怪（龙 144）下移，但精灵顶不得进入敌方身份卡，
+       * 因此 eyBase = max(enemyGround−90, 16+mBaseH)（eyBase 是 90 方框底，不是精灵顶）。 */
+      var eyBase = Math.max(enemyGround - 90, 16 + mBaseH);
+      ey = eyBase + mAtkOff + mKnock;
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y); /* D-16：震屏只作用于战场精灵，不动文字与 HUD */
       var mW = 90;
@@ -2796,20 +3871,22 @@
         var snw = sp2.naturalWidth || 90, snh = sp2.naturalHeight || 90;
         mShadowW = snh > 0 ? Math.round(snw * mBaseH / snh) : 90;
       }
-      contactShadow(ctx, ex + 45, 180, mShadowW, dying ? 0.62 * (1 - dieProg) : 0.62);
+      contactShadow(ctx, ex + 45, eyBase + 90, mShadowW, dying ? 0.82 * (1 - dieProg) : 0.82);
       if (dying) {
-        /* M9-3：死亡消散——渐隐 + 上浮 + 缩小 */
+        /* M9-3：死亡消散——渐隐 + 上浮 + 整数档缩小（D-105：2×→1×，无中间倍率）。
+         * 脚底钉在"原地 + 上浮量"上，缩小时只从头顶往下收，不做位置跳变。 */
         ctx.globalAlpha = 1 - dieProg;
-        var mScale = 1 - dieProg * 0.5;
-        var mSize = 90 * mScale;
-        var mDrawX = ex + (90 - mSize) / 2;
-        var mDrawY = ey - dieProg * 30 + (90 - mSize) / 2;
+        var dMul = battleDyingMul(dieProg);
+        var dFoot = ey + 90 - dieProg * 30;
         if (sp2) {
-          var dmSize = mBaseH * mScale;
-          mW = drawSpriteByHeight(ctx, sp2, mDrawX + mSize / 2, mDrawY + mSize, dmSize);
+          var nhD = sp2.naturalHeight || 0;
+          var dmSize = nhD > 0 ? nhD * dMul : 90 * dMul / BATTLE_SPRITE_MUL;
+          mW = drawSpriteByHeight(ctx, sp2, ex + 45, dFoot, dmSize);
         } else {
+          var fbSize = 90 * dMul / BATTLE_SPRITE_MUL;
           ctx.fillStyle = monster.color || '#888';
-          ctx.fillRect(mDrawX, mDrawY, mSize, mSize);
+          ctx.fillRect(ex + 45 - fbSize / 2, dFoot - fbSize, fbSize, fbSize);
+          mW = fbSize;
         }
       } else {
         if (sp2) {
@@ -2821,9 +3898,10 @@
         }
       }
       /* D-16：命中局部闪白（≤120ms，单次命中只闪一次；Fx 关档时无）
-       * 美学整改 A1：改为按精灵 alpha 着色，命中瞬间主体轮廓仍在；无素材时才退回整块方片 */
-      if (!dying && Fx && typeof Fx.flashOf === 'function') {
-        var fl = Fx.flashOf('monster');
+       * 美学整改 A1：改为按精灵 alpha 着色，命中瞬间主体轮廓仍在；无素材时才退回整块方片
+       * D-101：alpha 改从 Feedback 的 hit/hurt 账本取（Fx 兜底），两套布局同一来源 */
+      if (!dying) {
+        var fl = battleFlashOf('monster');
         if (fl && fl.alpha > 0.01) {
           if (sp2 && !tintSprite(ctx, sp2, ex + 45, ey + 90, mBaseH, '#ffffff', fl.alpha)) {
             ctx.fillStyle = 'rgba(255,255,255,' + fl.alpha.toFixed(3) + ')';
@@ -2837,76 +3915,64 @@
       }
       ctx.restore();
       var dbg = this._lastBattleBox || (this._lastBattleBox = {});
+      dbg.layout = 'vertical'; dbg.W = W; dbg.H = H;
       dbg.monster = { x: Math.round(ex + 45 - mW / 2), y: Math.round(ey + 90 - mBaseH), w: mW, h: mBaseH,
-        baseTop: Math.round(90 + 90 - mBaseH), groundY: 180, knock: Math.round(mKnock * 100) / 100 };
+        baseTop: Math.round(eyBase + 90 - mBaseH), groundY: eyBase + 90, knock: Math.round(mKnock * 100) / 100 };
 
-      if (!dying) {
-        /* D-16：敌方名字（Boss 保留【BOSS】前缀，供 P2-4 断言） */
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 16px monospace';
-        ctx.fillText((isBoss ? '【BOSS】' : '') + (monster.name || '?'), CX, 202);
-        ctx.restore();
-        /* D-16：敌方血条（带数值） */
-        var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
-        var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
-        battleBar(ctx, CX, 212, mobHp / mobMax, '#e24a4a', '#3a1218',
-          'HP ' + mobHp + ' / ' + mobMax + (state.enraged ? '  ⚡狂暴' : ''));
-      }
-
-      /* ===== 中段信息带（原 240px 空白） ===== */
-      var phase = state.phase || 'idle';
-      var roundNo = state.roundNo || ((state.turn | 0) + 1);
-      battleSegments(ctx, CX, 244, roundNo, phase);
-      /* 上次行动结果——伤害分级：普通白字 16px，高伤橙字 18px 并带【高伤】标记（无暴击系统）
-       * D-70：碾压档（特效非 off 时）用更大字与【碾压】标记；off 档与 D-69 完全一致 */
-      var la = state.lastAction;
-      if (la && typeof la.dmg === 'number') {
-        var fxOn = !(Fx && typeof Fx.effectiveLevel === 'function' && Fx.effectiveLevel() === 'off');
-        var crush = fxOn && la.tier === 'crush';
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.font = (crush ? 'bold 20px monospace' : (la.heavy ? 'bold 18px monospace' : 'bold 16px monospace'));
-        ctx.fillStyle = crush ? '#ff6b3d' : (la.heavy ? '#ffb347' : '#e8e8e8');
-        var actTxt = la.by === 'player'
-          ? ('你对 ' + (la.name || '') + ' 造成 ' + la.dmg + ' 伤害')
-          : ((la.name || '') + ' 反击，造成 ' + la.dmg + ' 伤害');
-        ctx.fillText((crush ? '【碾压】' : (la.heavy ? '【高伤】' : '')) + actTxt, CX, 300);
-        ctx.restore();
-      } else {
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.font = '15px monospace';
-        ctx.fillStyle = '#7f8399';
-        ctx.fillText('选择行动：攻击 / 防御 / 逃跑 / 技能 / 用药', CX, 300);
-        ctx.restore();
-      }
-      /* 战报（最近 3 行） */
-      var log = state.log || [];
-      var lstart = Math.max(log.length - 3, 0);
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.font = '12px monospace';
-      for (var li = 0; li < log.length - lstart; li++) {
-        ctx.fillStyle = (li === log.length - lstart - 1) ? '#9fe08f' : '#6fae6a';
-        ctx.fillText(log[lstart + li], CX, 326 + li * 18);
-      }
-      ctx.restore();
-      /* 状态（随战斗变化：狂暴 / 护盾 / 防御） */
-      battleChips(ctx, CX, 378, state);
-
-      /* ===== 我方 ===== */
-      var pKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('player') : 0;
       var pHp = (typeof p.hp === 'number') ? Math.max(p.hp, 0) : 0;
       var pMax = (typeof p.maxHp === 'number' && p.maxHp > 0) ? p.maxHp : Math.max(pHp, 1);
-      battleBar(ctx, CX, 414, pHp / pMax, '#4ade80', '#132a1c', 'HP ' + pHp + ' / ' + pMax);
+      var mobHp = (typeof monster.hp === 'number') ? Math.max(monster.hp, 0) : 0;
+      var mobMax = (typeof monster.maxHp === 'number' && monster.maxHp > 0) ? monster.maxHp : Math.max(mobHp, 1);
+      function vCardW(spriteW) {
+        return Math.max(112, Math.min(280, Math.max(Math.round((spriteW || 90) * 1.5 + 24), 112), W - 16));
+      }
+      if (!dying) {
+        var ew = vCardW(mW);
+        dbg.monsterPlate = battleCard(ctx, 8 + ew / 2, enemyCardTop, ew, {
+          name: (isBoss ? '【BOSS】' : '') + (monster.name || '?'),
+          hp: mobHp, hpMax: mobMax, hpColor: '#e24a4a',
+          enraged: !!state.enraged, chips: cardChips('monster', state)
+        });
+      }
 
+      /* ===== 中段信息带：管线 + 战报（比例锚点，不再写死 244/300/326） ===== */
+      var pKnock = (Fx && typeof Fx.knockOffset === 'function') ? Fx.knockOffset('player') : 0;
+      var playerCardTop = playerGround - 60;
+      var bandTop = eyBase + 90 + 6;
+      /* D-102：中段信息带的下沿同时受「我方卡顶」和「我方精灵顶」约束——
+       * 320 纵置龙时精灵顶 319，卡片 349，战报若只看卡顶会压到骑士头顶。 */
+      var bandBottom = Math.min(playerCardTop, playerGround - 90) - 6;
+      var bandH = Math.max(0, bandBottom - bandTop);
+      var logMax = (bandH >= 62) ? 2 : 1;
+      /* D-109 N1：中段信息带改为顶对齐（原为在带内垂直居中）。
+       * 居中会在带底留下 34–92px 的碎片空间，结果卡放不下任何一段；
+       * 顶对齐后「战报下沿 → 玩家精灵顶」成为一条连续空白，390/800 档可整卡落入。 */
+      var startY = bandTop;
+      dbg.pipeline = battlePipeline(ctx, CX, startY, state, now);
+      dbg.roundBar = { x: dbg.pipeline.x, y: dbg.pipeline.y, w: dbg.pipeline.w, h: dbg.pipeline.h,
+        text: dbg.pipeline.roundText };
+      var logY = startY + 32;
+      var vLines = battleLogLines(state, logMax);
+      if (!vLines.length) vLines = [W < 420 ? '选择行动（1–7）' : '选择行动：攻击 / 防御 / 逃跑 / 技能 / 用药'];
+      var vbr = dreadBroadcast();
+      dcMark('log');
+      /* 战报底：纵置中段会跨过火把/墙面装饰，铺一层 0.42 黑底保证 12px 文本可读 */
+      ctx.fillStyle = 'rgba(8,8,16,0.42)';
+      ctx.fillRect(7, logY - 4, W - 14, vLines.length * 16 + 8);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '12px ' + FONT_STACK;
+      for (var vli = 0; vli < vLines.length; vli++) {
+        var isDread = !!vbr && vLines[vli] === vbr;
+        ctx.fillStyle = isDread ? '#ffcf6e' : ((vli === vLines.length - 1) ? '#9fe08f' : '#6fae6a');
+        ctx.fillText(cardFit(ctx, vLines[vli], W - 16), 8, logY + vli * 16 + 8);
+      }
+      dbg.log = { x: 8, y: logY, w: W - 16, h: vLines.length * 16 + 4, lines: vLines };
+      dbg.battleLog = dbg.log;
+      dbg.mid = { top: bandTop, bottom: bandBottom, logs: logMax };
+
+      /* ===== 我方身份卡：左侧贴人（卡右缘 ≤ 精灵左缘 − 8） ===== */
       var px = CX - 45;
-      var py = H - 190 + pKnock;
-      /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
-      var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1);
-      py += pAtkOff;
       /* P1-3：玩家侧骑士帧动画——攻击动作期间切 knight_m_hit */
       var psp = null;
       if (Game.Core.Sprites && Game.Core.Sprites.isReady() && typeof Game.Core.Sprites.getFrame === 'function') {
@@ -2915,64 +3981,103 @@
           animIndex(pActing ? 'knight_m_hit' : 'knight_m_idle', 4));
       }
       if (!psp && Game.Core.Sprites && Game.Core.Sprites.isReady()) psp = Game.Core.Sprites.get('player');
+      /* D-104：玩家同样是原生 24×42 × 2 = 84（旧 90 → 2.143×）。 */
+      var pBaseH = battleSpriteH(psp, 90);
+      var py = playerGround - pBaseH + pKnock;
+      /* M9-3：玩家攻击前摇帧偏移（向前=向上） */
+      var pAtkOff = this._attackOffset(state.playerActionAt, 320, -1, now);
+      py += pAtkOff;
+      dcMark('sprite');
       ctx.save();
       if (shake.x || shake.y) ctx.translate(shake.x, shake.y);
-      var pW = 90;
+      var pW = 48;
       /* D-89：玩家接触阴影钉在 H-100 地面线（不随击退/前摇移动）；宽度按精灵实宽取 */
       var pShadowW = 90;
       if (psp) {
         var pnw = psp.naturalWidth || 90, pnh = psp.naturalHeight || 90;
-        pShadowW = pnh > 0 ? Math.round(pnw * 90 / pnh) : 90;
+        pShadowW = pnh > 0 ? Math.round(pnw * pBaseH / pnh) : 90;
       }
-      contactShadow(ctx, px + 45, H - 100, pShadowW, 0.62);
+      contactShadow(ctx, px + 45, playerGround, pShadowW, 0.82);
       if (psp) {
-        pW = drawSpriteByHeight(ctx, psp, px + 45, py + 90, 90);
+        pW = drawSpriteByHeight(ctx, psp, px + 45, py + pBaseH, pBaseH);
       } else {
         ctx.fillStyle = '#ffcf6e';
-        ctx.fillRect(px, py, 90, 90);
+        ctx.fillRect(px, py, 90, pBaseH);
       }
-      /* 美学整改 A1：受击闪红同样按 alpha 着色，不再用 90×90 方块盖住骑士 */
-      if (Fx && typeof Fx.flashOf === 'function') {
-        var fp = Fx.flashOf('player');
-        if (fp && fp.alpha > 0.01) {
-          if (psp) {
-            tintSprite(ctx, psp, px + 45, py + 90, 90, '#ff5a5a', fp.alpha);
-          } else {
-            ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
-            ctx.fillRect(px, py, pW, 90);
-          }
+      /* 美学整改 A1：受击闪红同样按 alpha 着色，不再用 90×90 方块盖住骑士
+       * D-101：alpha 从 Feedback 的 hurt 账本取（Fx 兜底），横置同一来源 */
+      var fp = battleFlashOf('player');
+      if (fp && fp.alpha > 0.01) {
+        if (psp) {
+          tintSprite(ctx, psp, px + 45, py + pBaseH, pBaseH, '#ff5a5a', fp.alpha);
+        } else {
+          ctx.fillStyle = 'rgba(255,90,90,' + fp.alpha.toFixed(3) + ')';
+          ctx.fillRect(px, py, pW, pBaseH);
         }
       }
       ctx.restore();
-      dbg.player = { x: Math.round(px + 45 - pW / 2), y: Math.round(py + 90 - 90), w: pW, h: 90,
-        baseTop: H - 190, groundY: H - 100, knock: Math.round(pKnock * 100) / 100 };
+      dbg.player = { x: Math.round(px + 45 - pW / 2), y: Math.round(py), w: pW, h: pBaseH,
+        baseTop: playerGround - pBaseH, groundY: playerGround, knock: Math.round(pKnock * 100) / 100 };
       /* D-16：程序化斩击弧（零素材，1~2 段 arc） */
       if (Fx && typeof Fx.drawSlashes === 'function') Fx.drawSlashes(ctx);
 
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '12px monospace';
-      var statTxt = '勇者  HP:' + pHp + '/' + pMax;
-      if (typeof p.atk === 'number') statTxt += '  ATK:' + p.atk;
-      if (typeof p.def === 'number') statTxt += '  DEF:' + p.def;
-      if (typeof p.mp === 'number' && typeof p.maxMp === 'number') statTxt += '  MP:' + p.mp + '/' + p.maxMp;
-      ctx.fillText(statTxt, CX, 562);
-      ctx.restore();
-
-      /* 指令提示（消散期间隐藏） */
+      /* ===== 我方身份卡（三段式，左侧贴人；血量数值在卡内） ===== */
+      /* 卡右缘必须 ≤ 精灵左缘 − 8；素材未加载时 pW 回退 90，320 宽下自动收窄到 99，
+       * 正常情况下（骑士 51 宽）仍是规格下限 112。 */
+      var pw = Math.min(vCardW(pW), Math.max(96, Math.floor(CX - pW / 2 - 8 - 8)));
       if (!dying) {
+        dbg.playerPlate = battleCard(ctx, 8 + pw / 2, playerCardTop, pw, {
+          name: '勇者', hp: pHp, hpMax: pMax, hpColor: '#4ade80',
+          chips: cardChips('player', state)
+        });
+      }
+      dbg.cards = { player: dbg.playerPlate || null, monster: dbg.monsterPlate || null };
+      dbg.playerBar = dbg.playerPlate
+        ? { x: dbg.playerPlate.barX, y: dbg.playerPlate.barY, w: dbg.playerPlate.barW, h: dbg.playerPlate.barH }
+        : null;
+
+      /* 属性行：playerGround − 100（精灵顶上方 10px，G19），不再写死 562 */
+      var statY = playerGround - 100;
+      dcMark('stat');
+      dbg.stat = null;
+      if (statY > logY + dbg.log.h + 12) {
         ctx.save();
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#9bbbf4';
-        ctx.font = '13px monospace';
-        ctx.fillText('1 攻击   2 防御   3 逃跑   4 火球   5 冲刺   6 护盾   7 用药', CX, H - 30);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px monospace';
+        var statTxt = '勇者  HP:' + pHp + '/' + pMax;
+        if (typeof p.atk === 'number') statTxt += '  ATK:' + p.atk;
+        if (typeof p.def === 'number') statTxt += '  DEF:' + p.def;
+        if (W >= 420 && typeof p.mp === 'number' && typeof p.maxMp === 'number') {
+          statTxt += '  MP:' + p.mp + '/' + p.maxMp;
+        }
+        ctx.fillText(cardFit(ctx, statTxt, W - 16), CX, statY);
         ctx.restore();
+        /* D-109 N1：属性行作为结果卡的避让对象登记（12px 文本，上下各 6px） */
+        dbg.stat = { x: 8, y: statY - 6, w: W - 16, h: 12 };
       }
+
+      /* D-102：横/纵共用一套七格指令条外观（4+3 紧凑档由 W<590 决定） */
+      var cmd = vCommandBar(W, H, state);
+      dbg.commandBar = cmd;
+      dbg.commandBarDrawn = !dying; /* 消散期间指令条不画，底部空间可用于结果卡 */
+      dbg.hudBand = { x: 0, y: 0, w: W, h: Math.min(42, H) };
+      dbg.safeBand = battleSafeBand(W, H, 'vertical');
+      for (var vci = 0; vci < cmd.cells.length; vci++) {
+        var vcc = cmd.cells[vci];
+        this._hotAdd('battle:' + vcc.key, vcc.x, vcc.y, vcc.w, vcc.h);
+      }
+      dbg.bars = { playerY: dbg.playerPlate ? dbg.playerPlate.y : playerGround - 60,
+        gapBand: Math.max(10, playerGround - 90 - (dbg.playerPlate ? dbg.playerPlate.y + dbg.playerPlate.h : 0)) };
       /* S3-4：战斗视觉反馈（伤害飘字），绘制于战斗内容之上、HUD 之下 */
+      dcMark('fx.float');
       try { if (Game.Feedback && typeof Game.Feedback.draw === 'function') Game.Feedback.draw(); } catch (e) { /* 降级 */ }
       /* M9-3：粒子特效（命中火花/死亡灵魂碎片），叠在反馈层之上 */
+      dcMark('fx.particles');
       try { if (Game.Particles && typeof Game.Particles.draw === 'function') Game.Particles.draw(); } catch (e) { /* 降级 */ }
+      /* D-97 P2：指令条压在特效之上（与横置同序），消散期间隐藏 */
+      if (!dying) vDrawCommandBar(ctx, cmd);
+      dcMark('hud');
       this._drawHud(); /* S3-2 */
     },
 
@@ -3257,7 +4362,8 @@
     /* M9-5：首次引导覆盖层——半透明遮罩 + 目标/去向说明 + 按键说明。
      * D-14：改为 Enter 或点击确认按钮关闭（不再任意键）；补目标与去向；可经 H 重看。
      * 按键文案与 M9-4 设置面板同源（方向键/WASD、B/S/M/T/L、K/Q、Esc），
-     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾、7 用药），不杜撰。D-78 起 F 键已解绑。
+     * 战斗按键取现有实现（1/2/3 攻防逃、4/5/6 火球/冲刺/护盾、7 用药），不杜撰。
+     * D-78 解绑 F 的战斗特效档位；D-98 起 F 改绑探索侧的「侦测 / 拆除陷阱」。
      * D-20：整块按键与机制文案改由 KEYMAP / guideRows 生成，与实际映射同源。 */
     drawGuide: function () {
       var ctx = this._ctx;
@@ -3350,7 +4456,7 @@
 
     /* D-91/D-94：设置行绘制——主菜单与暂停面板共用，杜绝两份样式/两种危险语义。
      * 行内加一句说明 + 右侧键帽，让 ←→ 可改这件事可见；危险行用 #ff9b6b / #c98a6b。 */
-    _drawSettingsRows: function (rows, sel, W, py, rowH) {
+    _drawSettingsRows: function (rows, sel, W, py, rowH, hotPrefix) {
       var ctx = this._ctx, cx = W / 2;
       var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
       var FONT_MONO = 'Consolas, "Courier New", monospace';
@@ -3362,6 +4468,15 @@
       };
       for (var i = 0; i < rows.length; i++) {
         var y = py + i * rowH, on = (i === sel), rr = rows[i];
+        var hotId = hotPrefix ? (hotPrefix + ':' + rr.id) : null;
+        if (hotId) this._hotAdd(hotId, cx - pw / 2, y, pw, rowH - 8);
+        if (!on && hotId && HOVER_ID === hotId) {
+          ctx.fillStyle = 'rgba(255,207,110,0.06)';
+          ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
+          ctx.strokeStyle = 'rgba(255,207,110,0.55)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx - pw / 2 + 0.5, y + 0.5, pw - 1, rowH - 9);
+        }
         if (on) {
           ctx.fillStyle = 'rgba(255,207,110,0.14)';
           ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
@@ -3448,6 +4563,16 @@
         ctx.fillStyle = on ? (danger ? '#ffb08a' : '#ffcf6e') : (danger ? '#c98a6b' : '#cfcfcf');
         ctx.font = (on ? 'bold ' : '') + '15px ' + FONT_CN;
         ctx.fillText(opts[j], x + bw / 2, oy + 26);
+        /* D-100：确认按钮登记热区；hover 只给非当前焦点加一层描边 */
+        var chId = g.hotPrefix ? (g.hotPrefix + ':' + j) : null;
+        if (chId) {
+          this._hotAdd(chId, x, oy, bw, 40);
+          if (!on && HOVER_ID === chId) {
+            ctx.strokeStyle = '#ffcf6e';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, oy + 0.5, bw - 1, 39);
+          }
+        }
       }
       ctx.fillStyle = '#7f8fa8';
       ctx.font = '11px monospace';
@@ -3461,28 +4586,29 @@
     drawMainMenu: function (spec) {
       var ctx = this._ctx;
       if (!ctx) return;
+      this._hotReset(); /* D-100 */
       this._applyDpr();
       var W = this.cssW || 1024, H = this.cssH || 640;
       var st = spec || {};
 
-      /* 背景：深色 + 细网格，沿用既有像素风的纯色块，不引外部图片 */
-      ctx.fillStyle = '#0b0c14';
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = 'rgba(80,90,130,0.16)';
-      ctx.lineWidth = 1;
-      for (var gx = 0; gx < W; gx += 32) {
-        ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
+      /* 背景：深色 + 细网格，沿用既有像素风的纯色块，不引外部图片。
+       * D-106：root 的场景会整幅覆盖背景（且自带网格），这里不再先画一层被盖住的网格；
+       * 子页没有场景层，仍保留网格背景。 */
+      var isRoot = !st.page || st.page === 'root';
+      if (!isRoot) {
+        ctx.fillStyle = '#0b0c14';
+        ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = 'rgba(80,90,130,0.16)';
+        ctx.lineWidth = 1;
+        for (var gx = 0; gx < W; gx += 32) {
+          ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
+        }
+        for (var gy = 0; gy < H; gy += 32) {
+          ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
+        }
       }
-      for (var gy = 0; gy < H; gy += 32) {
-        ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
-      }
-      /* 顶部/底部装饰线只属于首屏构图：子页有自己的卡头，不跟着复制 */
-      if (!st.page || st.page === 'root') {
-        ctx.fillStyle = '#ffcf6e';
-        ctx.fillRect(W / 2 - 120, 22, 240, 2);
-        ctx.fillStyle = '#3a3a55';
-        ctx.fillRect(W / 2 - 120, H - 30, 240, 2);
-      }
+      /* 顶部/底部装饰线只属于首屏构图：root 由场景整幅覆盖（等同不可见），
+       * 子页有自己的卡头，因此这里不再另画。 */
 
       if (st.page === 'help') this._drawMenuHelp(st, W, H);
       else if (st.page === 'settings') this._drawMenuSettings(st, W, H);
@@ -3495,7 +4621,9 @@
      * D-93：首屏「地牢门口静帧」——候选 A 的版式 + 候选 B 的门缝光。
      * 只换绘制入口：main.js 的菜单分支（选中/确认/返回/Esc）一行未动；
      * 楼层与等级在渲染层用只读的 Save.peek() 取，不写任何状态。
-     * 三档降级：W≥900 左右分栏 / 480≤W<900 上场景下菜单 / W<480 紧凑。
+     * 宽度三档：W≥900 左右分栏 / 480≤W<900 上场景下菜单 / W<480 紧凑。
+     * D-106：另加高度档 compact = H<620（960×540 基线走紧凑版）：右栏内容按
+     * rowH 34 + 进度贴栏底排布，mid 缩为 3 行场景且舍去行内详情；宽档栏位随 W 收进视口。
      * 精灵整数倍：地砖·墙砖·门·火把 24→48（2×）、骑士 24×42→48×84（2×）、
      * 锁链·蛛网·龙·酋长 1×；门缝光 2px 为纯绘制。
      * ───────────────────────────────────────────────────────────── */
@@ -3512,40 +4640,55 @@
     _menuLayout: function (W, H, hasSave, floor, level) {
       var T = 48;                       /* 24×2：地砖/墙砖/双扇门/火把 */
       var tier = (W >= 900) ? 'wide' : ((W >= 480) ? 'mid' : 'narrow');
-      var lay, sc, m, p, rail;
+      var compact = H < 620;            /* D-106 高度档：960×540/800×540 等低高度视口 */
+      var lay, sc, m, p, rail, hintY;
       if (tier === 'wide') {
+        /* D-106 P6：右栏右缘必须 ≤ W−24。900 宽时旧 x=616 会把栏裁掉 76px；
+         * 这里让栏位随 W 左移，场景列数按“栏位不压场景”反推（W≥952 才放得下 10 列）。 */
+        var cols = (W >= 952) ? 10 : 8;
+        var railX = Math.min(616, W - 360 - 24);
         var sy = Math.min(144, Math.max(96, H - 7 * T - 40));
-        var railH = Math.min(448, H - 112 - 40);
-        rail = { x: 616, y: 112, w: 360, h: railH };
-        sc = { x: 64, y: sy, cols: 10, rows: 7, doorCol: 4 };
-        var menuY = Math.max(210, Math.min(238, H - 5 * 42 - 60));
-        m = { x: 640, y: menuY, w: 312, rowH: 42, font: 18, label: 18, note: 12, detail: 11 };
+        var railH = compact ? (H - 112 - 16) : Math.min(448, H - 112 - 40);
+        rail = { x: railX, y: 112, w: 360, h: railH };
+        sc = { x: 64, y: sy, cols: cols, rows: 7, doorCol: cols / 2 - 1 };
+        var rowH = compact ? 34 : 42;
+        var menuY = Math.max(210, Math.min(238, H - 5 * rowH - 60));
+        m = { x: railX + 24, y: menuY, w: 312, rowH: rowH, font: 18, label: 18, note: 12, detail: 11 };
+        var pipY = rail.y + railH - (compact ? 44 : 40);
+        hintY = m.y + 5 * m.rowH + 20;
         lay = {
           tier: tier, T: T, scene: sc, panel: rail,
-          title: { x: 648, smallY: 154, mainY: 186, subY: 208, small: 11, main: 24, sub: 12 },
-          rule: { x: 628, y: 128, w: 336 },
+          title: { x: railX + 32, smallY: 154, mainY: 186, subY: 208, small: 11, main: 24, sub: 12 },
+          rule: { x: railX + 12, y: 128, w: 336 },
           menu: m,
-          progress: { x: 648, pipY: rail.y + railH - 40, pip: 20, gap: 12,
+          progress: { x: railX + 32, pipY: pipY, pip: 20, gap: 12,
             /* 真实进度标签比 A 稿的目标标签长，终点符号右对齐到栏内边距（12px），避免与文字重叠 */
             end: { name: 'dragon_idle_anim_f0', x: rail.x + rail.w - 72 - 12,
-              y: rail.y + railH - 40 - 46, k: 1 } }
+              y: pipY - 46, k: 1 } }
         };
       } else if (tier === 'mid') {
-        sc = { x: 34, y: 104, cols: 9, rows: 5, doorCol: 3 };
-        var pipY = Math.max(sc.y + sc.rows * T + 12, H - 328);
-        p = { x: 20, y: pipY + 42, w: W - 40, h: 0 };
-        m = { x: p.x + 14, y: p.y + 30, w: p.w - 28, rowH: 38, font: 18, label: 18, note: 12, detail: 11 };
+        /* D-106：低高度时场景缩为 4 行（门 2 + 暗井 1 + 台阶 1），骑士脚底贴场景底边，
+         * 把省下的 48px 让给菜单；行内详情在紧凑档舍去（与窄屏同一取舍），字号阶梯不变。 */
+        sc = { x: 34, y: compact ? 96 : 104, cols: 9, rows: compact ? 4 : 5, doorCol: 3 };
+        var mpipY = compact ? (sc.y + sc.rows * T + 24)
+          : Math.max(sc.y + sc.rows * T + 12, H - 328);
+        p = { x: 20, y: mpipY + 42, w: W - 40, h: 0 };
+        m = { x: p.x + 14, y: p.y + 30, w: p.w - 28, rowH: 38, font: 18, label: 18, note: 12,
+          detail: compact ? 0 : 11 };
         var avail = H - m.y - 24 - 18;
-        m.rowH = Math.max(26, Math.min(38, Math.floor(avail / 5)));
+        m.rowH = compact ? Math.max(24, Math.min(30, Math.floor(avail / 5)))
+          : Math.max(26, Math.min(38, Math.floor(avail / 5)));
         p.h = Math.min(246, H - p.y - 10);
+        hintY = compact ? Math.min(m.y + 5 * m.rowH + 20, p.y + p.h - 16)
+          : m.y + 5 * m.rowH + 20;
         lay = {
           tier: tier, T: T, scene: sc, panel: p,
           title: { x: 24, smallY: 40, mainY: 68, subY: 90, small: 10, main: 24, sub: 12 },
           rule: { x: 30, y: p.y + 12, w: p.w - 20 },
           menu: m,
-          progress: { x: 24, pipY: pipY, pip: 16, gap: 14,
+          progress: { x: 24, pipY: mpipY, pip: 16, gap: 14,
             /* 中屏放不下 72×72 巨龙（会压到场景底边与面板上沿），按"不放替身图标"处理：只留文字 */
-            end: { name: null, x: p.x + p.w - 32 - 12, y: pipY - 18, k: 1 } }
+            end: { name: null, x: p.x + p.w - 32 - 12, y: mpipY - 18, k: 1 } }
         };
       } else {
         var rows = (H >= 600) ? 5 : 4;
@@ -3556,6 +4699,7 @@
         var navail = H - m.y - 24 - 18;
         m.rowH = Math.max(22, Math.min(30, Math.floor(navail / 5)));
         p.h = H - p.y - 12;
+        hintY = m.y + 5 * m.rowH + 20;
         lay = {
           tier: tier, T: T, scene: sc, panel: p,
           title: { x: 16, smallY: 28, mainY: 52, subY: 72, small: 10, main: 20, sub: 11 },
@@ -3570,10 +4714,15 @@
       lay.shaft = { x: lay.door.x, y: sc.y + 2 * T, w: T * 2, h: T };
       lay.steps = { x: lay.door.x, y: sc.y + 3 * T, w: T * 2 };
       lay.knight = { x: lay.door.x - 56, bottom: lay.steps.y + 2 * T - 8, w: 48, h: 84 };
+      /* D-106 紧凑高度档：场景缩行后（中档 4 行 / 窄屏 4 行），骑士脚底收在场景底边之上，
+       * 避免人物与场景外的进度标签互相压住 */
+      if (compact && (tier === 'mid' || tier === 'narrow')) {
+        lay.knight.bottom = Math.min(lay.knight.bottom, sc.y + sc.rows * T - 6);
+      }
       lay.torch = { x: sc.x + (tier === 'narrow' ? 4 : 52), y: sc.y + T - 4, size: 48 };
       lay.chain = { x: sc.x + (tier === 'wide' ? 7 : 3) * T + 8, y: sc.y + T - 8 };
       lay.web = { x: sc.x + T - 12, y: sc.y + T + 4 };
-      lay.hint = { x: m.x + 2, y: m.y + 5 * m.rowH + 20 };
+      lay.hint = { x: m.x + 2, y: hintY };
       lay.hasSave = !!hasSave;
       /* 进度标签：有档写真实楼层/等级，无档写目标值；终点符号紧贴标签右缘（不越过面板内边距）。
        * 第 5 层已到头：不再写「→ 第 5 层」（不出现箭头指向自己），到达状态由下方的「已抵达」承担。 */
@@ -3619,6 +4768,61 @@
     _drawMenuScene: function (lay) {
       var ctx = this._ctx;
       var W = this.cssW || 1024, H = this.cssH || 640;
+      var S = Game.Core.Sprites;
+      var ready = !!(S && typeof S.isReady === 'function' && S.isReady());
+      var k = (this.dpr || 1) * (this.scale || 1);
+      var key = [W, H, k, lay.tier, lay.scene.x, lay.scene.y,
+        lay.scene.cols, lay.scene.rows, ready ? 1 : 0].join('|');
+      var cv = this._canvas;
+      var canBlit = !!(ctx && typeof ctx.save === 'function' && typeof ctx.restore === 'function' &&
+        typeof ctx.setTransform === 'function' && typeof ctx.drawImage === 'function');
+      if (ready && canBlit && menuSceneCache.cv && menuSceneCache.key === key) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (cv && (cv.width !== menuSceneCache.cv.width || cv.height !== menuSceneCache.cv.height)) {
+          ctx.drawImage(menuSceneCache.cv, 0, 0, cv.width, cv.height);
+        } else {
+          ctx.drawImage(menuSceneCache.cv, 0, 0);
+        }
+        ctx.restore();
+        return;
+      }
+      if (!ready || !canBlit || typeof document.createElement !== 'function') {
+        this._paintMenuScene(ctx, lay, W, H);
+        return;
+      }
+      var ow = Math.max(1, Math.round(W * k)), oh = Math.max(1, Math.round(H * k));
+      if (!menuSceneCache.cv) {
+        menuSceneCache.cv = document.createElement('canvas');
+        menuSceneCache.ctx = menuSceneCache.cv.getContext('2d');
+      }
+      if (!menuSceneCache.ctx) {
+        this._paintMenuScene(ctx, lay, W, H);
+        return;
+      }
+      if (menuSceneCache.cv.width !== ow || menuSceneCache.cv.height !== oh) {
+        menuSceneCache.cv.width = ow;
+        menuSceneCache.cv.height = oh;
+      }
+      var oc = menuSceneCache.ctx;
+      oc.setTransform(1, 0, 0, 1, 0, 0);
+      oc.clearRect(0, 0, ow, oh);
+      oc.setTransform(k, 0, 0, k, 0, 0);
+      try { if ('imageSmoothingEnabled' in oc) oc.imageSmoothingEnabled = false; } catch (e) { /* 降级 */ }
+      this._paintMenuScene(oc, lay, W, H);
+      menuSceneCache.key = key;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      if (cv && (cv.width !== ow || cv.height !== oh)) {
+        ctx.drawImage(menuSceneCache.cv, 0, 0, cv.width, cv.height);
+      } else {
+        ctx.drawImage(menuSceneCache.cv, 0, 0);
+      }
+      ctx.restore();
+    },
+
+    /* 场景本体：完全由 lay + 素材决定，不含时间/输入，可安全烘焙到离屏画布 */
+    _paintMenuScene: function (ctx, lay, W, H) {
       var sc = lay.scene, T = lay.T, d = lay.door;
       ctx.fillStyle = '#0a0b12';
       ctx.fillRect(0, 0, W, H);
@@ -3811,6 +5015,15 @@
         var on = (i === st.sel);
         var hasD = !!it.detail && m.detail > 0;
         var boxH = m.rowH - 4;
+        this._hotAdd('menu:row:' + it.id, m.x, y, m.w, boxH);
+        /* D-100：hover 只画当前这一行（选中行已有更强的焦点框） */
+        if (!on && HOVER_ID === 'menu:row:' + it.id) {
+          ctx.fillStyle = 'rgba(255,207,110,0.06)';
+          ctx.fillRect(m.x, y, m.w, boxH);
+          ctx.strokeStyle = 'rgba(255,207,110,0.55)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(m.x + 0.5, y + 0.5, m.w - 1, boxH - 1);
+        }
         if (on) {
           ctx.fillStyle = 'rgba(255,207,110,0.12)';
           ctx.fillRect(m.x, y, m.w, boxH);
@@ -4295,7 +5508,7 @@
       var y = Math.max(20, Math.round((H - cardH) / 2) - 8);
       this._menuPageCard(x, y, cardW, cardH, 'SYSTEM', '设置');
 
-      this._drawSettingsRows(rows, st.settingsSel, W, y + 66, rowH);
+      this._drawSettingsRows(rows, st.settingsSel, W, y + 66, rowH, 'menusettings');
 
       /* 提示放在卡外：卡内再嵌一条提示带，就成了“卡中卡” */
       ctx.textAlign = 'center';
@@ -4328,7 +5541,8 @@
         lineH: lineH,
         bw: Math.min(170, Math.floor((cardW - 88) / 2)),
         gapY: 24,
-        hintY: y + cardH - 14
+        hintY: y + cardH - 14,
+        hotPrefix: 'menuconfirm'
       });
       ctx.textAlign = 'left';
     },
@@ -4338,6 +5552,7 @@
     drawPause: function (spec) {
       var ctx = this._ctx;
       if (!ctx) return;
+      this._hotReset(); /* D-100 */
       this._applyDpr();
       var W = this.cssW || 1024, H = this.cssH || 640;
       var st = spec || {};
@@ -4371,7 +5586,7 @@
         var rowH = 54;
         var py = Math.max(150, H * 0.34 - rows.length * rowH / 2);
         /* D-91：与主菜单设置页共用同一份行绘制（含说明、键帽与危险色），不再各写一套 */
-        this._drawSettingsRows(rows, st.settingsSel, W, py, rowH);
+        this._drawSettingsRows(rows, st.settingsSel, W, py, rowH, 'pausesettings');
         ctx.textAlign = 'center';
         ctx.fillStyle = '#7f8fa8';
         ctx.font = '12px monospace';
@@ -4385,7 +5600,8 @@
           titleY: Math.max(160, H * 0.3),
           linesY: Math.max(160, H * 0.3) + 30,
           bw: Math.min(160, Math.floor((W - 88) / 2)),
-          gapY: 26
+          gapY: 26,
+          hotPrefix: 'pauseconfirm'
         });
         return;
       }
@@ -4396,6 +5612,14 @@
       var py2 = Math.max(170, H * 0.36 - listH / 2);
       for (var k = 0; k < items.length; k++) {
         var iy = py2 + k * itemH, oni = (k === st.sel);
+        this._hotAdd('pause:row:' + items[k].id, cx - ipw / 2, iy, ipw, itemH - 8);
+        if (!oni && HOVER_ID === 'pause:row:' + items[k].id) {
+          ctx.fillStyle = 'rgba(255,207,110,0.06)';
+          ctx.fillRect(cx - ipw / 2, iy, ipw, itemH - 8);
+          ctx.strokeStyle = 'rgba(255,207,110,0.55)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx - ipw / 2 + 0.5, iy + 0.5, ipw - 1, itemH - 9);
+        }
         if (oni) {
           ctx.fillStyle = 'rgba(255,207,110,0.14)';
           ctx.fillRect(cx - ipw / 2, iy, ipw, itemH - 8);
