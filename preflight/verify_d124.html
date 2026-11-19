@@ -328,6 +328,20 @@
       rule: 'hit = P0 −6 dB；sfxBus 恒 1.0；master 不被 ducking 改',
       targetDb: d1.duck.targetDb, sfx: d1.buses.sfx, master: d1.buses.master
     });
+
+    /* ── 8b. V19-8 恢复窗口：450–600 ms ─────────────────────────
+     * 2026-11-19 裁定：窗口由 350±100ms 修正为 450–600ms。
+     * 理由：§19.5.3 的 510ms duck 是刻意听感参数，不为迎合断言改音乐。 */
+    var hitLog = d1.duck.log.filter(function (x) { return x.reason === 'sfx:hit'; }).pop();
+    var measuredRecovery = hitLog ? (hitLog.attackMs + hitLog.holdMs + hitLog.releaseMs) : -1;
+    function recoveryOk(ms) { return ms >= 450 && ms <= 600; }
+    rec('v19_8_recovery_450_600', !!hitLog && measuredRecovery === 510 &&
+      recoveryOk(measuredRecovery) && !recoveryOk(200) && !recoveryOk(900), {
+      rule: 'V19-8 改为 450–600 ms；hit 实测 attack+hold+release 必须落在窗口内；负例 200/900 必须 FAIL',
+      measuredMs: measuredRecovery, window: [450, 600],
+      negative200: recoveryOk(200), negative900: recoveryOk(900),
+      declaration: '2026-11-19 裁定：窗口由 350±100ms 修正为 450–600ms。理由：§19.5.3 的 510ms duck 是刻意听感参数，不为迎合断言改音乐。'
+    });
     A.play('attack');
     var d2 = A._dbg();
     rec('duck_non_stacking', d2.duck.targetDb === -6 && d2.duck.sources.length >= 2 &&
@@ -422,6 +436,76 @@
       audioSrc.indexOf('new Howl') < 0 && musicSrc.indexOf('new Howl') < 0, {
       rule: 'index.html 不再引入 howler.min.js；audio/music 零 Howl 调用',
       indexHasHowler: indexSrc.indexOf('js/vendor/howler.min.js') >= 0
+    });
+
+    /* ── 14. D-125 Boss tier3：只在循环边界 +4 BPM，层单调 ────── */
+    A._resetForTest();
+    A.init();
+    Game.Data.Player = { floor: 5 };
+    window.dispatchEvent(new Event('pointerdown'));
+    await wait(80);
+    A.bgmPlay('boss');
+    await wait(100);
+    var boss0 = M._dbg();
+    rec('tier3_setup', boss0.current === 'boss' && !!boss0.boss &&
+      boss0.boss.bpm === 96 && Math.abs(boss0.boss.beatSec - 0.625) < 1e-6, {
+      rule: 'Boss 起播时 96 BPM（beatSec=0.625）',
+      boss: boss0.boss
+    });
+
+    M.setDreadTier(3);
+    var bossSet = M._dbg();
+    rec('tier3_pending_not_immediate', !!bossSet.boss && bossSet.boss.bpm === 96 &&
+      Math.abs(bossSet.boss.beatSec - 0.625) < 1e-6 && bossSet.boss.pendingTier === 3 &&
+      bossSet.boss.tempoTier === 0, {
+      rule: 'set(3) 后 beatSec 仍是 96 BPM 对应值；BPM 只登记 pendingTier，不立即生效',
+      boss: bossSet.boss
+    });
+
+    var bossNotesBefore = boss0.noteLog.filter(function (n) { return n.track === 'boss'; });
+    var nextBefore = boss0.nextNoteTime;
+    var crossed = M._testCrossCycle();
+    var tl = crossed.tempoLog.length ? crossed.tempoLog[crossed.tempoLog.length - 1] : null;
+    var measuredBpm = crossed.boss ? Math.round(60 / crossed.boss.beatSec) : null;
+    rec('tier3_bpm_at_boundary', !!crossed.boss && crossed.boss.bpm === 100 &&
+      measuredBpm === 100 && Math.abs(crossed.boss.beatSec - 0.6) < 1e-6 &&
+      !!tl && tl.fromBpm === 96 && tl.toBpm === 100, {
+      rule: '越过循环边界后 beatSec 对应 100 BPM（实测 BPM 由 60/beatSec 算）',
+      measuredBpm: measuredBpm, boss: crossed.boss, tempoLog: tl
+    });
+
+    var bossNotesAfter = crossed.noteLog.filter(function (n) { return n.track === 'boss'; });
+    var lastOld = tl ? bossNotesAfter.filter(function (n) { return n.at < tl.boundaryAt - 0.001; }).slice(-1)[0] : null;
+    var firstNew = tl ? bossNotesAfter.filter(function (n) { return n.at >= tl.boundaryAt - 0.001; })[0] : null;
+    var gap = (lastOld && firstNew) ? (firstNew.at - lastOld.at) : null;
+    rec('tier3_no_note_drop', !!firstNew && !!lastOld && gap > 0 &&
+      gap <= tl.prevBeatSec * 2 + 0.05 &&
+      Math.abs((crossed.nextNoteTime - tl.firstNoteAt) - crossed.boss.beatSec * 2) < 0.05, {
+      rule: '边界前后音符时间连续：无重叠、无大于 1 个 step 的空档；已排音符不被改写',
+      lastOld: lastOld, firstNew: firstNew, gapMs: gap == null ? null : Math.round(gap * 1000),
+      nextBefore: nextBefore, nextAfter: crossed.nextNoteTime,
+      expectedStepMs: crossed.boss ? Math.round(crossed.boss.beatSec * 2 * 1000) : null
+    });
+
+    var layers3 = crossed.boss.layers.slice().sort();
+    M.setDreadTier(2);
+    var downSet = M._dbg();
+    var layers2 = downSet.boss.layers.slice().sort();
+    var notImmediate = downSet.boss.bpm === 100 && downSet.boss.pendingTier === 2;
+    var down = M._testCrossCycle();
+    rec('tier3_downgrade_at_boundary', notImmediate && !!down.boss &&
+      down.boss.bpm === 96 && Math.abs(down.boss.beatSec - 0.625) < 1e-6 &&
+      down.boss.tempoTier === 0, {
+      rule: 'tier3→tier2 也只在边界回落：set 后仍 100 BPM，越界后 96 BPM',
+      beforeBoundary: downSet.boss, afterBoundary: down.boss,
+      tempoLog: down.tempoLog.length ? down.tempoLog[down.tempoLog.length - 1] : null
+    });
+    rec('tier3_layers_monotonic', layers3.indexOf('lowBoost') >= 0 &&
+      layers3.indexOf('detuneFifth') >= 0 && layers3.indexOf('subPulse') >= 0 &&
+      layers2.indexOf('lowBoost') >= 0 && layers2.indexOf('detuneFifth') >= 0 &&
+      layers2.indexOf('subPulse') < 0 && layers2.every(function (x) { return layers3.indexOf(x) >= 0; }), {
+      rule: 'tier3 的层集合包含 tier2 的全部层（低频 + 失谐五度），并多 40 Hz sub；降到 tier2 只撤 sub',
+      tier3: layers3, tier2: layers2
     });
 
     finish();

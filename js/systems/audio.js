@@ -166,6 +166,7 @@
     var target = mode ? mode.db : 0;
     var attackMs = mode ? mode.attackMs : 30;
     var releaseMs = mode ? mode.releaseMs : DUCK_RELEASE_DEFAULT;
+    var holdMs = 0;
     var sources = mode ? ['mode:' + mode.mode] : [];
 
     for (var i = 0; i < duckReq.length; i++) {
@@ -175,6 +176,7 @@
         attackMs = r.attackMs;
       }
       if (r.releaseMs > releaseMs) releaseMs = r.releaseMs;
+      if (r.holdMs > holdMs) holdMs = r.holdMs;
       sources.push(r.id);
     }
 
@@ -217,7 +219,9 @@
       reason: reason || 'change',
       targetDb: target,
       attackMs: attackMs,
+      holdMs: holdMs,
       releaseMs: releaseMs,
+      recoveryMs: attackMs + holdMs + releaseMs,
       sources: sources.slice(0),
       multiplicative: false
     });

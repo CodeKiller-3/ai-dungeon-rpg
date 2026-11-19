@@ -128,6 +128,7 @@
   var jingle = null;    /* { gain, nodes } */
   var deathPad = null;  /* { osc, gain } */
   var dreadTier = 0;
+  var tempoLog = [];     /* D-125：Boss 换档只在循环边界改 BPM 的记录 */
   var seq = 0;
 
   function Audio() { return Game.Systems && Game.Systems.Audio; }
@@ -284,8 +285,27 @@
     var guard = 0;
     while (guard++ < 512) {
       if (tr.idx >= evs.length) {
+        /* D-125：只在循环边界重算 beatSec/cycleDur。
+         * 先用旧 cycleDur 推进到新 cycle 起点，再应用 pendingTier；
+         * 已排入 nextNoteTime 队列的音符一律不动。 */
+        var prevBeatSec = tr.beatSec;
         tr.cycleStart += tr.cycleDur;
         tr.idx = 0;
+        var changed = applyPendingTempo(tr);
+        if (changed) {
+          var firstT = tr.cycleStart + evs[0].beat * tr.beatSec;
+          tempoLog.push({
+            at: r3(c.currentTime),
+            track: tr.id,
+            fromBpm: changed.fromBpm,
+            toBpm: changed.toBpm,
+            prevBeatSec: r3(prevBeatSec),
+            newBeatSec: r3(tr.beatSec),
+            boundaryAt: r3(tr.cycleStart),
+            firstNoteAt: r3(firstT)
+          });
+          if (tempoLog.length > 20) tempoLog.shift();
+        }
       }
       var ev = evs[tr.idx];
       var t = tr.cycleStart + ev.beat * tr.beatSec;
@@ -369,9 +389,11 @@
     var g = newGainNode(root);
     var tr = {
       id: defId, gain: g, nodes: [], drones: [], def: b.def,
-      events: b.events, beatSec: b.beatSec, cycleDur: b.cycleDur,
+      events: b.events, bpm: b.def.bpm, beatSec: b.beatSec, cycleDur: b.cycleDur,
       cycleStart: c.currentTime + delay / 1000 + 0.05, idx: 0, alive: true,
-      startAt: c.currentTime + delay / 1000, dreadBoost: 1
+      startAt: c.currentTime + delay / 1000, dreadBoost: 1,
+      /* D-125：pendingTier 只登记；BPM 在下一个循环边界才应用 */
+      pendingTier: dreadTier, appliedTier: dreadTier, tempoTier: 0, layers: {}
     };
     /* drone：每层最多两个固定音，接本曲目 gain */
     (b.def.drones || []).forEach(function (d) {
@@ -385,6 +407,7 @@
       tr.nodes.push(osc);
       tr.drones.push({ osc: osc, gain: dg, base: d[1] });
     });
+    if (defId === 'boss') applyLayers(tr, dreadTier); /* 层可以立刻叠；BPM 仍等边界 */
     nextNoteTime = Math.max(c.currentTime + 0.02, tr.cycleStart);
     seek(tr, tr.cycleStart);
     active.push(tr);
@@ -425,6 +448,10 @@
       try { if (d.osc.stop) d.osc.stop(); } catch (e) {}
       try { if (d.osc.disconnect) d.osc.disconnect(); } catch (e) {}
       try { if (d.gain.disconnect) d.gain.disconnect(); } catch (e) {}
+    });
+    Object.keys(tr.layers || {}).forEach(function (name) {
+      var L = tr.layers[name];
+      if (L && L.gain) { try { L.gain.disconnect(); } catch (e) {} }
     });
     try { if (tr.gain.disconnect) tr.gain.disconnect(); } catch (e) {}
     for (var i = active.length - 1; i >= 0; i--) if (active[i] === tr) active.splice(i, 1);
@@ -655,30 +682,98 @@
     timers.push(id);
   }
 
-  /* ---------- Boss 龙威（§19.4.2；tier 3 的 +4 BPM 见回执说明） ---------- */
+  /* ---------- Boss 龙威（§19.4.2） ----------
+   * D-125：BPM 96→100 只登记 pendingTier；调度器推进到新 cycle 起点时
+   * 才 applyPendingTempo() 重算 beatSec/cycleDur。已排音符不动。
+   * 层（低频 / 失谐五度 / 40 Hz sub）可以立即叠，tier3 ⊇ tier2。 */
+  function applyPendingTempo(tr) {
+    if (!tr || tr.id !== 'boss') return null;
+    var want = (tr.pendingTier >= 3) ? 100 : 96;
+    if (want === tr.bpm) {
+      tr.tempoTier = (want === 100) ? 3 : 0;
+      return null;
+    }
+    var from = tr.bpm;
+    tr.bpm = want;
+    tr.beatSec = 60 / want;
+    tr.cycleDur = CYCLE_BEATS * tr.beatSec;
+    tr.tempoTier = (want === 100) ? 3 : 0;
+    return { fromBpm: from, toBpm: want };
+  }
+
+  function removeLayer(tr, name) {
+    var L = tr.layers && tr.layers[name];
+    if (!L) return;
+    try { if (L.osc && L.osc.stop) L.osc.stop(); } catch (e) {}
+    try { if (L.osc && L.osc.disconnect) L.osc.disconnect(); } catch (e) {}
+    try { if (L.gain && L.gain.disconnect) L.gain.disconnect(); } catch (e) {}
+    delete tr.layers[name];
+  }
+
+  function applyLayers(tr, tier) {
+    if (!tr || tr.id !== 'boss') return;
+    var c = ctx();
+    if (!c) return;
+    /* tier1：低频层 +35% */
+    if (tier >= 1) {
+      if (!tr.layers.lowBoost) {
+        tr.drones.forEach(function (d) {
+          try { d.gain.gain.linearRampToValueAtTime(d.base * 1.35, c.currentTime + 0.4); } catch (e) {}
+        });
+        tr.layers.lowBoost = { boost: 1.35 };
+      }
+    } else if (tr.layers.lowBoost) {
+      tr.drones.forEach(function (d) {
+        try { d.gain.gain.linearRampToValueAtTime(d.base, c.currentTime + 0.4); } catch (e) {}
+      });
+      delete tr.layers.lowBoost;
+    }
+    /* tier2：五度 −18 cent 失谐层 */
+    if (tier >= 2) {
+      if (!tr.layers.detuneFifth) {
+        try {
+          var o2 = c.createOscillator();
+          var g2 = c.createGain();
+          o2.type = 'sine';
+          o2.frequency.setValueAtTime(tr.def.root * 1.5, c.currentTime);
+          if (o2.detune) o2.detune.setValueAtTime(-18, c.currentTime);
+          g2.gain.setValueAtTime(0.015, c.currentTime);
+          o2.connect(g2); g2.connect(tr.gain);
+          o2.start(c.currentTime);
+          tr.nodes.push(o2);
+          tr.layers.detuneFifth = { osc: o2, gain: g2 };
+        } catch (e) {}
+      }
+    } else {
+      removeLayer(tr, 'detuneFifth');
+    }
+    /* tier3：40 Hz sub 脉冲（层，不换曲） */
+    if (tier >= 3) {
+      if (!tr.layers.subPulse) {
+        try {
+          var o3 = c.createOscillator();
+          var g3 = c.createGain();
+          o3.type = 'sine';
+          o3.frequency.setValueAtTime(40, c.currentTime);
+          g3.gain.setValueAtTime(0.012, c.currentTime);
+          o3.connect(g3); g3.connect(tr.gain);
+          o3.start(c.currentTime);
+          tr.nodes.push(o3);
+          tr.layers.subPulse = { osc: o3, gain: g3 };
+        } catch (e) {}
+      }
+    } else {
+      removeLayer(tr, 'subPulse');
+    }
+    tr.appliedTier = tier;
+  }
+
   function setDreadTier(tier) {
-    dreadTier = tier | 0;
+    dreadTier = Math.max(0, Math.min(3, tier | 0));
     var tr = currentLoop();
     if (!tr || tr.id !== 'boss') return;
-    var boost = tier >= 1 ? 1.35 : 1;
-    tr.drones.forEach(function (d) {
-      try { d.gain.gain.linearRampToValueAtTime(d.base * boost, ctx().currentTime + 0.4); } catch (e) {}
-    });
-    if (tier >= 2 && !tr.detuneLayer) {
-      try {
-        var c = ctx();
-        var osc = c.createOscillator();
-        var g = c.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(tr.def.root * 1.5, c.currentTime);
-        if (osc.detune) osc.detune.setValueAtTime(-18, c.currentTime);
-        g.gain.setValueAtTime(0.015, c.currentTime);
-        osc.connect(g); g.connect(tr.gain);
-        osc.start(c.currentTime);
-        tr.nodes.push(osc);
-        tr.detuneLayer = { osc: osc, gain: g };
-      } catch (e) {}
-    }
+    tr.pendingTier = dreadTier;  /* 只登记；BPM 等循环边界 */
+    applyLayers(tr, dreadTier);  /* 层立即生效，tier3 包含 tier2 全部层 */
   }
 
   /* ---------- 模块 ---------- */
@@ -699,6 +794,16 @@
     fingerprint: fingerprint,
     _curveIn: curveIn,
     _curveOut: curveOut,
+    /* 验证页只读钩子：把 Boss 推进到下一个循环边界，走与调度器相同的分支 */
+    _testCrossCycle: function () {
+      var tr = currentLoop();
+      var c = ctx();
+      if (!tr || !c || tr.id !== 'boss') return null;
+      tr.idx = tr.events.length;
+      tr.cycleStart = c.currentTime - tr.cycleDur + 0.02;
+      scheduler();
+      return Game.Systems.Music._dbg();
+    },
     _dbg: function () {
       var c = ctx();
       var cur = currentLoop();
@@ -708,15 +813,25 @@
         fingerprints: Object.keys(TRACKS).filter(isFloorId).map(fingerprint),
         current: cur ? cur.id : null,
         active: active.map(function (tr) {
-          return { id: tr.id, alive: tr.alive, cycleStart: r3(tr.cycleStart), idx: tr.idx, bpm: tr.def.bpm };
+          return { id: tr.id, alive: tr.alive, cycleStart: r3(tr.cycleStart), idx: tr.idx, bpm: tr.bpm || tr.def.bpm };
         }),
-        position: cur ? { idx: cur.idx, cycleStart: r3(cur.cycleStart), beatSec: r3(cur.beatSec), cycleDur: r3(cur.cycleDur) } : null,
+        position: cur ? { idx: cur.idx, cycleStart: r3(cur.cycleStart), beatSec: r3(cur.beatSec), cycleDur: r3(cur.cycleDur), bpm: cur.bpm || cur.def.bpm } : null,
+        boss: (cur && cur.id === 'boss') ? {
+          bpm: cur.bpm,
+          beatSec: r3(cur.beatSec),
+          cycleDur: r3(cur.cycleDur),
+          pendingTier: cur.pendingTier,
+          appliedTier: cur.appliedTier,
+          tempoTier: cur.tempoTier,
+          layers: Object.keys(cur.layers || {})
+        } : null,
         nextNoteTime: r3(nextNoteTime),
         now: c ? r3(c.currentTime) : null,
         timerOn: !!timer,
         noteLog: noteLog.slice(-40),
         noteTotal: noteLog.length,
         transitions: transitionLog.slice(-12),
+        tempoLog: tempoLog.slice(-8),
         dreadTier: dreadTier,
         looping: active.length
       };

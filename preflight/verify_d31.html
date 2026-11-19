@@ -122,7 +122,11 @@
     'preflight/selfcheck/selfcheck.js', 'preflight/bot_d23.html', 'preflight/bot_d37.html',
     'preflight/lib/d17_bot.js',
     'preflight/selfcheck/d26-online-verify.json',
-    'preflight/verify_d54.html'
+    'preflight/verify_d54.html',
+    /* D-125：新增文件登记到锚点扫描表（只加可解析文件，不改判据） */
+    'js/systems/music.js',
+    'preflight/selfcheck/page-baseline.json',
+    'preflight/verify_d124.html'
   ].forEach(function (p) { FS[p] = read('../' + p); });
 
   var VER = {

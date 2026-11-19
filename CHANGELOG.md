@@ -4,6 +4,14 @@
 
 > 每条条目末尾带一个不可见的锚点注释（形如 `锚点: 相对路径#符号名`），由 `preflight/verify_d31.html` 扫描校验"提到的功能在代码里真实存在"，防止把没做的功能写进来。
 
+## [1.0.0] - 2026-11-19 · D-123–D-125 音乐收口与账目补全
+
+> 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。本节按卡补 D-123/D-124/D-125 三条账；D-124 起验证页 128→129，四策略与 D-118 逐局一致（`TOTAL_DIFF=0`）。
+
+- 收尾清理与文档对账（D-123）：删除 44 个未跟踪探针（14 个 `*.err`、29 个 `preflight/artifacts/d94/_*`、`preflight/_menu_comp.html`），四份文档对账到 D-122；全量 **128/128**、四策略零差异，commit `c3a0ed2`。<!-- 锚点: preflight/selfcheck/page-baseline.json#count -->
+- 五层 BGM 与音乐总线（D-124）：拆 `sfxBus`/`musicBus` 双总线，11 个既有音效行为与音量不变；新增 `f1`–`f5` 五层曲目（各自调中心/动机/BPM/配器）、菜单/战斗/精英/Boss/胜利/死亡状态机；换层 900/150/1200 ms、战斗 700/500/300 ms 交叉淡化；ducking 只压 `musicBus` 且取最深一档不叠乘；解锁补 `pointerdown`/`touchstart`；暂停 −9 dB + LP 800 Hz 且恢复不重播；设置新增「音乐」开关（只切 `musicBus`）；删除 `index.html` 的 `howler.min.js` 引入（全项目零 `new Howl`）。验证页 **128→129**，全量 **129/129**、`TOTAL_DIFF=0`，commit `40695ad`。<!-- 锚点: js/systems/music.js#Game.Systems.Music -->
+- 音乐规格收口（D-125）：Boss 龙威 tier3 的 **BPM 96→100** 只在循环边界应用（`pendingTier` 登记，`beatSec/cycleDur` 在 `cycleStart` 前进后重算，已排音符不动），升降档同路径；tier3 层集合包含 tier2 全部层（低频 + 失谐五度 + 40 Hz sub）；V19-8 恢复窗口按 **2026-11-19 裁定**改为 **450–600 ms**（§19.5.3 的 510 ms duck 参数不动）。全量 **129/129**、`TOTAL_DIFF=0`。<!-- 锚点: preflight/verify_d124.html#tier3_bpm_at_boundary -->
+
 ## [1.0.0] - 2026-11-19 · D-119–D-122 交付收口
 
 > 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。本节四张卡只做文档、断言与版本库收口，**游戏行为代码 0 改动**；四策略与 D-118 逐局一致（`TOTAL_DIFF=0`）。
