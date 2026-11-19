@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-113 探索地板/墙样张</title>
+<style>html,body{margin:0;padding:0;background:#07070f;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-113 实拍页：真实地图（固定种子）、无迷雾、无装饰/怪；?f=1..5 选层。
+     画面就是玩家实际看到的 24px 地块与墙拓扑，用来量"能不能读出边界"。 -->
+<script>window.__D113ERR = [];</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = (location.search.match(/[?&]f=(\d)/) || [])[1];
+  var floor = q ? (+q) : 1;
+  function boot() {
+    try {
+      var cv = document.getElementById('game');
+      var R = Game.Core.Render;
+      R.init(cv);
+      R.resize(0);
+      R._staticBypass = true;
+      R._animNow = function () { return 0; };
+
+      var MR = Game.Systems.Map;
+      var origRandom = Math.random;
+      var seed = 20261118 + floor * 7919;
+      Math.random = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      var keepAI = Game.Systems.AI;
+      Game.Systems.AI = { initPatrols: function () {}, getPatrols: function () { return []; } };
+      try { MR.expectedEnemyCount(); MR.setFloor(floor); } finally { Math.random = origRandom; Game.Systems.AI = keepAI; }
+      MR.getEnemies = function () { return []; };
+      MR.getElites = function () { return []; };
+      MR.getDetail = function () { return null; };
+      MR.getDecor = function () { return null; };
+
+      var grid = MR.getGrid();
+      var h = grid.length, w = grid[0].length;
+      var px = Math.floor(w / 2), py = Math.floor(h / 2), best = null;
+      for (var y = 0; y < h; y++) {
+        for (var x = 0; x < w; x++) {
+          if (grid[y][x] !== 1) continue;
+          var d = Math.abs(x - w / 2) + Math.abs(y - h / 2);
+          if (!best || d < best.d) best = { x: x, y: y, d: d };
+        }
+      }
+      if (best) { px = best.x; py = best.y; }
+
+      var player = { x: px, y: py, floor: floor, hp: 84, maxHp: 120, mp: 30, maxMp: 50, gold: 268, level: 4 };
+      R.drawMap(grid, player);
+      R.drawPlayer(player);
+
+      /* 交界裁切：找离玩家最近的一块"下方是地板"的墙，取它周围的走廊带 */
+      var cam = R._cam();
+      var crop = null, cd = 1e9;
+      for (var yy = 1; yy < h - 2; yy++) {
+        for (var xx = 1; xx < w - 1; xx++) {
+          if (grid[yy][xx] !== 0 || grid[yy + 1][xx] !== 1) continue;
+          var dd = Math.abs(xx - px) + Math.abs(yy - py);
+          if (dd < cd) {
+            cd = dd;
+            var x0 = Math.max(0, (xx - 3) * 24 - cam.x);
+            var y0 = Math.max(0, (yy - 2) * 24 - cam.y);
+            var x1 = Math.min(R.cssW, (xx + 4) * 24 - cam.x);
+            var y1 = Math.min(R.cssH, (yy + 3) * 24 - cam.y);
+            crop = [x0, y0, x1 - x0, y1 - y0];
+          }
+        }
+      }
+      window.__D113 = { floor: floor, gridW: w, gridH: h, player: player, crop: crop,
+        cssW: R.cssW, cssH: R.cssH };
+      document.title = 'READY D113';
+    } catch (e) {
+      window.__D113ERR.push(String(e && e.message));
+      document.title = 'ERR D113 ' + (e && (e.stack || e.message));
+    }
+  }
+  var t0 = Date.now();
+  Game.Core.Sprites.load('../../../assets/sprites/');
+  (function poll() {
+    var S = Game.Core && Game.Core.Sprites;
+    if (S && S.isReady()) { boot(); return; }
+    if (Date.now() - t0 > 8000) { boot(); return; }
+    setTimeout(poll, 50);
+  })();
+})();
+</script>
+</body>
+</html>
