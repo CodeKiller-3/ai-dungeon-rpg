@@ -45,6 +45,9 @@
   var flashes = [];                          /* { who, alpha, ms, t0, color } */
   var slashes = [];                          /* { x, y, r, a0, dir, color, ms, t0, alpha } */
   var rings = [];                            /* 第三拨 D-88：落点冲击环 { x, y, ms, t0, r0, r1, color } */
+  /* D-109 N3：斩击弧暗描边。默认开；_setSlashOutline(false) 只用于验证页回放旧行为。 */
+  var SLASH_EDGE = 'rgba(16,12,26,0.92)';
+  var slashOutline = true;
 
   var _clock = null;
 
@@ -76,6 +79,9 @@
     cycle: function () { level = 'high'; return 'high'; },
     _setPrefersReduced: function () { return 'high'; },
     _setClock: function (fn) { _clock = (typeof fn === 'function') ? fn : null; lastReal = null; },
+    /* D-109 N3：验证页专用——切换斩击弧是否带暗描边，用同一条渲染路径对照新旧行为 */
+    _setSlashOutline: function (on) { slashOutline = (on !== false); return slashOutline; },
+    _slashOutline: function () { return slashOutline; },
     now: realNow,
     clockNow: fxNow,
 
@@ -254,14 +260,22 @@
         ctx.quadraticCurveTo(L * 0.15 * grow, Wd * 0.30 * grow, -L * grow, 3);
         ctx.closePath();
         ctx.fill();
-        /* 刀路上的一线暖色，避免纯白读成"白条" */
-        ctx.globalAlpha = 0.55 * fade;
-        ctx.strokeStyle = s.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-L * grow, 4);
-        ctx.quadraticCurveTo(-L * 0.15 * grow, -Wd * 0.95 * grow, L * grow, -1);
-        ctx.stroke();
+        /* D-109 N3：白色月牙改描深色轮廓（直接复用上面刚画完的月牙路径，零新增调用）。
+         * 受击白闪会把主体刷白，纯白弧压在白底上等于消失；深色轮廓在亮底/暗底都可辨，
+         * 同时保留"从哪边砍过来"的方向感。_setSlashOutline(false) 只供验证页回放旧行为。 */
+        ctx.globalAlpha = 0.72 * fade;
+        if (slashOutline) {
+          ctx.strokeStyle = SLASH_EDGE;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-L * grow, 4);
+          ctx.quadraticCurveTo(-L * 0.15 * grow, -Wd * 0.95 * grow, L * grow, -1);
+          ctx.stroke();
+        }
         ctx.restore();
       }
       /* 落点冲击环画在斩击之后：环 + 白色十字星必须在最上层，静止帧就能看到"打点" */

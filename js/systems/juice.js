@@ -23,10 +23,45 @@
   var FADE = 320;         /* 末尾淡出 ms */
   var SLIDE = 160;        /* 入场淡入 ms */
 
-  /* D-78：战斗场景的"安全中带"——敌方血条 212~232、我方血条 414~434，
-   * 卡片只在这两条之间居中，绝不压住血条；探索场景直接用屏幕正中心。 */
+  /* D-78：纵置战斗场景的"安全带"——敌方血条 212~232、我方血条 414~434，
+   * 卡片只在这两条之间居中，绝不压住血条；探索场景直接用屏幕正中心。
+   * D-101：横置不套这两个常数，改按 barY、双方铭牌（身份带）实际矩形与指令条上沿重算。 */
   var BAND_TOP = 236;
   var BAND_BOTTOM = 410;
+
+  function inHorizontal() {
+    var R = Game.Core && Game.Core.Render;
+    return !!(R && typeof R._battleLayoutNow === 'function' && R._battleLayoutNow() === 'horizontal');
+  }
+
+  /* 战斗安全带：D-109 起纵置优先使用"本帧信息元素并集之外"的空白区间表（free），
+   * 由 Render._battleSafeBand(W,H,lay, box) 按实际绘制框计算；没有实拍框时退回旧几何口径。 */
+  function battleBand(W, H) {
+    var R0 = Game.Core && Game.Core.Render;
+    if (R0 && typeof R0._battleSafeBand === 'function') {
+      var lay = (typeof R0._resolveBattleLayout === 'function')
+        ? R0._resolveBattleLayout(W, H) : R0._battleLayoutNow();
+      var box0 = (R0 && R0._lastBattleBox) || null;
+      var sb = R0._battleSafeBand(W, H, lay, box0);
+      if (sb && ((sb.free && sb.free.length) || sb.bottom > sb.top + 24)) return sb;
+    }
+    if (!inHorizontal()) return { top: BAND_TOP, bottom: BAND_BOTTOM, free: [] };
+    var R = Game.Core && Game.Core.Render;
+    var box = (R && R._lastBattleBox) || null;
+    var geo = (R && typeof R._battleLayoutGeo === 'function') ? R._battleLayoutGeo(W, H) : null;
+    var top;
+    if (box && box.playerPlate) top = box.playerPlate.y + box.playerPlate.h + 6;
+    else if (geo) top = geo.groundY - 98;
+    else top = Math.round(H * 0.35);
+    var bottom;
+    if (box && box.commandBar) bottom = box.commandBar.y - 6;
+    else bottom = H - 102;
+    if (bottom <= top + 24) {
+      top = Math.round(H * 0.30);
+      bottom = Math.max(top + 24, Math.round(H * 0.68));
+    }
+    return { top: top, bottom: bottom, free: [] };
+  }
 
   var COLORS = {
     level: '#7dffb0',     /* 升级：绿色 */
@@ -95,13 +130,12 @@
     return bursts[bursts.length - 1];
   }
 
-  /* 战场坐标：与 battle.js 的 monsterPos / playerPos 同一口径（中心点） */
+  /* 战场坐标：D-101 起统一问 battle.js 的布局无关锚点（横置 enemyCx/playerCx 站位），
+   * 本模块不再自己拼 w/2、h−145。 */
   function battlePoint(who) {
-    var cv = (Game.Core && Game.Core.Render && Game.Core.Render._canvas) || null;
-    var w = (Game.Core && Game.Core.Render && Game.Core.Render.cssW) || (cv && cv.clientWidth) || 0;
-    var h = (Game.Core && Game.Core.Render && Game.Core.Render.cssH) || (cv && cv.clientHeight) || 0;
-    if (!w || !h) return null;
-    return who === 'player' ? { x: w / 2, y: h - 145 } : { x: w / 2, y: 135 };
+    var B = Game.Systems && Game.Systems.Battle;
+    if (B && typeof B._body === 'function') return B._body(who);
+    return null;
   }
 
   function inBattle() {
@@ -122,22 +156,60 @@
   function layout(W, H) {
     var cw = cardWidth(W);
     var battle = inBattle();
-    var top = battle ? BAND_TOP : 30;
-    var bottom = battle ? BAND_BOTTOM : H - 28;
-    var avail = Math.max(0, bottom - top);
-    var picked = [];
-    var used = 0;
-    var i, h, need;
-    for (i = cards.length - 1; i >= 0; i--) {
-      h = cardHeight(cards[i]);
-      need = h + (picked.length ? CARD_GAP : 0);
-      if (picked.length && used + need > avail) continue;
-      picked.push(cards[i]);
-      used += need;
-      if (used > avail) break;
+    var band = battle ? battleBand(W, H) : null;
+    var free = (battle && band && band.free && band.free.length) ? band.free : null;
+    var intervals;
+    if (!battle) {
+      intervals = [{ top: 30, bottom: H - 28, nonBattle: true }];
+    } else if (free) {
+      /* D-109 N1：优先落在离屏幕中线最近、且装得下整卡的那段空白。
+       * 320/960 这类"战报下沿到玩家精灵之间不足 104px"的档会自然选中
+       * 玩家脚下的空白（消散期间指令条不画，这块是空的），而不是去压战报。 */
+      intervals = free.slice().sort(function (a, b) {
+        return Math.abs((a.top + a.bottom) / 2 - H / 2) - Math.abs((b.top + b.bottom) / 2 - H / 2);
+      });
+    } else {
+      intervals = [{ top: band.top, bottom: band.bottom, legacy: true }];
     }
-    picked.reverse();
-    var total = used;
+    var chosen = null;
+    for (var ii = 0; ii < intervals.length && !chosen; ii++) {
+      var iv = intervals[ii];
+      var avail = Math.max(0, iv.bottom - iv.top);
+      if (!cards.length) {
+        if (iv.nonBattle) chosen = { iv: iv, picked: [], total: 0 };
+        continue;
+      }
+      /* 新卡优先：这段空白连最新一张都放不下就换下一段，绝不为了塞旧卡而跳过新卡 */
+      if (!iv.legacy && cardHeight(cards[cards.length - 1]) > avail) continue;
+      var picked = [], used = 0;
+      for (var i = cards.length - 1; i >= 0; i--) {
+        var h = cardHeight(cards[i]);
+        var need = h + (picked.length ? CARD_GAP : 0);
+        if (iv.legacy) {
+          if (picked.length && used + need > avail) continue;
+        } else if (used + need > avail) {
+          continue;
+        }
+        picked.push(cards[i]);
+        used += need;
+        if (!iv.legacy) continue;
+        if (used > avail) break;
+      }
+      if (!picked.length) continue;
+      if (!iv.legacy && used > avail) continue;
+      chosen = { iv: iv, picked: picked.reverse(), total: used };
+    }
+    if (!chosen && !battle) chosen = { iv: intervals[0], picked: [], total: 0 };
+    if (!chosen && battle && cards.length) {
+      /* 最后一档：真实流程里不会走到（结果卡只在怪物消散帧触发，此时底部空白 ≥150px）。
+       * 验证页若人为在怪物存活时注入结果卡，纵置小屏可能一段空白都塞不下 104px；
+       * 这时把最新一张沉到底边，至少不压五类信息，也不让奖励卡凭空消失。 */
+      var dh = cardHeight(cards[cards.length - 1]);
+      chosen = { iv: { top: H - 8 - dh, bottom: H - 8, dock: true },
+        picked: [cards[cards.length - 1]], total: dh };
+    }
+    if (!chosen) chosen = { iv: { top: band.top, bottom: band.bottom }, picked: [], total: 0 };
+    var top = chosen.iv.top, bottom = chosen.iv.bottom, total = chosen.total;
     var startY;
     if (battle) {
       startY = (top + bottom) / 2 - total / 2;
@@ -148,9 +220,9 @@
     }
     var out = [];
     var y = startY;
-    for (i = 0; i < picked.length; i++) {
-      h = cardHeight(picked[i]);
-      out.push({ card: picked[i], x: Math.round((W - cw) / 2), y: Math.round(y), w: cw, h: h });
+    for (i = 0; i < chosen.picked.length; i++) {
+      h = cardHeight(chosen.picked[i]);
+      out.push({ card: chosen.picked[i], x: Math.round((W - cw) / 2), y: Math.round(y), w: cw, h: h });
       y += h + CARD_GAP;
     }
     return {
