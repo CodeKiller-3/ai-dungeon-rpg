@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-100 全局鼠标：命中层 / 两段式 / 探索 / 战斗 / 菜单</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-100 · 全局鼠标（键盘仍是主通道，鼠标为并列通道）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { loaded: false, ok: true, sub: {} };
+  var M = Game.Core.Main, R = Game.Core.Render, Modal = Game.Modal;
+  var Map = Game.Systems.Map, B = Game.Systems.Battle, P = Game.Data.Player;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function setSize(w, h) { R.cssW = w; R.cssH = h; }
+  function inView(r, w, h) { return r.x >= -0.5 && r.y >= -0.5 && r.x + r.w <= w + 0.5 && r.y + r.h <= h + 0.5; }
+  function hots(prefix) {
+    return R._hotList().filter(function (r) { return r.id.indexOf(prefix) === 0; });
+  }
+  function center(r) { return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; }
+
+  var SIZES = [[320, 568], [390, 664], [960, 540], [1024, 640]];
+
+  try {
+    M.init({ skipMenu: true });
+    M.closeGuide();
+    out.loaded = !!(M && R && Modal && Map && B);
+
+    /* ══ A1. 统一命中层：四档尺寸 × DPR 1/2 ═══════════════════════ */
+    (function () {
+      var cv = document.getElementById('game');
+      var oldRect = cv.getBoundingClientRect;
+      var bad = [], cases = 0;
+      for (var i = 0; i < SIZES.length; i++) {
+        var w = SIZES[i][0], h = SIZES[i][1];
+        for (var d = 1; d <= 2; d++) {
+          setSize(w, h);
+          R.dpr = d;
+          cv.width = w * d; cv.height = h * d;
+          cv.getBoundingClientRect = function () {
+            return { left: 10, top: 20, width: w, height: h, right: 10 + w, bottom: 20 + h };
+          };
+          var pt = R.toLogical(10 + w * 0.25, 20 + h * 0.6);
+          cases++;
+          if (Math.abs(pt.x - w * 0.25) > 0.01 || Math.abs(pt.y - h * 0.6) > 0.01) {
+            bad.push(w + 'x' + h + '@' + d + '=' + pt.x.toFixed(2) + ',' + pt.y.toFixed(2));
+          }
+        }
+      }
+      cv.getBoundingClientRect = oldRect;
+      R.dpr = 1; cv.width = 1024; cv.height = 640;
+      setSize(1024, 640);
+      rec('A1_toLogical', bad.length === 0, { cases: cases, bad: bad });
+    })();
+
+    /* ══ A2. 菜单 / 暂停 / 弹窗热区：存在且矩形在视口内 ═════════ */
+    (function () {
+      var bad = [], detail = {};
+      function probeMenu(w, h) {
+        setSize(w, h);
+        R.drawMainMenu(M._menuSpec());
+        var rows = hots('menu:row:');
+        if (rows.length !== 5) bad.push(w + ':menuRows=' + rows.length);
+        for (var i = 0; i < rows.length; i++) if (!inView(rows[i], w, h)) bad.push(w + ':menuOut:' + rows[i].id);
+      }
+      function probePause(w, h) {
+        setSize(w, h);
+        var spec = M._pauseSpec();
+        R.drawPause(spec);
+        var rows = hots('pause:row:');
+        if (rows.length !== 4) bad.push(w + ':pauseRows=' + rows.length);
+        for (var i = 0; i < rows.length; i++) if (!inView(rows[i], w, h)) bad.push(w + ':pauseOut:' + rows[i].id);
+        R.drawPause({ page: 'settings', sel: 0, settingsSel: 0, confirmSel: 0,
+          items: spec.items, settings: spec.settings, hasSave: spec.hasSave, confirm: null });
+        var sr = hots('pausesettings:');
+        if (sr.length < 4) bad.push(w + ':pauseSet=' + sr.length);
+        for (var s = 0; s < sr.length; s++) if (!inView(sr[s], w, h)) bad.push(w + ':pauseSetOut:' + sr[s].id);
+        R.drawPause({ page: 'confirmAbandon', sel: 0, settingsSel: 0, confirmSel: 0,
+          items: spec.items, settings: spec.settings, hasSave: spec.hasSave,
+          confirm: { title: '放弃本局？', lines: ['本局进度不会保存'], opts: ['取消', '确认'], danger: true } });
+        var cr = hots('pauseconfirm:');
+        if (cr.length !== 2) bad.push(w + ':pauseConfirm=' + cr.length);
+        for (var c = 0; c < cr.length; c++) if (!inView(cr[c], w, h)) bad.push(w + ':pauseConfirmOut:' + cr[c].id);
+      }
+      function probeModal(w, h) {
+        setSize(w, h);
+        Modal.open('quests'); Modal.draw();
+        var tabs = hots('modal:tab:'), rows = hots('modal:row:');
+        if (tabs.length !== 4) bad.push(w + ':tabs=' + tabs.length);
+        if (rows.length < 1) bad.push(w + ':questRows=' + rows.length);
+        var all = tabs.concat(rows);
+        for (var i = 0; i < all.length; i++) if (!inView(all[i], w, h)) bad.push(w + ':modalOut:' + all[i].id);
+        Modal.close();
+
+        Modal.open('shop'); Modal.draw();
+        var modes = hots('modal:shopmode:'), srows = hots('modal:row:');
+        if (modes.length !== 2) bad.push(w + ':shopModes=' + modes.length);
+        if (srows.length < 1) bad.push(w + ':shopRows=' + srows.length);
+        var all2 = modes.concat(srows);
+        for (var j = 0; j < all2.length; j++) if (!inView(all2[j], w, h)) bad.push(w + ':shopOut:' + all2[j].id);
+        Modal.close();
+      }
+      for (var i = 0; i < SIZES.length; i++) {
+        var w = SIZES[i][0], h = SIZES[i][1];
+        probeMenu(w, h);
+        var mc = hots('menu:row:').length;
+        probePause(w, h);
+        var pc = hots('pause:row:').length;
+        probeModal(w, h);
+        detail[w + 'x' + h] = { menu: mc, pause: pc };
+      }
+      setSize(1024, 640);
+      rec('A2_hotRects', bad.length === 0, { bad: bad, sizes: SIZES.length, detail: detail });
+    })();
+
+    /* ══ A3. 弹窗两段式：首次只选中，第二次才执行 ═══════════════ */
+    (function () {
+      var fired = 0;
+      Modal.open('stairconfirm', { floor: 2, onConfirm: function () { fired++; } });
+      Modal.draw();
+      var L = Modal._layout();
+      var x = L.panelLeft + 40, y = L.rowYs[1] + 10;
+      Modal._handleClick(x, y);
+      var first = { fired: fired, open: Modal.isOpen(), armed: Modal._armed(), sel: Modal._layout().sel };
+      Modal._handleClick(x, y);
+      var second = { fired: fired, open: Modal.isOpen() };
+      if (Modal.isOpen()) Modal.close();
+      rec('A3_twoStage', first.fired === 0 && first.open && first.armed === 'row:1' && first.sel === 1 &&
+        second.fired === 1 && second.open === false, { first: first, second: second });
+    })();
+
+    /* ══ A4. 系统页：点击只选中/不执行，绝不关闭面板 ═══════════ */
+    (function () {
+      Modal.open('quests');
+      Modal._setPage(3);
+      Modal.draw();
+      var L = Modal._layout();
+      Modal._handleClick(L.panelLeft + 30, L.panelTop + 60);
+      var afterInside = { open: Modal.isOpen(), armed: Modal._armed() };
+      Modal._handleClick(L.panelLeft + 30, L.rowYs && L.rowYs.length ? L.rowYs[0] + 10 : L.panelTop + 80);
+      var afterRow = { open: Modal.isOpen(), armed: Modal._armed() };
+      Modal.close();
+      rec('A4_systemNoClose', afterInside.open && afterRow.open && afterRow.armed === null,
+        { inside: afterInside, row: afterRow });
+    })();
+
+    /* ══ A5. 页签 / 买-卖切换 / 滚轮（导航类单击即生效） ═══════ */
+    (function () {
+      Modal.open('quests'); Modal.draw();
+      var tabRects = hots('modal:tab:');
+      var c1 = center(tabRects[1]);
+      Modal._handleClick(c1.x, c1.y);
+      var p1 = Modal._debugState().page;
+      /* 再点「系统」页签：之后点面板内部任意位置都不许关闭 */
+      var tabTo3 = center(tabRects[3]);
+      Modal._handleClick(tabTo3.x, tabTo3.y);
+      var p3 = Modal._debugState().page;
+      var sysOpen = Modal.isOpen();
+      Modal.close();
+
+      Modal.open('shop'); Modal.draw();
+      var modes = hots('modal:shopmode:');
+      var beforeMode = Modal._debugState().shopMode;
+      var cm = center(modes[1]);
+      Modal._handleClick(cm.x, cm.y);
+      var afterMode = Modal._debugState().shopMode;
+      Modal.close();
+
+      /* 滚轮：320×160 时可见行数 1，购买列表必然可滚 */
+      setSize(320, 160);
+      Modal.open('shop'); Modal.draw();
+      var L = Modal._layout();
+      var sb = L.scrollable, s0 = L.start;
+      var consumed = Modal._wheel(120);
+      var s1 = Modal._layout().start;
+      var consumedUp = Modal._wheel(-120);
+      var s2 = Modal._layout().start;
+      Modal.close();
+      setSize(1024, 640);
+      rec('A5_tabsModeWheel', p1 === 1 && p3 === 3 && sysOpen && beforeMode === 'buy' && afterMode === 'sell' &&
+        sb && consumed === true && s1 === s0 + 1 && consumedUp === true && s2 === s0,
+        { pages: [p1, p3], shopMode: [beforeMode, afterMode], scrollable: sb, start: [s0, s1, s2],
+          consumed: [consumed, consumedUp], sysOpen: sysOpen });
+    })();
+
+    /* ══ B1. 菜单点击：行 → 动作；设置行 → 循环；确认页默认焦点仍是取消 ══ */
+    (function () {
+      Modal.close();
+      M.closePause();
+      setSize(1024, 640);
+      R.drawMainMenu(M._menuSpec());
+      var row = hots('menu:row:settings')[0];
+      var c = center(row);
+      M._menuClick(c.x, c.y);
+      var page1 = M.getMenuState().page;
+      R.drawMainMenu(M._menuSpec());
+      var srow = hots('menusettings:muted')[0];
+      var m0 = M.getSettings().muted;
+      var sc = center(srow);
+      M._menuClick(sc.x, sc.y);
+      var m1 = M.getSettings().muted;
+      M._menuClick(sc.x, sc.y); /* 还原 */
+      var m2 = M.getSettings().muted;
+      /* 确认页热区 + 默认焦点：合成 spec 检查两个按钮都在视口内，confirmSel 默认 0 */
+      R.drawMainMenu({ page: 'confirmNew', sel: 0, settingsSel: 0, helpScroll: 0, confirmSel: 0,
+        items: M._menuSpec().items, settings: M._menuSpec().settings, help: [],
+        confirm: { title: '开始新游戏？', lines: ['将覆盖现有存档'], opts: ['取消', '开始'], danger: true } });
+      var cbtns = hots('menuconfirm:');
+      var cbOk = cbtns.length === 2 && inView(cbtns[0], 1024, 640) && inView(cbtns[1], 1024, 640);
+      rec('B1_menuClick', page1 === 'settings' && m1 === !m0 && m2 === m0 && cbOk,
+        { page: page1, muted: [m0, m1, m2], confirmButtons: cbtns.length, defaultFocus: 0 });
+    })();
+
+    /* ══ B2. 暂停菜单：行点击 / 设置行 / 返回继续 ══════════════ */
+    (function () {
+      M.openPause(1e9);
+      R.drawPause(M._pauseSpec());
+      var row = hots('pause:row:settings')[0];
+      var c = center(row);
+      M._pauseClick(c.x, c.y);
+      var p1 = M.getPauseState().page;
+      R.drawPause(M._pauseSpec());
+      var srow = hots('pausesettings:guide')[0];
+      var g0 = M.getSettings().guide;
+      var sc = center(srow);
+      M._pauseClick(sc.x, sc.y);
+      var g1 = M.getSettings().guide;
+      M._pauseClick(sc.x, sc.y); /* 还原 */
+      var g2 = M.getSettings().guide;
+      M._pauseBack();
+      R.drawPause(M._pauseSpec());
+      var rrow = hots('pause:row:resume')[0];
+      var rc = center(rrow);
+      M._pauseClick(rc.x, rc.y);
+      var closed = M.isPaused() === false;
+      rec('B2_pauseClick', p1 === 'settings' && g1 === !g0 && g2 === g0 && closed,
+        { page: p1, guide: [g0, g1, g2], closed: closed });
+    })();
+
+    /* ══ C. 探索点击：相邻格走一步 / 楼梯走确认框 / 墙无位移 ═══ */
+    (function () {
+      Modal.close(); M.closePause(); M.switchScene('explore');
+      var grid = Map.getGrid();
+      var probes = { moved: false, stairModal: false, wallStay: false, wallPending: null, detail: {} };
+
+      function cleanFloor(x, y) {
+        /* 只要有地板就行：装饰/陷阱会在移动时拾取或扣血，但都不影响"走一格/触发楼梯确认"的断言；
+         * 排除怪物与精英，避免点击变成战斗把场景切走。 */
+        return grid[y][x] === 1 && !Map.enemyAt(x, y) &&
+          (typeof Map.eliteAt !== 'function' || !Map.eliteAt(x, y));
+      }
+      var DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+      /* 先找一处"地板 + 相邻下行梯"，把玩家直接放到那块地板 */
+      var stair = null, stand = null;
+      for (var y = 1; y < grid.length - 1 && !stair; y++) {
+        for (var x = 1; x < grid[0].length - 1; x++) {
+          if (grid[y][x] !== 2) continue;
+          for (var d = 0; d < DIRS.length; d++) {
+            var ax = x + DIRS[d][0], ay = y + DIRS[d][1];
+            /* 站到楼梯旁边的任意可走格即可（包括有装饰/陷阱的格子）；不能再是另一条楼梯 */
+            if (grid[ay][ax] !== 0 && grid[ay][ax] !== 2) { stair = { x: x, y: y }; stand = { x: ax, y: ay }; break; }
+          }
+          if (stair) break;
+        }
+      }
+      if (stair) {
+        P.x = stand.x; P.y = stand.y;
+        R.drawMap(Map.getGrid(), P);
+        var cam = R._cam();
+        var sx = stair.x * 24 - cam.x + 12, sy = stair.y * 24 - cam.y + 12;
+        M._exploreClick(sx, sy);
+        var pend = M._pendingClickDir();
+        M._updateExplore(1e5);
+        probes.stairModal = (Modal.isOpen() && Modal.current() === 'stairconfirm') && !!pend;
+        probes.detail.stair = { stair: stair, stand: stand, pending: pend };
+        Modal.close();
+      }
+
+      /* 相邻净地板：点一下必须正好走一格（若楼梯旁没有，就换一块干净地板再测） */
+      var stepFrom = { x: P.x, y: P.y }, target = null;
+      for (var dd = 0; dd < DIRS.length; dd++) {
+        var tx = P.x + DIRS[dd][0], ty = P.y + DIRS[dd][1];
+        if (cleanFloor(tx, ty)) { target = { x: tx, y: ty }; break; }
+      }
+      if (!target) {
+        for (var sy2 = 1; sy2 < grid.length - 1 && !target; sy2++) {
+          for (var sx2 = 1; sx2 < grid[0].length - 1; sx2++) {
+            if (!cleanFloor(sx2, sy2)) continue;
+            for (var d2 = 0; d2 < DIRS.length; d2++) {
+              var nx2 = sx2 + DIRS[d2][0], ny2 = sy2 + DIRS[d2][1];
+              if (cleanFloor(nx2, ny2)) {
+                P.x = sx2; P.y = sy2;
+                stepFrom = { x: sx2, y: sy2 };
+                target = { x: nx2, y: ny2 };
+                break;
+              }
+            }
+            if (target) break;
+          }
+        }
+      }
+      if (target) {
+        R.drawMap(Map.getGrid(), P);
+        var cam2 = R._cam();
+        M._exploreClick(target.x * 24 - cam2.x + 12, target.y * 24 - cam2.y + 12);
+        M._updateExplore(1e5 + 1);
+        probes.moved = (P.x === target.x && P.y === target.y);
+        probes.detail.move = { from: stepFrom, target: target, now: { x: P.x, y: P.y } };
+      }
+
+      /* 墙：点击后不得留下待执行方向，位置也不变（没有贴墙就换一处贴墙地板） */
+      var wall = null;
+      for (var wd = 0; wd < DIRS.length; wd++) {
+        var wx = P.x + DIRS[wd][0], wy = P.y + DIRS[wd][1];
+        if (wx >= 0 && wy >= 0 && wx < grid[0].length && wy < grid.length && grid[wy][wx] === 0) {
+          wall = { x: wx, y: wy }; break;
+        }
+      }
+      if (!wall) {
+        for (var wy2 = 1; wy2 < grid.length - 1 && !wall; wy2++) {
+          for (var wx2 = 1; wx2 < grid[0].length - 1; wx2++) {
+            if (!cleanFloor(wx2, wy2)) continue;
+            for (var d3 = 0; d3 < DIRS.length; d3++) {
+              var bx = wx2 + DIRS[d3][0], by = wy2 + DIRS[d3][1];
+              if (grid[by][bx] === 0) {
+                P.x = wx2; P.y = wy2;
+                wall = { x: bx, y: by };
+                break;
+              }
+            }
+            if (wall) break;
+          }
+        }
+      }
+      if (wall) {
+        R.drawMap(Map.getGrid(), P);
+        var cam3 = R._cam(), before = { x: P.x, y: P.y };
+        M._exploreClick(wall.x * 24 - cam3.x + 12, wall.y * 24 - cam3.y + 12);
+        probes.wallPending = M._pendingClickDir();
+        M._updateExplore(1e5 + 2);
+        probes.wallStay = (P.x === before.x && P.y === before.y);
+        probes.detail.wall = { wall: wall, before: before, after: { x: P.x, y: P.y }, pending: probes.wallPending };
+      }
+      rec('C_exploreClick', probes.stairModal && probes.moved && probes.wallStay && probes.wallPending === null,
+        probes.detail);
+    })();
+
+    /* ══ D. 战斗七格：两种布局都在视口内；点击 == 键盘 1–7 ═════ */
+    (function () {
+      Modal.close();
+      /* 前置隔离：C 段在随机地图上走格可能踩到带「流血」的陷阱（S-04），状态会跨段残留，
+       * 并在本段两次 B.start 之间继续按回合 tick，使「键盘 == 点击」的对照被状态回合数污染
+       * （实测同一页面约 1/5 概率 key 为「剩 1 回合」、click 为「流血消退」而判负）。
+       * 这里先清空玩家状态，让 D 段只比较输入通道本身；状态结算由 S-04 的既有断言覆盖。 */
+      if (Game.Systems.Status && typeof Game.Systems.Status.clearAll === 'function') {
+        Game.Systems.Status.clearAll();
+      }
+      var save = { hp: P.hp, mp: P.mp };
+      B._setClock(function () { return 1000; });
+
+      function snap() {
+        var s = B.getState();
+        return JSON.stringify({
+          mhp: s.monster ? s.monster.hp : null, php: P.hp, mp: P.mp,
+          round: s.roundNo, phase: s.phase, log: s.log.slice(-2), last: s.lastAction
+        });
+      }
+      var bars = [], bad = [];
+      var layouts = [['vertical', 320, 568], ['vertical', 390, 664], ['horizontal', 960, 540], ['horizontal', 1024, 640]];
+      for (var i = 0; i < layouts.length; i++) {
+        var lay = layouts[i][0], w = layouts[i][1], h = layouts[i][2];
+        R._setBattleLayout(lay);
+        setSize(w, h);
+        B.start('slime');
+        var bar = R._battleBarInfo(B.getState());
+        bars.push({ layout: lay, w: w, cells: bar.cells.length });
+        if (bar.cells.length !== 7) bad.push(lay + w + ':cells=' + bar.cells.length);
+        for (var c = 0; c < bar.cells.length; c++) {
+          if (!inView(bar.cells[c], w, h)) bad.push(lay + w + ':out:' + bar.cells[c].key);
+        }
+      }
+
+      /* 同一入口：键盘（_battleCommand）与点击（_battleClick）状态必须完全一致 */
+      R._setBattleLayout('vertical'); setSize(640, 360);
+      B.start('slime');
+      M._battleCommand('attack');
+      var viaKey = snap();
+      B.start('slime');
+      var bar2 = R._battleBarInfo(B.getState());
+      var atk = null;
+      for (var k = 0; k < bar2.cells.length; k++) if (bar2.cells[k].cmd === 'attack') atk = bar2.cells[k];
+      M._battleClick(atk.x + atk.w / 2, atk.y + atk.h / 2);
+      var viaClick = snap();
+
+      /* MP 耗尽：可点但不生效，提示/状态与键盘完全一致 */
+      B.start('slime'); P.mp = 0;
+      M._battleCommand('skill:fireball');
+      var noMpKey = snap();
+      B.start('slime'); P.mp = 0;
+      var bar3 = R._battleBarInfo(B.getState());
+      var fb = null;
+      for (var f = 0; f < bar3.cells.length; f++) if (bar3.cells[f].cmd === 'skill:fireball') fb = bar3.cells[f];
+      M._battleClick(fb.x + fb.w / 2, fb.y + fb.h / 2);
+      var noMpClick = snap();
+
+      /* hover：只改 cursor，不改游戏状态 */
+      R._setHover('battle:4');
+      var cur1 = document.getElementById('game').style.cursor;
+      R._setHover(null);
+      var cur2 = document.getElementById('game').style.cursor;
+
+      P.hp = save.hp; P.mp = save.mp;
+      B.abort(); M.switchScene('explore'); R._setBattleLayout('vertical');
+      rec('D_battleClick', bad.length === 0 && viaKey === viaClick && noMpKey === noMpClick &&
+        cur1 === 'pointer' && cur2 === 'default',
+        { bars: bars, bad: bad, sameState: viaKey === viaClick, noMpSame: noMpKey === noMpClick,
+          cursor: [cur1, cur2], key: viaKey, click: viaClick, noMpKey: noMpKey, noMpClick: noMpClick });
+    })();
+
+  } catch (e) {
+    rec('EXCEPTION', false, { msg: e && e.message ? e.message : String(e), stack: e && e.stack ? String(e.stack).slice(0, 400) : '' });
+  }
+
+  var verdict = out.ok ? 'PASS' : 'FAIL';
+  document.title = verdict + ' ' + JSON.stringify(out);
+  document.getElementById('result').textContent = verdict + ' ' + JSON.stringify(out);
+})();
+</script>
+</body>
+</html>

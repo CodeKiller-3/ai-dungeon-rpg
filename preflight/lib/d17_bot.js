@@ -1695,6 +1695,19 @@
       if (Game.Modal.isOpen()) { press('Escape', MOVE_MS); rec.actions++; }
       return;
     }
+    /* D-98：下行确认框——默认焦点是「取消」，Enter 落在默认项上只会取消，下不了层。
+     * 必须先按 → 把焦点移到「进入第 N 层」，再 Enter 才真正 changeFloor（与真人同一条路径）。
+     * D-99：这两个按键是"UI 选择"，不是游戏回合——用 0ms 帧推进。
+     *   代码证据（js/core/main.js）：弹窗打开时 _updateExplore 在 1636 行直接 return，
+     *   AI.tick（1707–1710）与玩家移动都不会执行 → 怪物/AI 是冻结的；
+     *   主循环仍推进 Feedback/Fx/Notice/Motion/Particles（1960–1971）与 Battle.tick，
+     *   即"动画/特效时钟不冻结"，但那只是表现层，不含 AI、怪物移动与战斗判定。
+     *   所以确认框不该额外推进 AI 的 120ms 巡逻时钟；动作数仍按真实按键 +2。 */
+    if (Game.Modal.isOpen() && Game.Modal.current() === 'stairconfirm') {
+      kd('ArrowRight'); frame(0); ku('ArrowRight'); rec.actions++;
+      kd('Enter'); frame(0); ku('Enter'); rec.actions++;
+      return;
+    }
     /* 面板残留保护：正常流程不会走到；若真卡住，按 Esc 收场并计数（不当作玩家动作） */
     if (Game.Modal.isOpen()) { rec.modalStuck++; press('Escape', MOVE_MS); return; }
     /* ① 低血用药：B1 在 F1–F4 把阈值压到 30%（药留给最终 Boss），F5 仍是 45%；

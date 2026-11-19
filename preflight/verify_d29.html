@@ -204,6 +204,9 @@
       var before = { sel: Modal._visibleRange().sel, w: P.equipment.weapon,
         inv: JSON.stringify(P.inventory) };
       Modal._handleClick(sl.x + sl.w / 2, sl.y + sl.h / 2);
+      /* D-100：弹窗改为两段式——第一次只选中，第二次点同一行才执行；
+       * 本探针要验的是"右栏能不能被当成行执行"，所以按新契约点两次。 */
+      Modal._handleClick(sl.x + sl.w / 2, sl.y + sl.h / 2);
       var after = { sel: Modal._visibleRange().sel, w: P.equipment.weapon,
         inv: JSON.stringify(P.inventory) };
       return { applicable: true, changed: before.sel !== after.sel || before.w !== after.w ||
