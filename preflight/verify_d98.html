@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-98 逻辑三件套</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas#game { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-98 · 精英战斗帧组 / 陷阱侦测拆除 / 楼梯下行确认（A–E）</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>
+window.__D98ERR = [];
+window.addEventListener('error', function (e) {
+  window.__D98ERR.push('error: ' + (e.message || '') + ' @' + (e.filename || '') + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', function (e) {
+  window.__D98ERR.push('reject: ' + String((e.reason && e.reason.message) || e.reason));
+});
+window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  function rec(n, ok, d) { out.sub[n] = { ok: !!ok, d: d }; }
+  var D = Game.Data, M = Game.Core.Main, R = Game.Core.Render;
+  var B = Game.Systems.Battle, Map = Game.Systems.Map, Modal = Game.Modal;
+  var cv = document.getElementById('game'), c = cv.getContext('2d');
+  var ELITES = ['elite_goblin', 'elite_orc', 'elite_ogre', 'elite_zombie', 'elite_angel'];
+
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gen(seed, floor) {
+    var saved = Math.random;
+    Math.random = mulberry32(seed);
+    Map.setFloor(floor);
+    Math.random = saved;
+    return { grid: Map.getGrid(), spawn: Map.getSpawn(), floor: floor };
+  }
+  function eachCell(grid, fn) {
+    for (var y = 0; y < grid.length; y++) for (var x = 0; x < grid[y].length; x++) fn(x, y, grid[y][x]);
+  }
+  /* 独立复算"移掉该格后 spawn 是否还能到下行楼梯"（不复用 map.js 的 isCutCell） */
+  function connectedWithout(grid, spawn, down, bx, by) {
+    var H = grid.length, W = grid[0].length;
+    var seen = {}, q = [[spawn.x, spawn.y]], qi = 0;
+    seen[spawn.x + ',' + spawn.y] = 1;
+    var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    while (qi < q.length) {
+      var cx = q[qi][0], cy = q[qi][1]; qi++;
+      if (cx === down.x && cy === down.y) return true;
+      for (var i = 0; i < 4; i++) {
+        var nx = cx + dirs[i][0], ny = cy + dirs[i][1];
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        if (nx === bx && ny === by) continue;
+        if (grid[ny][nx] === 0) continue;
+        var k = nx + ',' + ny;
+        if (seen[k]) continue;
+        seen[k] = 1; q.push([nx, ny]);
+      }
+    }
+    return false;
+  }
+  function passableNeighbors(grid, x, y) {
+    var n = 0;
+    if (grid[y - 1] && grid[y - 1][x] !== 0) n++;
+    if (grid[y + 1] && grid[y + 1][x] !== 0) n++;
+    if (grid[y][x - 1] !== 0) n++;
+    if (grid[y][x + 1] !== 0) n++;
+    return n;
+  }
+  function findTile(grid, t) {
+    for (var y = 0; y < grid.length; y++) for (var x = 0; x < grid[y].length; x++) if (grid[y][x] === t) return { x: x, y: y };
+    return null;
+  }
+  function hashCanvas(step) {
+    var d = c.getImageData(0, 0, cv.width, cv.height).data;
+    var h = 2166136261;
+    for (var i = 0; i < d.length; i += 4 * (step || 3)) {
+      h ^= d[i] + (d[i + 1] << 8) + (d[i + 2] << 16);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h;
+  }
+  function kd(code) { window.dispatchEvent(new KeyboardEvent('keydown', { code: code, bubbles: true, cancelable: true })); }
+  function ku(code) { window.dispatchEvent(new KeyboardEvent('keyup', { code: code, bubbles: true, cancelable: true })); }
+
+  try {
+    /* 地图生成依赖 Main.init 注入的 cfg（楼层数等），先起一局再逐种子重生成 */
+    M.init({ menu: false });
+
+    /* ══ A：精英战斗贴图串台 —— 五只 elite_* 必须查回基怪帧组 ═════════ */
+    var aRows = [], aBad = [];
+    for (var ai = 0; ai < ELITES.length; ai++) {
+      var id = ELITES[ai], def = D.MONSTERS[id];
+      var sp = def && def.sprite;
+      var anim = sp ? R.MONSTER_ANIM[sp] : null;
+      var st = B.start(id);
+      var used = st && st.monster ? st.monster.sprite : null;
+      var row = { id: id, sprite: sp, battleSprite: used, animIdle: anim ? anim.idle : null };
+      aRows.push(row);
+      if (!sp || !anim || !anim.idle || used !== sp) aBad.push(id);
+    }
+    rec('A1_elite_def', aBad.length === 0, {
+      rule: '五只 elite_* 的 MONSTERS[id].sprite 指向基怪帧组，Battle.start 后 state.monster.sprite 与之一致，且 MONSTER_ANIM 有该帧组',
+      rows: aRows, bad: aBad
+    });
+
+    /* 实跑精英层：任取种子，eliteAt 逐只比"战斗帧组 vs 地图 el.sprite 解析出的帧组" */
+    var GAME_ELITE = Game.Data.ELITE;
+    var oldEnabled = GAME_ELITE ? GAME_ELITE.enabled : true;
+    if (GAME_ELITE) GAME_ELITE.enabled = true;
+    var eBad = [], eRows = [], eCount = 0;
+    var eSeeds = [11, 29, 47, 83];
+    for (var si = 0; si < eSeeds.length; si++) {
+      for (var fl = 1; fl <= 5; fl++) {
+        gen(eSeeds[si], fl);
+        var els = Map.getElites() || [];
+        for (var ei = 0; ei < els.length; ei++) {
+          var el = Map.eliteAt(els[ei].x, els[ei].y);
+          if (!el) { eBad.push('eliteAt 空@' + eSeeds[si] + ':F' + fl); continue; }
+          eCount++;
+          var mapAnim = R.MONSTER_ANIM[el.sprite];
+          var bState = B.start(el.id);
+          var bUse = bState && bState.monster ? bState.monster.sprite : null;
+          var okOne = !!mapAnim && !!mapAnim.idle && bUse === el.sprite && bUse !== 'monster_chort';
+          if (!okOne) eBad.push(el.id + '@' + eSeeds[si] + ':F' + fl + ' map=' + el.sprite + ' battle=' + bUse);
+          if (eRows.length < 6) eRows.push({ id: el.id, map: el.sprite, battle: bUse, frame: mapAnim ? mapAnim.idle : null });
+        }
+      }
+    }
+    if (GAME_ELITE) GAME_ELITE.enabled = oldEnabled;
+    rec('A2_elite_generated', eCount > 0 && eBad.length === 0, {
+      rule: '实跑 4 种子 × F1–F5，eliteAt 每只：战斗用的帧组 == 地图 el.sprite 解析出的帧组，且不是 chort 兜底',
+      elites: eCount, sample: eRows, bad: eBad.slice(0, 8)
+    });
+
+    /* ══ B：陷阱不落在割点 / 单格走廊 ═════════ */
+    var tBadCut = [], tBadCorr = [], tTotal = 0, bSeeds = [5, 17, 31, 64];
+    for (var bs = 0; bs < bSeeds.length; bs++) {
+      for (var bf = 1; bf <= 5; bf++) {
+        var g = gen(bSeeds[bs], bf).grid;
+        var spawn = Map.getSpawn(), down = findTile(g, 2);
+        eachCell(g, function (x, y) {
+          var tr = Map.getTrap(x, y);
+          if (!tr) return;
+          tTotal++;
+          if (down && !connectedWithout(g, spawn, down, x, y)) {
+            tBadCut.push(bSeeds[bs] + ':F' + bf + '@' + x + ',' + y);
+          }
+          if (passableNeighbors(g, x, y) <= 2) tBadCorr.push(bSeeds[bs] + ':F' + bf + '@' + x + ',' + y);
+        });
+      }
+    }
+    rec('B1_trap_cut', tTotal > 0 && tBadCut.length === 0, {
+      rule: '同种子 4 组 × F1–F5：任何陷阱格都不是"移掉后 spawn→下行楼梯"断开的割点',
+      traps: tTotal, bad: tBadCut.slice(0, 8)
+    });
+    rec('B2_trap_corridor', tTotal > 0 && tBadCorr.length === 0, {
+      rule: '同批陷阱的通行邻居全部 >2（不落在单格走廊/死胡同）',
+      traps: tTotal, bad: tBadCorr.slice(0, 8)
+    });
+
+    /* ══ C：侦测 / 不可见 / 拆除 ═════════ */
+    R._animNow = function () { return 1234; };
+    R.resize();
+    R._staticBypass = true;
+    var gC = gen(23, 1).grid;
+    var trapC = null;
+    eachCell(gC, function (x, y) {
+      if (trapC) return;
+      if (!Map.getTrap(x, y)) return;
+      var opts = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      for (var i = 0; i < opts.length; i++) {
+        var px = x + opts[i][0], py = y + opts[i][1];
+        if (gC[py] && gC[py][px] !== 0) { trapC = { x: x, y: y, px: px, py: py }; break; }
+      }
+    });
+    var P = D.Player;
+    P.x = trapC.px; P.y = trapC.py; P.floor = 1;
+    Game.fov.update(P.x, P.y, 7, function (x, y) { return Map.tileAt(x, y) === 0; });
+    var trC = Map.getTrap(trapC.x, trapC.y);
+    trC.seen = false;
+    R.drawMap(gC, P);
+    var hUnseen = hashCanvas(3);
+    trC.seen = true;
+    R.drawMap(gC, P);
+    var hSeen = hashCanvas(3);
+    trC.seen = false;
+    R.drawMap(gC, P);
+    var hBack = hashCanvas(3);
+
+    rec('C1_unseen_invisible', hUnseen === hBack, {
+      rule: 'seen=false→true→false 三次重绘：未侦测帧与"侦测后再置回未侦测"逐像素一致，即未侦测时该格不画任何东西',
+      unseen: hUnseen, seen: hSeen, back: hBack
+    });
+    rec('C2_detect_renders', hSeen !== hUnseen, {
+      rule: 'seen=true 后同参数重绘，画面必须发生变化（陷阱显现在该格）',
+      unseen: hUnseen, seen: hSeen
+    });
+
+    /* 侦测：视野内标记，视野外保持不可见 */
+    var gD = gen(41, 2).grid;
+    var pick = null;
+    eachCell(gD, function (x, y) {
+      if (pick || !Map.getTrap(x, y)) return;
+      var opts = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      for (var i = 0; i < opts.length; i++) {
+        var px = x + opts[i][0], py = y + opts[i][1];
+        if (gD[py] && gD[py][px] !== 0) { pick = { x: x, y: y, px: px, py: py }; break; }
+      }
+    });
+    P.floor = 2; P.x = pick.px; P.y = pick.py;
+    Game.fov.update(P.x, P.y, 7, function (x, y) { return Map.tileAt(x, y) === 0; });
+    var visTrap = pick, farTrap = null;
+    eachCell(gD, function (x, y) {
+      if (farTrap) return;
+      if (!Map.getTrap(x, y)) return;
+      if (x === visTrap.x && y === visTrap.y) return;
+      if (!Game.fov.isVisible(x, y)) farTrap = { x: x, y: y };
+    });
+    var detN = Map.detectTraps();
+    var detOk = Map.getTrap(visTrap.x, visTrap.y).seen === true;
+    if (farTrap) detOk = detOk && Map.getTrap(farTrap.x, farTrap.y).seen === false;
+    rec('C3_detect_scope', detOk && detN > 0, {
+      rule: '侦测键只把视野内陷阱置 seen=true；视野外的陷阱仍不可见',
+      found: detN, inView: visTrap, farTrap: farTrap
+    });
+
+    /* 拆除：只看已显现；拆掉后该格恢复普通地面、踩上去不再触发 */
+    var gE = gen(53, 1).grid;
+    var tE = null;
+    eachCell(gE, function (x, y) {
+      if (tE) return;
+      if (!Map.getTrap(x, y)) return;
+      var opts = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      for (var i = 0; i < opts.length; i++) {
+        var px = x + opts[i][0], py = y + opts[i][1];
+        if (gE[py] && gE[py][px] !== 0) { tE = { x: x, y: y, px: px, py: py }; break; }
+      }
+    });
+    var hp0 = P.hp;
+    var notSeenDis = Map.disarmTrap(tE.px, tE.py);
+    Map.getTrap(tE.x, tE.y).seen = true;
+    var dis = Map.disarmTrap(tE.px, tE.py);
+    var afterTrigger = Map.triggerTrap(tE.x, tE.y);
+    var gone = Map.getTrap(tE.x, tE.y) === null;
+    rec('C4_disarm', notSeenDis === null && !!dis && gone && afterTrigger === null && P.hp === hp0, {
+      rule: '未显现不可拆；已显现的陷阱在相邻格可拆，拆除后该格为普通地面、再踩不触发、不掉血',
+      hiddenDisarm: notSeenDis, disarmed: dis, gone: gone, reTrigger: afterTrigger, hpSame: P.hp === hp0
+    });
+
+    /* ══ E：楼梯确认（下行弹窗默认取消 / 确认才切层 / 上行即时）═════════ */
+    M.init({ menu: false });
+    M._scene = 'explore';
+    M._guideVisible = false;
+    var T = 20000;
+    var g1 = Map.getGrid(), down1 = findTile(g1, 2);
+    var startFloor = D.Player.floor;
+    var placed = false;
+    var dirsTry = [[0, 1, 'ArrowUp'], [0, -1, 'ArrowDown'], [1, 0, 'ArrowLeft'], [-1, 0, 'ArrowRight']];
+    for (var di = 0; di < dirsTry.length && !placed; di++) {
+      var ox = down1.x + dirsTry[di][0], oy = down1.y + dirsTry[di][1];
+      if (g1[oy] && g1[oy][ox] !== 0) {
+        D.Player.x = ox; D.Player.y = oy;
+        kd(dirsTry[di][2]); M._updateExplore(T); ku(dirsTry[di][2]);
+        T += 200;
+        placed = true;
+      }
+    }
+    var opened = Modal.isOpen() && Modal.current() === 'stairconfirm';
+    var st1 = Modal._debugState ? Modal._debugState() : {};
+    var floorHeld = D.Player.floor === startFloor && Map.getFloor() === startFloor;
+    var defaultCancel = st1.sel === 0 && st1.total === 2;
+    kd('Enter'); ku('Enter');
+    var cancelled = !Modal.isOpen() && D.Player.floor === startFloor;
+    rec('E1_down_confirm', placed && opened && floorHeld && defaultCancel && cancelled, {
+      rule: '踩下行梯只弹确认框（默认焦点「取消」），Enter 在默认焦点上取消、不切层',
+      placed: placed, opened: opened, floorHeld: floorHeld, sel: st1.sel, total: st1.total, cancelled: cancelled
+    });
+
+    Modal.open('stairconfirm', {
+      floor: D.Player.floor + 1,
+      onConfirm: function () { Game.Core.Main._descendFloor(); }
+    });
+    kd('ArrowRight'); ku('ArrowRight');
+    kd('Enter'); ku('Enter');
+    var descended = D.Player.floor === startFloor + 1 && Map.getFloor() === startFloor + 1 && !Modal.isOpen();
+    rec('E2_confirm_descends', descended, {
+      rule: '焦点移到「进入第 N 层」后 Enter 才真正 changeFloor，层号 +1',
+      floor: D.Player.floor, mapFloor: Map.getFloor(), open: Modal.isOpen()
+    });
+
+    /* 上行：即时切层，不弹窗 */
+    var g2 = Map.getGrid(), up2 = findTile(g2, 3);
+    var upOk = false;
+    if (up2) {
+      for (var ui = 0; ui < dirsTry.length; ui++) {
+        var ux = up2.x + dirsTry[ui][0], uy = up2.y + dirsTry[ui][1];
+        if (g2[uy] && g2[uy][ux] !== 0) {
+          var fBefore = D.Player.floor;
+          D.Player.x = ux; D.Player.y = uy;
+          kd(dirsTry[ui][2]); M._updateExplore(T); ku(dirsTry[ui][2]);
+          T += 200;
+          upOk = !Modal.isOpen() && D.Player.floor === fBefore - 1;
+          break;
+        }
+      }
+    }
+    rec('E3_up_immediate', upOk, {
+      rule: '踩上行梯不弹确认框，直接切回上一层',
+      floor: D.Player.floor, open: Modal.isOpen(), up: up2
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; }) && window.__D98ERR.length === 0;
+    out.errors = window.__D98ERR.slice(0, 5);
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.getElementById('result').textContent = txt;
+    document.title = txt;
+  } catch (e) {
+    var bad = 'FAIL ' + JSON.stringify({ ok: false, error: String((e && e.stack) || e), errors: window.__D98ERR });
+    document.getElementById('result').textContent = bad;
+    document.title = bad;
+  }
+})();
+</script>
+</body>
+</html>

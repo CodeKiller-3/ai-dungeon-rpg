@@ -307,6 +307,25 @@
         ku('Enter');
         if (!closedG) { M.closeGuide(); eBad.push('Enter'); }
         eDetail.push('Enter=' + (closedG ? '确认关闭' : '未关闭'));
+      } else if (er.act === 'trap') {
+        /* D-98：F = 侦测 / 拆除陷阱。本页不起地图，给三个桩：脚下无陷阱 → 拆除返回 null，
+         * 必然走侦测分支（detectTraps 被调用一次）；tileAt/fov.update 供收尾的 refreshFov 走通。 */
+        var odis = Game.Systems.Map.disarmTrap, odet = Game.Systems.Map.detectTraps,
+            otile = Game.Systems.Map.tileAt, ofov = Game.fov && Game.fov.update,
+            ostt = Game.Systems.Status && Game.Systems.Status.tick;
+        var detected = 0;
+        Game.Systems.Map.disarmTrap = function () { return null; };
+        Game.Systems.Map.detectTraps = function () { detected++; return 0; };
+        Game.Systems.Map.tileAt = function () { return 1; };
+        if (Game.fov) Game.fov.update = function () { return 0; };
+        if (Game.Systems.Status) Game.Systems.Status.tick = function () { return []; };
+        playExplore(er.codes[0], er.act);
+        Game.Systems.Map.disarmTrap = odis; Game.Systems.Map.detectTraps = odet;
+        Game.Systems.Map.tileAt = otile;
+        if (Game.fov && ofov) Game.fov.update = ofov;
+        if (Game.Systems.Status && ostt) Game.Systems.Status.tick = ostt;
+        if (detected !== 1) eBad.push('F');
+        eDetail.push('F=' + (detected === 1 ? '侦测' : '无'));
       } else {
         var want = eExpect[er.act];
         var h = playExplore(er.codes[0], er.act);

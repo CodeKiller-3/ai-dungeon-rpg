@@ -287,6 +287,1192 @@
       sub.t9_fallback = fbOk;
       ok = ok && fbOk;
 
+      /* ══ D-112：地图上 18 组怪物落屏尺寸 ═══════════════════════════
+       * 走真实绘制路径：桩掉 MP.getEnemies 放一只怪 → R.drawMap → 从被包装的
+       * ctx.drawImage 里取该帧实际落屏宽高（不是另算一遍公式）。
+       * 判据：落屏 = 原生 × 整数倍；宽度必须整格（不得落在 1.5 地块 = 36px）；本卡口径统一 1×。 */
+      var D112 = [
+        { id: 'slime', pre: 'slime_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'bat', pre: 'bat_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'skeleton', pre: 'skelet_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'goblin', pre: 'goblin_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'tiny_zombie', pre: 'tiny_zombie_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'imp', pre: 'imp_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'angel', pre: 'angel_idle_anim_f', nw: 24, nh: 24 },
+        { id: 'orc_warrior', pre: 'orc_warrior_idle_anim_f', nw: 24, nh: 35 },
+        { id: 'orc_shaman', pre: 'orc_shaman_idle_anim_f', nw: 24, nh: 35 },
+        { id: 'wogol', pre: 'wogol_idle_anim_f', nw: 24, nh: 35 },
+        { id: 'necromancer', pre: 'necromancer_anim_f', nw: 24, nh: 35 },
+        { id: 'masked_orc', pre: 'masked_orc_idle_anim_f', nw: 24, nh: 35 },
+        { id: 'pumpkin_dude', pre: 'pumpkin_dude_idle_anim_f', nw: 24, nh: 35 },
+        { id: 'ogre', pre: 'ogre_idle_anim_f', nw: 48, nh: 54 },
+        { id: 'big_zombie', pre: 'big_zombie_idle_anim_f', nw: 48, nh: 54 },
+        { id: 'ogre_boss', pre: 'ogre_boss_idle_anim_f', nw: 48, nh: 54 },
+        { id: 'zombie_king', pre: 'zombie_king_idle_anim_f', nw: 48, nh: 54 },
+        { id: 'dragon', pre: 'dragon_idle_anim_f', nw: 72, nh: 72 }
+      ];
+      var gridD = makeFloorGrid(10, 8);
+      function drawOne(id, pre) {
+        MP.getEnemies = function () { return [{ x: 3, y: 3, monsterId: id }]; };
+        Game.Systems.AI = { getPatrols: function () { return []; } };
+        imgs = [];
+        R.drawMap(gridD, { x: 1, y: 1, floor: 1 });
+        for (var ii = 0; ii < imgs.length; ii++) {
+          if (imgs[ii].n.indexOf(pre) === 0) return imgs[ii];
+        }
+        return null;
+      }
+      var d112Rows = [], d112Bad = [], map1xBad = [];
+      for (var dgi = 0; dgi < D112.length; dgi++) {
+        var dg = D112[dgi];
+        var db = drawOne(dg.id, dg.pre);
+        var intMul = !!db && db.w % dg.nw === 0 && db.h % dg.nh === 0 &&
+          (db.w / dg.nw) === (db.h / dg.nh) && db.w >= dg.nw;
+        var tidy = !!db && db.w % 24 === 0;
+        var notHalf = !!db && db.w !== 36;
+        var oneX = !!db && db.w === dg.nw && db.h === dg.nh;
+        var mul = db ? db.w / dg.nw : 0;
+        d112Rows.push({ id: dg.id, nat: dg.nw + 'x' + dg.nh, map: db ? (db.w + 'x' + db.h) : null,
+          mul: mul, tiles: db ? +(db.w / 24).toFixed(2) : null, battle: (dg.nw * 2) + 'x' + (dg.nh * 2) });
+        if (!intMul) d112Bad.push(dg.id + ':map=' + (db ? db.w + 'x' + db.h : 'null'));
+        if (!tidy || !notHalf) d112Bad.push(dg.id + ':width=' + (db ? db.w : 'null'));
+        if (!oneX) map1xBad.push(dg.id + '=' + mul + 'x');
+      }
+      sub.d112_groups18 = { ok: D112.length === 18 && d112Rows.length === 18, d: { groups: d112Rows.length } };
+      sub.d112_mapIntMul = { ok: d112Bad.length === 0, d: { bad: d112Bad.slice(0, 8),
+        rule: '18 组：地图落屏宽高 = 原生 × 同一整数倍，且宽度为整格（24 的整数倍，不得为 36）' } };
+      sub.d112_map1x = { ok: map1xBad.length === 0, d: { bad: map1xBad.slice(0, 8),
+        rule: '本卡口径：地图 1×（原生 1:1）、战斗 2×；与其余 16 组一致' } };
+      ok = ok && sub.d112_groups18.ok && sub.d112_mapIntMul.ok && sub.d112_map1x.ok;
+
+      /* 负例：把 slime/bat 还原成 16 基（即旧白名单），仍走真实 drawMap → 必须判负 */
+      function setBase(pre, base) {
+        for (var fi2 = 0; fi2 < 4; fi2++) {
+          var im2 = S.get(pre + fi2);
+          if (im2) im2.__base = base;
+        }
+      }
+      var negRows = [], negOk = true;
+      [['slime', 'slime_idle_anim_f', 24], ['bat', 'bat_idle_anim_f', 24]].forEach(function (ng) {
+        setBase(ng[1], 16);
+        var ob = drawOne(ng[0], ng[1]);
+        var oldRule = !!ob && ob.w % ng[2] === 0 && ob.w !== 36 && ob.w === ng[2];
+        var oldMul = ob ? ob.w / ng[2] : 0;
+        negRows.push({ id: ng[0], old: ob ? (ob.w + 'x' + ob.h) : null, mul: oldMul, mustFail: oldRule === false });
+        if (oldRule !== false) negOk = false;
+        setBase(ng[1], ng[2]);
+        var rb = drawOne(ng[0], ng[1]);
+        var newRule = !!rb && rb.w % ng[2] === 0 && rb.w !== 36 && rb.w === ng[2];
+        negRows[negRows.length - 1].restored = rb ? (rb.w + 'x' + rb.h) : null;
+        negRows[negRows.length - 1].restoredPass = newRule;
+        if (!newRule) negOk = false;
+      });
+      sub.d112_neg36 = { ok: negOk, d: { rows: negRows,
+        rule: '把 __base 改回 16（旧白名单）走真实 drawMap：36×36 必须判负；恢复 24 后必须判正' } };
+      ok = ok && negOk;
+      MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+      Game.Systems.AI = origAI;
+      sub.d112Rows = d112Rows;
+
+      /* ══ D-113：探索层地板 / 墙可走性（双口径） ═════════════════════
+       * 场景：真实地图，固定种子 20261118 + f×7919，走真实 drawMap，像素直接从画布读。
+       * L：WCAG sRGB 线性化亮度，取**交界 3px 带**面积均值（地板侧 / 墙侧）。
+       * 门槛① L地板 / L墙 ≥ 2.0（线性亮度直接相除，不加 +0.05）
+       * 门槛② 交界 3px 带的 sRGB 差 ≥ 0.055（地板侧 - 墙侧，逐层）
+       * 门槛③ 可分性：交界带面积口径下 sep ≥0.90 且 dP50 ≥0.055
+       * 诊断：WCAG CR=(Lmax+0.05)/(Lmin+0.05) 只报不判
+       * 其余：地板抬升 ≤15%、墙必须低于地板、色相变化 ≤0.5°；
+       *      FOV 黑场不许漏暗边、invalidateStatic 后缓存必须重建。 */
+      var d113Grids = {};
+      function d113GridFor(f) {
+        if (d113Grids[f]) return d113Grids[f];
+        /* 真实地图：固定种子生成（同清单 §1.1 的固定种子口径），只读 grid，不写任何地图数据 */
+        var MR = Game.Systems.Map;
+        var origRandom = Math.random;
+        var seed = 20261118 + f * 7919;
+        Math.random = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+        var keepAI = Game.Systems.AI;
+        Game.Systems.AI = { initPatrols: function () {}, getPatrols: function () { return []; } };
+        try { MR.setFloor(f); } finally { Math.random = origRandom; Game.Systems.AI = keepAI; }
+        d113Grids[f] = MR.getGrid();
+        return d113Grids[f];
+      }
+      var D113_NEW = R._wallStyle();
+      var D113_OLD = { top: 0.40, body: 0.45, edge: 0, edgePx: 3, guard: 0 };
+      var D113_WALLONLY = { top: D113_NEW.top, body: D113_NEW.body, edge: 0, edgePx: 3, guard: 4 };
+      var d113Ok = true;
+      function ck113(id, ok, detail) {
+        sub[id] = { ok: !!ok, d: detail === undefined ? '' : detail };
+        if (!ok) d113Ok = false;
+      }
+      function lin(c) {
+        c = c / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      }
+      function d113Scene(f, style) {
+        R._wallStyle(style);
+        MP.getEnemies = function () { return []; };
+        MP.getElites = function () { return []; };
+        MP.getDetail = function () { return null; };
+        MP.getDecor = function () { return null; };
+        Game.Systems.AI = { getPatrols: function () { return []; } };
+        R._staticBypass = true;
+        var gridD = d113GridFor(f);
+        var cw = gridD[0].length, ch = gridD.length;
+        R.drawMap(gridD, { x: Math.floor(cw / 2), y: Math.floor(ch / 2), floor: f });
+        var cam = R._cam();
+        var k = R.dpr * R.scale;
+        var data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var W = cv.width, H = cv.height;
+        function pxAt(cx, cy) {
+          var X = Math.round((cx * 24 - cam.x + 12) * k);
+          var Y = Math.round((cy * 24 - cam.y + 12) * k);
+          if (X < 0 || Y < 0 || X >= W || Y >= H) return null;
+          var i = (Y * W + X) * 4;
+          return { r: data[i], g: data[i + 1], b: data[i + 2] };
+        }
+        function wcag(p) { return 0.2126 * lin(p.r) + 0.7152 * lin(p.g) + 0.0722 * lin(p.b); }
+        function srgb(p) { return (0.299 * p.r + 0.587 * p.g + 0.114 * p.b) / 255; }
+        function meanRect(x0, y0, w, h, fn) {
+          var n = 0, s = 0;
+          var X0 = Math.max(0, Math.round(x0 * k)), Y0 = Math.max(0, Math.round(y0 * k));
+          var X1 = Math.min(W, Math.round((x0 + w) * k)), Y1 = Math.min(H, Math.round((y0 + h) * k));
+          for (var py = Y0; py < Y1; py++) {
+            for (var px = X0; px < X1; px++) {
+              var i = (py * W + px) * 4;
+              s += fn({ r: data[i], g: data[i + 1], b: data[i + 2] }); n++;
+            }
+          }
+          return n ? s / n : 0;
+        }
+        function cellXY(cx, cy) { return { x: cx * 24 - cam.x, y: cy * 24 - cam.y }; }
+        /* 视口内才计数：越界的带在 meanRect 里会被裁空，返回 0，会把均值与可分性稀释成假 0 */
+        function insideRect(x0, y0, w, h) {
+          var X0 = Math.round(x0 * k), Y0 = Math.round(y0 * k);
+          var X1 = Math.round((x0 + w) * k), Y1 = Math.round((y0 + h) * k);
+          return X0 >= 0 && Y0 >= 0 && X1 <= W && Y1 <= H;
+        }
+        function strip(cx, cy, dx, dy) {
+          var p = cellXY(cx, cy);
+          if (dy > 0) return meanRect(p.x + 4, p.y + 21, 16, 3, srgb);
+          if (dy < 0) return meanRect(p.x + 4, p.y, 16, 3, srgb);
+          if (dx < 0) return meanRect(p.x, p.y + 4, 3, 16, srgb);
+          return meanRect(p.x + 21, p.y + 4, 3, 16, srgb);
+        }
+        function meanLin(x0, y0, w, h) {
+          var n = 0, s = 0;
+          var X0 = Math.max(0, Math.round(x0 * k)), Y0 = Math.max(0, Math.round(y0 * k));
+          var X1 = Math.min(W, Math.round((x0 + w) * k)), Y1 = Math.min(H, Math.round((y0 + h) * k));
+          for (var py = Y0; py < Y1; py++) {
+            for (var px = X0; px < X1; px++) {
+              var i = (py * W + px) * 4;
+              s += 0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]);
+              n++;
+            }
+          }
+          return n ? s / n : 0;
+        }
+        var fL = 0, wL = 0, eSum = 0, eSigned = 0, eN = 0, fCell = 0, fCellN = 0;
+        var hx = 0, hy = 0, hN = 0;
+        /* 交界带可分性：同一交界上逐列配对（地板侧 3px 带 vs 墙侧 3px 带），
+         * 统计「这一列能不能分出边界」的面积占比与分位数——不是再合成一个均值。
+         * 面积口径：每条交界取 8 列采样（16px 宽、隔列取 1），area = 8 × 交界条数。 */
+        var dArr = [], dArea = 0, dGood = 0;
+        for (var y2 = 0; y2 < ch; y2++) {
+          for (var x2 = 0; x2 < cw; x2++) {
+            var p2 = pxAt(x2, y2);
+            if (!p2) continue;
+            var t2 = gridD[y2][x2];
+            if (t2 === 0) {
+              /* 只统计"玩家能看见的那一面墙"：下方是地板的墙（wall_top）；
+               * 对比度用交界的 3px 带（地板侧 / 墙侧），而不是整格平均——整格平均会被砖块纹理抹平。 */
+              if (!gridD[y2 + 1] || gridD[y2 + 1][x2] !== 1) continue;
+              var wp = cellXY(x2, y2), fp = cellXY(x2, y2 + 1);
+              if (!insideRect(fp.x + 4, fp.y, 16, 3) || !insideRect(wp.x + 4, wp.y + 21, 16, 3)) continue;
+              fL += meanLin(fp.x + 4, fp.y, 16, 3);
+              wL += meanLin(wp.x + 4, wp.y + 21, 16, 3);
+              var dvS = strip(x2, y2 + 1, 0, -1) - strip(x2, y2, 0, 1);
+              eSum += Math.max(0, dvS); eSigned += dvS; eN++;
+              for (var cc = 0; cc < 16; cc += 2) {
+                var dv = meanRect(fp.x + 4 + cc, fp.y, 1, 3, srgb) -
+                  meanRect(wp.x + 4 + cc, wp.y + 21, 1, 3, srgb);
+                dArr.push(dv); dArea++;
+                if (dv >= 0.055) dGood++;
+              }
+            } else if (t2 === 1) {
+              /* D-115：地板样本只取 t=1。楼梯（t=2/3）不是地板，且从 D-115 起带可交互标识，
+               * 混进"地板均值/色相"会把楼梯的新标识算成地板变化（口径修正，阈值未改）。 */
+              fCell += wcag(p2); fCellN++;
+              var cp = cellXY(x2, y2);
+              var X0 = Math.max(0, Math.round((cp.x + 2) * k)), Y0 = Math.max(0, Math.round((cp.y + 2) * k));
+              var X1 = Math.min(W, Math.round((cp.x + 22) * k)), Y1 = Math.min(H, Math.round((cp.y + 22) * k));
+              for (var yy2 = Y0; yy2 < Y1; yy2 += 2) {
+                for (var xx2 = X0; xx2 < X1; xx2 += 2) {
+                  var i2 = (yy2 * W + xx2) * 4;
+                  var rr = data[i2], gg = data[i2 + 1], bb = data[i2 + 2];
+                  if (Math.max(rr, gg, bb) - Math.min(rr, gg, bb) <= 12) continue;
+                  var hu = Math.atan2(Math.sqrt(3) * (gg - bb), 2 * rr - gg - bb);
+                  hx += Math.cos(hu); hy += Math.sin(hu); hN++;
+                }
+              }
+            }
+          }
+        }
+        var Lf = fL / eN, Lw = wL / eN;
+        dArr.sort(function (a3, b3) { return a3 - b3; });
+        function pct(q) {
+          if (!dArr.length) return 0;
+          return dArr[Math.min(dArr.length - 1, Math.max(0, Math.round(q * (dArr.length - 1))))];
+        }
+        return {
+          Lf: +Lf.toFixed(4), Lw: +Lw.toFixed(4),
+          LfCell: +(fCell / fCellN).toFixed(4),
+          ratio: +(Lf / Lw).toFixed(2),
+          wcag: +((Math.max(Lf, Lw) + 0.05) / (Math.min(Lf, Lw) + 0.05)).toFixed(2),
+          edge: +(eSum / eN).toFixed(4),
+          edgeSigned: +(eSigned / eN).toFixed(4),
+          /* 可分性：交界带面积口径下的「可分辨列占比」与差值分位数 */
+          junctions: eN, area: dArea,
+          sep: dArea ? +(dGood / dArea).toFixed(3) : 0,
+          dP05: +pct(0.05).toFixed(4), dP50: +pct(0.5).toFixed(4),
+          dMin: dArr.length ? +dArr[0].toFixed(4) : 0,
+          hue: hN ? +(Math.atan2(hy / hN, hx / hN) * 180 / Math.PI).toFixed(1) : null
+        };
+      }
+      var d113Before = {}, d113After = {}, d113WallOnly = {};
+      for (var f113 = 1; f113 <= 5; f113++) {
+        d113Before[f113] = d113Scene(f113, D113_OLD);
+        d113After[f113] = d113Scene(f113, D113_NEW);
+        d113WallOnly[f113] = d113Scene(f113, D113_WALLONLY);
+      }
+      R._wallStyle(D113_NEW);
+      R._staticBypass = false;
+      MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+      Game.Systems.AI = origAI;
+
+      /* ── FOV 黑场：未探明格整格必须是 #07070f，交界暗边不许漏进去 ──
+       * 做法：注入一个"只看中心 ±2 格"的 fov，走同一条 drawMap，取远处一格
+       * 与地板相邻的墙（本来会被画暗边的位置），逐像素必须仍等于黑场色。 */
+      var d113FovBlack = null, d113FovCells = 0;
+      (function () {
+        var gF = d113GridFor(1), cwF = gF[0].length, chF = gF.length;
+        var cxF = Math.floor(cwF / 2), cyF = Math.floor(chF / 2);
+        var origFov = Game.fov;
+        var seen = function (x, y) { return Math.abs(x - cxF) <= 2 && Math.abs(y - cyF) <= 2; };
+        Game.fov = { isVisible: seen, isExplored: seen };
+        R._wallStyle(D113_NEW);
+        MP.getEnemies = function () { return []; };
+        MP.getElites = function () { return []; };
+        MP.getDetail = function () { return null; };
+        MP.getDecor = function () { return null; };
+        Game.Systems.AI = { getPatrols: function () { return []; } };
+        R._staticBypass = true;
+        R.drawMap(gF, { x: cxF, y: cyF, floor: 1 });
+        var camF = R._cam(), kF = R.dpr * R.scale;
+        var dataF = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var badF = [];
+        for (var yF = 0; yF < chF; yF++) {
+          for (var xF = 0; xF < cwF; xF++) {
+            if (gF[yF][xF] !== 0 || !gF[yF + 1] || gF[yF + 1][xF] !== 1) continue;
+            if (Math.abs(xF - cxF) <= 2 && Math.abs(yF - cyF) <= 2) continue;
+            var X0F = Math.round((xF * 24 - camF.x) * kF), Y0F = Math.round((yF * 24 - camF.y) * kF);
+            var X1F = X0F + Math.round(24 * kF), Y1F = Y0F + Math.round(24 * kF);
+            if (X0F < 0 || Y0F < 0 || X1F > cv.width || Y1F > cv.height) continue;
+            d113FovCells++;
+            /* 黑场色 = #07070f 再叠本层主题 tint，不是固定 RGB；因此判据是
+             * 「整格与格内左上角像素逐像素相同」——一旦暗边漏进来，3px 带就会不同。 */
+            var iRef = (Y0F * cv.width + X0F) * 4;
+            var refF = [dataF[iRef], dataF[iRef + 1], dataF[iRef + 2]];
+            for (var yyF = Y0F; yyF < Y1F && !badF.length; yyF++) {
+              for (var xxF = X0F; xxF < X1F; xxF++) {
+                var iF = (yyF * cv.width + xxF) * 4;
+                if (dataF[iF] !== refF[0] || dataF[iF + 1] !== refF[1] || dataF[iF + 2] !== refF[2]) {
+                  badF.push({ x: xF, y: yF, at: [xxF - X0F, yyF - Y0F],
+                    px: [dataF[iF], dataF[iF + 1], dataF[iF + 2]], ref: refF });
+                  break;
+                }
+              }
+            }
+          }
+        }
+        d113FovBlack = { cells: d113FovCells, bad: badF.slice(0, 3) };
+        Game.fov = origFov;
+        R._wallStyle(D113_NEW);
+        R._staticBypass = false;
+        MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+        Game.Systems.AI = origAI;
+      })();
+
+      /* ── 静态缓存失效：改布局 → invalidateStatic → 重建结果必须与直绘逐像素一致 ──
+       * 暗边画在静态层里，若缓存不失效，旧布局的暗边会留在新墙上。 */
+      var d113Cache = null;
+      (function () {
+        var gC = d113GridFor(3).map(function (row) { return row.slice(); });
+        var cwC = gC[0].length, chC = gC.length;
+        var cxC = Math.floor(cwC / 2), cyC = Math.floor(chC / 2);
+        MP.getEnemies = function () { return []; };
+        MP.getElites = function () { return []; };
+        MP.getDetail = function () { return null; };
+        MP.getDecor = function () { return null; };
+        Game.Systems.AI = { getPatrols: function () { return []; } };
+        R._wallStyle(D113_NEW);
+        R._staticBypass = false;
+        R.drawMap(gC, { x: cxC, y: cyC, floor: 3 });
+        var mut = null;
+        for (var yM = 0; yM < chC && !mut; yM++) {
+          for (var xM = 0; xM < cwC; xM++) {
+            if (gC[yM][xM] === 0 && Math.abs(xM - cxC) <= 4 && Math.abs(yM - cyC) <= 4) {
+              mut = { x: xM, y: yM }; break;
+            }
+          }
+        }
+        gC[mut.y][mut.x] = 1;              /* 同一数组换布局（墙 → 地板） */
+        R.invalidateStatic();
+        R.drawMap(gC, { x: cxC, y: cyC, floor: 3 });
+        var aC = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        R._staticBypass = true;
+        R.drawMap(gC, { x: cxC, y: cyC, floor: 3 });
+        var bC = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var diffC = 0;
+        for (var iC = 0; iC < aC.length; iC += 4) {
+          if (aC[iC] !== bC[iC] || aC[iC + 1] !== bC[iC + 1] || aC[iC + 2] !== bC[iC + 2]) diffC++;
+        }
+        d113Cache = { mutated: mut, diff: diffC, px: aC.length / 4 };
+        R._staticBypass = false;
+        R.invalidateStatic();
+        MP.getEnemies = origEnemies; MP.getDetail = origDetail; MP.getDecor = origDecor;
+        Game.Systems.AI = origAI;
+      })();
+
+      var d113Table = [], legacyAllRed = true, wallOnlyAllRed = true, wallOnlyEdgeLow = true;
+      var legacyEdge = [], wallOnlySigned = [];
+      for (var f2 = 1; f2 <= 5; f2++) {
+        var b2 = d113Before[f2], a2 = d113After[f2], o2 = d113WallOnly[f2];
+        var passRule = function (m) { return m.ratio >= 2.0 && m.edge >= 0.055; };
+        if (passRule(b2)) legacyAllRed = false;
+        if (passRule(o2)) wallOnlyAllRed = false;
+        if (o2.edge >= 0.055) wallOnlyEdgeLow = false;
+        legacyEdge.push(b2.edge);
+        wallOnlySigned.push(o2.edgeSigned);
+        ck113('d113.f' + f2 + '.ratio', a2.ratio >= 2.0,
+          'Lf/Lw=' + a2.ratio + ' (Lf=' + a2.Lf + ' Lw=' + a2.Lw + ')');
+        ck113('d113.f' + f2 + '.edge', a2.edge >= 0.055, 'edge=' + a2.edge + ' (sRGB 3px)');
+        /* 可分性：交界带面积口径——至少 90% 的采样列差值达 0.055，且中位数也在门槛上。
+         * 这一条才是"玩家能不能看出边界"的直接证据；ratio/edge 只是它的合成摘要。 */
+        ck113('d113.f' + f2 + '.sep', a2.sep >= 0.90 && a2.dP50 >= 0.055,
+          'sep=' + a2.sep + ' (area=' + a2.area + ' cols / ' + a2.junctions + ' junctions) dP05=' +
+          a2.dP05 + ' dP50=' + a2.dP50 + ' dMin=' + a2.dMin);
+        ck113('d113.f' + f2 + '.lift', a2.LfCell <= b2.LfCell * 1.15,
+          'Lf(cell) ' + b2.LfCell + '→' + a2.LfCell + ' (+' +
+          (a2.LfCell / b2.LfCell * 100 - 100).toFixed(1) + '%)');
+        ck113('d113.f' + f2 + '.order', a2.Lw < a2.Lf, 'Lw=' + a2.Lw + ' Lf=' + a2.Lf);
+        ck113('d113.f' + f2 + '.hue', a2.hue !== null && b2.hue !== null &&
+          Math.abs(a2.hue - b2.hue) <= 0.5, 'hue ' + b2.hue + '°→' + a2.hue + '°');
+        d113Table.push({ f: f2, Lf: a2.Lf, Lw: a2.Lw, LfCell: a2.LfCell, ratio: a2.ratio,
+          wcag: a2.wcag, edge: a2.edge, edgeBefore: b2.edge,
+          sep: a2.sep, sepBefore: b2.sep, dP05: a2.dP05, dP50: a2.dP50, dMin: a2.dMin,
+          junctions: a2.junctions, area: a2.area,
+          liftPct: +(a2.LfCell / b2.LfCell * 100 - 100).toFixed(1),
+          ratioBefore: b2.ratio, wcagBefore: b2.wcag, hue: a2.hue, hueBefore: b2.hue,
+          wallOnlyRatio: o2.ratio, wallOnlyWcag: o2.wcag, wallOnlyEdge: o2.edgeSigned });
+      }
+      var hues = [1, 2, 3, 4, 5].map(function (k3) { return d113After[k3].hue; });
+      var hueSpread = Math.max.apply(null, hues) - Math.min.apply(null, hues);
+      ck113('d113.hue.identity', hueSpread >= 20,
+        '五层地板色相=' + hues.join('° / ') + '° 跨度=' + hueSpread.toFixed(1) + '°');
+      ck113('d113.neg.legacy', legacyAllRed,
+        '旧配色（0.40/0.45、无交界暗边）五层全部判负；旧交界差=' + legacyEdge.join(' / '));
+      /* 只压墙体内圈、交界像素不动：交界带的有符号差值必须为负（实测 −0.07~−0.12），
+       * 且线性比值 <2、交界差 <0.055。这条防的是「墙变暗了、边界还是糊的」。 */
+      ck113('d113.neg.wallOnly', wallOnlyAllRed && wallOnlyEdgeLow &&
+        wallOnlySigned.every(function (v) { return v <= -0.06; }),
+        '只压墙体内圈：五层必须全负；交界带有符号差=' + wallOnlySigned.join(' / ') +
+        '；线性比值=' + [1, 2, 3, 4, 5].map(function (k4) { return d113WallOnly[k4].ratio; }).join(' / ') +
+        '；WCAG 诊断=' + [1, 2, 3, 4, 5].map(function (k5) { return d113WallOnly[k5].wcag; }).join(' / '));
+      ck113('d113.fovBlack', d113FovCells > 0 && d113FovBlack.bad.length === 0,
+        '未探明区里与地板相邻的墙 ' + d113FovCells + ' 格，整格必须与格内左上角同色（黑场+tint）；越界=' +
+        JSON.stringify(d113FovBlack.bad));
+      ck113('d113.cacheInvalidate', d113Cache && d113Cache.mutated && d113Cache.diff === 0,
+        '墙→地板后 invalidateStatic 重建 vs 直绘：diff=' + (d113Cache ? d113Cache.diff : 'n/a') +
+        ' / ' + (d113Cache ? d113Cache.px : 0) + ' px');
+      sub.d113FovBlack = d113FovBlack;
+      sub.d113Cache = d113Cache;
+      sub.d113Table = d113Table;
+      sub.d113Before = d113Before;
+      sub.d113WallOnly = d113WallOnly;
+      ok = ok && d113Ok;
+
+      /* ─────────────────────────────────────────────────────────────
+       * D-115：楼梯可辨识 + 可交互物统一语法（楼梯/宝箱/陷阱/NPC）
+       * 判据（逐层 × 四档，都在真实地图的真实绘制上取像素）：
+       *   ① peakRatio = 楼梯格内 p95 线性亮度 / 四邻墙朝向楼梯的 3px 带均值 ≥ 5
+       *   ② meanRatio ≥ 3
+       *   ③ 亮像素占比（sRGB > 墙带均值+0.20）≥ 0.15
+       *   ④ 交界差 = 楼梯侧 3px 带 - 墙侧 3px 带 ≥ 0.10（每条共享边都要满足）
+       *   ⑤ 方向：下行 ▼ 的上半亮像素多于下半；上行 ▲ 相反，差值 ≥4
+       * 负例：关掉标识（回到 D-113 的纯贴图）→ ①②③ 必须全部失败。
+       * 另测：FOV 未探明格不得出现标识；玩家精灵必须盖住标识（优先级）。
+       * ───────────────────────────────────────────────────────────── */
+      var d115Ok = true, d115Table = [], d115Neg = null, d115Fov = null, d115Pri = null;
+      function ck115(id, ok2, d) {
+        sub[id] = { ok: !!ok2, d: d === undefined ? '' : d };
+        if (!ok2) d115Ok = false;
+      }
+      var d115W0 = window.innerWidth, d115H0 = window.innerHeight;
+      var d115Save = { en: MP.getEnemies, el: MP.getElites, de: MP.getDetail, dc: MP.getDecor,
+        np: MP.getNpcs, tr: MP.getTrap, ai: Game.Systems.AI };
+      MP.getEnemies = function () { return []; };
+      MP.getElites = function () { return []; };
+      MP.getDetail = function () { return null; };
+      MP.getDecor = function () { return null; };
+      if (typeof MP.getNpcs === 'function') MP.getNpcs = function () { return []; };
+      if (typeof MP.getTrap === 'function') MP.getTrap = function () { return null; };
+      Game.Systems.AI = { getPatrols: function () { return []; } };
+
+      function d115Pick(grid, type) {
+        var best = null, bestN = -1, dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (var y = 0; y < grid.length; y++) {
+          for (var x = 0; x < grid[0].length; x++) {
+            if (grid[y][x] !== type) continue;
+            var walls = [];
+            for (var d = 0; d < 4; d++) {
+              var nx = x + dirs[d][0], ny = y + dirs[d][1];
+              if (ny < 0 || ny >= grid.length || nx < 0 || nx >= grid[0].length || grid[ny][nx] === 0) {
+                walls.push(dirs[d]);
+              }
+            }
+            if (walls.length > bestN) { bestN = walls.length; best = { x: x, y: y, walls: walls }; }
+          }
+        }
+        return best;
+      }
+
+      /* 一次真实绘制 + 像素度量。marks=false 时回放 D-113 的纯贴图版本。 */
+      function d115Scene(f, type, marks) {
+        var grid = d113GridFor(f), st = d115Pick(grid, type);
+        if (!st) return null;
+        R._interactMarks(marks);
+        R._staticBypass = true;
+        R.drawMap(grid, { x: st.x, y: st.y, floor: f });
+        var cam2 = R._cam(), k2 = R.dpr * R.scale;
+        var W2 = cv.width, H2 = cv.height, d2 = ctx.getImageData(0, 0, W2, H2).data;
+        function lin2(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+        function at(lx, ly) {
+          var X = Math.round((st.x * 24 - cam2.x + lx) * k2);
+          var Y = Math.round((st.y * 24 - cam2.y + ly) * k2);
+          if (X < 0 || Y < 0 || X >= W2 || Y >= H2) return null;
+          var i = (Y * W2 + X) * 4;
+          return { r: d2[i], g: d2[i + 1], b: d2[i + 2] };
+        }
+        function lum2(p) { return p ? 0.2126 * lin2(p.r) + 0.7152 * lin2(p.g) + 0.0722 * lin2(p.b) : 0; }
+        function srgb2(p) { return p ? (0.299 * p.r + 0.587 * p.g + 0.114 * p.b) / 255 : 0; }
+        function band(lx0, ly0, lw, lh, fn) {
+          var s = 0, n = 0;
+          for (var yy = 0; yy < lh; yy++) {
+            for (var xx = 0; xx < lw; xx++) {
+              var p = at(lx0 + xx, ly0 + yy);
+              if (!p) continue;
+              s += fn(p); n++;
+            }
+          }
+          return n ? s / n : 0;
+        }
+        var vals = [], bright = 0, nIn = 0, top = 0, bot = 0;
+        for (var ly = 2; ly < 22; ly++) {
+          for (var lx = 2; lx < 22; lx++) {
+            var p = at(lx, ly);
+            if (!p) continue;
+            vals.push(lum2(p)); nIn++;
+            if (lx >= 8 && lx <= 15 && ly >= 5 && ly <= 10 && srgb2(p) > 0.55) top++;
+            if (lx >= 8 && lx <= 15 && ly >= 14 && ly <= 19 && srgb2(p) > 0.55) bot++;
+          }
+        }
+        var wallBandS = [], wallBandL = [], edgeD = [];
+        for (var wi = 0; wi < st.walls.length; wi++) {
+          var dx = st.walls[wi][0], dy = st.walls[wi][1];
+          var ws, ww, hs, hh;
+          if (dx > 0) { ws = 21; ww = 3; hs = 4; hh = 16; }
+          else if (dx < 0) { ws = 0; ww = 3; hs = 4; hh = 16; }
+          else if (dy > 0) { ws = 4; ww = 16; hs = 21; hh = 3; }
+          else { ws = 4; ww = 16; hs = 0; hh = 3; }
+          var wp = { x: st.x + dx, y: st.y + dy };
+          var wx = wp.x * 24 - cam2.x, wy = wp.y * 24 - cam2.y;
+          var wxs = dx > 0 ? 0 : (dx < 0 ? 21 : 4);
+          var wys = dy > 0 ? 0 : (dy < 0 ? 21 : 4);
+          var ww2 = dx ? 3 : 16, wh2 = dy ? 3 : 16;
+          var sW = 0, lW = 0, nW = 0;
+          for (var yb = 0; yb < wh2; yb++) {
+            for (var xb = 0; xb < ww2; xb++) {
+              var X2 = Math.round((wx + wxs + xb) * k2), Y2 = Math.round((wy + wys + yb) * k2);
+              if (X2 < 0 || Y2 < 0 || X2 >= W2 || Y2 >= H2) continue;
+              var i2 = (Y2 * W2 + X2) * 4;
+              var pp2 = { r: d2[i2], g: d2[i2 + 1], b: d2[i2 + 2] };
+              sW += srgb2(pp2); lW += lum2(pp2); nW++;
+            }
+          }
+          var wS = nW ? sW / nW : 0, wL = nW ? lW / nW : 0;
+          wallBandS.push(wS); wallBandL.push(wL);
+          edgeD.push(band(ws, hs, ww, hh, srgb2) - wS);
+        }
+        vals.sort(function (a3, b3) { return a3 - b3; });
+        var peak = vals.length ? vals[Math.min(vals.length - 1, Math.round(vals.length * 0.95))] : 0;
+        var meanL = vals.length ? vals.reduce(function (a3, b3) { return a3 + b3; }, 0) / vals.length : 0;
+        var wMean = wallBandL.length ? wallBandL.reduce(function (a3, b3) { return a3 + b3; }, 0) / wallBandL.length : 0;
+        var wSMean = wallBandS.length ? wallBandS.reduce(function (a3, b3) { return a3 + b3; }, 0) / wallBandS.length : 0;
+        for (var li = 2; li < 22; li++) {
+          for (var lj = 2; lj < 22; lj++) {
+            var pb = at(li, lj);
+            if (pb && srgb2(pb) > wSMean + 0.20) bright++;
+          }
+        }
+        return {
+          tile: 24 * k2,
+          peakRatio: wMean > 0 ? peak / wMean : 0,
+          meanRatio: wMean > 0 ? meanL / wMean : 0,
+          bright: nIn ? bright / nIn : 0,
+          edgeMin: edgeD.length ? Math.min.apply(null, edgeD) : 0,
+          top: top, bot: bot,
+          wallMean: wMean, peak: peak, mean: meanL
+        };
+      }
+
+      var d115Sizes = [[320, 568], [390, 844], [960, 540], [1024, 640]];
+      var d115Worst = {}, d115Dir = {};
+      for (var si = 0; si < d115Sizes.length; si++) {
+        try {
+          Object.defineProperty(window, 'innerWidth', { value: d115Sizes[si][0], configurable: true });
+          Object.defineProperty(window, 'innerHeight', { value: d115Sizes[si][1], configurable: true });
+        } catch (e2) { /* 忽略 */ }
+        R.resize(1);
+        for (var f115 = 1; f115 <= 5; f115++) {
+          var down = d115Scene(f115, 2, true), up = d115Scene(f115, 3, true);
+          var key = 'f' + f115 + '.' + d115Sizes[si][0];
+          d115Table.push({
+            key: key, w: d115Sizes[si][0], f: f115,
+            down: down && { p: +down.peakRatio.toFixed(1), m: +down.meanRatio.toFixed(1),
+              b: +down.bright.toFixed(2), e: +down.edgeMin.toFixed(2), top: down.top, bot: down.bot },
+            up: up && { p: +up.peakRatio.toFixed(1), m: +up.meanRatio.toFixed(1),
+              b: +up.bright.toFixed(2), e: +up.edgeMin.toFixed(2), top: up.top, bot: up.bot }
+          });
+          [['down', down, 2], ['up', up, 3]].forEach(function (pair) {
+            var nm = pair[0], m = pair[1], kind = pair[2];
+            if (!m) return;
+            var kk = 'f' + f115 + '.' + nm;
+            var cur = d115Worst[kk];
+            if (!cur || m.peakRatio < cur.peakRatio) d115Worst[kk] = m;
+            if (!d115Dir[kk]) d115Dir[kk] = { top: m.top, bot: m.bot, kind: kind };
+            else { d115Dir[kk].top = Math.min(d115Dir[kk].top, m.top); d115Dir[kk].bot = Math.min(d115Dir[kk].bot, m.bot); }
+          });
+        }
+      }
+
+      var d115Bad = [];
+      for (var fk = 1; fk <= 5; fk++) {
+        ['down', 'up'].forEach(function (nm) {
+          var kk = 'f' + fk + '.' + nm, m = d115Worst[kk];
+          var d3 = d115Dir[kk];
+          var dirOk = nm === 'down' ? (d3.top - d3.bot >= 4) : (d3.bot - d3.top >= 4);
+          var good = !!m && m.peakRatio >= 5 && m.meanRatio >= 3 && m.bright >= 0.15 &&
+            m.edgeMin >= 0.10 && dirOk;
+          if (!good) d115Bad.push({ f: fk, kind: nm, m: m, dir: d3 });
+          ck115('d115.' + kk, good,
+            nm + (nm === 'down' ? ' ▼' : ' ▲') + ' peak=' + (m ? m.peakRatio.toFixed(1) : 'n/a') +
+            ' mean=' + (m ? m.meanRatio.toFixed(1) : 'n/a') +
+            ' bright=' + (m ? m.bright.toFixed(2) : 'n/a') +
+            ' edge=' + (m ? m.edgeMin.toFixed(2) : 'n/a') +
+            ' 上/下亮像素=' + d3.top + '/' + d3.bot);
+        });
+      }
+
+      /* 负例：关掉统一标识 → 回到 D-113 的纯贴图，同一条门槛必须全红 */
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: 320, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: 568, configurable: true });
+      } catch (e3) { /* 忽略 */ }
+      R.resize(1);
+      d115Neg = d115Scene(1, 2, false);
+      R._interactMarks(true);
+      var negRule = !!d115Neg && d115Neg.bright < 0.05 &&
+        !(d115Neg.peakRatio >= 5 && d115Neg.meanRatio >= 3 && d115Neg.bright >= 0.15 && d115Neg.edgeMin >= 0.10);
+      ck115('d115.neg.legacyStair', negRule,
+        '关标识后（F1 下行）：peak=' + (d115Neg ? d115Neg.peakRatio.toFixed(2) : 'n/a') +
+        ' mean=' + (d115Neg ? d115Neg.meanRatio.toFixed(2) : 'n/a') +
+        ' bright=' + (d115Neg ? d115Neg.bright.toFixed(3) : 'n/a') +
+        ' — 必须达不到正例门槛（peak≥5 / bright≥0.15）');
+
+      /* FOV：未探明格的楼梯整格必须是黑场色，不许漏标识 */
+      (function () {
+        var gridF2 = d113GridFor(1), stF = d115Pick(gridF2, 2), origFov2 = Game.fov;
+        Game.fov = { isVisible: function () { return false; }, isExplored: function () { return false; } };
+        R._interactMarks(true);
+        R.drawMap(gridF2, { x: stF.x, y: stF.y, floor: 1 });
+        var camF = R._cam(), kF = R.dpr * R.scale;
+        var XF = Math.round((stF.x * 24 - camF.x + 12) * kF), YF = Math.round((stF.y * 24 - camF.y + 12) * kF);
+        var XT = Math.round((stF.x * 24 - camF.x + 1) * kF), YT = Math.round((stF.y * 24 - camF.y + 1) * kF);
+        var iF = (YF * cv.width + XF) * 4, iT = (YT * cv.width + XT) * 4;
+        var dF = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var same = dF[iF] === dF[iT] && dF[iF + 1] === dF[iT + 1] && dF[iF + 2] === dF[iT + 2];
+        var lumF = (0.299 * dF[iF] + 0.587 * dF[iF + 1] + 0.114 * dF[iF + 2]) / 255;
+        d115Fov = { same: same, lum: +lumF.toFixed(3) };
+        Game.fov = origFov2;
+        ck115('d115.fovBlack', same && lumF < 0.10, '未探明楼梯格：与格内左上角同色=' +
+          same + '，亮度=' + lumF.toFixed(3) + '（必须 <0.10 且整格同色）');
+      })();
+
+      /* 优先级：玩家精灵必须盖住楼梯标识（标识在实体之下）。
+       * 取样点取格内上边框 (12,2)：这里既是楼梯标识的亮框，骑士立绘也一定覆盖（躯干），
+       * 中心 (12,12) 是双腿间隙，不能用来判遮挡。要求像素从类别色变成精灵色。 */
+      (function () {
+        var gridP = d113GridFor(1), stP = d115Pick(gridP, 2);
+        R._interactMarks(true);
+        R.drawMap(gridP, { x: stP.x, y: stP.y, floor: 1 });
+        var camP = R._cam(), kP = R.dpr * R.scale;
+        var XP = Math.round((stP.x * 24 - camP.x + 12) * kP), YP = Math.round((stP.y * 24 - camP.y + 2) * kP);
+        var dP0 = ctx.getImageData(XP, YP, 1, 1).data;
+        R.drawPlayer({ x: stP.x, y: stP.y, floor: 1, facing: 'right' });
+        var dP1 = ctx.getImageData(XP, YP, 1, 1).data;
+        var changed = dP0[0] !== dP1[0] || dP0[1] !== dP1[1] || dP0[2] !== dP1[2];
+        var notMark = Math.abs(dP1[0] - 202) + Math.abs(dP1[1] - 230) + Math.abs(dP1[2] - 245) > 18;
+        d115Pri = { before: [dP0[0], dP0[1], dP0[2]], after: [dP1[0], dP1[1], dP1[2]],
+          changed: changed, notMark: notMark };
+        ck115('d115.priority', changed && notMark, '玩家站上楼梯后 (12,2) 像素 ' +
+          JSON.stringify(d115Pri.before) + '→' + JSON.stringify(d115Pri.after) +
+          '（必须变化且不再是类别色 → 精灵盖住标识）');
+      })();
+
+      R._interactMarks(true);
+
+      /* ─────────────────────────────────────────────────────────────
+       * D-116：地图构图与场外边框（纯表现层，不动 TILE / 缩放 / 地图生成）
+       * 判据（5 档 × F1/F5，都在真实地图、真实贴图的静态绘制上取像素）：
+       *   ① 可见地图面积 / 视口面积 —— 与相机几何表逐档对齐（改动前后必须相同）
+       *   ② 场外均值亮度 / 地图地板均值 ≤ 0.55（场外不许比地图亮）
+       *   ③ 场外亮度标准差 ≥ 0.012（有岩体结构，不是一整块平背景）
+       *   ④ 地板均值 − 场外沿口 4px 带均值 ≥ 0.10（沿口接触阴影把地图"压"进岩体）
+       *   ⑤ 场外"可走质感"像素 = 0（暖棕地板色系 + 接近地板亮度的像素一律算出界）
+       * 负例 A：_outerFrame(false) 回放改动前的平背景 → ③ 必须红。
+       * 负例 B：_outerStyle(地板棕) 把场外染成可走地面 → ⑤ 必须红。
+       * ───────────────────────────────────────────────────────────── */
+      var d116Ok = true, d116Table = [], d116NegA = null, d116NegB = null;
+      function ck116(id, ok2, d) {
+        sub[id] = { ok: !!ok2, d: d === undefined ? '' : d };
+        if (!ok2) d116Ok = false;
+      }
+      /* 逐档"可见地图面积 / 视口面积"基线（相机居中+夹边的几何结果；纯只读对照） */
+      var D116_RATIO = {
+        '320x568': { 1: 0.8028, 5: 1.0 },
+        '390x844': { 1: 0.5402, 5: 0.7678 },
+        '960x540': { 1: 0.5278, 5: 1.0 },
+        '1024x640': { 1: 0.4175, 5: 0.9609 },
+        '1280x800': { 1: 0.4175, 5: 0.9609 }
+      };
+      var d116Fov0 = Game.fov;
+      Game.fov = undefined;
+
+      function d116Pose(f) {
+        var g = d113GridFor(f);
+        var cx0 = Math.floor(g[0].length / 2), cy0 = Math.floor(g.length / 2);
+        function walk(x, y) { return g[y] && g[y][x] !== undefined && g[y][x] !== 0; }
+        for (var rad = 0; rad < 40; rad++) {
+          for (var dy = -rad; dy <= rad; dy++) {
+            for (var dx = -rad; dx <= rad; dx++) {
+              if (Math.abs(dx) !== rad && Math.abs(dy) !== rad) continue;
+              if (walk(cx0 + dx, cy0 + dy)) return { grid: g, x: cx0 + dx, y: cy0 + dy, floor: f };
+            }
+          }
+        }
+        return { grid: g, x: cx0, y: cy0, floor: f };
+      }
+
+      /* 真实绘制一帧并按视口统计场外/地板/沿口；返回纯数值（不保留像素数组） */
+      function d116Scene(f, W, H) {
+        Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+        R.resize(1);
+        var pose = d116Pose(f);
+        R.drawMap(pose.grid, pose);
+        var VW = R.cssW, VH = R.cssH, k = R.dpr * R.scale;
+        var cam2 = R._cam();
+        var mw = pose.grid[0].length * R.TILE, mh = pose.grid.length * R.TILE;
+        var mx = -cam2.x, my = -cam2.y;
+        var img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var CW = cv.width, CH = cv.height;
+        /* 设备像素矩形 */
+        var X0 = Math.max(0, Math.round(mx * k)), Y0 = Math.max(0, Math.round(my * k));
+        var X1 = Math.min(CW, Math.round((mx + mw) * k)), Y1 = Math.min(CH, Math.round((my + mh) * k));
+        /* 可见地图面积比 */
+        var vis = Math.max(0, X1 - X0) * Math.max(0, Y1 - Y0) / (CW * CH);
+        /* 场外：均值 / 方差 / 暖棕像素 / 过亮像素 */
+        var s = 0, s2 = 0, n = 0, warm = 0, hist = [];
+        for (var hb = 0; hb < 256; hb++) hist[hb] = 0;
+        for (var Y = 0; Y < CH; Y++) {
+          var inY = (Y >= Y0 && Y < Y1);
+          for (var X = 0; X < CW; X++) {
+            if (inY && X >= X0 && X < X1) continue;
+            var i0 = (Y * CW + X) * 4, r = img[i0], g2 = img[i0 + 1], b = img[i0 + 2];
+            var L = (0.299 * r + 0.587 * g2 + 0.114 * b) / 255;
+            s += L; s2 += L * L; n++;
+            hist[Math.min(255, Math.round(L * 255))]++;
+            if (r > g2 + 10 && g2 > b + 4 && r > 50) warm++;
+          }
+        }
+        /* 场外 p95：岩框最亮的那 5% 也必须落在"明显低于地板均值"的区间 */
+        var p95 = 0, acc = 0, cut = Math.ceil(n * 0.95);
+        for (var hb2 = 0; hb2 < 256; hb2++) {
+          acc += hist[hb2];
+          if (acc >= cut) { p95 = hb2 / 255; break; }
+        }
+        var mean = n ? s / n : 0;
+        var sd = n ? Math.sqrt(Math.max(0, s2 / n - mean * mean)) : 0;
+        /* 地板均值：逐格 t=1，取格心 3×3（设备像素） */
+        var fs = 0, fn = 0;
+        for (var cy2 = 0; cy2 < pose.grid.length; cy2++) {
+          for (var cx2 = 0; cx2 < pose.grid[0].length; cx2++) {
+            if (pose.grid[cy2][cx2] !== 1) continue;
+            var px0 = Math.round((cx2 * R.TILE - cam2.x + 10) * k);
+            var py0 = Math.round((cy2 * R.TILE - cam2.y + 10) * k);
+            for (var qy = 0; qy < 3; qy++) {
+              for (var qx = 0; qx < 3; qx++) {
+                var qX = px0 + qx, qY = py0 + qy;
+                if (qX < 0 || qY < 0 || qX >= CW || qY >= CH) continue;
+                var j0 = (qY * CW + qX) * 4;
+                fs += (0.299 * img[j0] + 0.587 * img[j0 + 1] + 0.114 * img[j0 + 2]) / 255;
+                fn++;
+              }
+            }
+          }
+        }
+        var floorMean = fn ? fs / fn : 0;
+        /* 沿口 4px 带（紧贴地图外沿） */
+        var es = 0, en = 0;
+        for (var e = 1; e <= 4; e++) {
+          for (var ex = X0; ex < X1; ex++) {
+            [[ex, Y0 - e], [ex, Y1 + e - 1]].forEach(function (pt) {
+              if (pt[0] < 0 || pt[1] < 0 || pt[0] >= CW || pt[1] >= CH) return;
+              var ie = (pt[1] * CW + pt[0]) * 4;
+              es += (0.299 * img[ie] + 0.587 * img[ie + 1] + 0.114 * img[ie + 2]) / 255; en++;
+            });
+          }
+          for (var ey = Y0; ey < Y1; ey++) {
+            [[X0 - e, ey], [X1 + e - 1, ey]].forEach(function (pt) {
+              if (pt[0] < 0 || pt[1] < 0 || pt[0] >= CW || pt[1] >= CH) return;
+              var ie2 = (pt[1] * CW + pt[0]) * 4;
+              es += (0.299 * img[ie2] + 0.587 * img[ie2 + 1] + 0.114 * img[ie2 + 2]) / 255; en++;
+            });
+          }
+        }
+        var edgeMean = en ? es / en : 0;
+        /* 过亮：场外超过地板均值 60% 的像素数（再扫一次，阈值已知） */
+        /* 可走质感：普通地板/墙面同款的过亮像素占比（p95 之外再留一道兜底） */
+        var lim = floorMean * 0.65, brightN = 0;
+        for (var Y2 = 0; Y2 < CH; Y2++) {
+          var inY2 = (Y2 >= Y0 && Y2 < Y1);
+          for (var X2 = 0; X2 < CW; X2++) {
+            if (inY2 && X2 >= X0 && X2 < X1) continue;
+            var i2 = (Y2 * CW + X2) * 4;
+            if ((0.299 * img[i2] + 0.587 * img[i2 + 1] + 0.114 * img[i2 + 2]) / 255 > lim) brightN++;
+          }
+        }
+        return {
+          vw: Math.round(VW), vh: Math.round(VH), mapPx: [mw, mh], cam: [cam2.x, cam2.y],
+          visRatio: +vis.toFixed(4),
+          outerMean: +mean.toFixed(4), outerSd: +sd.toFixed(4),
+          floorMean: +floorMean.toFixed(4), edgeMean: +edgeMean.toFixed(4),
+          ratio: +(floorMean > 0 ? mean / floorMean : 9).toFixed(3),
+          p95: +p95.toFixed(4), p95Ratio: +(floorMean > 0 ? p95 / floorMean : 9).toFixed(3),
+          warm: warm, bright: brightN, outerPx: n
+        };
+      }
+
+      var d116Bad = [];
+      [[320, 568], [390, 844], [960, 540], [1024, 640], [1280, 800]].forEach(function (sz) {
+        [1, 5].forEach(function (f) {
+          var m = d116Scene(f, sz[0], sz[1]);
+          var key = m.vw + 'x' + m.vh;
+          var want = D116_RATIO[sz[0] + 'x' + sz[1]][f];
+          var ratioOk = Math.abs(m.visRatio - want) <= 0.004;
+          /* D-120：不再用 !hasOuter || 短路。
+           * 地图铺满视口时场外判据无定义，但"为什么没有场外"必须被独立证明：
+           * 只有 visRatio≈1 且地图像素 ≥ 视口时，才允许把 5 条场外判据标为 N/A；
+           * 否则（例如采样/裁剪出错）按失败处理。 */
+          var hasOuter = m.outerPx > 0;
+          var fullBleedOk = hasOuter ||
+            (m.visRatio >= 0.9999 && m.mapPx[0] >= m.vw && m.mapPx[1] >= m.vh);
+          var dimOk = m.ratio <= 0.55;
+          var peakOk = m.p95Ratio <= 0.80;
+          var sdrOk = m.outerSd >= 0.012;
+          var keenOk = (m.floorMean - m.edgeMean) >= 0.10;
+          var walkOk = m.warm === 0;
+          var outerOk;
+          if (hasOuter) {
+            outerOk = dimOk && peakOk && sdrOk && keenOk && walkOk;
+          } else {
+            outerOk = fullBleedOk;
+            ck116('d116.fullbleed.' + (f === 1 ? 'f1' : 'f5') + '.' + sz[0] + 'x' + sz[1], fullBleedOk,
+              '场外 0 像素必须由"地图铺满视口"解释：可见比例=' + m.visRatio +
+              '、地图 ' + m.mapPx.join('×') + ' vs 视口 ' + m.vw + '×' + m.vh);
+          }
+          var good = ratioOk && outerOk;
+          d116Table.push({ tier: sz[0] + 'x' + sz[1], f: f, ok: good, m: m, want: want,
+            outerNA: !hasOuter, fullBleedOk: fullBleedOk });
+          if (!good) d116Bad.push({ tier: sz[0] + 'x' + sz[1], f: f, m: m });
+          ck116('d116.' + (f === 1 ? 'f1' : 'f5') + '.' + sz[0] + 'x' + sz[1], good,
+            '可见地图=' + (m.visRatio * 100).toFixed(1) + '%（基线 ' + (want * 100).toFixed(1) + '%）' +
+            ' 场外/地板=' + m.ratio + ' 场外SD=' + m.outerSd +
+            ' p95/地板=' + m.p95Ratio + '（≤0.80）' +
+            ' 沿口差=' + (m.floorMean - m.edgeMean).toFixed(3) +
+            ' 暖棕=' + m.warm + ' 过亮=' + m.bright + '/' + m.outerPx +
+            '（' + m.vw + '×' + m.vh + ' 逻辑）');
+        });
+      });
+
+      /* 负例 A：回放改动前的整块平背景（#14142a）→ "有结构"必须红 */
+      (function () {
+        R._outerFrame(false);
+        var m = d116Scene(1, 390, 844);
+        R._outerFrame(true);
+        var failed = !(m.outerSd >= 0.012) || m.ratio > 0.55;
+        d116NegA = m;
+        ck116('d116.neg.flatBg', failed,
+          '关场外岩框后（390×844 F1）：场外SD=' + m.outerSd + '（正例门槛 ≥0.012）、' +
+          '场外/地板=' + m.ratio + ' — 结构判据必须失败');
+      })();
+
+      /* 负例 B：把场外染成地板棕 → "场外不许出现可走质感"必须红 */
+      (function () {
+        var keep = R._outerStyle();
+        R._outerStyle({ base: '#221510', far: '#3a2a18', mid: '#5a4326', near: '#6b3a24',
+          ink: '#3a2a18', rim: '#5a4326' });
+        var m = d116Scene(1, 390, 844);
+        R._outerStyle(keep);
+        var failed = !(m.warm === 0) || m.p95Ratio > 0.80;
+        d116NegB = m;
+        ck116('d116.neg.walkable', failed,
+          '场外染地板棕后（390×844 F1）：暖棕像素=' + m.warm + '、p95/地板=' + m.p95Ratio +
+          ' — 可走质感判据必须失败（正例要求暖棕=0 且 p95/地板≤0.80）');
+      })();
+
+      Game.fov = d116Fov0;
+      sub.d116Table = d116Table;
+      sub.d116NegA = d116NegA;
+      sub.d116NegB = d116NegB;
+      sub.d116Bad = d116Bad;
+      sub.d116Style = R._outerStyle();
+      ok = ok && d116Ok;
+
+      R._staticBypass = false;
+      MP.getEnemies = d115Save.en; MP.getElites = d115Save.el;
+      MP.getDetail = d115Save.de; MP.getDecor = d115Save.dc;
+      if (typeof MP.getNpcs === 'function') MP.getNpcs = d115Save.np;
+      if (typeof MP.getTrap === 'function') MP.getTrap = d115Save.tr;
+      Game.Systems.AI = d115Save.ai;
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: d115W0, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: d115H0, configurable: true });
+      } catch (e4) { /* 忽略 */ }
+      R.resize(1);
+
+      /* ─────────────────────────────────────────────────────────────
+       * D-117：F1 / F2 的"这是哪一层"辨识（构图语言，纯绘制）
+       * 判据（同尺寸、同一相机位，改前 vs 改后各一组）：
+       *   ① 构图特征 = 8 桶边缘方向直方图 + 48px 周期能量 + 边缘密度 +
+       *      亮度 SD + 主色占比（由地板格内部像素统计，避开 D-113 的 3px 交界带）
+       *   ② 构图可分距离 = 0.35×方向直方图 L1/2 + 0.25×周期差 + 0.20×密度差
+       *      + 0.10×SD 差 + 0.10×主色差；改后必须 ≥0.085 且 ≥改前×1.30
+       *   ③ 负例：关掉构图层回放改前 → 距离必须 <0.085（门槛在改前不成立，断言会真红）
+       *   ④ 对照：F3/F4/F5 在开关两种状态下逐像素哈希必须完全一致（零扰动）
+       *   ⑤ 绘制预算：1024×640 一次静态重建的绘制调用（fillRect/fill/stroke/drawImage）
+       *      相对改前增幅 ≤ 60%（F1、F2 分别测）
+       * 配色项（12 维色相直方图）单独做诊断，只要求"不被构图手段压低"——五层色相
+       * 在 D-113 已分开，本卡要证的是"颜色之外还有构图"。
+       * ───────────────────────────────────────────────────────────── */
+      var d117Ok = true, d117Table = [], d117Ctrl = [];
+      function ck117(id, ok2, d) {
+        sub[id] = { ok: !!ok2, d: d === undefined ? '' : d };
+        if (!ok2) d117Ok = false;
+      }
+      var D117_MIN = 0.085, D117_GAIN = 1.30, D117_OPS_RATIO = 1.60;
+      var d117Save2 = {
+        en: MP.getEnemies, el: MP.getElites, de: MP.getDetail, dc: MP.getDecor,
+        np: MP.getNpcs, tr: MP.getTrap, ai: Game.Systems.AI, fov: Game.fov
+      };
+      var d117W0b = window.innerWidth, d117H0b = window.innerHeight;
+      var d117Tiers = [[320, 568], [390, 844], [960, 540], [1024, 640]];
+      var d117S3 = [320, 568], d117S4 = [1024, 640];
+      var d117Grids = {};
+      function d117Grid(f) {
+        if (!d117Grids[f]) d117Grids[f] = d113GridFor(f);
+        return d117Grids[f];
+      }
+      function d117Pose(f) {
+        var g = d117Grid(f);
+        var cx0 = Math.floor(g[0].length / 2), cy0 = Math.floor(g.length / 2);
+        function walk(x, y) { return g[y] && g[y][x] !== undefined && g[y][x] !== 0; }
+        for (var rad = 0; rad < 40; rad++) {
+          for (var dy = -rad; dy <= rad; dy++) {
+            for (var dx = -rad; dx <= rad; dx++) {
+              if (Math.abs(dx) !== rad && Math.abs(dy) !== rad) continue;
+              if (walk(cx0 + dx, cy0 + dy)) return { grid: g, x: cx0 + dx, y: cy0 + dy, floor: f };
+            }
+          }
+        }
+        return { grid: g, x: cx0, y: cy0, floor: f };
+      }
+      /* 一次真实绘制 + 特征：
+       *   色相 12 维（地板内部、饱和像素）
+       *   构图 6 维：48px 砌层周期能量 / 轴对齐一致度 / 斜向一致度 / 边缘密度 /
+       *              亮度 SD / 主色占比
+       * 周期能量取"地图矩形的亮度自相关"（shift = 48px）：F1 的通缝与竖缝都在 48px
+       * 上重复，F2 的刮痕不落在 48 网格上——这是"砌筑 vs 踩踏"的直接量化。 */
+      function d117Stats(f, W, H, on) {
+        Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+        R.resize(1);
+        R._layerSig(on);
+        R.invalidateStatic();
+        var pose = d117Pose(f);
+        var ops = 0;
+        var oR = ctx.fillRect, oF = ctx.fill, oS = ctx.stroke, oD = ctx.drawImage;
+        ctx.fillRect = function () { ops++; return oR.apply(ctx, arguments); };
+        ctx.fill = function () { ops++; return oF.apply(ctx, arguments); };
+        ctx.stroke = function () { ops++; return oS.apply(ctx, arguments); };
+        ctx.drawImage = function () { ops++; return oD.apply(ctx, arguments); };
+        try { R.drawMap(pose.grid, pose); } finally {
+          ctx.fillRect = oR; ctx.fill = oF; ctx.stroke = oS; ctx.drawImage = oD;
+        }
+        var img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var CW = cv.width, CH = cv.height, k = R.dpr * R.scale;
+        var cam2 = R._cam();
+        var ls = 0, lsq = 0, lp = 0, edgeN = 0, sampN = 0;
+        var hueN = [], oriN = [], qN = {}, hueTot = 0, oriTot = 0, qTot = 0;
+        for (var hb = 0; hb < 12; hb++) hueN[hb] = 0;
+        for (var ob = 0; ob < 8; ob++) oriN[ob] = 0;
+        /* 48px 周期能量：只在地板格之间配对（+2 格 = 48px），亮度自相关。
+         * 相关本身对亮度线性缩放不变，所以低亮度下这条仍成立；
+         * 它测的是"砌层是否在 48px 上重复"，而不是画面整体明暗布局。 */
+        var cX = { n: 0, a: 0, b: 0, aa: 0, bb: 0, ab: 0 };
+        var cY = { n: 0, a: 0, b: 0, aa: 0, bb: 0, ab: 0 };
+        function accC(c, a2, b2) {
+          c.n++; c.a += a2; c.b += b2; c.aa += a2 * a2; c.bb += b2 * b2; c.ab += a2 * b2;
+        }
+        function corrOf(c) {
+          if (c.n < 64) return 0;
+          var cov = c.n * c.ab - c.a * c.b;
+          var va = c.n * c.aa - c.a * c.a, vb = c.n * c.bb - c.b * c.b;
+          if (va <= 0 || vb <= 0) return 0;
+          return cov / Math.sqrt(va * vb);
+        }
+        function lumAt(X, Y) {
+          var j = (Y * CW + X) * 4;
+          return (0.299 * img[j] + 0.587 * img[j + 1] + 0.114 * img[j + 2]) / 255;
+        }
+        var SH = Math.round(48 * k);
+        for (var cy = 0; cy < pose.grid.length; cy++) {
+          for (var cx = 0; cx < pose.grid[0].length; cx++) {
+            if (pose.grid[cy][cx] !== 1) continue;
+            var X0 = Math.round((cx * 24 - cam2.x + 3) * k);
+            var Y0 = Math.round((cy * 24 - cam2.y + 3) * k);
+            var X1 = Math.round((cx * 24 - cam2.x + 21) * k);
+            var Y1 = Math.round((cy * 24 - cam2.y + 21) * k);
+            if (X0 < 1 || Y0 < 1 || X1 >= CW - 1 || Y1 >= CH - 1) continue;
+            var okX = (cx + 2 < pose.grid[0].length) && pose.grid[cy][cx + 2] === 1 && (X1 + SH < CW);
+            var okY = (cy + 2 < pose.grid.length) && pose.grid[cy + 2][cx] === 1 && (Y1 + SH < CH);
+            for (var Y = Y0; Y < Y1; Y++) {
+              for (var X = X0; X < X1; X++) {
+                var i = (Y * CW + X) * 4;
+                var r = img[i], g2 = img[i + 1], b = img[i + 2];
+                var L = (0.299 * r + 0.587 * g2 + 0.114 * b) / 255;
+                ls += L; lsq += L * L; lp++; sampN++;
+                if (Math.max(r, g2, b) - Math.min(r, g2, b) > 12) {
+                  var hu = Math.atan2(Math.sqrt(3) * (g2 - b), 2 * r - g2 - b);
+                  var bin = Math.floor(((hu + Math.PI) / (Math.PI * 2)) * 12) % 12;
+                  hueN[bin]++; hueTot++;
+                }
+                qTot++;
+                var qk = ((r >> 4) << 8) | ((g2 >> 4) << 4) | (b >> 4);
+                qN[qk] = (qN[qk] || 0) + 1;
+                var dx2 = Math.abs(lumAt(X + 1, Y) - lumAt(X - 1, Y));
+                var dy2 = Math.abs(lumAt(X, Y + 1) - lumAt(X, Y - 1));
+                if (dx2 + dy2 > 0.055) {
+                  edgeN++;
+                  /* 边缘方向 8 桶（0..180°，按梯度幅值加权）：正交砌层落在 0/90°，
+                   * 斜向踩踏痕落在 45/135°——这是"构图不同"的直接证据。 */
+                  var ang = Math.atan2(dy2, dx2);
+                  if (ang < 0) ang += Math.PI;
+                  var obi = Math.floor(ang / Math.PI * 8) % 8;
+                  oriN[obi] += dx2 + dy2; oriTot += dx2 + dy2;
+                }
+                if (okX) accC(cX, L, lumAt(X + SH, Y));
+                if (okY) accC(cY, L, lumAt(X, Y + SH));
+              }
+            }
+          }
+        }
+        var per = (Math.abs(corrOf(cX)) + Math.abs(corrOf(cY))) / 2;
+        var mean = lp ? ls / lp : 0;
+        var sd = lp ? Math.sqrt(Math.max(0, lsq / lp - mean * mean)) : 0;
+        var hueV = [];
+        for (var hb2 = 0; hb2 < 12; hb2++) hueV.push(hueTot ? hueN[hb2] / hueTot : 0);
+        var oriV = [];
+        for (var ob2 = 0; ob2 < 8; ob2++) oriV.push(oriTot ? oriN[ob2] / oriTot : 0);
+        var dom = 0;
+        for (var qq in qN) if (qN.hasOwnProperty(qq) && qN[qq] > dom) dom = qN[qq];
+        return { hue: hueV, ori: oriV, ops: ops, mean: +mean.toFixed(4), sd: +sd.toFixed(4),
+          per: +per.toFixed(4), edge: +(sampN ? edgeN / sampN : 0).toFixed(4),
+          dom: +(qTot ? dom / qTot : 0).toFixed(4) };
+      }
+      /* 可分距离口径：
+       *   构图项（本卡主判据）= 0.35×8 桶边缘方向直方图 L1/2
+       *                      + 0.25×48px 周期能量差 + 0.20×边缘密度差
+       *                      + 0.10×亮度 SD 差（归一到 0..1）+ 0.10×主色占比差
+       *   配色项（诊断，只判不降）= 12 维色相直方图 L1/2
+       * 为什么不把配色算进主判据：五层色相在 D-113 已经分开，本卡的问题正是
+       * "低亮度下颜色不够用"，所以判据必须落在配色之外；总分按 40/60 加权只用于展示。 */
+      function d117Dist(a, b) {
+        var i, s = 0;
+        for (i = 0; i < a.hue.length; i++) s += Math.abs(a.hue[i] - b.hue[i]);
+        var dc = s / 2;
+        var so = 0;
+        for (i = 0; i < 8; i++) so += Math.abs(a.ori[i] - b.ori[i]);
+        var ds = 0.35 * (so / 2) + 0.25 * Math.abs(a.per - b.per) +
+          0.20 * Math.abs(a.edge - b.edge) +
+          0.10 * Math.abs(a.sd / 0.2 - b.sd / 0.2) +
+          0.10 * Math.abs(a.dom - b.dom);
+        return { total: 0.4 * dc + 0.6 * ds, color: dc, struct: ds };
+      }
+      function d117Hash(f, W, H, on) {
+        Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+        R.resize(1);
+        R._layerSig(on);
+        R.invalidateStatic();
+        var pose = d117Pose(f);
+        R.drawMap(pose.grid, pose);
+        var img = ctx.getImageData(0, 0, cv.width, cv.height).data;
+        var hsh = 2166136261;
+        for (var i = 0; i < img.length; i++) {
+          hsh ^= img[i];
+          hsh = (hsh + ((hsh << 1) + (hsh << 4) + (hsh << 7) + (hsh << 8) + (hsh << 24))) >>> 0;
+        }
+        return hsh >>> 0;
+      }
+
+      /* 固定取数桩：同一格图、同一站位，开关只差 D-117 的绘制 */
+      MP.getEnemies = function () { return []; };
+      MP.getElites = function () { return []; };
+      MP.getDetail = function () { return null; };
+      MP.getDecor = function () { return null; };
+      if (typeof MP.getNpcs === 'function') MP.getNpcs = function () { return []; };
+      Game.fov = undefined;
+      Game.Systems.AI = { getPatrols: function () { return []; } };
+      R._staticBypass = true;
+      R._wallStyle(D113_NEW);
+
+      var d117Before = {}, d117After = {}, d117OpsF = {};
+      for (var ti = 0; ti < d117Tiers.length; ti++) {
+        var TW = d117Tiers[ti][0], TH = d117Tiers[ti][1], tkey = TW + 'x' + TH;
+        d117Before[tkey] = {}; d117After[tkey] = {};
+        [1, 2].forEach(function (f0) {
+          var s0 = d117Stats(f0, TW, TH, false);
+          var s1 = d117Stats(f0, TW, TH, true);
+          d117Before[tkey][f0] = s0;
+          d117After[tkey][f0] = s1;
+        });
+        var dBr = d117Dist(d117Before[tkey][1], d117Before[tkey][2]);
+        var dAr = d117Dist(d117After[tkey][1], d117After[tkey][2]);
+        var dB = dBr.struct, dA = dAr.struct;
+        var mB = d117Before[tkey][1], mA = d117After[tkey][1];
+        var opsB = mB.ops, opsA = mA.ops;
+        var ratio = opsB ? opsA / opsB : 9;
+        function d117F(s) {
+          return { mean: s.mean, sd: s.sd, edge: s.edge, dom: s.dom, per: s.per, ori: s.ori };
+        }
+        d117Table.push({ tier: tkey, before: +dB.toFixed(4), after: +dA.toFixed(4),
+          gain: +(dB ? dA / dB : 9).toFixed(2),
+          totalBefore: +dBr.total.toFixed(4), totalAfter: +dAr.total.toFixed(4),
+          colorBefore: +dBr.color.toFixed(4), colorAfter: +dAr.color.toFixed(4),
+          f1a: d117F(mA), f1b: d117F(mB),
+          f2a: d117F(d117After[tkey][2]), f2b: d117F(d117Before[tkey][2]),
+          opsF1: { before: opsB, after: opsA, ratio: +ratio.toFixed(2) } });
+        ck117('d117.before.' + tkey, dB < D117_MIN, '改动前构图可分距离=' + dB.toFixed(4) +
+          '（必须 < ' + D117_MIN + ' → 门槛在改前不成立）');
+        ck117('d117.after.' + tkey, dA >= D117_MIN && dA >= dB * D117_GAIN,
+          '改动后=' + dA.toFixed(4) + '（≥' + D117_MIN + ' 且 ≥改前×' + D117_GAIN + '，改前=' + dB.toFixed(4) +
+          '；配色诊断项 ' + dAr.color.toFixed(4) + '，加权总分 ' + dAr.total.toFixed(4) + '）');
+        ck117('d117.color.' + tkey, dAr.color >= dBr.color - 0.02,
+          '配色可分项不得被构图手段破坏：' + dBr.color.toFixed(4) + '→' + dAr.color.toFixed(4));
+        ck117('d117.ops.' + tkey, ratio <= D117_OPS_RATIO,
+          'F1 静态重建绘制调用 ' + opsB + '→' + opsA + '（×' + ratio.toFixed(2) + '，≤' + D117_OPS_RATIO + '）');
+      }
+      /* F2 的绘制预算单独报（scuff 是 stroke，量级与 F1 不同） */
+      var d117OpsF2 = {};
+      d117S4 && (function () {
+        var tkey = d117S4[0] + 'x' + d117S4[1];
+        d117OpsF2 = { before: d117Before[tkey][2].ops, after: d117After[tkey][2].ops };
+        var rr = d117OpsF2.before ? d117OpsF2.after / d117OpsF2.before : 9;
+        d117OpsF2.ratio = +rr.toFixed(2);
+        ck117('d117.ops.f2', rr <= D117_OPS_RATIO,
+          'F2 静态重建绘制调用 ' + d117OpsF2.before + '→' + d117OpsF2.after +
+          '（×' + rr.toFixed(2) + '，≤' + D117_OPS_RATIO + '）');
+      })();
+      /* 对照：F3/F4/F5 在开关两种状态下必须逐像素一致（本卡只动 F1/F2） */
+      [3, 4, 5].forEach(function (fc) {
+        [d117S3, d117S4].forEach(function (sz) {
+          var hOff = d117Hash(fc, sz[0], sz[1], false);
+          var hOn = d117Hash(fc, sz[0], sz[1], true);
+          d117Ctrl.push({ f: fc, tier: sz[0] + 'x' + sz[1], off: hOff, on: hOn, same: hOff === hOn });
+          ck117('d117.ctrl.f' + fc + '.' + sz[0], hOff === hOn,
+            'F' + fc + ' ' + sz[0] + '×' + sz[1] + ' 开关哈希 ' + hOff + ' / ' + hOn);
+        });
+      });
+      /* F1/F2 必须真的画了东西（否则上面的"改后"只是 tint 抖动） */
+      var d117Changed = {};
+      [1, 2].forEach(function (fz) {
+        var hOff = d117Hash(fz, 1024, 640, false);
+        var hOn = d117Hash(fz, 1024, 640, true);
+        d117Changed[fz] = { off: hOff, on: hOn, diff: hOff !== hOn };
+        ck117('d117.painted.f' + fz, hOff !== hOn,
+          'F' + fz + ' 1024×640 开关哈希 ' + hOff + ' / ' + hOn);
+      });
+      /* 负例口径（真实可失败）：把"改前"的 F1/F2 直接喂给 ② 的门槛 */
+      var d117NegWorst = 0;
+      for (var tk in d117Before) {
+        if (!d117Before.hasOwnProperty(tk)) continue;
+        var dv = d117Dist(d117Before[tk][1], d117Before[tk][2]).struct;
+        if (dv > d117NegWorst) d117NegWorst = dv;
+      }
+      ck117('d117.neg.before', d117NegWorst < D117_MIN,
+        '改前最大可分距离=' + d117NegWorst.toFixed(4) + ' < ' + D117_MIN +
+        '（四档全部达不到改后门槛 → 断言会真红）');
+
+      R._layerSig(true);
+      R._staticBypass = false;
+      MP.getEnemies = d117Save2.en; MP.getElites = d117Save2.el;
+      MP.getDetail = d117Save2.de; MP.getDecor = d117Save2.dc;
+      if (typeof MP.getNpcs === 'function') MP.getNpcs = d117Save2.np;
+      if (typeof MP.getTrap === 'function') MP.getTrap = d117Save2.tr;
+      Game.Systems.AI = d117Save2.ai;
+      Game.fov = d117Save2.fov;
+      try {
+        Object.defineProperty(window, 'innerWidth', { value: d117W0b, configurable: true });
+        Object.defineProperty(window, 'innerHeight', { value: d117H0b, configurable: true });
+      } catch (e5) { /* 忽略 */ }
+      R.resize(1);
+      sub.d117Table = d117Table;
+      sub.d117Ctrl = d117Ctrl;
+      sub.d117Changed = d117Changed;
+      sub.d117OpsF2 = d117OpsF2;
+      sub.d117Style = R._layerSigStyle();
+      ok = ok && d117Ok;
+
+      sub.d115Style = R._interactStyle();
+      sub.d115Table = d115Table;
+      sub.d115Neg = d115Neg;
+      sub.d115Fov = d115Fov;
+      sub.d115Pri = d115Pri;
+      sub.d115Bad = d115Bad;
+      ok = ok && d115Ok;
+
       out.sub = sub;
       out.mapOk = ok;
     } catch (e) {

@@ -1,6 +1,6 @@
 {
-    "at":  "2026-11-15T16:04:51.4803253+08:00",
-    "total":  339,
+    "at":  "2026-11-18T04:55:23.6937845+08:00",
+    "total":  355,
     "paletteSize":  84,
     "palette":  [
                     "#16222e",
@@ -101,7 +101,7 @@
 
                  ],
     "names":  {
-                  "count":  339,
+                  "count":  355,
                   "missingFiles":  [
 
                                    ],
@@ -7941,6 +7941,390 @@
                                    46,
                                    53
                                ]
+                  },
+                  {
+                      "name":  "bat_idle_anim_f0.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  181,
+                      "full":  181,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   3,
+                                   21,
+                                   17
+                               ]
+                  },
+                  {
+                      "name":  "bat_idle_anim_f1.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  181,
+                      "full":  181,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   2,
+                                   21,
+                                   16
+                               ]
+                  },
+                  {
+                      "name":  "bat_idle_anim_f2.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  182,
+                      "full":  182,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   3,
+                                   21,
+                                   17
+                               ]
+                  },
+                  {
+                      "name":  "bat_idle_anim_f3.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  182,
+                      "full":  182,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   4,
+                                   21,
+                                   18
+                               ]
+                  },
+                  {
+                      "name":  "bat_run_anim_f0.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  185,
+                      "full":  185,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   2,
+                                   21,
+                                   16
+                               ]
+                  },
+                  {
+                      "name":  "bat_run_anim_f1.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  183,
+                      "full":  183,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   4,
+                                   21,
+                                   18
+                               ]
+                  },
+                  {
+                      "name":  "bat_run_anim_f2.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  188,
+                      "full":  188,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   2,
+                                   21,
+                                   16
+                               ]
+                  },
+                  {
+                      "name":  "bat_run_anim_f3.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  183,
+                      "full":  183,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#222222",
+                                     "#2e1a3e",
+                                     "#472a5c",
+                                     "#5f2d56",
+                                     "#6a3d7a",
+                                     "#d3bfa9",
+                                     "#facb3e"
+                                 ],
+                      "bbox":  [
+                                   0,
+                                   4,
+                                   21,
+                                   18
+                               ]
+                  },
+                  {
+                      "name":  "slime_idle_anim_f0.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  128,
+                      "full":  128,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   5,
+                                   10,
+                                   18,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_idle_anim_f1.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  136,
+                      "full":  136,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   6,
+                                   7,
+                                   17,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_idle_anim_f2.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  126,
+                      "full":  126,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   4,
+                                   11,
+                                   19,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_idle_anim_f3.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  144,
+                      "full":  144,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   5,
+                                   8,
+                                   18,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_run_anim_f0.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  124,
+                      "full":  124,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   4,
+                                   12,
+                                   19,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_run_anim_f1.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  143,
+                      "full":  143,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   6,
+                                   6,
+                                   17,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_run_anim_f2.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  138,
+                      "full":  138,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   4,
+                                   10,
+                                   19,
+                                   20
+                               ]
+                  },
+                  {
+                      "name":  "slime_run_anim_f3.png",
+                      "w":  24,
+                      "h":  24,
+                      "opaque":  136,
+                      "full":  136,
+                      "semi":  0,
+                      "colorCount":  7,
+                      "colors":  [
+                                     "#16222e",
+                                     "#222222",
+                                     "#3e5442",
+                                     "#5c7a56",
+                                     "#79b85a",
+                                     "#97da3f",
+                                     "#fdf7ed"
+                                 ],
+                      "bbox":  [
+                                   6,
+                                   8,
+                                   17,
+                                   20
+                               ]
                   }
               ],
     "groups":  [
@@ -7979,6 +8363,46 @@
                                ],
                        "files":  [
                                      "barrel"
+                                 ]
+                   },
+                   {
+                       "group":  "bat_idle_anim",
+                       "frames":  4,
+                       "dims":  [
+                                    "24x24"
+                                ],
+                       "dimsOk":  true,
+                       "missing":  [
+
+                                   ],
+                       "dup":  [
+
+                               ],
+                       "files":  [
+                                     "bat_idle_anim_f0",
+                                     "bat_idle_anim_f1",
+                                     "bat_idle_anim_f2",
+                                     "bat_idle_anim_f3"
+                                 ]
+                   },
+                   {
+                       "group":  "bat_run_anim",
+                       "frames":  4,
+                       "dims":  [
+                                    "24x24"
+                                ],
+                       "dimsOk":  true,
+                       "missing":  [
+
+                                   ],
+                       "dup":  [
+
+                               ],
+                       "files":  [
+                                     "bat_run_anim_f0",
+                                     "bat_run_anim_f1",
+                                     "bat_run_anim_f2",
+                                     "bat_run_anim_f3"
                                  ]
                    },
                    {
@@ -9239,6 +9663,46 @@
                                ],
                        "files":  [
                                      "skull"
+                                 ]
+                   },
+                   {
+                       "group":  "slime_idle_anim",
+                       "frames":  4,
+                       "dims":  [
+                                    "24x24"
+                                ],
+                       "dimsOk":  true,
+                       "missing":  [
+
+                                   ],
+                       "dup":  [
+
+                               ],
+                       "files":  [
+                                     "slime_idle_anim_f0",
+                                     "slime_idle_anim_f1",
+                                     "slime_idle_anim_f2",
+                                     "slime_idle_anim_f3"
+                                 ]
+                   },
+                   {
+                       "group":  "slime_run_anim",
+                       "frames":  4,
+                       "dims":  [
+                                    "24x24"
+                                ],
+                       "dimsOk":  true,
+                       "missing":  [
+
+                                   ],
+                       "dup":  [
+
+                               ],
+                       "files":  [
+                                     "slime_run_anim_f0",
+                                     "slime_run_anim_f1",
+                                     "slime_run_anim_f2",
+                                     "slime_run_anim_f3"
                                  ]
                    },
                    {

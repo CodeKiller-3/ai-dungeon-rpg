@@ -127,10 +127,15 @@
     var maxId = null, maxPrice = -1;
     Object.keys(I).forEach(function (k) { if (I[k].price > maxPrice) { maxPrice = I[k].price; maxId = k; } });
     var g0 = P.gold;
+    /* D-96：全表最贵件（稀有板甲 800）只在 F5 核心货架；本步骤临时把楼层桩设到 5，
+     * 买卖完立刻恢复，套利断言不变，也不影响后续 t7/t8 的楼层遍历。 */
+    var floorT6 = floor;
+    floor = 5;
     var rb = Shop.buy(maxId);
     var b1 = P.gold;
     var rs = Shop.sell(maxId);
     var b2 = P.gold;
+    floor = floorT6;
     sub.t6_noArbitrage = arbBad.length === 0 && rb.ok && rs.ok && b1 < g0 && b2 < g0;
     sub.t6_worstDelta = { buy: b1 - g0, sellThen: b2 - g0, item: maxId };
     ok = ok && sub.t6_noArbitrage;

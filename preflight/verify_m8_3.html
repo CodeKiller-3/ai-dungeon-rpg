@@ -147,7 +147,17 @@
       var useR = Inv.use('potion_small');
       var use_ok = useR.ok && P.hp === 80 && !P.inventory.potion_small;
       P.gold = 200;
+      /* D-96：白骨剑只在 F1 轮换池，是否在货架取决于开张相位；本步骤临时把楼层桩设到 1，
+       * 按真实开张规则推进到它出现在货架为止（有界），买完恢复原桩（F3）。 */
+      var floorFnT7 = G.Systems.Map.getFloor;
+      G.Systems.Map.getFloor = function () { return 1; };
+      for (var tk7 = 0; tk7 <= G.Data.SHOP_ROTATION[0].length; tk7++) {
+        var ids7 = Shop.getStock().map(function (e) { return e.id; });
+        if (ids7.indexOf('sword_bone') >= 0) break;
+        Shop.refresh();
+      }
       var b2 = Shop.buy('sword_bone');
+      G.Systems.Map.getFloor = floorFnT7;
       var oldBuy_ok = b2.ok && P.gold === 140 && P.inventory.sword_bone === 1;
       sub.t7_oldFunc = use_ok && oldBuy_ok;
       ok = ok && sub.t7_oldFunc;

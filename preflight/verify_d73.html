@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>D-73 交付材料总同步 · 验收</title>
+<title>D-73 交付材料总同步 · 验收（D-95 复核）</title>
 <style>
   body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
   pre { white-space:pre-wrap; word-break:break-all; }
@@ -10,7 +10,7 @@
 </style>
 </head>
 <body>
-<h1>D-73 · 对外截图 9 张 + 六份文档数字 ↔ D-72 代码（A–C）</h1>
+<h1>D-73 · 对外截图 9 张 + 七份文档数字 ↔ 当前代码（A–C；D-95 起改指 d95/ 与 D-94 现值）</h1>
 <pre id="result">RUNNING</pre>
 <canvas id="game" width="1024" height="640"></canvas>
 <script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
@@ -45,7 +45,9 @@
   function has(t, s) { return !!t && t.indexOf(s) >= 0; }
   function no(t, s) { return !!t && t.indexOf(s) < 0; }
 
-  /* ── A：截图存在 + 尺寸（Image 真正解码，不是只看文件名）──────── */
+  /* ── A：截图存在 + 尺寸（Image 真正解码，不是只看文件名）────────
+   * D-95：对外图目录从 d73/ 换到 d95/（d73/ 9 张、d74/ 10 张原样保留为历史）。 */
+  var SHOT_DIR = 'd95';
   var SHOTS = [
     '01-menu-nosave', '02-menu-save', '03-guide', '04-explore-elite',
     '05-battle-crush', '06-elite-loot', '07-levelup', '08-death', '09-ending'
@@ -56,11 +58,11 @@
     var bad = [], rows = [];
     for (var i = 0; i < SHOTS.length; i++) {
       var s = shotState[SHOTS[i]] || { ok: false, w: 0, h: 0 };
-      rows.push({ file: 'd73/' + SHOTS[i] + '.png', w: s.w, h: s.h, ok: s.ok });
+      rows.push({ file: SHOT_DIR + '/' + SHOTS[i] + '.png', w: s.w, h: s.h, ok: s.ok });
       if (!s.ok || s.w !== 1280 || s.h !== 800) bad.push(SHOTS[i] + ' ' + s.w + 'x' + s.h);
     }
     rec('A1_nineShots', bad.length === 0, {
-      rule: 'd73/ 九张对外图必须能解码，且都是 1280×800',
+      rule: SHOT_DIR + '/ 九张对外图必须能解码，且都是 1280×800',
       count: SHOTS.length, bad: bad, rows: rows
     });
     finalize();
@@ -77,7 +79,7 @@
           shotState[name] = { ok: false, w: 0, h: 0 };
           if (--pending === 0) finishShots();
         };
-        img.src = 'artifacts/d73/' + name + '.png';
+        img.src = 'artifacts/' + SHOT_DIR + '/' + name + '.png';
       })(SHOTS[i]);
     }
   })();
@@ -112,17 +114,19 @@
     });
 
     var BASE = readJson('selfcheck/page-baseline.json');
-    rec('B2_pageBaseline', !!BASE && BASE.count === 122 && BASE.count === BASE.pages.length &&
+    /* D-95：页数不再硬编码，一律从 page-baseline.json 的 count 读（README / 运行说明同源）。 */
+    var PN = (BASE && typeof BASE.count === 'number') ? BASE.count : 0;
+    rec('B2_pageBaseline', !!BASE && PN > 0 && PN === BASE.pages.length &&
       BASE.pages.indexOf('verify_d73') >= 0 && BASE.pages.indexOf('verify_d72') >= 0 &&
       BASE.pages.indexOf('verify_d78') >= 0 && BASE.pages.indexOf('verify_d79') >= 0 &&
       BASE.pages.indexOf('verify_d89') >= 0 && BASE.pages.indexOf('verify_d90') >= 0 &&
       BASE.pages.indexOf('verify_d91') >= 0 && BASE.pages.indexOf('verify_d93') >= 0, {
-      rule: 'page-baseline.json：count=122（D-93 新增 verify_d93）、清单长度一致、含 verify_d73 / verify_d72 / verify_d78 / verify_d79 / verify_d89 / verify_d90 / verify_d91 / verify_d93',
+      rule: 'page-baseline.json：count>0 且等于清单长度（现值 ' + PN + '）、含 verify_d73 / verify_d72 / verify_d78 / verify_d79 / verify_d89 / verify_d90 / verify_d91 / verify_d93',
       count: BASE ? BASE.count : null, len: BASE && BASE.pages ? BASE.pages.length : null,
       hasD73: BASE && BASE.pages ? BASE.pages.indexOf('verify_d73') >= 0 : false
     });
 
-    /* ── C：六份文档逐项对齐 ─────────────────────────────────── */
+    /* ── C：七份文档逐项对齐（D-95：页数从 page-baseline 读，不再写死）──── */
     var README = readText('README.md');
     var RUN = readText('docs/运行说明.md');
     var DEMO = readText('docs/演示脚本.md');
@@ -131,34 +135,43 @@
     var BAL = readText('docs/平衡定档.md');
     var ACC = readText('docs/最终验收清单-D-73.md');
 
+    var PAGES = '验证页 ' + PN + ' 个';
     var docs = {
       README: {
-        must: ['验证页 122 个', '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套', 'preflight/artifacts/d74/'],
-        no: ['验证页 121 个', '验证页 113 个', '验证页 111 个', '验证页 100 个']
+        must: [PAGES, '层内精英', '精英专属武器', '伤害三档与碾压', '爽感表现层四件套',
+          'preflight/artifacts/d95/', 'L10→L11 **200**', 'L11→L12 **1400**'],
+        no: ['验证页 121 个', '验证页 113 个', '验证页 111 个', '验证页 100 个', '113 个 headless']
       },
       RUN: {
-        must: ['当前 122', 'TOTAL=122', 'GUARD=OK expected=122', '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
-        no: ['当前 121', 'TOTAL=121', '当前 113', 'TOTAL=113', 'TOTAL=111', 'TOTAL=100']
+        must: ['当前 ' + PN, 'TOTAL=' + PN, 'GUARD=OK expected=' + PN, 'preflight/artifacts/d95/',
+          '01-menu-nosave.png', '09-ending.png', '10-menu-1920.png'],
+        no: ['当前 121', 'TOTAL=121', '当前 113', 'TOTAL=113', 'TOTAL=111', 'TOTAL=100', 'artifacts/d74/']
       },
       DEMO: {
-        must: ['3/50（6%）', '断牙', '面板 11 → 13', 'd74/04-explore-elite.png', 'd74/06-elite-loot.png'],
-        no: ['24/50（48%）', '14/50']
+        must: ['3/50（6%）', '断牙', '面板 11 → 13', 'd95/04-explore-elite.png', 'd95/06-elite-loot.png',
+          '350', '3 / 6 / 9 / 11 / 12', '12 / 17 / 22 / 24 / 25', '15 点'],
+        no: ['24/50（48%）', '14/50', '260 血', '单次 18', '断牙 8']
       },
       CHK: {
-        must: ['共 29 条（R01–R29）', 'R26', 'R27', 'R28', 'R29'],
-        no: ['共 25 条']
+        must: ['共 34 条（R01–R34）', 'R26', 'R27', 'R28', 'R29', 'R30', 'R31', 'R32', 'R33', 'R34',
+          '横置战斗', '五层战斗背景', '三只 Boss 剪影', '门口首屏', '系统仪表盘'],
+        no: ['共 25 条', '共 29 条']
       },
       TALK: {
-        must: ['3 局（6%）', '断牙', '烬牙', '碾压'],
-        no: ['24 局（48%）', '14/50']
+        must: ['3 局（6%）', '断牙', '烬牙', '碾压', '350', '3 / 6 / 9 / 11 / 12',
+          '12 / 17 / 22 / 24 / 25', '按种类 3–8 格'],
+        no: ['24 局（48%）', '14/50', '断牙 8', '裂颅 12', '霜噬 16', '烬牙 22', '感知半径 6']
       },
       BAL: {
-        must: ['## 二十三', '3/50（6%）', '3 / 6 / 9 / 11 / 12', '13 / 16 / 19 / 21 / 22', '12 / 17 / 22 / 24 / 25'],
-        no: []
+        must: ['## 二十三', '3/50（6%）', '3 / 6 / 9 / 11 / 12', '13 / 16 / 19 / 21 / 22',
+          '12 / 17 / 22 / 24 / 25', '全部龙战中位', '胜场中位'],
+        no: ['B1 中位 17 回合', '中位 11 回合']
       },
       ACC: {
-        must: ['已知不足（7 条）', '已退休口径（4 条）', '3/50（6%）', '118', 'F3 霜噬'],
-        no: ['24/50（48%）']
+        must: ['D-94 现值', 'D-73 历史快照', String(PN), '355', '48 件', '3/50（6%）', '40/50',
+          '350 / 32 / 15', '3 / 6 / 9 / 11 / 12', '12 / 17 / 22 / 24 / 25', '霜噬',
+          '已知不足（8 条）', '已退休口径（5 条）'],
+        no: []
       }
     };
     var txt = { README: README, RUN: RUN, DEMO: DEMO, CHK: CHK, TALK: TALK, BAL: BAL, ACC: ACC };

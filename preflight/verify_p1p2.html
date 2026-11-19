@@ -79,6 +79,11 @@
     for (i = 0; i < ps.length; i++) if (ps[i].monsterId === 'dragon') n++;
     return n;
   }
+  /* D-98：下行改确认框，弹窗只认真实 KeyboardEvent */
+  function tapKey(code) {
+    try { window.dispatchEvent(new KeyboardEvent('keydown', { code: code })); } catch (e) { }
+    try { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); } catch (e) { }
+  }
   function stepOnto(tile, t) {
     var s = findTile(tile);
     if (!s) return false;
@@ -93,8 +98,12 @@
       M._updateExplore(t);
       delete Input.getState()[offs[i][2]];
       t += 300;
+      if (Game.Modal && Game.Modal.isOpen()) {
+        /* 下行：→ 选中「进入第 N 层」+ Enter 确认；其他面板直接关闭 */
+        if (Game.Modal.current() === 'stairconfirm') { tapKey('ArrowRight'); tapKey('Enter'); }
+        else Game.Modal.close();
+      }
       if (Map.getFloor() !== f0) return true;
-      if (Game.Modal && Game.Modal.isOpen()) Game.Modal.close();
     }
     return false;
   }

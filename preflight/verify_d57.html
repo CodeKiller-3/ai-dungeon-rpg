@@ -175,17 +175,17 @@ window.addEventListener('error', function (e) { window.__D57ERR.push('error: ' +
     var onlyLocal = names.filter(function (n) { return auditNames.indexOf(n) < 0; });
     var onlyAudit = auditNames.filter(function (n) { return names.indexOf(n) < 0; });
     var meta = (audit && audit.names) || {};
-    var ok = names.length === 339 && !!audit && audit.total === 339 &&
-      meta.count === 339 && auditNames.length === 339 && onlyLocal.length === 0 && onlyAudit.length === 0 &&
+    var ok = names.length === 355 && !!audit && audit.total === 355 &&
+      meta.count === 355 && auditNames.length === 355 && onlyLocal.length === 0 && onlyAudit.length === 0 &&
       (meta.missingFiles || []).length === 0 && (meta.extraFiles || []).length === 0 && (meta.dupNames || []).length === 0 &&
       missingFrames.length === 0 && names.indexOf('player') >= 0 &&
-      lic.indexOf('339 个 PNG') >= 0 && lic.indexOf('339 注册 / 339 落盘') >= 0;
+      lic.indexOf('355 个 PNG') >= 0 && lic.indexOf('355 注册 / 355 落盘') >= 0;
     rec('D_assets_registered', ok, {
-      rule: 'NAMES 339 = 落盘 339 = LICENSE 339（D-79 +96 主题贴图、D-86 +36 Boss 三态）；玩家 12 帧 + player 单图全部登记',
+      rule: 'NAMES 355 = 落盘 355 = LICENSE 355（D-79 +96 主题贴图、D-86 +36 Boss 三态、新怪帧 +16）；玩家 12 帧 + player 单图全部登记',
       names: names.length, auditTotal: audit && audit.total, files: auditNames.length,
       auditCount: meta.count, missingFiles: meta.missingFiles, extraFiles: meta.extraFiles, dupNames: meta.dupNames,
       missingFrames: missingFrames, onlyLocal: onlyLocal.slice(0, 5), onlyAudit: onlyAudit.slice(0, 5),
-      license339: lic.indexOf('339 个 PNG') >= 0
+      license339: lic.indexOf('355 个 PNG') >= 0
     });
   })();
 

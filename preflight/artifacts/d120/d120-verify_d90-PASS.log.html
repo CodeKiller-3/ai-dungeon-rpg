@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>PASS {"protocol":"D-90","ok":true,"error":null,"sub":{"A_surveyTimeline":{"ok":true,"d":{"rule":"0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 文字 0.5；260ms 房间 1；360ms 退去起点；460ms 0.27；520ms 归零；房间 ≤6（D-114 起不再有 X3 网格 alpha）","frames":{"t0":{"t":0,"phase":"in","black":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t40":{"t":40,"phase":"in","black":0.36,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t80":{"t":80,"phase":"survey","black":0.72,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t120":{"t":120,"phase":"survey","black":0.72,"textAlpha":0.5,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t260":{"t":260,"phase":"survey","black":0.72,"textAlpha":1,"roomAlpha":0.75,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t360":{"t":360,"phase":"out","black":0.72,"textAlpha":1,"roomAlpha":1,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t460":{"t":460,"phase":"out","black":0.27,"textAlpha":0,"roomAlpha":0.167,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t520":null}}},"B_x3Removed":{"ok":true,"d":{"rule":"X3 绘制入口/API 全部不存在；T1 黑场安全线 HUD_SAFE_H=43（顶栏 0–28 + 读数带 28–42 不打黑）","gridPoints":"undefined","underlay":"undefined","hudSafeH":43}},"C_fixturePlaced":{"ok":true,"d":{"rule":"楼梯夹具必须在本轮摆出\"能看见楼梯\"的站位（环形半径 2..6）；摆不出即本轮无法验证，判负并换种子","stair":{"x":13,"y":9},"placed":true,"n":1}},"C_targetBrackets":{"ok":true,"d":{"rule":"目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；夹具成立时必须检出（无 !placed 短路）","stair":{"x":13,"y":9},"placed":true,"n":1,"bad":[],"keys":[{"key":"stair:13,9","kind":"stair","x":13,"y":9,"gold":false}]}},"D_hudBand":{"ok":true,"d":{"rule":"宽屏三簇（LV/ATK/突破，y=28）；320 = 左簇 + ATK 右簇（经验条缩到 32，右缘 ≤W−8）","wide":{"W":1024,"narrow":false,"tiny":false,"left":{"x":8,"w":103,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":44,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":496,"w":33,"text":"ATK 12","align":"center","bottom":42},"right":{"x":939,"w":77,"text":"突破 还差 2381","kind":"next","notch":{"x":930,"y":32,"w":2,"h":6}},"y":28},"narrow":{"W":320,"narrow":true,"tiny":true,"left":{"x":8,"w":91,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":279,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"y":28}}},"E_breakthroughShared":{"ok":true,"d":{"rule":"Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破","live":{"kind":"next","need":2450,"have":69,"remain":2381},"ready":{"kind":"ready","need":2450,"have":2450,"remain":0},"done":{"kind":"done","ms":{"atk":9,"def":4,"maxHp":20}},"same":true}},"F_noNewKeys":{"ok":true,"d":{"rule":"HELP 8 条不变，键位需求未改（verify_d20 仍是权威）","n":8}},"G_pureVisual":{"ok":true,"d":{"rule":"绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变","random":0,"writes":0}},"H_inputDuringSurvey":{"ok":true,"d":{"rule":"测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制","picked":{"dx":1,"dy":0,"code":"ArrowRight"},"before":{"x":1,"y":1,"scene":"explore"},"after":{"x":2,"y":1,"scene":"explore"},"surveyPhase":"survey","surveyT":200,"sceneAfter":"explore"}},"J_layersOnce":{"ok":true,"d":{"rule":"顶栏无 Lv/经验；读数带 ATK=Player.atk 且无\"刀\"；系统页 攻/成长终点同值；页内经验只一处；武器段写\"武器 N\"","violations":[],"atkBand":"ATK 12","chip":"攻 12","growth":"本局成长：攻击 11 → 12","plAtk":12,"weaponEff":16,"bar":["100/100","MP 30/30","金币 128","第 1/5 层","击杀 0/0","LV","4","24/60","ATK ","12","突破","还差 2336"],"band":["LV","4","24/60","ATK ","12","突破","还差 2336"],"pageAtk":["攻 12","武器共鸣","武器 16","本局成长：攻击 11 → 12"],"pageExp":["经验 24/60 · 还差 36"]}},"K_negativeLegacyLv":{"ok":true,"d":{"rule":"还原旧四层 Lv 的两处（顶栏 Lv.4 24/60、页内条右端 24/60）→ 裁决必报 topbar:Lv 与 page:经验读数 2 次","violations":["topbar:Lv","page:经验读数出现 2 次"]}},"L_x1AndT1":{"ok":true,"d":{"rule":"X1 无坐标/无层号；T1 黑场从 y=43 起：顶栏(10,10)/读数带(400,35) 像素不变，地图(512,600) 亮度 &lt;55%","x1Gone":true,"hudSafe":43,"topSame":true,"bandSame":true,"mapLum":[0.5019607843137255,0.15827843137254902],"markerTexts":[]}},"M_narrowBand":{"ok":true,"d":{"rule":"320/390 读数带 = 左簇(LV+经验) + ATK 右簇；右缘 ≤W−8、间距 ≥6、条底 ≤42、ATK 文本与 fillText 入参一致；条底 &lt; 真实 chip 行 y","geo":{"320":{"ok":true,"left":{"x":8,"w":91,"text":"LV4 24/60","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.4}},"mid":{"x":279,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"gap":180,"bandBottom":42,"chipY":45},"390":{"ok":true,"left":{"x":8,"w":91,"text":"LV4 24/60","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.4}},"mid":{"x":349,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"gap":250,"bandBottom":42,"chipY":45}}}},"O_bandBudget":{"ok":true,"d":{"rule":"窄档读数带绘制调用 ≤24（D-114 基线 15，D-118 增加 ATK 底板+两段文字 = 18）","ops":{"320":18,"390":18,"1024":23}}},"P_archNarrowWords":{"ok":true,"d":{"rule":"窄档档案用完整词（精英刀/图鉴/任务），一行放得下（measureText ≤ 内容宽），无单字缩写","geo":{"320":{"ok":true,"arch":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"innerW":258,"variant":"narrow","padTop":200},"390":{"ok":true,"arch":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"innerW":319,"variant":"narrow","padTop":338}}}},"Q_negativeLegacyNarrow":{"ok":true,"d":{"rule":"D-114 窄档旧格式复刻 + 真实测量（旧函数本体已随 D-114 删除，不可调用）：P.atk=null → 真实 drawHudBand(390) 无 ATK；旧单字档案（真实 arch 数值 + 真实 measureText）→ 同一裁决必须判负；当前完整词档案必须判正","band":{"mid":null,"rejected":true,"cap":[{"t":"LV","x":8,"y":39},{"t":"4","x":22,"y":39},{"t":"24/60","x":71.5,"y":39}]},"arch":{"legacy":{"text":"刀 0/5 · 鉴 0/18 · 任 0/12","w":140,"lines":1,"font":"10px"},"rejected":true,"current":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"currentAccepted":true}}},"N_ledgerComplete":{"ok":true,"d":{"rule":"系统页（1024）仍含全部账本项（龙威只在龙战出现，本夹具不适用）","missing":[]}},"I_evidence":{"ok":true,"d":{"rule":"本轮实拍证据（D-90 九张 + D-114 八张 + D-115 五张 + D-116 十张 + D-117 十张 + D-118 六张）必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）","n":48,"bad":[]}}}}</title>
+<style>
+  html,body{margin:0;background:#0b0b10;color:#d8d8e0;font:13px/1.5 monospace}
+  #result{padding:14px 18px;white-space:pre-wrap;word-break:break-all}
+  canvas{position:fixed;left:-9999px;top:0}
+  h1{font-size:15px;margin:12px 0 6px;color:#ffd479}
+</style>
+</head>
+<body>
+<h1>D-90：系统测量层（T1 入层测绘 / X1 水印 / X3 网格残迹 / X2 目标括号 / H1+H2 读数带）</h1>
+<pre id="result">PASS {"protocol":"D-90","ok":true,"error":null,"sub":{"A_surveyTimeline":{"ok":true,"d":{"rule":"0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 文字 0.5；260ms 房间 1；360ms 退去起点；460ms 0.27；520ms 归零；房间 ≤6（D-114 起不再有 X3 网格 alpha）","frames":{"t0":{"t":0,"phase":"in","black":0,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t40":{"t":40,"phase":"in","black":0.36,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t80":{"t":80,"phase":"survey","black":0.72,"textAlpha":0,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t120":{"t":120,"phase":"survey","black":0.72,"textAlpha":0.5,"roomAlpha":0,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t260":{"t":260,"phase":"survey","black":0.72,"textAlpha":1,"roomAlpha":0.75,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t360":{"t":360,"phase":"out","black":0.72,"textAlpha":1,"roomAlpha":1,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t460":{"t":460,"phase":"out","black":0.27,"textAlpha":0,"roomAlpha":0.167,"floor":1,"w":25,"h":19,"rooms":0,"title":"F1","sub":"25 × 19 · 已测绘"},"t520":null}}},"B_x3Removed":{"ok":true,"d":{"rule":"X3 绘制入口/API 全部不存在；T1 黑场安全线 HUD_SAFE_H=43（顶栏 0–28 + 读数带 28–42 不打黑）","gridPoints":"undefined","underlay":"undefined","hudSafeH":43}},"C_fixturePlaced":{"ok":true,"d":{"rule":"楼梯夹具必须在本轮摆出\"能看见楼梯\"的站位（环形半径 2..6）；摆不出即本轮无法验证，判负并换种子","stair":{"x":13,"y":9},"placed":true,"n":1}},"C_targetBrackets":{"ok":true,"d":{"rule":"目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；夹具成立时必须检出（无 !placed 短路）","stair":{"x":13,"y":9},"placed":true,"n":1,"bad":[],"keys":[{"key":"stair:13,9","kind":"stair","x":13,"y":9,"gold":false}]}},"D_hudBand":{"ok":true,"d":{"rule":"宽屏三簇（LV/ATK/突破，y=28）；320 = 左簇 + ATK 右簇（经验条缩到 32，右缘 ≤W−8）","wide":{"W":1024,"narrow":false,"tiny":false,"left":{"x":8,"w":103,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":44,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":496,"w":33,"text":"ATK 12","align":"center","bottom":42},"right":{"x":939,"w":77,"text":"突破 还差 2381","kind":"next","notch":{"x":930,"y":32,"w":2,"h":6}},"y":28},"narrow":{"W":320,"narrow":true,"tiny":true,"left":{"x":8,"w":91,"text":"LV3 24/45","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.533}},"mid":{"x":279,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"y":28}}},"E_breakthroughShared":{"ok":true,"d":{"rule":"Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破","live":{"kind":"next","need":2450,"have":69,"remain":2381},"ready":{"kind":"ready","need":2450,"have":2450,"remain":0},"done":{"kind":"done","ms":{"atk":9,"def":4,"maxHp":20}},"same":true}},"F_noNewKeys":{"ok":true,"d":{"rule":"HELP 8 条不变，键位需求未改（verify_d20 仍是权威）","n":8}},"G_pureVisual":{"ok":true,"d":{"rule":"绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变","random":0,"writes":0}},"H_inputDuringSurvey":{"ok":true,"d":{"rule":"测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制","picked":{"dx":1,"dy":0,"code":"ArrowRight"},"before":{"x":1,"y":1,"scene":"explore"},"after":{"x":2,"y":1,"scene":"explore"},"surveyPhase":"survey","surveyT":200,"sceneAfter":"explore"}},"J_layersOnce":{"ok":true,"d":{"rule":"顶栏无 Lv/经验；读数带 ATK=Player.atk 且无\"刀\"；系统页 攻/成长终点同值；页内经验只一处；武器段写\"武器 N\"","violations":[],"atkBand":"ATK 12","chip":"攻 12","growth":"本局成长：攻击 11 → 12","plAtk":12,"weaponEff":16,"bar":["100/100","MP 30/30","金币 128","第 1/5 层","击杀 0/0","LV","4","24/60","ATK ","12","突破","还差 2336"],"band":["LV","4","24/60","ATK ","12","突破","还差 2336"],"pageAtk":["攻 12","武器共鸣","武器 16","本局成长：攻击 11 → 12"],"pageExp":["经验 24/60 · 还差 36"]}},"K_negativeLegacyLv":{"ok":true,"d":{"rule":"还原旧四层 Lv 的两处（顶栏 Lv.4 24/60、页内条右端 24/60）→ 裁决必报 topbar:Lv 与 page:经验读数 2 次","violations":["topbar:Lv","page:经验读数出现 2 次"]}},"L_x1AndT1":{"ok":true,"d":{"rule":"X1 无坐标/无层号；T1 黑场从 y=43 起：顶栏(10,10)/读数带(400,35) 像素不变，地图(512,600) 亮度 &lt;55%","x1Gone":true,"hudSafe":43,"topSame":true,"bandSame":true,"mapLum":[0.5019607843137255,0.15827843137254902],"markerTexts":[]}},"M_narrowBand":{"ok":true,"d":{"rule":"320/390 读数带 = 左簇(LV+经验) + ATK 右簇；右缘 ≤W−8、间距 ≥6、条底 ≤42、ATK 文本与 fillText 入参一致；条底 &lt; 真实 chip 行 y","geo":{"320":{"ok":true,"left":{"x":8,"w":91,"text":"LV4 24/60","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.4}},"mid":{"x":279,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"gap":180,"bandBottom":42,"chipY":45},"390":{"ok":true,"left":{"x":8,"w":91,"text":"LV4 24/60","bar":{"x":33.5,"y":34,"w":32,"h":4,"seg":10,"ratio":0.4}},"mid":{"x":349,"w":33,"text":"ATK 12","align":"right","bottom":42},"right":null,"gap":250,"bandBottom":42,"chipY":45}}}},"O_bandBudget":{"ok":true,"d":{"rule":"窄档读数带绘制调用 ≤24（D-114 基线 15，D-118 增加 ATK 底板+两段文字 = 18）","ops":{"320":18,"390":18,"1024":23}}},"P_archNarrowWords":{"ok":true,"d":{"rule":"窄档档案用完整词（精英刀/图鉴/任务），一行放得下（measureText ≤ 内容宽），无单字缩写","geo":{"320":{"ok":true,"arch":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"innerW":258,"variant":"narrow","padTop":200},"390":{"ok":true,"arch":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"innerW":319,"variant":"narrow","padTop":338}}}},"Q_negativeLegacyNarrow":{"ok":true,"d":{"rule":"D-114 窄档旧格式复刻 + 真实测量（旧函数本体已随 D-114 删除，不可调用）：P.atk=null → 真实 drawHudBand(390) 无 ATK；旧单字档案（真实 arch 数值 + 真实 measureText）→ 同一裁决必须判负；当前完整词档案必须判正","band":{"mid":null,"rejected":true,"cap":[{"t":"LV","x":8,"y":39},{"t":"4","x":22,"y":39},{"t":"24/60","x":71.5,"y":39}]},"arch":{"legacy":{"text":"刀 0/5 · 鉴 0/18 · 任 0/12","w":140,"lines":1,"font":"10px"},"rejected":true,"current":{"text":"精英刀 0/5 · 图鉴 0/18 · 任务 0/12","w":180,"lines":1,"font":"10px"},"currentAccepted":true}}},"N_ledgerComplete":{"ok":true,"d":{"rule":"系统页（1024）仍含全部账本项（龙威只在龙战出现，本夹具不适用）","missing":[]}},"I_evidence":{"ok":true,"d":{"rule":"本轮实拍证据（D-90 九张 + D-114 八张 + D-115 五张 + D-116 十张 + D-117 十张 + D-118 六张）必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）","n":48,"bad":[]}}}}</pre>
+<canvas id="game" width="1024" height="640" style="width: 1024px; height: 640px;"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { protocol: 'D-90', ok: true, error: null, sub: {} };
+  function rec(name, ok, d) { out.sub[name] = { ok: !!ok, d: d }; if (!ok) out.ok = false; }
+  function r3(v) { return Math.round(v * 1000) / 1000; }
+  function near(a, b, eps) { return typeof a === 'number' && Math.abs(a - b) <= (eps || 0.002); }
+
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 640, configurable: true });
+  } catch (e) {}
+
+  var R = Game.Core.Render, S = Game.Core.Sprites, M = Game.Core.Main;
+  var Map = Game.Systems.Map, P = Game.Data.Player, Sys = Game.Sys, Modal = Game.Modal;
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  function offctx(w, h) {
+    var cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    return cv.getContext('2d');
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      R.resize();
+      M._guideVisible = false; /* 首次引导覆盖层会暂停探索输入，本页只测系统层 */
+      M._guidePending = false;
+      P.hp = 100; P.maxHp = 100; P.mp = 30; P.maxMp = 30; P.gold = 128;
+      P.level = 3; P.exp = 24; P.atk = 12; P.def = 6;
+      Game.hud.update({
+        hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: Game.Systems.Battle.expToNext(P.level), status: []
+      });
+
+      var snap = JSON.stringify(P);
+
+      /* ── A：T1 三阶段（0/80/360/520ms） ── */
+      Sys._reset();
+      Sys._setClock(10000);
+      Sys.armSurvey();
+      function at(t) { Sys._setClock(10000 + t); return Sys._surveyFrame(); }
+      var a0 = at(0), a40 = at(40), a80 = at(80), a120 = at(120),
+        a260 = at(260), a360 = at(360), a460 = at(460), a520 = at(520);
+      var aOk = !!a0 && !!a80 && !!a260 && !!a360 && a520 === null &&
+        near(a0.black, 0) && a0.phase === 'in' &&
+        near(a40.black, 0.36) &&
+        near(a80.black, 0.72) && a80.phase === 'survey' &&
+        near(a120.textAlpha, 0.5) &&
+        near(a260.roomAlpha, 0.75) &&
+        near(a360.black, 0.72) && a360.phase === 'out' &&
+        near(a460.black, 0.27) &&
+        a260.title === 'F' + P.floor && a260.sub.indexOf('×') > 0 && a260.sub.indexOf('已测绘') > 0 &&
+        a260.rooms >= 0 && a260.rooms <= 6;
+      rec('A_surveyTimeline', aOk, {
+        rule: '0ms 黑场 0；40ms 0.36；80ms 0.72；120ms 文字 0.5；260ms 房间 1；360ms 退去起点；460ms 0.27；520ms 归零；房间 ≤6（D-114 起不再有 X3 网格 alpha）',
+        frames: { t0: a0, t40: a40, t80: a80, t120: a120, t260: a260, t360: a360, t460: a460, t520: a520 }
+      });
+
+      /* ── B：X3 六格网格残迹已在 D-114 删除（不可见层不许留代码） ── */
+      var bOk = typeof Sys._gridPoints === 'undefined' &&
+        typeof Sys.drawUnderlay === 'undefined' &&
+        Sys._peek().grid === undefined &&
+        Sys.HUD_SAFE_H === 43;
+      rec('B_x3Removed', bOk, {
+        rule: 'X3 绘制入口/API 全部不存在；T1 黑场安全线 HUD_SAFE_H=43（顶栏 0–28 + 读数带 28–42 不打黑）',
+        gridPoints: typeof Sys._gridPoints, underlay: typeof Sys.drawUnderlay,
+        peekGrid: Sys._peek().grid, hudSafeH: Sys.HUD_SAFE_H
+      });
+
+      /* ── C：目标四角括号（只允许 陷阱/容器/楼梯/精英；与玩家包围盒不相交） ── */
+      function targetCheck() {
+        var list = Sys._targets(P), bad = [];
+        for (var j = 0; j < list.length; j++) {
+          var g = list[j];
+          if (['trap', 'container', 'stair', 'elite'].indexOf(g.kind) < 0) bad.push({ kind: g.kind });
+          var bx = g.x * 24 - 2, by = g.y * 24 - 2, bw = 28, bh = 28;
+          var pxx = P.x * 24 - 2, pyy = P.y * 24 - 2, pww = 28, phh = 28;
+          if (bx < pxx + pww && bx + bw > pxx && by < pyy + phh && by + bh > pyy) bad.push({ overlap: g.key });
+          if (g.x === P.x && g.y === P.y) bad.push({ sameCell: g.key });
+        }
+        return { n: list.length, bad: bad, list: list };
+      }
+      var grid0 = Map.getGrid(), stair = null;
+      for (var sy = 0; sy < grid0.length && !stair; sy++) {
+        for (var sx = 0; sx < grid0[sy].length; sx++) {
+          if (grid0[sy][sx] === 2 || grid0[sy][sx] === 3) { stair = { x: sx, y: sy }; break; }
+        }
+      }
+      var savedPos = { x: P.x, y: P.y };
+      var placed = false;
+      if (stair) {
+        /* 在楼梯周围环形搜索一处"能看见楼梯"的可通行格：
+         * 旧实现只试 16 个固定偏移，随机地图偶尔一个都不可走/看不见，夹具失败会把
+         * "目标框"断言误判成红（D-117 排障时实测 1/45）。环形搜索覆盖半径 2..6 全部格。 */
+        for (var rad = 2; rad <= 6 && !placed; rad++) {
+          for (var dy = -rad; dy <= rad && !placed; dy++) {
+            for (var dx = -rad; dx <= rad && !placed; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
+              var cx = stair.x + dx, cy = stair.y + dy;
+              if (!(cx > 0 && cy > 0 && cx < grid0[0].length && cy < grid0.length && Map.isWalkable(cx, cy))) continue;
+              P.x = cx; P.y = cy;
+              Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+              if (Game.fov.isVisible(stair.x, stair.y)) placed = true;
+            }
+          }
+        }
+      }
+      var tc = targetCheck();
+      P.x = savedPos.x; P.y = savedPos.y;
+      Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) { return Map.tileAt(x, y) === 0; });
+      /* D-120：夹具失败不再短路。分成两条断言：
+       *   C_fixturePlaced —— 本轮是否真的摆出了"能看见楼梯"的站位；摆不出就判负（本轮无法验证）。
+       *   C_targetBrackets —— 只在夹具成立时要求必须检出；不再用 !placed 把失败合并成通过。 */
+      var cFixture = !!(stair && placed);
+      rec('C_fixturePlaced', cFixture, {
+        rule: '楼梯夹具必须在本轮摆出"能看见楼梯"的站位（环形半径 2..6）；摆不出即本轮无法验证，判负并换种子',
+        stair: stair, placed: placed, n: tc.n
+      });
+      var cOk = cFixture && tc.bad.length === 0 && tc.n > 0;
+      rec('C_targetBrackets', cOk, {
+        rule: '目标框只出现在陷阱/容器/楼梯/精英；不与玩家包围盒相交、不同格；夹具成立时必须检出（无 !placed 短路）',
+        stair: stair, placed: placed, n: tc.n, bad: tc.bad.slice(0, 5), keys: tc.list.slice(0, 8)
+      });
+
+      /* ── D：HUD 读数带（宽 1024 三簇；窄 320 只留左簇） ── */
+      var c1 = offctx(1024, 64), c2 = offctx(320, 64);
+      var w1 = Sys.drawHudBand(c1, 1024);
+      var w2 = Sys.drawHudBand(c2, 320);
+      var dOk = !!w1 && !!w1.left && !!w1.mid && !!w1.right &&
+        w1.left.text.indexOf('LV') === 0 && w1.mid.text.indexOf('ATK') === 0 &&
+        w1.right.text.indexOf('突破') === 0 && w1.y === 28 &&
+        /* D-118：窄档不再"只留左簇"——左簇 + ATK 右簇（320 仍无突破簇） */
+        !!w2 && !!w2.left && !!w2.mid && !w2.right && w2.tiny && w2.left.bar.w === 32 &&
+        w2.mid.text === 'ATK ' + P.atk && w2.mid.x + w2.mid.w <= 320 - 8 &&
+        w2.mid.x >= w2.left.x + w2.left.w + 6;
+      rec('D_hudBand', dOk, {
+        rule: '宽屏三簇（LV/ATK/突破，y=28）；320 = 左簇 + ATK 右簇（经验条缩到 32，右缘 ≤W−8）',
+        wide: w1, narrow: w2
+      });
+
+      /* ── E：突破读数与第 4 页同源（Sys.breakthrough === Modal._sys.breakthrough） ── */
+      var b1 = Sys.breakthrough(), b2 = Modal._sys.breakthrough(), b3 = Modal._systemModel().brk;
+      var eSame = JSON.stringify(b1) === JSON.stringify(b2) && JSON.stringify(b1) === JSON.stringify(b3);
+      var savedLv = P.level, savedExp = P.exp, eStates = {};
+      P.level = 10; P.exp = 200; eStates.ready = Sys.breakthrough();
+      P.level = 11; P.exp = 0; eStates.done = Sys.breakthrough();
+      P.level = savedLv; P.exp = savedExp;
+      var eOk = eSame && eStates.ready && eStates.ready.kind === 'ready' &&
+        eStates.done && eStates.done.kind === 'done';
+      rec('E_breakthroughShared', eOk, {
+        rule: 'Sys.breakthrough() 与第 4 页 _systemModel().brk 逐字段相同；Lv10/exp200=就绪、Lv11=已突破',
+        live: b1, ready: eStates.ready, done: eStates.done, same: eSame
+      });
+
+      /* ── F：未新增按键（HELP 仍是 8 条，键位需求未变） ── */
+      var helpOk = M.HELP && M.HELP.length === 8 &&
+        M.HELP[0].need.indexOf('KeyB') >= 0 && M.HELP[1].need.indexOf('Digit4') >= 0;
+      rec('F_noNewKeys', helpOk, { rule: 'HELP 8 条不变，键位需求未改（verify_d20 仍是权威）', n: M.HELP ? M.HELP.length : 0 });
+
+      /* ── G：纯视觉（MATH.random 0 / localStorage 写入 0 / Player 不变） ── */
+      var rnd0 = Math.random, rndN = 0;
+      Math.random = function () { rndN++; return rnd0(); };
+      var setN = 0, set0 = Storage.prototype.setItem;
+      Storage.prototype.setItem = function () { setN++; return set0.apply(this, arguments); };
+      try {
+        Sys._setClock(10200);
+        var dctx = offctx(1024, 640);
+        Sys.drawMarkers(dctx, P);
+        Sys.drawEvent(dctx, P);
+        Sys.drawHudBand(dctx, 1024);
+      } finally {
+        Math.random = rnd0;
+        Storage.prototype.setItem = set0;
+      }
+      var gOk = rndN === 0 && setN === 0 && JSON.stringify(P) === snap;
+      rec('G_pureVisual', gOk, { rule: '绘制路径 Math.random 调用 0、localStorage.setItem 0、Player 深比较不变', random: rndN, writes: setN });
+
+      /* ── H：死线自证——测绘期间按键仍然生效 ── */
+      Sys._reset();
+      Sys._setClock(30000);
+      Sys.armSurvey();
+      Sys._setClock(30200); /* 200ms：测绘进行中（黑场 0.72 段） */
+      var dirs = [[1, 0, 'ArrowRight'], [-1, 0, 'ArrowLeft'], [0, 1, 'ArrowDown'], [0, -1, 'ArrowUp']];
+      var picked = null;
+      for (var di = 0; di < dirs.length; di++) {
+        var nx = P.x + dirs[di][0], ny = P.y + dirs[di][1];
+        if (!Map.isWalkable(nx, ny)) continue;
+        if (typeof Map.enemyAt === 'function' && Map.enemyAt(nx, ny)) continue;
+        if (typeof Map.eliteAt === 'function' && Map.eliteAt(nx, ny)) continue;
+        var pat = (Game.Systems.AI && Game.Systems.AI.getPatrols) ? Game.Systems.AI.getPatrols() : [];
+        var blocked = false;
+        for (var pi = 0; pi < pat.length; pi++) if (pat[pi].x === nx && pat[pi].y === ny) blocked = true;
+        if (blocked) continue;
+        picked = { dx: dirs[di][0], dy: dirs[di][1], code: dirs[di][2] };
+        break;
+      }
+      var before = { x: P.x, y: P.y, scene: M._scene };
+      if (picked) {
+        Game.Core.Input.getState()[picked.code] = true;
+        M.loop(performance.now() + 16); /* 真实主循环：测绘只叠加绘制，不拦截更新 */
+        delete Game.Core.Input.getState()[picked.code];
+      }
+      var after = { x: P.x, y: P.y, scene: M._scene };
+      var sfH = Sys._peek().survey;
+      var moved = picked && (after.x !== before.x || after.y !== before.y);
+      var hOk = !!moved && !!sfH && sfH.phase === 'survey';
+      rec('H_inputDuringSurvey', hOk, {
+        rule: '测绘进行中（t=200ms）按方向键，主循环照常更新：位置确实变化，且事件仍在绘制',
+        picked: picked, before: before, after: after,
+        surveyPhase: sfH ? sfH.phase : null, surveyT: sfH ? sfH.t : null, sceneAfter: M._scene
+      });
+
+      /* ══ J–N：D-114 分工与去重（顶栏=资源 / 读数带=build / 系统页=账本）══
+       * 全部断言抓实际绘制文本（fillText 入参），不读配置。 */
+      function captureText(fn) {
+        var proto = CanvasRenderingContext2D.prototype;
+        var orig = proto.fillText, list = [];
+        proto.fillText = function (t, x, y) {
+          list.push({ t: String(t), x: x, y: y });
+          return orig.apply(this, arguments);
+        };
+        try { fn(); } finally { proto.fillText = orig; }
+        return list;
+      }
+      function pick(list, re) { return list.filter(function (r) { return re.test(r.t); }); }
+      function lvTopCount(list) { return pick(list, /Lv\.\d+/).length; }
+      function dedupeViolations(cap, expS) {
+        var v = [];
+        if (lvTopCount(cap.bar) !== 0) v.push('topbar:Lv');
+        if (pick(cap.band, /刀/).length) v.push('band:刀');
+        if (pick(cap.page, /^攻击\s/).length) v.push('page:武器段写成攻击');
+        if (expS) {
+          var n = cap.page.filter(function (r) { return r.t.indexOf(expS) >= 0; }).length;
+          if (n !== 1) v.push('page:经验读数出现 ' + n + ' 次');
+        }
+        return v;
+      }
+
+      var save114 = { level: P.level, exp: P.exp, atk: P.atk, def: P.def, gold: P.gold,
+        floor: P.floor, weapon: P.equipment.weapon };
+      P.level = 4; P.exp = 24; P.atk = 12; P.def = 6; P.gold = 128; P.floor = 1;
+      P.equipment.weapon = 'elite_fang_5'; /* 武器 16 ≠ 宿主总攻击 12：两套数值必须分名 */
+      var expNext4 = Game.Systems.Battle.expToNext(4);
+      Game.hud.update({
+        hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: expNext4,
+        kills: 0, killTarget: 0, status: []
+      });
+      var bar114 = captureText(function () { Game.hud.draw(); });
+      var band114 = null;
+      var bandRecs = captureText(function () { band114 = Sys.drawHudBand(offctx(1024, 64), 1024); });
+      var page114 = captureText(function () { Modal._sysMetrics(1024, 640); });
+      var atkTxt = band114 && band114.mid ? band114.mid.text : '';
+      var chip114 = pick(page114, /^攻\s+\d+$/)[0];
+      var growth114 = pick(page114, /^本局成长：攻击\s+\d+\s+→\s+\d+/)[0];
+      var g114 = growth114 ? growth114.t.match(/攻击\s+(\d+)\s+→\s+(\d+)/) : null;
+      var expS114 = P.exp + '/' + expNext4;
+      var viol114 = dedupeViolations({ bar: bar114, band: bandRecs, page: page114 }, expS114);
+      var jOk = viol114.length === 0 && atkTxt === 'ATK ' + P.atk &&
+        !!chip114 && chip114.t === '攻 ' + P.atk &&
+        !!g114 && (+g114[2]) === P.atk &&
+        pick(bandRecs, /^LV$/).length === 1 && pick(bandRecs, /^突破$/).length === 1 &&
+        pick(page114, /^武器\s+\d+$/).length === 1 && lvTopCount(bar114) === 0;
+      rec('J_layersOnce', jOk, {
+        rule: '顶栏无 Lv/经验；读数带 ATK=Player.atk 且无"刀"；系统页 攻/成长终点同值；页内经验只一处；武器段写"武器 N"',
+        violations: viol114, atkBand: atkTxt, chip: chip114 && chip114.t,
+        growth: growth114 && growth114.t, plAtk: P.atk,
+        weaponEff: Modal._systemModel().weapon ? Modal._systemModel().weapon.eff : null,
+        bar: bar114.map(function (r) { return r.t; }),
+        band: bandRecs.map(function (r) { return r.t; }),
+        pageAtk: pick(page114, /攻击|^攻\s|^武器/).map(function (r) { return r.t; }),
+        pageExp: pick(page114, /经验\s+\d+\/\d+/).map(function (r) { return r.t; })
+      });
+
+      /* K：负例——把旧四层 Lv 里的两处复原（顶栏一条 + 页内本级条右端一条），同一裁决必须红 */
+      var legacy114 = {
+        bar: bar114.concat([{ t: 'Lv.' + P.level + ' ' + P.exp + '/' + expNext4, x: 300, y: 18 }]),
+        band: bandRecs,
+        page: page114.concat([{ t: P.exp + '/' + expNext4, x: 900, y: 200 }])
+      };
+      var lvViol = dedupeViolations(legacy114, expS114);
+      rec('K_negativeLegacyLv', lvViol.indexOf('topbar:Lv') >= 0 &&
+        lvViol.some(function (v) { return v.indexOf('page:经验读数出现 2 次') === 0; }), {
+        rule: '还原旧四层 Lv 的两处（顶栏 Lv.4 24/60、页内条右端 24/60）→ 裁决必报 topbar:Lv 与 page:经验读数 2 次',
+        violations: lvViol
+      });
+
+      /* L：X1 调试坐标已删 + T1 黑场不压 HUD（像素级） */
+      var x1Recs = captureText(function () { Sys.drawMarkers(offctx(1024, 640), P); });
+      var x1Gone = pick(x1Recs, /^x\s+\d+\s+y\s+\d+$/).length === 0 && pick(x1Recs, /^F\d+\s+·/).length === 0;
+      var cvA = document.createElement('canvas'); cvA.width = 1024; cvA.height = 640;
+      var cvB = document.createElement('canvas'); cvB.width = 1024; cvB.height = 640;
+      var ctxA = cvA.getContext('2d'), ctxB = cvB.getContext('2d');
+      var bakR = { ctx: R._ctx, cv: R._canvas, w: R.cssW, h: R.cssH };
+      function frame114(ctx) {
+        ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, 1024, 640);
+        R._ctx = ctx; R._canvas = ctx.canvas; R.cssW = 1024; R.cssH = 640;
+        Game.hud.draw();
+      }
+      Sys._reset();
+      frame114(ctxA);
+      Sys._setClock(40000);
+      Sys.armSurvey();
+      Sys._setClock(40260);
+      frame114(ctxB);
+      Sys.drawEvent(ctxB, P);
+      R._ctx = bakR.ctx; R._canvas = bakR.cv; R.cssW = bakR.w; R.cssH = bakR.h;
+      function lum(d) { return (0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2]) / 255; }
+      var pA = ctxA.getImageData(10, 10, 1, 1).data, pB = ctxB.getImageData(10, 10, 1, 1).data;
+      var qA = ctxA.getImageData(400, 35, 1, 1).data, qB = ctxB.getImageData(400, 35, 1, 1).data;
+      var mA = ctxA.getImageData(512, 600, 1, 1).data, mB = ctxB.getImageData(512, 600, 1, 1).data;
+      var topSame = pA[0] === pB[0] && pA[1] === pB[1] && pA[2] === pB[2];
+      var bandSame = qA[0] === qB[0] && qA[1] === qB[1] && qA[2] === qB[2];
+      var mapDim = lum(mB) < lum(mA) * 0.55;
+      rec('L_x1AndT1', x1Gone && topSame && bandSame && mapDim && Sys.HUD_SAFE_H === 43, {
+        rule: 'X1 无坐标/无层号；T1 黑场从 y=43 起：顶栏(10,10)/读数带(400,35) 像素不变，地图(512,600) 亮度 <55%',
+        x1Gone: x1Gone, hudSafe: Sys.HUD_SAFE_H, topSame: topSame, bandSame: bandSame,
+        mapLum: [lum(mA), lum(mB)], markerTexts: x1Recs.map(function (r) { return r.t; })
+      });
+
+      /* M：320/390 读数带左簇 + ATK 右簇（D-118 修订：窄档不再"只留左簇"） */
+      function bandNarrowOk(bx, cap, atk) {
+        if (!bx || !bx.left || !bx.mid || bx.right || bx.tiny !== true) return false;
+        if (bx.left.x + bx.left.w <= 0) return false;
+        if (bx.mid.x < bx.left.x + bx.left.w + 6) return false;      /* 与左簇不相接 */
+        if (bx.mid.x + bx.mid.w > bx.W - 8) return false;             /* 右缘 ≤ W-8 */
+        if (bx.left.bar.y + bx.left.bar.h > 42) return false;          /* 条底 ≤42 */
+        if (bx.mid.bottom !== 42) return false;                        /* 带底 28+14=42 */
+        if (bx.mid.text !== 'ATK ' + atk) return false;
+        var hit = pick(cap, /^ATK $/)[0];                              /* 抓真实 fillText 入参 */
+        if (!hit || Math.round(hit.x) !== bx.mid.x) return false;
+        return true;
+      }
+      /* D-120：真实量 chip 行 y——让 HUD 用真实状态画一次，抓 fillRect(x,y,w,h=13) 的 y。
+       * 不再用常量 42 < 45；读数带的 bottom 是真实几何，chip 行也来自真实绘制。 */
+      function measureChipRowY(W) {
+        var cv = document.createElement('canvas'); cv.width = W; cv.height = 64;
+        var c = cv.getContext('2d');
+        var bak = { ctx: R._ctx, cv: R._canvas, w: R.cssW, h: R.cssH };
+        var bakLast = Game.hud.last;
+        R._ctx = c; R._canvas = cv; R.cssW = W; R.cssH = 64;
+        Game.hud.update({ hp: 1, hpMax: 100, mp: 0, mpMax: 0, gold: 0, floor: 1, kills: 0, killTarget: 0,
+          level: P.level, exp: P.exp, expNext: 60,
+          status: [{ name: '中毒', turns: 3, color: '#9fe3a1' }] });
+        var proto = CanvasRenderingContext2D.prototype;
+        var oR = proto.fillRect, rows = [];
+        proto.fillRect = function (x, y, w, h) {
+          rows.push({ x: x, y: y, w: w, h: h });
+          return oR.apply(this, arguments);
+        };
+        try { Game.hud.draw(); } finally {
+          proto.fillRect = oR;
+          R._ctx = bak.ctx; R._canvas = bak.cv; R.cssW = bak.w; R.cssH = bak.h;
+          Game.hud.last = bakLast;
+        }
+        var chips = rows.filter(function (r) { return r.h === 13 && r.y >= 30; });
+        return chips.length ? chips[chips.length - 1].y : null;
+      }
+
+      var geo118 = {}, mOk = true;
+      [320, 390].forEach(function (W) {
+        var bx = null, cap = [];
+        cap = captureText(function () { bx = Sys.drawHudBand(offctx(W, 64), W); });
+        var chipY = measureChipRowY(W);
+        var ok = bandNarrowOk(bx, cap, P.atk) && chipY !== null && !!bx && !!bx.mid &&
+          bx.mid.bottom < chipY;
+        geo118[W] = { ok: ok, left: bx && bx.left, mid: bx && bx.mid,
+          right: bx && bx.right, gap: bx && bx.mid ? bx.mid.x - (bx.left.x + bx.left.w) : null,
+          bandBottom: bx && bx.mid ? bx.mid.bottom : null, chipY: chipY };
+        if (!ok) mOk = false;
+      });
+      rec('M_narrowBand', mOk, { rule: '320/390 读数带 = 左簇(LV+经验) + ATK 右簇；右缘 ≤W−8、间距 ≥6、条底 ≤42、ATK 文本与 fillText 入参一致；条底 < 真实 chip 行 y', geo: geo118 });
+
+      /* O：D-118 预算账——读数带在 320/390 的实际绘制调用（fillText/fillRect/fill/stroke） */
+      function bandOps(W) {
+        var proto = CanvasRenderingContext2D.prototype;
+        var oF = proto.fillText, oR = proto.fillRect, oFl = proto.fill, oS = proto.stroke, n = 0;
+        proto.fillText = function () { n++; return oF.apply(this, arguments); };
+        proto.fillRect = function () { n++; return oR.apply(this, arguments); };
+        proto.fill = function () { n++; return oFl.apply(this, arguments); };
+        proto.stroke = function () { n++; return oS.apply(this, arguments); };
+        try { Sys.drawHudBand(offctx(W, 64), W); } finally {
+          proto.fillText = oF; proto.fillRect = oR; proto.fill = oFl; proto.stroke = oS;
+        }
+        return n;
+      }
+      var ops118 = { 320: bandOps(320), 390: bandOps(390), 1024: bandOps(1024) };
+      rec('O_bandBudget', ops118[320] <= 24 && ops118[390] <= 24,
+        { rule: '窄档读数带绘制调用 ≤24（D-114 基线 15，D-118 增加 ATK 底板+两段文字 = 18）',
+          ops: ops118 });
+
+      /* P：D-118 窄档档案必须是完整词，不许单字缩写；宽度按真实 measureText 判定 */
+      function archNarrowOk(arch, innerW) {
+        if (!arch) return false;
+        var s = String(arch.text);
+        if (s.indexOf('精英刀') < 0 || s.indexOf('图鉴') < 0 || s.indexOf('任务') < 0) return false;
+        /* 去掉完整词后不许再残留孤字（刀/鉴/任） */
+        if (s.replace(/精英刀/g, '').indexOf('刀') >= 0) return false;
+        if (s.replace(/图鉴/g, '').indexOf('鉴') >= 0) return false;
+        if (s.replace(/任务/g, '').indexOf('任') >= 0) return false;
+        if (arch.lines !== 1) return false;
+        if (!(arch.w <= innerW)) return false;
+        return true;
+      }
+      var arch118 = {}, pOk = true;
+      [[320, 568], [390, 844]].forEach(function (sz) {
+        var L = Modal._sysMetrics(sz[0], sz[1]);
+        var ok = archNarrowOk(L.arch, L.content.w);
+        arch118[sz[0]] = { ok: ok, arch: L.arch, innerW: L.content.w, variant: L.variant, padTop: L.content.y };
+        if (!ok) pOk = false;
+      });
+      rec('P_archNarrowWords', pOk,
+        { rule: '窄档档案用完整词（精英刀/图鉴/任务），一行放得下（measureText ≤ 内容宽），无单字缩写', geo: arch118 });
+
+      /* Q：负例——D-114 窄档的旧格式复刻 + 真实测量，必须红（D-120：不再手搓对象）
+       *   读数带：把 Player.atk 置 null，走真实 Sys.drawHudBand(390) 渲染路径；
+       *           旧窄档正是"不产出 ATK"，渲染结果里 mid=null。
+       *   档案行：旧函数本体已随 D-114 删除，不可调用；这里用真实系统的
+       *           arch 数值 + 旧格式逐字复刻 + 真实 ctx.measureText 得到 width，
+       *           再喂给同一裁决函数（不是固定 w=120 的手搓对象）。
+       *           它不是"回放旧代码"，只是"旧格式复刻 + 真实测量"。 */
+      var savedAtk120 = P.atk, legacyBand = null, legacyCap = [];
+      P.atk = null;
+      try {
+        legacyCap = captureText(function () { legacyBand = Sys.drawHudBand(offctx(390, 64), 390); });
+      } finally { P.atk = savedAtk120; }
+      var qBand = !bandNarrowOk(legacyBand, legacyCap, savedAtk120);
+
+      var archM120 = Modal._systemModel();
+      var legacyText120 = '刀 ' + archM120.arch.owned + '/5 · 鉴 ' + archM120.arch.known +
+        '/18 · 任 ' + archM120.arch.done + '/12';
+      var measureCv120 = document.createElement('canvas');
+      measureCv120.width = 64; measureCv120.height = 16;
+      var measureC120 = measureCv120.getContext('2d');
+      measureC120.font = '10px monospace';
+      var legacyArch = { text: legacyText120, w: Math.round(measureC120.measureText(legacyText120).width),
+        lines: 1, font: '10px' };
+      var curArch120 = Modal._sysMetrics(390, 844);
+      var qArch = !archNarrowOk(legacyArch, curArch120.content.w);
+      var qPos = archNarrowOk(curArch120.arch, curArch120.content.w);
+      rec('Q_negativeLegacyNarrow', qBand && qArch && qPos,
+        { rule: 'D-114 窄档旧格式复刻 + 真实测量（旧函数本体已随 D-114 删除，不可调用）：P.atk=null → 真实 drawHudBand(390) 无 ATK；旧单字档案（真实 arch 数值 + 真实 measureText）→ 同一裁决必须判负；当前完整词档案必须判正',
+          band: { mid: legacyBand && legacyBand.mid, rejected: qBand, cap: legacyCap },
+          arch: { legacy: legacyArch, rejected: qArch, current: curArch120.arch, currentAccepted: qPos } });
+
+      /* N：系统页账本一项不少（全宽实绘文本） */
+      var want114 = ['Lv.', '经验', '攻 ', '防 ', '血 ', '金 ', '层', '击杀', '回合', '药水', '救援',
+        '最高等级', '最深层', '用时', '突破', '武器', '精英刀', '图鉴', '任务', 'Boss'];
+      var allPage114 = page114.map(function (r) { return r.t; }).join(' | ');
+      var miss114 = want114.filter(function (k) { return allPage114.indexOf(k) < 0; });
+      rec('N_ledgerComplete', miss114.length === 0, {
+        rule: '系统页（1024）仍含全部账本项（龙威只在龙战出现，本夹具不适用）', missing: miss114
+      });
+
+      /* 还原夹具 */
+      P.level = save114.level; P.exp = save114.exp; P.atk = save114.atk; P.def = save114.def;
+      P.gold = save114.gold; P.floor = save114.floor; P.equipment.weapon = save114.weapon;
+      Sys._reset();
+      M.switchScene('explore');
+
+      /* 收尾：清掉注入时钟与事件，恢复初始位置 */
+      Sys._reset();
+      M.switchScene('explore');
+      P.x = savedPos.x; P.y = savedPos.y;
+
+      evidence();
+    } catch (e) {
+      out.ok = false;
+      out.error = String(e && (e.stack || e.message) || e);
+      finish();
+    }
+  }
+
+  /* ══ 本轮实拍证据登记（按实际尺寸逐张核对，缺一张即判负）══ */
+  var EVID = [
+    ['survey-t000.png', 1280, 800], ['survey-t120.png', 1280, 800],
+    ['survey-t260.png', 1280, 800], ['survey-t460.png', 1280, 800],
+    ['explore-f1.png', 1280, 800], ['explore-f5.png', 1280, 800],
+    ['hud-wide.png', 1280, 800], ['hud-narrow320.png', 400, 800],
+    ['key-during-survey.png', 1280, 800]
+  ];
+  /* D-114：四档 + 系统页四页签（artifacts/d114/），与上面 9 张同批核对 */
+  var EVID114 = [
+    ['d114-320x568.png', 320, 568], ['d114-390x844.png', 390, 844],
+    ['d114-960x540.png', 960, 540], ['d114-1024x640.png', 1024, 640],
+    ['d114-tab1-任务.png', 1024, 640], ['d114-tab2-怪物.png', 1024, 640],
+    ['d114-tab3-物品.png', 1024, 640], ['d114-tab4-系统.png', 1024, 640]
+  ];
+  /* D-115：320 全屏 + 1 格 24px 的 2× 裁切 + 1024 对照 */
+  var EVID115 = [
+    ['d115-320-f1-down.png', 320, 568], ['d115-320-f1-down-2x.png', 240, 240],
+    ['d115-320-f1-up-2x.png', 240, 240], ['d115-320-f5-down-2x.png', 240, 240],
+    ['d115-1024-f1-down.png', 1024, 640]
+  ];
+  /* D-116：F1/F5 × 五档全屏实拍（artifacts/d116/），证明场外是岩壁而不是空白 */
+  var EVID116 = [
+    ['d116-320-f1.png', 320, 568], ['d116-390-f1.png', 390, 844],
+    ['d116-960-f1.png', 960, 540], ['d116-1024-f1.png', 1024, 640],
+    ['d116-1280-f1.png', 1280, 800],
+    ['d116-320-f5.png', 320, 568], ['d116-390-f5.png', 390, 844],
+    ['d116-960-f5.png', 960, 540], ['d116-1024-f5.png', 1024, 640],
+    ['d116-1280-f5.png', 1280, 800]
+  ];
+  /* D-117：F1/F2 各四档全屏实拍 + 两张并排对比（artifacts/d117/） */
+  var EVID117 = [
+    ['d117-320-f1.png', 320, 568], ['d117-320-f2.png', 320, 568],
+    ['d117-390-f1.png', 390, 844], ['d117-390-f2.png', 390, 844],
+    ['d117-960-f1.png', 960, 540], ['d117-960-f2.png', 960, 540],
+    ['d117-1024-f1.png', 1024, 640], ['d117-1024-f2.png', 1024, 640],
+    ['d117-compare-320.png', 648, 590], ['d117-compare-1024.png', 2056, 662]
+  ];
+  /* D-118：320/390 探索全屏 + 系统页 + 读数带 3× 裁切（artifacts/d118/） */
+  var EVID118 = [
+    ['d118-320-explore.png', 320, 568], ['d118-390-explore.png', 390, 844],
+    ['d118-320-sys.png', 320, 568], ['d118-390-sys.png', 390, 844],
+    ['d118-320-band3x.png', 960, 60], ['d118-390-band3x.png', 1170, 60]
+  ];
+  function evidence() {
+    var done = 0, bad = [];
+    var jobs = [];
+    EVID.forEach(function (e) { jobs.push({ dir: 'artifacts/d90/', e: e }); });
+    EVID114.forEach(function (e) { jobs.push({ dir: 'artifacts/d114/', e: e }); });
+    EVID115.forEach(function (e) { jobs.push({ dir: 'artifacts/d115/', e: e }); });
+    EVID116.forEach(function (e) { jobs.push({ dir: 'artifacts/d116/', e: e }); });
+    EVID117.forEach(function (e) { jobs.push({ dir: 'artifacts/d117/', e: e }); });
+    EVID118.forEach(function (e) { jobs.push({ dir: 'artifacts/d118/', e: e }); });
+    function tick() {
+      if (++done < jobs.length) return;
+      rec('I_evidence', bad.length === 0, {
+        rule: '本轮实拍证据（D-90 九张 + D-114 八张 + D-115 五张 + D-116 十张 + D-117 十张 + D-118 六张）必须存在且尺寸与登记一致（缺一张/尺寸不符即判负）',
+        n: jobs.length, bad: bad
+      });
+      finish();
+    }
+    jobs.forEach(function (job) {
+      var e = job.e, im = new Image();
+      im.onload = function () {
+        if (im.naturalWidth !== e[1] || im.naturalHeight !== e[2]) {
+          bad.push({ f: job.dir + e[0], got: [im.naturalWidth, im.naturalHeight], want: [e[1], e[2]] });
+        }
+        tick();
+      };
+      im.onerror = function () { bad.push({ f: job.dir + e[0], got: 'missing' }); tick(); };
+      im.src = job.dir + e[0];
+    });
+  }
+
+  function finish() {
+    var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = txt;
+    document.getElementById('result').textContent = txt;
+  }
+
+  S.load();
+  var tries = 0;
+  (function wait() {
+    tries++;
+    if (S.isReady && S.isReady()) { boot(); return; }
+    if (tries > 240) { boot(); return; }
+    window.setTimeout(wait, 50);
+  })();
+})();
+</script>
+
+
+</body></html>

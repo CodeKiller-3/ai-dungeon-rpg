@@ -193,7 +193,7 @@
       var a = null;
       try { a = JSON.parse(txt); } catch (e) { a = null; }
       out.sub.A4_audit = {
-        ok: !!a && a.total === 339 && a.palette && a.palette.length === 84 &&
+        ok: !!a && a.total === 355 && a.palette && a.palette.length === 84 &&
           a.empty.length === 0 && a.paletteBad.length === 0,
         d: { total: a && a.total, palette: a && a.palette && a.palette.length,
           empty: a && a.empty.length, paletteBad: a && a.paletteBad.length }

@@ -355,15 +355,16 @@
       (BASE && BASE.pages ? BASE.pages.length : 'n/a') +
       '；含 verify_d32=' + (BASE && BASE.pages ? BASE.pages.indexOf('verify_d32') >= 0 : 'n/a'));
 
-    /* A10 */
+    /* A10：页数与 page-baseline 同源（D-98 起不再写死，避免每次新增验证页都要改这里） */
     var README = read('../README.md'), LOG = read('../CHANGELOG.md');
+    var pn32 = (BASE && typeof BASE.count === 'number') ? BASE.count : 0;
     var a10 = README.indexOf('docs/process/') >= 0 && README.indexOf('preflight/artifacts/') >= 0 &&
-      README.indexOf('验证页 122 个') >= 0 &&
+      pn32 > 0 && README.indexOf('验证页 ' + pn32 + ' 个') >= 0 &&
       LOG.indexOf('阶段 B1 目录归位') >= 0 && LOG.indexOf('阶段 B2') >= 0;
     rec('A10_docsUpdated', a10,
       'README 含 docs/process=' + (README.indexOf('docs/process/') >= 0) +
       ' / preflight/artifacts=' + (README.indexOf('preflight/artifacts/') >= 0) +
-      ' / 验证页 122 个=' + (README.indexOf('验证页 122 个') >= 0) +
+      ' / 验证页 ' + pn32 + ' 个=' + (README.indexOf('验证页 ' + pn32 + ' 个') >= 0) +
       '；CHANGELOG 含 B1=' + (LOG.indexOf('阶段 B1 目录归位') >= 0) +
       ' B2=' + (LOG.indexOf('阶段 B2') >= 0));
 

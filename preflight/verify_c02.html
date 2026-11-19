@@ -207,13 +207,28 @@
     P.inventory = {};
     P.equipment = { weapon: null, armor: null };
     var g0 = P.gold;
+    /* D-96：稀有板甲只在 F5 核心货架；本步骤临时把楼层桩设到 5，买/卖完立刻恢复，
+     * 价格与套利断言一字不改，也不影响后续 C2-8 的楼层遍历。 */
+    var floorC27 = floor;
+    floor = 5;
     var rb = Shop.buy('plate_armor_epic');
     var g1 = P.gold;
     var rs = Shop.sell('plate_armor_epic');
     var g2 = P.gold;
+    floor = floorC27;
     sub.c27_noArbitrage = arbBad.length === 0 && rb.ok && rs.ok &&
       (g1 - g0) === -800 && (g2 - g1) === 400 && (g2 - g0) < 0;
     sub.c27_delta = { buy: g1 - g0, sell: g2 - g1, net: g2 - g0 };
+
+    /* C2-9（D-96 负例）：货架外与 drop-only 物品一律不可买，金币与背包不变
+     *   elite_fang_5 / sword_rescue 从未进任何货架；plate_armor_epic 此时不在 F3 货架。 */
+    var gN = P.gold, invN = JSON.stringify(P.inventory);
+    var nElite = Shop.buy('elite_fang_5');
+    var nRescue = Shop.buy('sword_rescue');
+    var nOffShelf = Shop.buy('plate_armor_epic');
+    sub.c29_buyShelfGuard = nElite.ok === false && nRescue.ok === false && nOffShelf.ok === false &&
+      P.gold === gN && JSON.stringify(P.inventory) === invN;
+    sub.c29_msgs = { elite: nElite.msg, rescue: nRescue.msg, offShelf: nOffShelf.msg };
 
     /* C2-8 tierCoherence：F4/F5 轮换池每项为装备类且 price ≥ 该层核心装备最低价 */
     var tier = {};
@@ -235,7 +250,7 @@
     sub.c28_detail = tier;
     ok = ok && sub.c21_resetOnRestart && sub.c22_noDoubleAdvance && sub.c23_poolSize &&
       sub.c24_cycleLen && sub.c25_countsUnchanged && sub.c26_stableWithinOpen &&
-      sub.c27_noArbitrage && sub.c28_tierCoherence;
+      sub.c27_noArbitrage && sub.c28_tierCoherence && sub.c29_buyShelfGuard;
 
     out.sub = sub;
     out.ok = ok;

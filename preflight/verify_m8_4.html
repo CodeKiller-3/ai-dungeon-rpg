@@ -78,7 +78,10 @@
         B.data.monsters.slime === B.getMonsterCount('slime');
       ok = ok && sub.t3_battle;
 
-      /* 4. shop 登记：购买成功 item count 增加；金币不足购买失败不登记 */
+      /* 4. shop 登记：购买成功 item count 增加；金币不足购买失败不登记
+       * D-96：Shop.buy 现在校验本层货架，本页不加载 map.js，补一个只读楼层桩（F1）。 */
+      G.Systems.Map = G.Systems.Map || {};
+      G.Systems.Map.getFloor = function () { return 1; };
       resetPlayer();
       P.gold = 100;
       var ib2 = B.getItemCount('potion_small');

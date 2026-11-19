@@ -106,9 +106,9 @@
     var audit = readJson('selfcheck/d21-audit.json') || {};
     var lic = readDoc('../assets/sprites/LICENSE.md');
     var pal = audit.palette || [];
-    rec('A1_registry', names.length === 339 && audit.total === 339 && pal.length === 84 &&
+    rec('A1_registry', names.length === 355 && audit.total === 355 && pal.length === 84 &&
       (audit.empty || []).length === 0 && (audit.paletteBad || []).length === 0 &&
-      lic.indexOf('339 个 PNG') >= 0 && lic.indexOf('84 色') >= 0,
+      lic.indexOf('355 个 PNG') >= 0 && lic.indexOf('84 色') >= 0,
       { names: names.length, disk: audit.total, palette: pal.length,
         empty: (audit.empty || []).length, paletteBad: (audit.paletteBad || []).length });
 
