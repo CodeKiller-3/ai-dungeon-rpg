@@ -4,6 +4,15 @@
 
 > 每条条目末尾带一个不可见的锚点注释（形如 `锚点: 相对路径#符号名`），由 `preflight/verify_d31.html` 扫描校验"提到的功能在代码里真实存在"，防止把没做的功能写进来。
 
+## [1.0.0] - 2026-11-19 · D-119–D-122 交付收口
+
+> 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。本节四张卡只做文档、断言与版本库收口，**游戏行为代码 0 改动**；四策略与 D-118 逐局一致（`TOTAL_DIFF=0`）。
+
+- 交付文档重钉（D-119）：验收清单从 D-94 现值重钉到 **128 页 / B1 4/50、S1 0/50、G2 37/50、M1 50/50**，旧值整段下沉为带时点声明的历史快照；README 补 **F = 侦测/拆除陷阱**、M 面板改 **四页签**；平衡定档按代码修正独眼酋长 **1.4/1.2**、僵尸王 **1.35/1.25**；CHANGELOG 补齐 D-110–D-118。<!-- 锚点: js/data/config.js#GROWTH -->
+- 断言纪律整改（D-120）：去掉 `verify_d90` 的夹具短路与 `42 < 45` 恒真比较，D-114 负例改为“旧格式复刻 + 真实测量”；`verify_p2_3` 的 D-116 满幅格改由 `d116.fullbleed.*` 独立判据接管。FAIL/PASS 证据落 `preflight/artifacts/d120/`，台账登记在 `docs/验证体系-断言纪律.md` §10。<!-- 锚点: preflight/selfcheck/run-all.ps1#ExpectPages -->
+- 提交收口盘点（D-121）：只做了工作区盘点，因中断**未产生任何 commit**；D-95–D-120 仍未入库，留待下一张卡。<!-- 锚点: preflight/selfcheck/run-all.ps1#ExpectPages -->
+- 提交与推送（D-122）：按卡补齐 **26 个 commit**（D-95–D-120）+ 验收输出与截图脚本 2 个 commit，**全部 fast-forward 推送** `origin/main`；GitHub Pages 重新构建，线上 `page-baseline.json` 为 **count=128**，`render.js` 含 `drawSigF1` / `outerStone`，`sysviz.js` 含窄档 `ATK`。**未 force push、未 rebase、未 amend。**<!-- 锚点: README.md#128 -->
+
 ## [1.0.0] - 2026-11-19 · D-110–D-118 视觉与系统域增补
 
 > 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。本节按卡分条，全部为纯表现层 / 验证页 / 文档整改；四策略逐局结果与 D-100 基线零差异（`TOTAL_DIFF=0`）。
