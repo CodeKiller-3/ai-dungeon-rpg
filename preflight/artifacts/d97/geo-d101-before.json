@@ -1,0 +1,3118 @@
+{
+  "320x568-f1-slime-vertical": {
+    "viewport": [
+      320,
+      568
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 320,
+      "cssH": 568,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 135,
+        "y": 378,
+        "w": 51,
+        "h": 90,
+        "baseTop": 378,
+        "groundY": 468,
+        "knock": 0
+      },
+      "monster": {
+        "x": 115,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 512,
+        "w": 320,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 51,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 95,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 139,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 183,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 227,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 271,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "fx": null,
+      "hash": "40023855"
+    },
+    "box": {
+      "monster": {
+        "x": 115,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 60,
+        "y": 348,
+        "w": 200,
+        "h": 20
+      },
+      "player": {
+        "x": 135,
+        "y": 378,
+        "w": 51,
+        "h": 90,
+        "baseTop": 378,
+        "groundY": 468,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 512,
+        "w": 320,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 51,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 95,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 139,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 183,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 227,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 271,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "mid": {
+        "top": 242,
+        "bottom": 338,
+        "chips": false,
+        "logs": 2
+      },
+      "bars": {
+        "playerY": 348,
+        "gapBand": 10
+      }
+    }
+  },
+  "320x568-f5-dragon-vertical": {
+    "viewport": [
+      320,
+      568
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 320,
+      "cssH": 568,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 135,
+        "y": 378,
+        "w": 51,
+        "h": 90,
+        "baseTop": 378,
+        "groundY": 468,
+        "knock": 0
+      },
+      "monster": {
+        "x": 88,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 512,
+        "w": 320,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 51,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 95,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 139,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 183,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 227,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 271,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "fx": null,
+      "hash": "aa15037d"
+    },
+    "box": {
+      "monster": {
+        "x": 88,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 60,
+        "y": 348,
+        "w": 200,
+        "h": 20
+      },
+      "player": {
+        "x": 135,
+        "y": 378,
+        "w": 51,
+        "h": 90,
+        "baseTop": 378,
+        "groundY": 468,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 512,
+        "w": 320,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 51,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 95,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 139,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 183,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 227,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 271,
+            "y": 518,
+            "w": 42,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "mid": {
+        "top": 242,
+        "bottom": 338,
+        "chips": false,
+        "logs": 2
+      },
+      "bars": {
+        "playerY": 348,
+        "gapBand": 10
+      }
+    }
+  },
+  "390x844-f1-slime-vertical": {
+    "viewport": [
+      390,
+      844
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 390,
+      "cssH": 844,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 170,
+        "y": 654,
+        "w": 51,
+        "h": 90,
+        "baseTop": 654,
+        "groundY": 744,
+        "knock": 0
+      },
+      "monster": {
+        "x": 150,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 788,
+        "w": 390,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 61,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 115,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 169,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 223,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 277,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 331,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "fx": null,
+      "hash": "d754eea5"
+    },
+    "box": {
+      "monster": {
+        "x": 150,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 95,
+        "y": 526,
+        "w": 200,
+        "h": 20
+      },
+      "player": {
+        "x": 170,
+        "y": 654,
+        "w": 51,
+        "h": 90,
+        "baseTop": 654,
+        "groundY": 744,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 788,
+        "w": 390,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 61,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 115,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 169,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 223,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 277,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 331,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "mid": {
+        "top": 304,
+        "bottom": 418,
+        "chips": false,
+        "logs": 3
+      },
+      "bars": {
+        "playerY": 526,
+        "gapBand": 108
+      }
+    }
+  },
+  "390x844-f5-dragon-vertical": {
+    "viewport": [
+      390,
+      844
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 390,
+      "cssH": 844,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 170,
+        "y": 654,
+        "w": 51,
+        "h": 90,
+        "baseTop": 654,
+        "groundY": 744,
+        "knock": 0
+      },
+      "monster": {
+        "x": 123,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 788,
+        "w": 390,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 61,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 115,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 169,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 223,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 277,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 331,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "fx": null,
+      "hash": "8085153f"
+    },
+    "box": {
+      "monster": {
+        "x": 123,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 95,
+        "y": 526,
+        "w": 200,
+        "h": 20
+      },
+      "player": {
+        "x": 170,
+        "y": 654,
+        "w": 51,
+        "h": 90,
+        "baseTop": 654,
+        "groundY": 744,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 788,
+        "w": 390,
+        "h": 56,
+        "cells": [
+          {
+            "x": 7,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 61,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 115,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 169,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 223,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 277,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 331,
+            "y": 794,
+            "w": 52,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": true
+      },
+      "mid": {
+        "top": 304,
+        "bottom": 418,
+        "chips": false,
+        "logs": 3
+      },
+      "bars": {
+        "playerY": 526,
+        "gapBand": 108
+      }
+    }
+  },
+  "960x540-f1-slime-vertical": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 484,
+        "w": 960,
+        "h": 56,
+        "cells": [
+          {
+            "x": 15,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 149,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 283,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 417,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 551,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 685,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 819,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "fx": null,
+      "hash": "a651cefb"
+    },
+    "box": {
+      "monster": {
+        "x": 435,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 310,
+        "y": 320,
+        "w": 340,
+        "h": 20
+      },
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 484,
+        "w": 960,
+        "h": 56,
+        "cells": [
+          {
+            "x": 15,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 149,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 283,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 417,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 551,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 685,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 819,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "mid": {
+        "top": 234,
+        "bottom": 310,
+        "chips": false,
+        "logs": 1
+      },
+      "bars": {
+        "playerY": 320,
+        "gapBand": 10
+      }
+    }
+  },
+  "960x540-f5-dragon-vertical": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "monster": {
+        "x": 408,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 484,
+        "w": 960,
+        "h": 56,
+        "cells": [
+          {
+            "x": 15,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 149,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 283,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 417,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 551,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 685,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 819,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "fx": null,
+      "hash": "7be52d76"
+    },
+    "box": {
+      "monster": {
+        "x": 408,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 310,
+        "y": 320,
+        "w": 340,
+        "h": 20
+      },
+      "player": {
+        "x": 455,
+        "y": 350,
+        "w": 51,
+        "h": 90,
+        "baseTop": 350,
+        "groundY": 440,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 484,
+        "w": 960,
+        "h": 56,
+        "cells": [
+          {
+            "x": 15,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 149,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 283,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 417,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 551,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 685,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 819,
+            "y": 490,
+            "w": 126,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "mid": {
+        "top": 234,
+        "bottom": 310,
+        "chips": false,
+        "logs": 1
+      },
+      "bars": {
+        "playerY": 320,
+        "gapBand": 10
+      }
+    }
+  },
+  "1280x800-f1-slime-vertical": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 584,
+        "w": 1024,
+        "h": 56,
+        "cells": [
+          {
+            "x": 12,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 156,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 300,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 444,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 588,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 732,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 876,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "fx": null,
+      "hash": "699ec99b"
+    },
+    "box": {
+      "monster": {
+        "x": 467,
+        "y": 90,
+        "w": 90,
+        "h": 90,
+        "baseTop": 90,
+        "groundY": 180,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 342,
+        "y": 414,
+        "w": 340,
+        "h": 20
+      },
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 584,
+        "w": 1024,
+        "h": 56,
+        "cells": [
+          {
+            "x": 12,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 156,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 300,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 444,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 588,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 732,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 876,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "mid": {
+        "top": 284,
+        "bottom": 398,
+        "chips": false,
+        "logs": 3
+      },
+      "bars": {
+        "playerY": 414,
+        "gapBand": 16
+      }
+    }
+  },
+  "1280x800-f5-dragon-vertical": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "monster": {
+        "x": 440,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerPlate": null,
+      "monsterPlate": null,
+      "roundBar": null,
+      "commandBar": {
+        "x": 0,
+        "y": 584,
+        "w": 1024,
+        "h": 56,
+        "cells": [
+          {
+            "x": 12,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 156,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 300,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 444,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 588,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 732,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 876,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "fx": null,
+      "hash": "7b879f53"
+    },
+    "box": {
+      "monster": {
+        "x": 440,
+        "y": 44,
+        "w": 144,
+        "h": 144,
+        "baseTop": 44,
+        "groundY": 188,
+        "knock": 0
+      },
+      "playerBar": {
+        "x": 342,
+        "y": 414,
+        "w": 340,
+        "h": 20
+      },
+      "player": {
+        "x": 487,
+        "y": 450,
+        "w": 51,
+        "h": 90,
+        "baseTop": 450,
+        "groundY": 540,
+        "knock": 0
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 584,
+        "w": 1024,
+        "h": 56,
+        "cells": [
+          {
+            "x": 12,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 156,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 300,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 444,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 588,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 732,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 876,
+            "y": 590,
+            "w": 136,
+            "h": 44,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ],
+        "compact": false
+      },
+      "mid": {
+        "top": 284,
+        "bottom": 398,
+        "chips": false,
+        "logs": 3
+      },
+      "bars": {
+        "playerY": 414,
+        "gapBand": 16
+      }
+    }
+  },
+  "960x540-f1-slime-horizontal": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 685,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 276,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 296,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 663,
+        "y": 276,
+        "w": 135,
+        "h": 34,
+        "barX": 671,
+        "barY": 296,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 416,
+        "y": 44,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": null,
+      "hash": "8a1da79"
+    },
+    "box": {
+      "monster": {
+        "x": 685,
+        "y": 324,
+        "w": 90,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 276,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 296,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 663,
+        "y": 276,
+        "w": 135,
+        "h": 34,
+        "barX": 671,
+        "barY": 296,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 416,
+        "y": 44,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      }
+    }
+  },
+  "960x540-f5-dragon-horizontal": {
+    "viewport": [
+      960,
+      540
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 658,
+        "y": 270,
+        "w": 144,
+        "h": 144,
+        "baseTop": 270,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 222,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 242,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 622,
+        "y": 222,
+        "w": 216,
+        "h": 34,
+        "barX": 630,
+        "barY": 242,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 416,
+        "y": 44,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": null,
+      "hash": "ebf99885"
+    },
+    "box": {
+      "monster": {
+        "x": 658,
+        "y": 270,
+        "w": 144,
+        "h": 144,
+        "baseTop": 270,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 205,
+        "y": 324,
+        "w": 51,
+        "h": 90,
+        "baseTop": 324,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 182,
+        "y": 222,
+        "w": 96,
+        "h": 34,
+        "barX": 190,
+        "barY": 242,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 622,
+        "y": 222,
+        "w": 216,
+        "h": 34,
+        "barX": 630,
+        "barY": 242,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 416,
+        "y": 44,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 159,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 289,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 419,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 549,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 679,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 809,
+            "y": 460,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      }
+    }
+  },
+  "1280x800-f1-slime-horizontal": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "floor": 1,
+    "monster": "slime",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 352,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 372,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 711,
+        "y": 352,
+        "w": 135,
+        "h": 34,
+        "barX": 719,
+        "barY": 372,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 448,
+        "y": 52,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": null,
+      "hash": "b78a9c81"
+    },
+    "box": {
+      "monster": {
+        "x": 733,
+        "y": 400,
+        "w": 90,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 352,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 372,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 711,
+        "y": 352,
+        "w": 135,
+        "h": 34,
+        "barX": 719,
+        "barY": 372,
+        "barW": 119,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 448,
+        "y": 52,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      }
+    }
+  },
+  "1280x800-f5-dragon-horizontal": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "floor": 5,
+    "monster": "dragon",
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 706,
+        "y": 346,
+        "w": 144,
+        "h": 144,
+        "baseTop": 346,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 298,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 318,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 670,
+        "y": 298,
+        "w": 216,
+        "h": 34,
+        "barX": 678,
+        "barY": 318,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 448,
+        "y": 52,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      },
+      "fx": null,
+      "hash": "5044b8b5"
+    },
+    "box": {
+      "monster": {
+        "x": 706,
+        "y": 346,
+        "w": 144,
+        "h": 144,
+        "baseTop": 346,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 221,
+        "y": 400,
+        "w": 51,
+        "h": 90,
+        "baseTop": 400,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 198,
+        "y": 298,
+        "w": 96,
+        "h": 34,
+        "barX": 206,
+        "barY": 318,
+        "barW": 80,
+        "barH": 7
+      },
+      "monsterPlate": {
+        "x": 670,
+        "y": 298,
+        "w": 216,
+        "h": 34,
+        "barX": 678,
+        "barY": 318,
+        "barW": 200,
+        "barH": 7
+      },
+      "roundBar": {
+        "x": 448,
+        "y": 52,
+        "w": 128,
+        "h": 24,
+        "text": "第 1 回合 · 待机"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 166,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false
+          },
+          {
+            "x": 306,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false
+          },
+          {
+            "x": 446,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false
+          },
+          {
+            "x": 586,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false
+          },
+          {
+            "x": 726,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false
+          },
+          {
+            "x": 866,
+            "y": 560,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "potion",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false
+          }
+        ]
+      }
+    }
+  }
+}
