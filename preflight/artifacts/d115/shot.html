@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-115 样张</title>
+<style>html,body{margin:0;padding:0;background:#07070f;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-115 实拍页：把玩家放到真实楼梯格上，镜头居中。
+     ?floor=1..5&kind=down|up&z=1（z>1 时用 CSS transform 放大，仅供 2× 裁切对照） -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/sysviz.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  function qs(k, d) {
+    var m = location.search.match(new RegExp('[?&]' + k + '=([^&]+)'));
+    return m ? decodeURIComponent(m[1]) : d;
+  }
+  var floor = +qs('floor', 1), kind = qs('kind', 'down'), zoom = +qs('z', 1);
+
+  function boot() {
+    try {
+      var M = Game.Core.Main, R = Game.Core.Render, P = Game.Data.Player;
+      M.init({ menu: false });
+      M._guideVisible = false;
+      M._guidePending = false;
+      /* 固定种子切层（保证样张可复现） */
+      var seed = 20261118 + floor * 7919, orig = Math.random;
+      Math.random = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      try { Game.Systems.Map.generate(); Game.Systems.Map.setFloor(floor); } finally { Math.random = orig; }
+      var g = Game.Systems.Map.getGrid(), want = kind === 'up' ? 3 : 2, pos = null;
+      for (var y = 0; y < g.length && !pos; y++) {
+        for (var x = 0; x < g[0].length; x++) if (g[y][x] === want) { pos = { x: x, y: y }; break; }
+      }
+      /* 玩家站到楼梯旁边（不踩住标识）：优先上/左邻格，跳过墙 */
+      if (pos) {
+        /* 站右侧：骑士剑朝右，不会伸进楼梯格；右侧是墙时再试上/左/下 */
+        var cand = kind === 'up'
+          ? [[1, 0], [0, 1], [-1, 0], [0, -1]]
+          : [[1, 0], [0, -1], [-1, 0], [0, 1]], stand = null;
+        for (var i = 0; i < cand.length; i++) {
+          var nx = pos.x + cand[i][0], ny = pos.y + cand[i][1];
+          if (g[ny] && g[ny][nx] !== undefined && g[ny][nx] !== 0) { stand = { x: nx, y: ny }; break; }
+        }
+        P.x = stand ? stand.x : pos.x;
+        P.y = stand ? stand.y : pos.y;
+      }
+      P.floor = floor;
+      /* 传送后必须重算 FOV，否则新位置周围仍是未探明黑场 */
+      if (Game.fov && typeof Game.fov.update === 'function') {
+        Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) {
+          return Game.Systems.Map.tileAt(x, y) === 0;
+        });
+      }
+      R.resize();
+      if (zoom > 1) {
+        try {
+          var cv = document.getElementById('game');
+          cv.style.transformOrigin = '50% 30%';
+          cv.style.transform = 'scale(' + zoom + ')';
+        } catch (e) { /* 忽略 */ }
+      }
+      M.start();
+      window.__D115 = { floor: floor, kind: kind, pos: pos, scale: R.scale, cssW: R.cssW, cssH: R.cssH };
+      document.title = 'READY D115';
+    } catch (e) {
+      document.title = 'ERR D115 ' + (e && (e.stack || e.message));
+    }
+  }
+
+  var S = Game.Core.Sprites, origLoad = S.load;
+  S.load = function () { return origLoad.call(this, '../../../assets/sprites/'); };
+  S.load();
+  var tries = 0;
+  (function wait() {
+    tries++;
+    if (S.isReady && S.isReady()) { boot(); return; }
+    if (tries > 240) { boot(); return; }
+    window.setTimeout(wait, 50);
+  })();
+})();
+</script>
+</body>
+</html>
