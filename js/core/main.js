@@ -206,9 +206,9 @@
     {
       id: 'move', title: '移动与交互',
       lines: ['方向键 / WASD 移动；踩到怪物即进入战斗。',
-        'B 背包 · E 商店 · M 任务 · T 对话（需相邻）· Q 设置 · H 重看引导'],
+        'B 背包 · E 商店 · M 任务 · T 对话（需相邻）· F 侦测/拆除陷阱 · Q 设置 · H 重看引导'],
       src: ['js/core/main.js'],
-      need: ['KeyB', 'KeyE', 'KeyM', 'KeyT', 'KeyQ', 'KeyH']
+      need: ['KeyB', 'KeyE', 'KeyM', 'KeyT', 'KeyF', 'KeyQ', 'KeyH']
     },
     {
       id: 'fireball', title: '火球',
@@ -409,6 +409,9 @@
    * 不随玩家按键频率变化（怪物相对速度不变）。 */
   var lastDir = null;
   var lastAiAt = -1e9;
+  /* D-100：鼠标点击的"下一步方向"——点击只登记，真正的移动仍由 _updateExplore
+   * 走同一条移动入口（含楼梯确认、陷阱、遭遇、拾取），不另写一套移动逻辑。 */
+  var pendingClickDir = null;
 
   /* D-15：本次战斗的遭遇上下文。
    * 逃跑：按它把玩家后退一格、怪物留在原地；胜利：按它移除对应的那一只怪。
@@ -720,6 +723,7 @@
       Game.Core.EventBus.on('quest:complete', onQuestComplete);
       Game.Core.EventBus.on('ai:encounter', onAiEncounter);
       encounter = null; /* D-15：新一局不继承上一局的遭遇上下文 */
+      pendingClickDir = null; /* D-100：新一局不继承上一次点击方向 */
       Game.Systems.NPC.bind();
       Game.Systems.Audio.init();
       Game.Systems.Audio.bind();
@@ -799,6 +803,8 @@
           window.visualViewport.addEventListener('resize', onViewportChange);
         }
       } catch (e) { /* 降级：不支持 visualViewport 时仅依赖 resize */ }
+      /* D-100：鼠标监听只绑一次（验证页会重复 init，重复绑定会让一次点击执行多次） */
+      this._bindMouse();
     },
 
     start: function () {
@@ -1270,6 +1276,27 @@
     },
 
     /* 菜单键盘：↑↓ 选择 / Enter 确认 / Esc 从子页返回（鼠标点击为可选增强，不依赖） */
+    /* D-100：主菜单行的唯一动作入口——键盘 Enter 与鼠标点击共用，语义不复制。
+     * 返回 true 表示动作已受理（含弹确认页/提示），false 表示未知 id。 */
+    _menuActivate: function (id) {
+      if (id === 'new') {
+        /* D-91：有档时先弹覆盖确认，默认焦点在「取消」；无档才直接开新局 */
+        if (saveHas()) {
+          menu.confirm = 'new';
+          menu.confirmSel = 0;
+          menu.page = 'confirmNew';
+          return true;
+        }
+        this.enterGame('new');
+        return true;
+      }
+      if (id === 'continue') { this.enterGame('continue'); return true; }
+      if (id === 'help') { menu.page = 'help'; menu.helpScroll = 0; return true; }
+      if (id === 'settings') { menu.page = 'settings'; menu.settingsSel = 0; return true; }
+      if (id === 'about') { menu.page = 'about'; return true; }
+      return false;
+    },
+
     _updateMenu: function () {
       var k = Game.Core.Input.getState();
       var up = k['ArrowUp'] || k['KeyW'];
@@ -1283,21 +1310,7 @@
         if (enter) {
           delete k['Enter']; delete k['NumpadEnter'];
           var id = ['new', 'continue', 'help', 'settings', 'about'][menu.sel];
-          if (id === 'new') {
-            /* D-91：有档时先弹覆盖确认，默认焦点在「取消」；无档才直接开新局 */
-            if (saveHas()) {
-              menu.confirm = 'new';
-              menu.confirmSel = 0;
-              menu.page = 'confirmNew';
-              return;
-            }
-            this.enterGame('new');
-            return;
-          }
-          if (id === 'continue') { this.enterGame('continue'); return; }
-          if (id === 'help') { menu.page = 'help'; menu.helpScroll = 0; return; }
-          if (id === 'settings') { menu.page = 'settings'; menu.settingsSel = 0; return; }
-          if (id === 'about') { menu.page = 'about'; return; }
+          this._menuActivate(id);
         }
         return;
       }
@@ -1534,10 +1547,16 @@
       if (!enter) return;
       delete k['Enter']; delete k['NumpadEnter'];
       var action = PAUSE_ITEMS[pause.sel] ? PAUSE_ITEMS[pause.sel].id : 'resume';
-      if (action === 'resume') { this.closePause(); return; }
-      if (action === 'settings') { pause.page = 'settings'; pause.settingsSel = 0; return; }
-      if (action === 'menu') { this._pauseReturnToMenu(); return; }
-      if (action === 'abandon') { pause.page = 'confirmAbandon'; pause.confirmSel = 0; return; }
+      this._pauseActivate(action);
+    },
+
+    /* D-100：暂停根页行的唯一动作入口（键盘 Enter 与鼠标点击共用）。 */
+    _pauseActivate: function (action) {
+      if (action === 'resume') { this.closePause(); return true; }
+      if (action === 'settings') { pause.page = 'settings'; pause.settingsSel = 0; return true; }
+      if (action === 'menu') { this._pauseReturnToMenu(); return true; }
+      if (action === 'abandon') { pause.page = 'confirmAbandon'; pause.confirmSel = 0; return true; }
+      return false;
     },
 
     /* Esc / 取消：确认页回到上一级，设置页回根页，根页 = 继续游戏 */
@@ -1605,6 +1624,176 @@
       this.switchScene('menu');
     },
 
+    /* ── D-100：全局鼠标（菜单 / 暂停 / 探索 / 战斗；弹窗由 Modal 自己接管） ──
+     * 所有 client 坐标先经 Render.toLogical 换算；命中只读 Render 每帧登记的热区。
+     * init 可能被验证页重复调用，绑定只做一次，避免重复监听导致一次点击执行多次。 */
+    _bindMouse: function () {
+      if (this._mouseBound) return false;
+      var R = Game.Core && Game.Core.Render;
+      var cv = R && R._canvas;
+      if (!cv) return false;
+      var self = this;
+      this._mouseBound = true;
+      cv.addEventListener('click', function (e) {
+        var pt = R.toLogical(e.clientX, e.clientY);
+        self._uiClick(pt.x, pt.y);
+      });
+      cv.addEventListener('mousemove', function (e) {
+        var pt = R.toLogical(e.clientX, e.clientY);
+        R._setHover(R._hotAt(pt.x, pt.y));
+      });
+      cv.addEventListener('mouseleave', function () { R._setHover(null); });
+      cv.addEventListener('wheel', function (e) {
+        if (self._uiWheel(e.deltaY)) e.preventDefault();
+      }, { passive: false });
+      return true;
+    },
+
+    _uiWheel: function (dy) {
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen() &&
+          typeof Game.Modal._wheel === 'function') {
+        return Game.Modal._wheel(dy);
+      }
+      return false;
+    },
+
+    _uiClick: function (x, y) {
+      /* 引导覆盖层自己消费点击（D-14），这里不重复处理 */
+      if (this._guideVisible) return false;
+      /* 弹窗打开时世界冻结（见 _updateExplore），点击全部交给 Modal 的监听器 */
+      if (Game.Modal && Game.Modal.isOpen && Game.Modal.isOpen()) return false;
+      if (pause.active) return this._pauseClick(x, y);
+      if (this._scene === 'menu') return this._menuClick(x, y);
+      if (this._scene === 'battle') return this._battleClick(x, y);
+      if (this._scene === 'explore') return this._exploreClick(x, y);
+      return false;
+    },
+
+    _menuClick: function (x, y) {
+      var R = Game.Core.Render;
+      var id = R._hotAt(x, y);
+      if (!id) return false;
+      if (id.indexOf('menu:row:') === 0) {
+        var key = id.slice('menu:row:'.length);
+        var items = this._menuSpec().items || [];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].id === key) { menu.sel = i; break; }
+        }
+        return this._menuActivate(key);
+      }
+      if (id.indexOf('menusettings:') === 0) {
+        var sid = id.slice('menusettings:'.length);
+        var rows = this._settingsRows();
+        for (var r = 0; r < rows.length; r++) if (rows[r].id === sid) { menu.settingsSel = r; break; }
+        if (sid === 'clearSave') {
+          var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
+          if (!hasSave) { Game.Core.EventBus.emit('ui:notice', { msg: '当前没有存档可清除' }); return true; }
+          menu.confirm = 'clear';
+          menu.confirmSel = 0;
+          menu.page = 'confirmClear';
+          return true;
+        }
+        this.cycleSetting(sid, 1);
+        return true;
+      }
+      if (id.indexOf('menuconfirm:') === 0) {
+        var j = id.slice('menuconfirm:'.length) === '1' ? 1 : 0;
+        menu.confirmSel = j;
+        if (j === 0) {
+          menu.page = (menu.page === 'confirmNew') ? 'root' : 'settings';
+          menu.confirm = null;
+          return true;
+        }
+        if (menu.page === 'confirmNew') {
+          menu.page = 'root'; menu.confirm = null; menu.confirmSel = 0;
+          this.enterGame('new');
+        } else {
+          var had = this.clearSave();
+          Game.Core.EventBus.emit('ui:notice', { msg: had ? '存档已清除（当前无存档）' : '当前没有存档可清除' });
+          menu.page = 'settings'; menu.confirm = null; menu.confirmSel = 0;
+        }
+        return true;
+      }
+      return false;
+    },
+
+    _pauseClick: function (x, y) {
+      var R = Game.Core.Render;
+      var id = R._hotAt(x, y);
+      if (!id) return false;
+      if (id.indexOf('pause:row:') === 0) {
+        var key = id.slice('pause:row:'.length);
+        for (var i = 0; i < PAUSE_ITEMS.length; i++) if (PAUSE_ITEMS[i].id === key) { pause.sel = i; break; }
+        return this._pauseActivate(key);
+      }
+      if (id.indexOf('pausesettings:') === 0) {
+        var sid = id.slice('pausesettings:'.length);
+        var rows = this._settingsRows();
+        for (var r = 0; r < rows.length; r++) if (rows[r].id === sid) { pause.settingsSel = r; break; }
+        if (sid === 'clearSave') {
+          if (!this._pauseSpec().hasSave) {
+            Game.Core.EventBus.emit('ui:notice', { msg: '当前没有存档可清除' });
+            return true;
+          }
+          pause.page = 'confirmClear';
+          pause.confirmSel = 0;
+          return true;
+        }
+        this.cycleSetting(sid, 1);
+        return true;
+      }
+      if (id.indexOf('pauseconfirm:') === 0) {
+        var j = id.slice('pauseconfirm:'.length) === '1' ? 1 : 0;
+        pause.confirmSel = j;
+        if (j === 0) { this._pauseBack(); return true; }
+        if (pause.page === 'confirmAbandon') this._pauseAbandon();
+        else this._pauseClearSave();
+        return true;
+      }
+      return false;
+    },
+
+    _battleClick: function (x, y) {
+      var B = Game.Systems && Game.Systems.Battle;
+      var R = Game.Core && Game.Core.Render;
+      if (!B || !R || typeof R._battleBarInfo !== 'function') return false;
+      var bar = R._battleBarInfo(B.getState());
+      if (!bar) return false;
+      for (var i = 0; i < bar.cells.length; i++) {
+        var c = bar.cells[i];
+        if (x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h) {
+          this._battleCommand(c.cmd);
+          return true;
+        }
+      }
+      return false;
+    },
+
+    _exploreClick: function (x, y) {
+      var R = Game.Core && Game.Core.Render;
+      var Map = Game.Systems && Game.Systems.Map;
+      if (!R || !Map || typeof R._screenToTile !== 'function') return false;
+      var t = R._screenToTile(x, y);
+      if (!t) return false;
+      var dx = t.x - player.x, dy = t.y - player.y;
+      if (dx === 0 && dy === 0) return true;
+      if (Math.abs(dx) + Math.abs(dy) !== 1) {
+        Game.Core.EventBus.emit('ui:notice', { msg: '只能点击相邻格（多步寻路未开放）' });
+        return true;
+      }
+      if (!Map.isWalkable(t.x, t.y)) {
+        Game.Core.EventBus.emit('ui:notice', { msg: '那里走不过去' });
+        return true;
+      }
+      /* 只登记方向：下一帧仍由 _updateExplore 的同一段移动逻辑执行，
+       * 因此楼梯确认（D-98）、陷阱、遭遇、拾取全部与键盘一致。 */
+      pendingClickDir = { dx: dx, dy: dy };
+      return true;
+    },
+
+    /* D-100：验证/调试只读——当前待执行的鼠标方向（消费后为 null） */
+    _pendingClickDir: function () { return pendingClickDir; },
+
     _drawPause: function () {
       var R = Game.Core && Game.Core.Render;
       if (R && typeof R.drawPause === 'function') {
@@ -1653,15 +1842,55 @@
         return;
       }
       if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
+      /* D-98：F = 侦测 / 拆除陷阱（T 已被 NPC 对话占用，改用 F，设置页「操作说明」已写明）。
+       * 先判拆除：站在已显现陷阱的相邻格（4 向）→ 直接拆掉，不耗道具、不加掉落。
+       * 否则侦测：消耗 1 个回合（走一次状态结算与步数），把视野内陷阱置 seen=true。
+       * 未侦测的陷阱仍然不画。 */
+      if (k['KeyF']) {
+        delete k['KeyF'];
+        var MP = Game.Systems.Map;
+        var dis = (MP && typeof MP.disarmTrap === 'function') ? MP.disarmTrap(player.x, player.y) : null;
+        if (dis) {
+          var tdef = Game.Data.TRAPS && Game.Data.TRAPS[dis.id];
+          Game.Core.EventBus.emit('ui:notice', { msg: '已拆除' + ((tdef && tdef.name) || '陷阱') });
+          /* 陷阱画在静态离屏层：拆除后必须让缓存失效，否则要等下一"步"才消失 */
+          if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+            Game.Core.Render.invalidateStatic();
+          }
+          if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
+          return;
+        }
+        var found = (MP && typeof MP.detectTraps === 'function') ? MP.detectTraps() : 0;
+        Game.Core.EventBus.emit('ui:notice', {
+          msg: found > 0 ? ('侦测到 ' + found + ' 处陷阱') : '视野内没有发现陷阱',
+          ok: found > 0
+        });
+        /* 侦测不改位移，静态层不会自己失效；这里显式让缓存重建，陷阱当帧就出现在画面上 */
+        if (Game.Core.Render && typeof Game.Core.Render.invalidateStatic === 'function') {
+          Game.Core.Render.invalidateStatic();
+        }
+        /* 消耗 1 个回合：与移动同一条状态结算路径，但不走位移/遭遇 */
+        if (Game.Systems.Status && typeof Game.Systems.Status.tick === 'function') {
+          var stF = Game.Systems.Status.tick();
+          if (stF && stF.length && player.hp <= 0) { refreshFov(); return; }
+        }
+        this._noteStep();
+        refreshFov();
+        return;
+      }
       /* M9-4：Q 打开设置弹窗；K 一键静音（不 return，允许同时移动） */
       if (k['KeyQ']) { delete k['KeyQ']; Game.Modal.open('settings'); return; }
       if (k['KeyK']) { delete k['KeyK']; Game.Systems.Audio.setMuted(!Game.Systems.Audio.isMuted()); }
       /* 修复 P1：定步长（120ms）处理 AI 与移动；动作键仍即时响应。
        * D-12：新按下/换方向立即生效（见 lastDir），只有"按住同方向"才吃 120ms 节流。 */
       var tNow = (typeof now === 'number') ? now : performance.now();
-      var d = Game.Core.Input.direction(k);
+      /* D-100：鼠标点击在本帧转成一个"已确认的新方向"，其余完全复用键盘移动路径 */
+      var clickDir = pendingClickDir;
+      pendingClickDir = null;
+      var d = clickDir || Game.Core.Input.direction(k);
       var dirDown = (d.dx !== 0 || d.dy !== 0);
-      var fresh = dirDown && (dirEdge || !lastDir || d.dx !== lastDir.dx || d.dy !== lastDir.dy);
+      var fresh = clickDir ? dirDown
+        : (dirDown && (dirEdge || !lastDir || d.dx !== lastDir.dx || d.dy !== lastDir.dy));
       if (!dirDown) lastDir = null;
       if (!fresh && tNow - lastStepAt < MOVE_INTERVAL) return;
       lastStepAt = tNow;
@@ -1702,21 +1931,17 @@
           Game.Core.EventBus.emit('audio:play', { sfx: 'move' });
           var t = Game.Systems.Map.tileAt(nx, ny);
           if (t === 2) {
-            /* 修复：最深层踩下行梯不再静默重生成当前层（changeFloor 边界返回 null） */
-            var prevDown = player.floor;
-            deferFloorSave = true;
-            var movedDown;
-            try { movedDown = Game.Systems.Map.changeFloor(1); } finally { deferFloorSave = false; }
-            if (movedDown) {
-              player.floor = Game.Systems.Map.getFloor();
-              resetPlayer();
-              /* D-49：层间落点检查"上一层出口血 <20%"——只在换层后触发，不在战斗中 */
-              if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
-                Game.Systems.Adaptive.onFloorArrived(prevDown);
-              }
-              /* D-77：坐标已定在新层出生点，此时落盘才是对的落点 */
-              if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
+            /* D-98：下行改为确认框（标题「进入第 N 层」，默认焦点「取消」，与 D-91 确认页同口径）。
+             * 确认后才真正 changeFloor；上行（t===3）保持即时，回到已探索层不再追问。 */
+            var totalF = (Game.Data.MAPS && Game.Data.MAPS.floors) ? Game.Data.MAPS.floors : 0;
+            if (!totalF || player.floor < totalF) {
+              Game.Modal.open('stairconfirm', {
+                floor: player.floor + 1,
+                onConfirm: function () { Game.Core.Main._descendFloor(); }
+              });
             }
+            refreshFov();
+            return;
           } else if (t === 3) {
             /* 修复：第 1 层踩上行梯不再静默重生成当前层 */
             var prevUp = player.floor;
@@ -1763,8 +1988,31 @@
             }
           }
           refreshFov(); /* S3-1：移动/换层后刷新视野 */
+        } else {
+          /* D-100：撞墙反馈——键盘与鼠标点击共用同一句提示（鼠标点击墙在 _exploreClick 里也发这句） */
+          Game.Core.EventBus.emit('ui:notice', { msg: '那里走不过去' });
         }
       }
+    },
+
+    /* D-98：下行确认后的落地动作——原 t===2 分支原样搬到这里，changeFloor 仍是
+     * "调用即生效"（没有改成异步），只是把触发时机交给确认框回调。 */
+    _descendFloor: function () {
+      var prevDown = player.floor;
+      deferFloorSave = true;
+      var movedDown;
+      try { movedDown = Game.Systems.Map.changeFloor(1); } finally { deferFloorSave = false; }
+      if (movedDown) {
+        player.floor = Game.Systems.Map.getFloor();
+        resetPlayer();
+        /* D-49：层间落点检查"上一层出口血 <20%"——只在换层后触发，不在战斗中 */
+        if (Game.Systems.Adaptive && typeof Game.Systems.Adaptive.onFloorArrived === 'function') {
+          Game.Systems.Adaptive.onFloorArrived(prevDown);
+        }
+        /* D-77：坐标已定在新层出生点，此时落盘才是对的落点 */
+        if (Game.Systems.Save && typeof Game.Systems.Save.save === 'function') Game.Systems.Save.save();
+      }
+      refreshFov();
     },
 
     /* 战斗场景
@@ -1772,7 +2020,6 @@
      * 解锁后由 Battle.tick 执行一次；锁时长 ≤160ms，玩家不会感到"按了没反应"。 */
     _updateBattle: function () {
       var k = Game.Core.Input.getState();
-      var B = Game.Systems.Battle;
       /* D-78：F 键不再切换特效（特效硬性常开），此键留空，未绑定新功能 */
       var cmd = null;
       if (k['Digit1'] || k['Numpad1']) { delete k['Digit1']; delete k['Numpad1']; cmd = 'attack'; }
@@ -1786,11 +2033,24 @@
        * 改键会直接破坏既有战斗操作，故取同序列的下一个空闲数字键 7。 */
       else if (k['Digit7'] || k['Numpad7']) { delete k['Digit7']; delete k['Numpad7']; cmd = 'item'; }
       if (!cmd) return;
-      if (B && typeof B.isInputLocked === 'function' && B.isInputLocked()) {
+      this._battleCommand(cmd);
+    },
+
+    /* D-100：战斗指令唯一入口——键盘 1–7 与鼠标点七格都走这里。
+     * 输入锁期间只缓冲一条（解锁后由 Battle.tick 执行），与 D-16 的键盘语义完全一致。 */
+    _battleCommand: function (cmd) {
+      var B = Game.Systems && Game.Systems.Battle;
+      if (!B || typeof B.playerAction !== 'function') return false;
+      /* D-103：键盘 1–7 与鼠标点击都先落"当前格"焦点，绘制层与 hover 共用同一份高亮 */
+      if (Game.Core.Render && typeof Game.Core.Render._commandFocus === 'function') {
+        Game.Core.Render._commandFocus(cmd);
+      }
+      if (typeof B.isInputLocked === 'function' && B.isInputLocked()) {
         B.bufferCommand(cmd);   /* 只缓冲一条，解锁后执行一次 */
-        return;
+        return false;
       }
       B.playerAction(cmd);
+      return true;
     },
 
     /* 背包场景 */
