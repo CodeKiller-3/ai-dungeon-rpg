@@ -1580,7 +1580,9 @@
       startPos: '', endPos: '',
       lastMonster: null, lastTrapAt: -1, diedInBattle: false, noPotionAtDeath: null,
       death: null, /* D-23：死亡归因快照（battle:end lose 的 payload 副本；只读） */
-      gold: 0, level: 1, hp: 0, equip: 0, quests: {}
+      gold: 0, level: 1, hp: 0, equip: 0, quests: {},
+      /* D-127：本层无事可做的终止原因（默认 null，不改变既有字段） */
+      stallReason: null, stallAt: 0, stallSignal: false
     };
   }
   /* 记录"离开第 N 层时的状态"；结局层（死亡/卡关/胜利）由 flushFloor 在收尾时补记 */
@@ -1629,7 +1631,9 @@
     var st = B.getState();
     if (!st || !st.monster) { frame(STEP); return; }
     /* B1：怪已死（消散动画中）时不要再按攻击——否则会把同一回合的伤害重复记账，
-     * 也会把动作数浪费在尸体上。既有策略不进入这条分支，行为不变。 */
+     * 也会把动作数浪费在尸体上。既有策略不进入这条分支，行为不变。
+     * D-127 结论：这一守卫若扩到所有策略，会让原本在消散动画里耗完动作的局继续
+     * 推进并改变终局（例如 1013 会从 stuck 变 win），超出"只去空转"的范围，故不扩。 */
     if (rec.b1 && (st.dying || st.monster.hp <= 0)) { frame(STEP); return; }
     var code = 'Digit1';
     var potionsBefore = healPotions().length;
@@ -1780,7 +1784,10 @@
       var dd0 = DIR_DELTA[dir];
       if (dd0 && Map.tileAt(P.x + dd0[0], P.y + dd0[1]) === 2) { b1ShopAct(rec); return; }
     }
-    if (!dir) { rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return; }
+    if (!dir) {
+      if (noteNoTarget(rec)) return;
+      rec.noDir++; frame(MOVE_MS); rec.actions++; rec.blockedSteps++; return;
+    }
     var bx = P.x, by = P.y, traps0 = rec.traps, hp0m = P.hp;
     rec.actions++;
     press(dir, MOVE_MS);
@@ -1791,6 +1798,36 @@
       if (rec.traps > traps0) rec.d39.floorStart.trapDmg += dhp;
       else if (dhp < 0) rec.d39.floorStart.statusDmg += dhp;
     }
+  }
+
+  /* D-127：本层"确实无事可做"判定——四种策略都规划不出方向（dir=null），
+   * 且四邻没有任何可交互对象（怪 / NPC / 宝箱 / 下行梯）时，本局结束并记
+   * stallCleared。只加在"目标清空"这一条路径上；不改 maxActions、不缩短超时。 */
+  function adjacentActionable() {
+    var P = Game.Data.Player, Map = Game.Systems.Map, grid = Map.getGrid();
+    if (!grid) return false;
+    var FLOORS = (Game.Data.MAPS && Game.Data.MAPS.floors) || 5;
+    for (var i = 0; i < 4; i++) {
+      var nx = P.x + DIRS[i][0], ny = P.y + DIRS[i][1];
+      if (ny < 0 || ny >= grid.length || nx < 0 || nx >= grid[0].length) continue;
+      var t = grid[ny][nx];
+      if (t === 0) continue;
+      if (t === 2 && P.floor < FLOORS) return true; /* 下行梯 */
+      if (Map.enemyAt(nx, ny)) return true;
+      if (Map.npcAt && Map.npcAt(nx, ny)) return true;
+      var dc = Map.getDecor && Map.getDecor(nx, ny);
+      if (dc === 'chest' || dc === 'room_chest' || dc === 'gold_pile' || dc === 'potion_stash') return true;
+    }
+    return false;
+  }
+  function noteNoTarget(rec) {
+    if (Game.Modal.isOpen() || adjacentActionable()) return false;
+    /* 只在本层确实清空（没有可打的怪）时收尾；箱子按策略可能本来就不开 */
+    if (Game.Systems.Map.getEnemies().length > 0) return false;
+    rec.stallReason = 'stallCleared';
+    rec.stallAt = rec.actions;
+    rec.stallSignal = true;
+    return true;
   }
 
   /* 卡关诊断：区分"楼梯把通路堵死"与"本层根本没有下部可走的路"。
@@ -2000,6 +2037,12 @@
     Math.random = mulberry32(seed);
     if (Game.Fx && typeof Game.Fx._reset === 'function') Game.Fx._reset();
     M.restart();
+    /* D-127 测试夹具：只用于验证页构造"本层目标已清空"的真实引擎状态 */
+    if (opts.testClearEnemies && Game.Systems.Map.removeEnemyAt) {
+      Game.Systems.Map.getEnemies().slice().forEach(function (e) {
+        Game.Systems.Map.removeEnemyAt(e.x, e.y);
+      });
+    }
     /* D-52：被动台账——每个被引擎计入的回合都会发 battle:turn；只数事件，不干预行动 */
     var _onTurnEvt = function () { rec.battleTurns++; };
     Game.Core.EventBus.on('battle:turn', _onTurnEvt);
@@ -2058,6 +2101,8 @@
       /* D-52：被动计数——只有探索场景里的真实位移才算一步（逃跑后退格不算探索步） */
       if (wasExplore && (P.x !== sx || P.y !== sy)) rec.steps++;
       if (P.level > rec.maxLevelSeen) rec.maxLevelSeen = P.level;
+      /* D-127：规划无目标且四邻无交互对象 → 本局结束（stallCleared） */
+      if (rec.stallSignal) break;
     }
     if (!rec.outcome) rec.outcome = 'stuck';
     if (rec.outcome === 'dead') classify(rec);

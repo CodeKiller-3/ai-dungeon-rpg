@@ -277,6 +277,75 @@
       oldSeed: 1013, outcome: negD.outcome, stuckReason: negD.stuckReason || null
     });
 
+    /* ══ E 组：D-127 本层清空后不再空转到 maxActions ═══════════════
+     * 真值路径：规划无目标（dir=null）且四邻无交互对象且本层无怪 → 结束并记
+     * stallCleared。正例用真实引擎状态（清空本层怪 + 短路的 M1 规划），
+     * 负例只保留怪、不满足"目标清空"，必须照旧跑到 maxActions。 */
+    var ePositive = Bot.run(1001, {
+      maxActions: 500, m1: { clear: true, stall: true }, testClearEnemies: true
+    });
+    var eNegative = Bot.run(1001, { maxActions: 500, m1: { clear: true, stall: true } });
+    var ePosOk = ePositive.stallReason === 'stallCleared' && ePositive.actions < 50 &&
+      ePositive.stallAt === ePositive.actions && ePositive.outcome === 'stuck';
+    var eNegOk = eNegative.stallReason === null && eNegative.actions >= eNegative.maxActions;
+    rec('bot_no_idle_to_maxactions', ePosOk && eNegOk, {
+      rule: '目标清空且无相邻可交互对象时立即收尾；目标未清空时不得提前收尾',
+      positive: { actions: ePositive.actions, stallAt: ePositive.stallAt, stallReason: ePositive.stallReason,
+        outcome: ePositive.outcome },
+      negative: { actions: eNegative.actions, maxActions: eNegative.maxActions,
+        stallReason: eNegative.stallReason, outcome: eNegative.outcome }
+    });
+    rec('bot_stall_reason_recorded', ePosOk && ePositive.stallReason === 'stallCleared' &&
+      eNegative.stallReason !== 'stallCleared', {
+      rule: '收尾必须留下 stallCleared；不满足清空条件的局不得写这个原因',
+      positiveReason: ePositive.stallReason, positiveAt: ePositive.stallAt,
+      negativeReason: eNegative.stallReason
+    });
+
+    /* 200 局逐局等价：d118 基线 vs d127；只允许 actions / steps 变化 */
+    function readJSON38(rel) {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false); x.send(null);
+      return JSON.parse((x.responseText || '{}').replace(/^\uFEFF/, ''));
+    }
+    function canon38(v) {
+      if (v === null || typeof v !== 'object') return JSON.stringify(v);
+      if (Object.prototype.toString.call(v) === '[object Array]') {
+        return '[' + v.map(canon38).join(',') + ']';
+      }
+      var ks = Object.keys(v).sort();
+      return '{' + ks.map(function (k) { return JSON.stringify(k) + ':' + canon38(v[k]); }).join(',') + '}';
+    }
+    var EQ_KEYS = ['b1', 's1', 'g2', 'm1'];
+    var eqPairs = [], eqBad = [], eqGames = 0;
+    try {
+      EQ_KEYS.forEach(function (k) {
+        var a = readJSON38('selfcheck/d118-' + k + '-50.json');
+        var b = readJSON38('selfcheck/d127-' + k + '-50.json');
+        var ra = a.runs[k], rb = b.runs[k];
+        if (!ra || !rb || ra.length !== 50 || rb.length !== 50) {
+          eqBad.push(k + ':len'); return;
+        }
+        var same = 0;
+        for (var i = 0; i < 50; i++) {
+          eqGames++;
+          var fa = {}, fb = {};
+          Object.keys(ra[i]).forEach(function (x) { if (x !== 'actions' && x !== 'steps') fa[x] = ra[i][x]; });
+          Object.keys(rb[i]).forEach(function (x) { if (x !== 'actions' && x !== 'steps') fb[x] = rb[i][x]; });
+          if (canon38(fa) === canon38(fb)) same++;
+          else eqBad.push(k + '#' + ra[i].seed);
+        }
+        eqPairs.push({ k: k, same: same });
+      });
+    } catch (e) {
+      eqBad.push('read:' + String(e && e.message || e));
+    }
+    rec('d127_equiv_states_200', eqBad.length === 0 && eqGames === 200 &&
+      eqPairs.every(function (p) { return p.same === 50; }), {
+      rule: '200 局终局状态（层数/HP/金币/道具/胜负/任务）与 d118 逐局全等；仅 actions/steps 可变',
+      games: eqGames, pairs: eqPairs, bad: eqBad.slice(0, 6)
+    });
+
     Game.Data.REWARD = d46RwSnap;
     if (Game.Data.ELITE && eliteSnap38 !== undefined) Game.Data.ELITE.enabled = eliteSnap38; /* D-69：恢复精英放置 */
     out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
