@@ -38,6 +38,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
 <script src="../js/data/dialogue.js"></script>
 <script src="../js/data/reactions.js"></script>
 <script src="../js/data/config.js"></script>
+<script src="lib/geom.js"></script>
 <script src="../js/vendor/astar.js"></script>
 <script src="../js/vendor/howler.min.js"></script>
 <script src="../js/vendor/rot.min.js"></script>
@@ -355,10 +356,259 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
       checks: gChecks
     });
 
+    /* ══ H：D-106 高度档——每行/提示/门框/门徽/进度/石钉两两不交且在视口内 ══ */
+    var G = window.PreflightGeom;
+    function txtRect(x, baseY, size, text) {
+      return { x: x, y: baseY - size, w: Math.max(1, R._menuTextW(text, size)), h: size + 3 };
+    }
+    function menuParts(W, H, floor) {
+      var lay = R._menuLayout(W, H, true, floor, 7);
+      var m = lay.menu, pr = lay.progress;
+      var rows = [];
+      for (var i = 0; i < 5; i++) rows.push({ x: m.x, y: m.y + i * m.rowH, w: m.w, h: m.rowH - 4 });
+      var hint = txtRect(lay.hint.x, lay.hint.y, m.note, '↑↓ 选择 · Enter 确认');
+      var label = txtRect(pr.x, pr.pipY - 8, pr.fontSize, pr.label);
+      var pips = [];
+      for (var k = 0; k < 4; k++) pips.push({ x: pr.x + k * (pr.pip + pr.gap), y: pr.pipY, w: pr.pip, h: pr.pip });
+      var seam = R._seamSpec(lay);
+      var door = { x: lay.door.x - 6, y: lay.door.y - 6, w: lay.door.w + 12, h: lay.door.h + 12 };
+      var emblem = { x: seam.x, y: seam.y, w: seam.w, h: seam.h };
+      var end = pr.end.name ? { x: pr.end.x, y: pr.end.y, w: 72, h: 72 } : null;
+      var reached = R._progressModel(floor).final
+        ? txtRect(pr.x, pr.pipY + pr.pip + 12, 11, '已抵达') : null;
+      var groups = [
+        { name: 'rows', rects: rows }, { name: 'hint', rects: [hint] },
+        { name: 'door', rects: [door] }, { name: 'emblem', rects: [emblem] },
+        { name: 'label', rects: [label] }, { name: 'pips', rects: pips }
+      ];
+      if (end) groups.push({ name: 'end', rects: [end] });
+      if (reached) groups.push({ name: 'reached', rects: [reached] });
+      return { lay: lay, m: m, pr: pr, rows: rows, hint: hint, label: label, pips: pips,
+        end: end, reached: reached, groups: groups };
+    }
+    /* 旧口径（D-105 之前）的宽/中档坐标：负例必须判负 */
+    function oldParts(W, H) {
+      if (W >= 900) {
+        var railH = Math.min(448, H - 152);
+        var menuY = Math.max(210, Math.min(238, H - 270));
+        var pipY = 112 + railH - 40;
+        var m = { x: 640, y: menuY, w: 312, rowH: 42 };
+        return {
+          m: m, pipY: pipY,
+          rows: [0, 1, 2, 3, 4].map(function (i) { return { x: m.x, y: m.y + i * 42, w: m.w, h: 38 }; }),
+          hint: txtRect(m.x + 2, m.y + 5 * 42 + 20, 12, '↑↓ 选择 · Enter 确认'),
+          label: txtRect(648, pipY - 8, 12, '第 3 层 · Lv.7 → 第 5 层'),
+          pips: [0, 1, 2, 3].map(function (k) { return { x: 648 + k * 32, y: pipY, w: 20, h: 20 }; }),
+          end: { x: 616 + 360 - 84, y: pipY - 46, w: 72, h: 72 }
+        };
+      }
+      var sc5 = 104 + 5 * 48 + 12, pip5 = Math.max(sc5, H - 328);
+      var py = pip5 + 42, my = py + 30;
+      var rh = Math.max(26, Math.min(38, Math.floor((H - my - 24 - 18) / 5)));
+      return {
+        m: { x: 34, y: my, w: W - 68, rowH: rh }, pipY: pip5,
+        rows: [0, 1, 2, 3, 4].map(function (i) { return { x: 34, y: my + i * rh, w: W - 68, h: rh - 4 }; }),
+        hint: txtRect(36, my + 5 * rh + 20, 12, '↑↓ 选择 · Enter 确认'),
+        label: txtRect(24, pip5 - 8, 12, '第 3 层 · Lv.7 → 第 5 层'),
+        pips: [0, 1, 2, 3].map(function (k) { return { x: 24 + k * 30, y: pip5, w: 16, h: 16 }; }),
+        end: null
+      };
+    }
+    function flatGroups(P) {
+      var gs = [{ name: 'rows', rects: P.rows }, { name: 'hint', rects: [P.hint] },
+        { name: 'label', rects: [P.label] }, { name: 'pips', rects: P.pips }];
+      if (P.end) gs.push({ name: 'end', rects: [P.end] });
+      return gs;
+    }
+    var combos = [[320, 568], [390, 844], [960, 540], [1024, 640], [1280, 800],
+      [900, 540], [975, 540], [800, 540], [480, 540], [1280, 540]];
+    var hRows = [], hBad = [], fontUsed = {};
+    combos.forEach(function (wh) {
+      var W = wh[0], H = wh[1];
+      var P = menuParts(W, H, 3);
+      var pv = G.pairwise(P.groups, [['door', 'emblem']]);
+      var all = [];
+      P.groups.forEach(function (g) { g.rects.forEach(function (r) { all.push(r); }); });
+      var vp = G.allInViewport(all, W, H);
+      var panel = P.lay.panel;
+      var panelOk = panel.x >= 0 && panel.y >= 0 &&
+        panel.x + panel.w <= W && panel.y + panel.h <= H;
+      function insidePanel(r) {
+        return r.x >= panel.x && r.x + r.w <= panel.x + panel.w &&
+          r.y >= panel.y && r.y + r.h <= panel.y + panel.h;
+      }
+      var rowsIn = P.rows.every(insidePanel) && insidePanel(P.hint);
+      var scene = P.lay.scene;
+      var sceneOk = scene.x >= 0 && scene.y >= 0 &&
+        scene.x + scene.cols * P.lay.T <= W && scene.y + scene.rows * P.lay.T <= H;
+      var sepOk = P.lay.tier !== 'wide' || (scene.x + scene.cols * P.lay.T + 8 <= panel.x);
+      /* 骑士必须完整站在场景框内（紧凑高度档缩行后尤其要卡住，不能压到进度行） */
+      var kn = P.lay.knight;
+      var knOk = kn.x >= scene.x &&
+        kn.x + kn.w <= scene.x + scene.cols * P.lay.T &&
+        kn.bottom <= scene.y + scene.rows * P.lay.T;
+      var ok = pv.ok && vp.ok && panelOk && rowsIn && sceneOk && sepOk && knOk;
+      hRows.push({ at: W + 'x' + H, tier: P.lay.tier, rowH: P.m.rowH,
+        hintY: P.lay.hint.y, pipY: P.pr.pipY,
+        violations: pv.violations.length, outOfView: vp.bad.length,
+        panelOk: panelOk, rowsInPanel: rowsIn, sceneOk: sceneOk, sepOk: sepOk,
+        knightInScene: knOk, ok: ok });
+      if (!ok) hBad.push(hRows[hRows.length - 1]);
+      fontUsed[P.m.label] = 1; fontUsed[P.m.note] = 1;
+      if (P.m.detail) fontUsed[P.m.detail] = 1;
+      fontUsed[P.pr.fontSize] = 1;
+      fontUsed[P.lay.title.small] = 1; fontUsed[P.lay.title.main] = 1; fontUsed[P.lay.title.sub] = 1;
+    });
+    /* 负例：旧口径在 960×540（石钉压提示）、800×540（五行出屏）必须判负 */
+    var negH = [];
+    [[960, 540], [800, 540]].forEach(function (wh) {
+      var W = wh[0], H = wh[1], O = oldParts(W, H);
+      var pv = G.pairwise(flatGroups(O), []);
+      var all = [];
+      flatGroups(O).forEach(function (g) { g.rects.forEach(function (r) { all.push(r); }); });
+      var vp = G.allInViewport(all, W, H);
+      negH.push({ at: W + 'x' + H, violations: pv.violations.length,
+        outOfView: vp.bad.length, failed: !(pv.ok && vp.ok) });
+    });
+    var LADDER = { 9: 1, 10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 18: 1, 20: 1, 22: 1, 24: 1 };
+    var outside = Object.keys(fontUsed).filter(function (s) { return !LADDER[+s]; });
+    var wideC = R._menuLayout(960, 540, true, 3, 7).menu;
+    var wideR = R._menuLayout(1024, 640, true, 3, 7).menu;
+    var midC = R._menuLayout(800, 540, true, 3, 7).menu;
+    var midR = R._menuLayout(800, 700, true, 3, 7).menu;
+    var fontStable = wideC.label === wideR.label && wideC.note === wideR.note &&
+      wideC.detail === wideR.detail && midC.label === midR.label && midC.note === midR.note;
+    rec('H_height_tiers', hBad.length === 0 && negH.every(function (n) { return n.failed; }) &&
+      outside.length === 0 && fontStable, {
+      rule: '高度档 compact=H<620：每行/提示/门框/门徽/进度标签/石钉/终点两两不交且在视口与面板内；字号仅用既有阶梯且不随高度缩；旧口径在 960×540 与 800×540 必须判负',
+      rows: hRows, negatives: negH, fonts: Object.keys(fontUsed), outsideLadder: outside,
+      fontStable: fontStable
+    });
+
+    /* ══ I：D-106 右栏宽度——320..1400 每 8px 零裁切；旧 900 档界负例 ══ */
+    var rampBad = [], rampRows = [];
+    var rwList = [];
+    for (var rw = 320; rw <= 1400; rw += 8) rwList.push(rw);
+    /* 档界点单独补测（8px 步进不会正好落在 900/975 上） */
+    rwList.push(900, 975);
+    rwList.sort(function (a, b) { return a - b; });
+    for (var ri2 = 0; ri2 < rwList.length; ri2++) {
+      var rw = rwList[ri2];
+      var layR = R._menuLayout(rw, 540, true, 3, 7);
+      var mR = layR.menu, prR = layR.progress, pR = layR.panel;
+      var right = [
+        { k: 'panel', v: pR.x + pR.w },
+        { k: 'menu', v: mR.x + mR.w },
+        { k: 'hint', v: layR.hint.x + R._menuTextW('↑↓ 选择 · Enter 确认', mR.note) },
+        { k: 'label', v: prR.x + R._menuTextW(prR.label, prR.fontSize) },
+        { k: 'pips', v: prR.x + 3 * (prR.pip + prR.gap) + prR.pip },
+        { k: 'end', v: prR.end.name ? prR.end.x + 72 : 0 },
+        { k: 'rule', v: layR.rule.x + layR.rule.w }
+      ];
+      var worst = 0, worstK = '';
+      right.forEach(function (e) {
+        if (e.v > worst) { worst = e.v; worstK = e.k; }
+      });
+      var okR = worst <= rw - 8;
+      if (!okR) rampBad.push({ W: rw, worst: worst, elem: worstK, limit: rw - 8 });
+      if (rw === 900 || rw === 960 || rw === 975 || rw === 976 || rw === 1024 || rw === 1400) {
+        rampRows.push({ W: rw, tier: layR.tier, panelRight: pR.x + pR.w, limit: rw - 8,
+          worst: worst, elem: worstK, ok: okR });
+      }
+    }
+    var oldBoundaryFail = [900, 940, 975].every(function (W) {
+      return (616 + 360) > W - 8;   /* 旧值：x=616、w=360 → 右缘 976 */
+    });
+    rec('I_right_column_ramp', rampBad.length === 0 && oldBoundaryFail, {
+      rule: 'W 从 320 到 1400 每 8px：面板/菜单/提示/进度标签/石钉/终点/分隔线的右缘一律 ≤ W−8；把旧 900 档界（栏 x=616,w=360）套回 900/940/975 必须判负',
+      samples: rampRows, bad: rampBad.slice(0, 8), oldBoundaryFail: oldBoundaryFail,
+      wideCols: { at900: R._menuLayout(900, 540, true, 1, 1).scene.cols,
+        at952: R._menuLayout(952, 540, true, 1, 1).scene.cols,
+        at960: R._menuLayout(960, 540, true, 1, 1).scene.cols,
+        at1024: R._menuLayout(1024, 640, true, 1, 1).scene.cols }
+    });
+
+    /* ══ J：D-106 菜单绘制调用——与战斗不同帧，单独报数（预算 206+8） ══ */
+    function finalize() {
+      try {
+    var dcNames = ['save', 'restore', 'translate', 'rotate', 'scale', 'setTransform',
+      'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+      'arc', 'ellipse', 'rect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'clip',
+      'fillText', 'strokeText', 'drawImage', 'createRadialGradient', 'createLinearGradient',
+      'createPattern', 'setLineDash'];
+    (function () {
+      var P = window.CanvasRenderingContext2D.prototype;
+      window.__DC = window.__DC || { n: 0, by: {} };
+      dcNames.forEach(function (nm) {
+        var orig = P[nm];
+        if (typeof orig !== 'function' || orig.__d106dc) return;
+        P[nm] = function () {
+          window.__DC.n++;
+          window.__DC.by[nm] = (window.__DC.by[nm] || 0) + 1;
+          return orig.apply(this, arguments);
+        };
+        P[nm].__d106dc = true;
+      });
+    })();
+    var menuCallRows = [], menuCallWorst = 0;
+    [[320, 568], [390, 844], [800, 540], [900, 540], [960, 540], [975, 540], [1024, 640], [1280, 800]]
+      .forEach(function (wh) {
+        var cv2 = document.getElementById('game');
+        cv2.width = wh[0]; cv2.height = wh[1];
+        R.dpr = 1; R.scale = 1; R.cssW = wh[0]; R.cssH = wh[1];
+        R.drawMainMenu(M._menuSpec());          /* 冷帧：烘焙离线场景 */
+        window.__DC.n = 0; window.__DC.by = {};
+        R.drawMainMenu(M._menuSpec());          /* 稳态帧：应有缓存，只 blit */
+        menuCallRows.push({ at: wh[0] + 'x' + wh[1], calls: window.__DC.n });
+        if (window.__DC.n > menuCallWorst) menuCallWorst = window.__DC.n;
+      });
+    /* 缓存必须逐像素等于直绘：同一 lay 分别走 _drawMenuScene（命中缓存）与 _paintMenuScene（直绘） */
+    var cacheEq = false, cacheDiff = -1;
+    (function () {
+      var lay = R._menuLayout(960, 540, true, 3, 7);
+      var cvA = document.getElementById('game');
+      cvA.width = 960; cvA.height = 540;
+      R.dpr = 1; R.scale = 1; R.cssW = 960; R.cssH = 540;
+      R._drawMenuScene(lay);                       /* 烘焙一次 */
+      var ca = cvA.getContext('2d');
+      ca.setTransform(1, 0, 0, 1, 0, 0);
+      ca.clearRect(0, 0, 960, 540);
+      R._drawMenuScene(lay);                       /* 命中缓存后 blit */
+      var a = ca.getImageData(0, 0, 960, 540).data;
+      var cvB = document.createElement('canvas');
+      cvB.width = 960; cvB.height = 540;
+      var cb = cvB.getContext('2d');
+      cb.setTransform(1, 0, 0, 1, 0, 0);
+      cb.imageSmoothingEnabled = false;
+      R._paintMenuScene(cb, lay, 960, 540);        /* 直绘 */
+      var b = cb.getImageData(0, 0, 960, 540).data;
+      var diff = 0;
+      for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) diff++;
+      cacheDiff = diff; cacheEq = diff === 0;
+    })();
+    rec('J_menu_draw_calls', menuCallWorst <= 214 && cacheEq, {
+      rule: '菜单稳态单帧 canvas 调用数 ≤ 206+8（与战斗不同帧，分开报数；战斗现值见 verify_d104）；静态场景缓存必须与直绘逐像素一致',
+      rows: menuCallRows, worst: menuCallWorst, budget: 214,
+      cachePixelEqual: cacheEq, cacheDiffBytes: cacheDiff
+    });
+
     out.ok = Object.keys(out.sub).every(function (x) { return out.sub[x].ok; });
     var txt = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
     document.getElementById('result').textContent = txt;
     document.title = txt;
+      } catch (e2) {
+        var bad2 = 'FAIL ' + JSON.stringify({ ok: false, error: String((e2 && e2.stack) || e2) });
+        document.getElementById('result').textContent = bad2;
+        document.title = bad2;
+      }
+    }
+    /* 菜单绘制调用必须在素材就绪后测（就绪前走兜底色块且不写缓存） */
+    var S93 = Game.Core.Sprites;
+    if (S93 && typeof S93.load === 'function') S93.load('../assets/sprites/');
+    (function waitSpriteReady(n) {
+      if (!S93 || typeof S93.isReady !== 'function' || S93.isReady() || n > 120) { finalize(); return; }
+      setTimeout(function () { waitSpriteReady(n + 1); }, 50);
+    })(0);
   } catch (e) {
     var bad = 'FAIL ' + JSON.stringify({ ok: false, error: String((e && e.stack) || e), errors: window.__D93ERR });
     document.getElementById('result').textContent = bad;
