@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-116 样张</title>
+<style>html,body{margin:0;padding:0;background:#07070f;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-116 实拍页：探索画面（地图居中/贴边两种极端），用于场外岩框的构图对照。
+     ?floor=1..5 —— 固定种子切层；不触发战斗（AI/Battle.tick 被停），镜头跟随玩家落点。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/npcs.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/sysviz.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/adaptive.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/systems/juice.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  function qs(k, d) {
+    var m = location.search.match(new RegExp('[?&]' + k + '=([^&]+)'));
+    return m ? decodeURIComponent(m[1]) : d;
+  }
+  var floor = +qs('floor', 1);
+  var px = qs('px', ''), py = qs('py', '');
+
+  function boot() {
+    try {
+      var M = Game.Core.Main, R = Game.Core.Render, P = Game.Data.Player;
+      M.init({ menu: false });
+      M._guideVisible = false;
+      M._guidePending = false;
+      /* 停掉 AI 与战斗：本页只拍探索构图，不等同于跳过任何玩法逻辑 */
+      if (Game.Systems.AI && Game.Systems.AI.tick) Game.Systems.AI.tick = function () { };
+      if (Game.Systems.Battle && Game.Systems.Battle.tick) Game.Systems.Battle.tick = function () { };
+      var seed = 20261118 + floor * 7919, orig = Math.random;
+      Math.random = function () { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+      try { Game.Systems.Map.generate(); Game.Systems.Map.setFloor(floor); } finally { Math.random = orig; }
+      var g = Game.Systems.Map.getGrid();
+      /* 默认站位 = 离地图中心最近的可走格：镜头落在中心，F1 时四周空白最典型 */
+      function walk(x, y) { return g[y] && g[y][x] !== undefined && g[y][x] !== 0; }
+      var cx = Math.floor(g[0].length / 2), cy = Math.floor(g.length / 2);
+      var pos = null;
+      if (px !== '' && py !== '') pos = { x: +px, y: +py };
+      if (!pos || !walk(pos.x, pos.y)) {
+        pos = null;
+        for (var rad = 0; rad < 40 && !pos; rad++) {
+          for (var dy = -rad; dy <= rad && !pos; dy++) {
+            for (var dx = -rad; dx <= rad; dx++) {
+              if (Math.abs(dx) !== rad && Math.abs(dy) !== rad) continue;
+              if (walk(cx + dx, cy + dy)) { pos = { x: cx + dx, y: cy + dy }; break; }
+            }
+          }
+        }
+      }
+      if (!pos) pos = Game.Systems.Map.getSpawn();
+      P.x = pos.x; P.y = pos.y; P.floor = floor;
+      if (Game.fov && typeof Game.fov.update === 'function') {
+        Game.fov.update(P.x, P.y, Game.fov.RADIUS || 5, function (x, y) {
+          return Game.Systems.Map.tileAt(x, y) === 0;
+        });
+      }
+      R.resize();
+      M.start();
+      window.__D116 = {
+        floor: floor, pos: pos, scale: R.scale, cssW: R.cssW, cssH: R.cssH,
+        gridW: g[0].length, gridH: g.length,
+        mapPx: [g[0].length * R.TILE, g.length * R.TILE]
+      };
+      document.title = 'READY D116';
+    } catch (e) {
+      document.title = 'ERR D116 ' + (e && (e.stack || e.message));
+    }
+  }
+
+  var S = Game.Core.Sprites, origLoad = S.load;
+  S.load = function () { return origLoad.call(this, '../../../assets/sprites/'); };
+  S.load();
+  var tries = 0;
+  (function wait() {
+    tries++;
+    if (S.isReady && S.isReady()) { boot(); return; }
+    if (tries > 240) { boot(); return; }
+    window.setTimeout(wait, 50);
+  })();
+})();
+</script>
+</body>
+</html>
