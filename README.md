@@ -4,6 +4,8 @@
 >
 > **版本 v1.0.0** · 变更记录见 [CHANGELOG.md](CHANGELOG.md) · 第三方许可见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 
+> **时点声明（2026-11-20，D-129）**：下方功能列表里的「三场景 BGM / howler.js 音频引擎」是 v1.0.0 初版描述，现已被 D-124–D-126 取代——音乐改为 Web Audio 双总线 + 五层曲目（`f1`–`f5`）与菜单 / 战斗 / 精英 / Boss / 胜利 / 死亡状态机，设置页新增「音乐」开关，`index.html` 已移除 howler.js 引入（全项目零 `new Howl`）；主菜单「玩法说明 / 设置 / 确认 / 关于」四个子页已在 D-128 落地。历史正文不改。
+
 [在线试玩](https://CodeKiller-3.github.io/ai-dungeon-rpg/)（GitHub Pages 静态托管；线上各验证页的可用性以 `preflight/selfcheck/d26-online-verify.*` 的逐页记录为准，不以本行代替核验）
 
 ## 快速开始（Windows）
@@ -119,7 +121,7 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 355 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 129 个 headless 验证页（M1 至今；以 selfcheck/page-baseline.json 的 count 为准）
+├── preflight/            # 129 个 headless 验证页（M1 至今；D-129 现值为 130，以 selfcheck/page-baseline.json 的 count 为准）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图：preflight/artifacts/d95/ 为 D-95 对外图 11 张（10 张常规 + F5 横置）；d74/ 10 张、d73/ 9 张、d61/ 8 张为历史；shots_resize/ 12 张响应式；D-35 8× 对照
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明
