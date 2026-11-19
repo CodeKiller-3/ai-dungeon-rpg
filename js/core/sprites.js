@@ -63,6 +63,11 @@
     'tiny_slug_anim_f0', 'tiny_slug_anim_f1', 'tiny_slug_anim_f2', 'tiny_slug_anim_f3',
     'imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3',
     'imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3',
+    /* 新怪帧接轨（蝙蝠/史莱姆独立帧）：16 张 24×24，不再借 imp / tiny_slug */
+    'bat_idle_anim_f0', 'bat_idle_anim_f1', 'bat_idle_anim_f2', 'bat_idle_anim_f3',
+    'bat_run_anim_f0', 'bat_run_anim_f1', 'bat_run_anim_f2', 'bat_run_anim_f3',
+    'slime_idle_anim_f0', 'slime_idle_anim_f1', 'slime_idle_anim_f2', 'slime_idle_anim_f3',
+    'slime_run_anim_f0', 'slime_run_anim_f1', 'slime_run_anim_f2', 'slime_run_anim_f3',
     'big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3',
     'big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3',
     /* P2-1：怪物扩量——goblin/tiny_zombie/orc_warrior/orc_shaman/wogol 各 idle+run 8 帧、ogre 32×36 双态 8 帧 */
@@ -130,6 +135,12 @@
     tiny_slug: ['tiny_slug_anim_f0', 'tiny_slug_anim_f1', 'tiny_slug_anim_f2', 'tiny_slug_anim_f3'],
     imp_idle: ['imp_idle_anim_f0', 'imp_idle_anim_f1', 'imp_idle_anim_f2', 'imp_idle_anim_f3'],
     imp_run: ['imp_run_anim_f0', 'imp_run_anim_f1', 'imp_run_anim_f2', 'imp_run_anim_f3'],
+    /* D-105：蝙蝠/史莱姆独立帧组（4+4）。显式登记后 getFrame 的越界索引走既有取模回环，
+     * 不再依赖文件名兜底；run 与 idle 是两组不同帧，移动/待机可区分。 */
+    bat_idle: ['bat_idle_anim_f0', 'bat_idle_anim_f1', 'bat_idle_anim_f2', 'bat_idle_anim_f3'],
+    bat_run: ['bat_run_anim_f0', 'bat_run_anim_f1', 'bat_run_anim_f2', 'bat_run_anim_f3'],
+    slime_idle: ['slime_idle_anim_f0', 'slime_idle_anim_f1', 'slime_idle_anim_f2', 'slime_idle_anim_f3'],
+    slime_run: ['slime_run_anim_f0', 'slime_run_anim_f1', 'slime_run_anim_f2', 'slime_run_anim_f3'],
     big_demon_idle: ['big_demon_idle_anim_f0', 'big_demon_idle_anim_f1', 'big_demon_idle_anim_f2', 'big_demon_idle_anim_f3'],
     big_demon_run: ['big_demon_run_anim_f0', 'big_demon_run_anim_f1', 'big_demon_run_anim_f2', 'big_demon_run_anim_f3'],
     /* P2-1：六种新怪 idle/run 各 4 帧 */
@@ -213,9 +224,11 @@
       if (/^(floor_[1-8]|floor_stairs|floor_ladder|wall_(left|mid|right)|wall_top_(left|mid|right))$/.test(name)) return 24;
       if (/^(chest|room_chest|barrel|torch|vine|crate|skull)$/.test(name)) return 24;
       /* D-80：角色/怪物帧按 24 基原生重画——原生高即当前屏幕绘制高（玩家 24×42、小怪 24×24）
-       * 15 组怪物全部覆盖：漏掉任意一组都会让 24 基素材按 16 基放大 1.5 倍（落屏尺寸变大），
-       * verify_d80 A9 逐组钉死 base=24 与 unitBox=原生尺寸。 */
-      if (/^(knight_m_|tiny_slug_|imp_|goblin_|tiny_zombie_|angel_|skelet_|orc_warrior_|orc_shaman_|wogol_|necromancer_|masked_orc_|pumpkin_dude_|ogre_|big_demon_|big_zombie_|dragon_|zombie_king_)/.test(name)) return 24;
+       * 怪物帧全部覆盖：漏掉任意一组都会让 24 基素材按 16 基放大 1.5 倍（落屏尺寸变大），
+       * verify_d80 A9 逐组钉死 base=24 与 unitBox=原生尺寸。
+       * D-112：补上 slime_ / bat_ 两组——它们原先漏在白名单外，被 16 基放大成 36×36
+       * （1.5 地块、相对素材 1.5×），是全表唯一两组「地图 1.5× / 战斗 2×」不成 1:2 的异类。 */
+      if (/^(knight_m_|tiny_slug_|slime_|bat_|imp_|goblin_|tiny_zombie_|angel_|skelet_|orc_warrior_|orc_shaman_|wogol_|necromancer_|masked_orc_|pumpkin_dude_|ogre_|big_demon_|big_zombie_|dragon_|zombie_king_)/.test(name)) return 24;
       /* D-80 裁定 B：道具/UI 图标全部 24×24 原生 1:1（背包行 / 商店行 / HUD 一律按原生尺寸绘制） */
       if (/^(weapon_|icon_armor_|icon_scroll_|flask_|flask_big_|ui_heart_|coin$|button_)/.test(name)) return 24;
       return 16;

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-112 地图怪物同屏样张</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0c14; overflow: hidden; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<!-- D-112 实拍页：固定地图、固定机位、无迷雾、无随机；
+     同一行放 slime / bat / goblin / skeleton / orc_warrior，骑士站在下一行正中，
+     用来看 24×24 的史莱姆与蝙蝠相对骑士与其他小怪是否协调。 -->
+<script>window.__D112ERR = [];
+window.addEventListener('error', function (e) { window.__D112ERR.push(String(e.message || e)); });</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script>
+(function () {
+  'use strict';
+  var W = 14, H = 10;
+  var grid = [], decor = {};
+  for (var y = 0; y < H; y++) {
+    grid[y] = [];
+    for (var x = 0; x < W; x++) {
+      var wall = (x === 0 || y === 0 || x === W - 1 || y === H - 1);
+      if (x >= 6 && x <= 7 && y >= 1 && y <= 2) wall = true;
+      grid[y][x] = wall ? 0 : 1;
+    }
+  }
+  decor['2,1'] = 'torch'; decor['11,1'] = 'torch'; decor['2,8'] = 'barrel'; decor['11,8'] = 'crate';
+  var enemies = [
+    { x: 4, y: 4, monsterId: 'slime' },
+    { x: 5, y: 4, monsterId: 'bat' },
+    { x: 6, y: 4, monsterId: 'goblin' },
+    { x: 8, y: 4, monsterId: 'skeleton' },
+    { x: 9, y: 4, monsterId: 'orc_warrior' }
+  ];
+  var playerObj = { x: 6, y: 6, floor: 1, hp: 84, maxHp: 120, mp: 30, maxMp: 50, gold: 268, level: 4 };
+
+  function stub() {
+    Game.Systems = Game.Systems || {};
+    Game.Systems.Map = {
+      getDetail: function () { return null; },
+      getDecor: function (x, y) { return decor[x + ',' + y] || null; },
+      getEnemies: function () { return enemies; },
+      getElites: function () { return []; },
+      getNpcs: function () { return []; },
+      getGrid: function () { return grid; },
+      getTrap: function () { return null; },
+      isSecretRoom: function () { return false; },
+      isSecretRoomDoor: function () { return false; },
+      getFloor: function () { return 1; }
+    };
+    Game.Systems.AI = { getPatrols: function () { return []; } };
+    Game.fov = undefined;
+    Game.Particles = undefined;
+    Game.Feedback = undefined;
+    Game.Motion = undefined;
+  }
+
+  function boot() {
+    try {
+      var cv = document.getElementById('game');
+      var R = Game.Core.Render;
+      R.init(cv);
+      R.resize(0);
+      R._staticBypass = true;
+      R._animNow = function () { return 0; };
+      stub();
+      Game.hud.update({ hp: playerObj.hp, hpMax: playerObj.maxHp, mp: playerObj.mp, mpMax: playerObj.maxMp,
+        gold: playerObj.gold, floor: 1, kills: 3, killTarget: 12, level: 4, exp: 12, expNext: 40 });
+      draw();
+      setTimeout(draw, 120);
+      setTimeout(draw, 400);
+    } catch (e) {
+      window.__D112ERR.push('boot: ' + (e && e.message));
+    }
+  }
+
+  var boxes = [];
+  function draw() {
+    var R = Game.Core.Render;
+    var ctx = R._ctx;
+    var orig = ctx.drawImage;
+    boxes = [];
+    ctx.drawImage = function (img, dx, dy, dw, dh) {
+      try {
+        if (img && img.src) {
+          var n = String(img.src).split('/').pop().replace(/\.png$/i, '');
+          if (/^(slime_|bat_|goblin_|skelet_|orc_warrior_|knight_m_)/.test(n)) {
+            boxes.push({ n: n, x: dx, y: dy, w: dw, h: dh });
+          }
+        }
+      } catch (e) { /* 忽略 */ }
+      return orig.apply(ctx, arguments);
+    };
+    ctx.setTransform(R.dpr * R.scale, 0, 0, R.dpr * R.scale, 0, 0);
+    ctx.fillStyle = '#0b0c14';
+    ctx.fillRect(0, 0, R.cssW, R.cssH);
+    try {
+      R.drawMap(grid, playerObj);
+      R.drawPlayer(playerObj);
+      if (Game.Lighting && Game.Lighting.draw) Game.Lighting.draw();
+      Game.hud.draw();
+    } catch (e) {
+      window.__D112ERR.push('draw: ' + (e && e.message));
+    }
+    ctx.drawImage = orig;
+    window.__D112 = { cssW: R.cssW, cssH: R.cssH, dpr: R.dpr, scale: R.scale, boxes: boxes };
+    if (window.__D112ERR.length) {
+      ctx.fillStyle = '#ff8080';
+      ctx.font = '14px monospace';
+      ctx.fillText(window.__D112ERR.join(' | '), 20, 60);
+    }
+    document.title = 'READY D112' + (window.__D112ERR.length ? ' ERR' : '');
+  }
+
+  var t0 = Date.now();
+  Game.Core.Sprites.load('../../../assets/sprites/');
+  (function poll() {
+    var S = Game.Core && Game.Core.Sprites;
+    if (S && S.isReady()) { boot(); return; }
+    if (Date.now() - t0 > 8000) { boot(); return; }
+    setTimeout(poll, 50);
+  })();
+})();
+</script>
+</body>
+</html>
