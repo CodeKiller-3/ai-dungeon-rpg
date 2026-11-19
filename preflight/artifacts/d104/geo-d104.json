@@ -1,0 +1,4292 @@
+{
+  "320x568-f1-slime-horizontal": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 320,
+      "cssH": 568,
+      "layout": "horizontal",
+      "resolved": "vertical",
+      "player": {
+        "x": 136,
+        "y": 325,
+        "w": 48,
+        "h": 84,
+        "baseTop": 325,
+        "groundY": 409,
+        "knock": 0
+      },
+      "monster": {
+        "x": 136,
+        "y": 122,
+        "w": 48,
+        "h": 48,
+        "baseTop": 122,
+        "groundY": 170,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 349,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 369,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 356,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 369,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 382,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 418,
+        "w": 320,
+        "h": 150,
+        "cells": [
+          {
+            "x": 9,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 86,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 163,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 240,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 48,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 125,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 202,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 432,
+        "footerY": 564,
+        "cellH": 52
+      },
+      "fx": null,
+      "hash": "26f649b2"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 320,
+      "H": 568,
+      "monster": {
+        "x": 136,
+        "y": 122,
+        "w": 48,
+        "h": 48,
+        "baseTop": 122,
+        "groundY": 170,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 96,
+            "y": 212,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 204,
+            "y": 212,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 242,
+        "w": 304,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 242,
+        "w": 304,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 176,
+        "bottom": 313,
+        "logs": 2
+      },
+      "player": {
+        "x": 136,
+        "y": 325,
+        "w": 48,
+        "h": 84,
+        "baseTop": 325,
+        "groundY": 409,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 349,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 369,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 356,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 369,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 382,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 349,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 369,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 356,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 369,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 382,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 369,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 418,
+        "w": 320,
+        "h": 150,
+        "cells": [
+          {
+            "x": 9,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 86,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 163,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 240,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 48,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 125,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 202,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 432,
+        "footerY": 564,
+        "cellH": 52
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 258,
+        "bottom": 343
+      },
+      "bars": {
+        "playerY": 349,
+        "gapBand": 10
+      }
+    }
+  },
+  "320x568-f1-slime-vertical": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "vertical",
+    "geo": {
+      "cssW": 320,
+      "cssH": 568,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 136,
+        "y": 325,
+        "w": 48,
+        "h": 84,
+        "baseTop": 325,
+        "groundY": 409,
+        "knock": 0
+      },
+      "monster": {
+        "x": 136,
+        "y": 122,
+        "w": 48,
+        "h": 48,
+        "baseTop": 122,
+        "groundY": 170,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 349,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 369,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 356,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 369,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 382,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 418,
+        "w": 320,
+        "h": 150,
+        "cells": [
+          {
+            "x": 9,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 86,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 163,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 240,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 48,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 125,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 202,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 432,
+        "footerY": 564,
+        "cellH": 52
+      },
+      "fx": null,
+      "hash": "26f649b2"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 320,
+      "H": 568,
+      "monster": {
+        "x": 136,
+        "y": 122,
+        "w": 48,
+        "h": 48,
+        "baseTop": 122,
+        "groundY": 170,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 96,
+            "y": 212,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 204,
+            "y": 212,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 0,
+        "y": 210,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 242,
+        "w": 304,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 242,
+        "w": 304,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 176,
+        "bottom": 313,
+        "logs": 2
+      },
+      "player": {
+        "x": 136,
+        "y": 325,
+        "w": 48,
+        "h": 84,
+        "baseTop": 325,
+        "groundY": 409,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 349,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 369,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 356,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 369,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 382,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 349,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 369,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 356,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 369,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 382,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 369,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 418,
+        "w": 320,
+        "h": 150,
+        "cells": [
+          {
+            "x": 9,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 86,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 163,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 240,
+            "y": 434,
+            "w": 71,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 48,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 125,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 202,
+            "y": 492,
+            "w": 71,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 432,
+        "footerY": 564,
+        "cellH": 52
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 258,
+        "bottom": 343
+      },
+      "bars": {
+        "playerY": 349,
+        "gapBand": 10
+      }
+    }
+  },
+  "390x844-f1-slime-horizontal": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 390,
+      "cssH": 844,
+      "layout": "horizontal",
+      "resolved": "vertical",
+      "player": {
+        "x": 171,
+        "y": 524,
+        "w": 48,
+        "h": 84,
+        "baseTop": 524,
+        "groundY": 608,
+        "knock": 0
+      },
+      "monster": {
+        "x": 171,
+        "y": 205,
+        "w": 48,
+        "h": 48,
+        "baseTop": 205,
+        "groundY": 253,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 548,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 568,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 555,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 568,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 581,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 694,
+        "w": 390,
+        "h": 150,
+        "cells": [
+          {
+            "x": 10,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 104,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 198,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 292,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 57,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 151,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 245,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 708,
+        "footerY": 840,
+        "cellH": 52
+      },
+      "fx": null,
+      "hash": "35ede1a0"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 390,
+      "H": 844,
+      "monster": {
+        "x": 171,
+        "y": 205,
+        "w": 48,
+        "h": 48,
+        "baseTop": 205,
+        "groundY": 253,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 131,
+            "y": 353,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 239,
+            "y": 353,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 383,
+        "w": 374,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 383,
+        "w": 374,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 259,
+        "bottom": 512,
+        "logs": 2
+      },
+      "player": {
+        "x": 171,
+        "y": 524,
+        "w": 48,
+        "h": 84,
+        "baseTop": 524,
+        "groundY": 608,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 548,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 568,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 555,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 568,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 581,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 548,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 568,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 555,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 568,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 581,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 568,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 694,
+        "w": 390,
+        "h": 150,
+        "cells": [
+          {
+            "x": 10,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 104,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 198,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 292,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 57,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 151,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 245,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 708,
+        "footerY": 840,
+        "cellH": 52
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 261,
+        "bottom": 542
+      },
+      "bars": {
+        "playerY": 548,
+        "gapBand": 10
+      }
+    }
+  },
+  "390x844-f1-slime-vertical": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "vertical",
+    "geo": {
+      "cssW": 390,
+      "cssH": 844,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 171,
+        "y": 524,
+        "w": 48,
+        "h": 84,
+        "baseTop": 524,
+        "groundY": 608,
+        "knock": 0
+      },
+      "monster": {
+        "x": 171,
+        "y": 205,
+        "w": 48,
+        "h": 48,
+        "baseTop": 205,
+        "groundY": 253,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 548,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 568,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 555,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 568,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 581,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 694,
+        "w": 390,
+        "h": 150,
+        "cells": [
+          {
+            "x": 10,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 104,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 198,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 292,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 57,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 151,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 245,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 708,
+        "footerY": 840,
+        "cellH": 52
+      },
+      "fx": null,
+      "hash": "35ede1a0"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 390,
+      "H": 844,
+      "monster": {
+        "x": 171,
+        "y": 205,
+        "w": 48,
+        "h": 48,
+        "baseTop": 205,
+        "groundY": 253,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 131,
+            "y": 353,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 239,
+            "y": 353,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 35,
+        "y": 351,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 383,
+        "w": 374,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 383,
+        "w": 374,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 259,
+        "bottom": 512,
+        "logs": 2
+      },
+      "player": {
+        "x": 171,
+        "y": 524,
+        "w": 48,
+        "h": 84,
+        "baseTop": 524,
+        "groundY": 608,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 548,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 568,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 555,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 568,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 581,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 548,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 568,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 555,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 568,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 581,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 568,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 694,
+        "w": 390,
+        "h": 150,
+        "cells": [
+          {
+            "x": 10,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 104,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 198,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 292,
+            "y": 710,
+            "w": 88,
+            "h": 52,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 57,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 151,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 245,
+            "y": 768,
+            "w": 88,
+            "h": 52,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": true,
+        "headerY": 708,
+        "footerY": 840,
+        "cellH": 52
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 390,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 261,
+        "bottom": 542
+      },
+      "bars": {
+        "playerY": 548,
+        "gapBand": 10
+      }
+    }
+  },
+  "960x540-f1-slime-horizontal": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 206,
+        "y": 330,
+        "w": 48,
+        "h": 84,
+        "baseTop": 330,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 706,
+        "y": 366,
+        "w": 48,
+        "h": 48,
+        "baseTop": 366,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 174,
+        "y": 264,
+        "w": 112,
+        "h": 52,
+        "barX": 182,
+        "barY": 284,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 183,
+          "y": 271,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 182,
+          "y": 284,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 183,
+          "y": 297,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 674,
+        "y": 264,
+        "w": 112,
+        "h": 52,
+        "barX": 682,
+        "barY": 284,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 683,
+          "y": 271,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 682,
+          "y": 284,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 683,
+          "y": 297,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 320,
+        "y": 46,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 159,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 289,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 419,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 549,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 679,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 809,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 458,
+        "footerY": 536,
+        "cellH": 64
+      },
+      "fx": null,
+      "hash": "b553a812"
+    },
+    "box": {
+      "layout": "horizontal",
+      "W": 960,
+      "H": 540,
+      "monster": {
+        "x": 706,
+        "y": 366,
+        "w": 48,
+        "h": 48,
+        "baseTop": 366,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 206,
+        "y": 330,
+        "w": 48,
+        "h": 84,
+        "baseTop": 330,
+        "groundY": 414,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 174,
+        "y": 264,
+        "w": 112,
+        "h": 52,
+        "barX": 182,
+        "barY": 284,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 183,
+          "y": 271,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 182,
+          "y": 284,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 183,
+          "y": 297,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 674,
+        "y": 264,
+        "w": 112,
+        "h": 52,
+        "barX": 682,
+        "barY": 284,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 683,
+          "y": 271,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 682,
+          "y": 284,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 683,
+          "y": 297,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "cards": {
+        "player": {
+          "x": 174,
+          "y": 264,
+          "w": 112,
+          "h": 52,
+          "barX": 182,
+          "barY": 284,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 183,
+            "y": 271,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 182,
+            "y": 284,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 183,
+            "y": 297,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 674,
+          "y": 264,
+          "w": 112,
+          "h": 52,
+          "barX": 682,
+          "barY": 284,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 683,
+            "y": 271,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 682,
+            "y": 284,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 683,
+            "y": 297,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "pipeline": {
+        "x": 320,
+        "y": 46,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 416,
+            "y": 48,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 524,
+            "y": 48,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 320,
+        "y": 46,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 77,
+        "y": 416,
+        "w": 806,
+        "h": 26,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 77,
+        "y": 416,
+        "w": 806,
+        "h": 26,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 159,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 289,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 419,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 549,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 679,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 809,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 458,
+        "footerY": 536,
+        "cellH": 64
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 262,
+        "bottom": 410
+      }
+    }
+  },
+  "960x540-f1-slime-vertical": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "vertical",
+    "geo": {
+      "cssW": 960,
+      "cssH": 540,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 456,
+        "y": 305,
+        "w": 48,
+        "h": 84,
+        "baseTop": 305,
+        "groundY": 389,
+        "knock": 0
+      },
+      "monster": {
+        "x": 456,
+        "y": 114,
+        "w": 48,
+        "h": 48,
+        "baseTop": 114,
+        "groundY": 162,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 329,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 349,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 336,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 349,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 362,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 320,
+        "y": 196,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 159,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 289,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 419,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 549,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 679,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 809,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 458,
+        "footerY": 536,
+        "cellH": 64
+      },
+      "fx": null,
+      "hash": "20221247"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 960,
+      "H": 540,
+      "monster": {
+        "x": 456,
+        "y": 114,
+        "w": 48,
+        "h": 48,
+        "baseTop": 114,
+        "groundY": 162,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 320,
+        "y": 196,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 416,
+            "y": 198,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 524,
+            "y": 198,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 320,
+        "y": 196,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 228,
+        "w": 944,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 228,
+        "w": 944,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 168,
+        "bottom": 293,
+        "logs": 2
+      },
+      "player": {
+        "x": 456,
+        "y": 305,
+        "w": 48,
+        "h": 84,
+        "baseTop": 305,
+        "groundY": 389,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 329,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 349,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 336,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 349,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 362,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 329,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 349,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 336,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 349,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 362,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 349,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 444,
+        "w": 960,
+        "h": 96,
+        "cells": [
+          {
+            "x": 29,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 159,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 289,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 419,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 549,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 679,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 809,
+            "y": 462,
+            "w": 122,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 458,
+        "footerY": 536,
+        "cellH": 64
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 960,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 258,
+        "bottom": 323
+      },
+      "bars": {
+        "playerY": 329,
+        "gapBand": 10
+      }
+    }
+  },
+  "1280x800-f1-slime-horizontal": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "horizontal",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "horizontal",
+      "resolved": "horizontal",
+      "player": {
+        "x": 222,
+        "y": 406,
+        "w": 48,
+        "h": 84,
+        "baseTop": 406,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "monster": {
+        "x": 754,
+        "y": 442,
+        "w": 48,
+        "h": 48,
+        "baseTop": 442,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 190,
+        "y": 340,
+        "w": 112,
+        "h": 52,
+        "barX": 198,
+        "barY": 360,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 199,
+          "y": 347,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 198,
+          "y": 360,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 199,
+          "y": 373,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 722,
+        "y": 340,
+        "w": 112,
+        "h": 52,
+        "barX": 730,
+        "barY": 360,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 731,
+          "y": 347,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 730,
+          "y": 360,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 731,
+          "y": 373,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 352,
+        "y": 52,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 526,
+        "w": 1024,
+        "h": 114,
+        "cells": [
+          {
+            "x": 26,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 166,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 306,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 446,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 586,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 726,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 866,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 540,
+        "footerY": 636,
+        "cellH": 64
+      },
+      "fx": null,
+      "hash": "46f94f8e"
+    },
+    "box": {
+      "layout": "horizontal",
+      "W": 1024,
+      "H": 640,
+      "monster": {
+        "x": 754,
+        "y": 442,
+        "w": 48,
+        "h": 48,
+        "baseTop": 442,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "player": {
+        "x": 222,
+        "y": 406,
+        "w": 48,
+        "h": 84,
+        "baseTop": 406,
+        "groundY": 490,
+        "knockX": -0.0,
+        "lungeX": 0,
+        "knock": -0.0
+      },
+      "playerPlate": {
+        "x": 190,
+        "y": 340,
+        "w": 112,
+        "h": 52,
+        "barX": 198,
+        "barY": 360,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 199,
+          "y": 347,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 198,
+          "y": 360,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 199,
+          "y": 373,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 722,
+        "y": 340,
+        "w": 112,
+        "h": 52,
+        "barX": 730,
+        "barY": 360,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 731,
+          "y": 347,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 730,
+          "y": 360,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 731,
+          "y": 373,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "cards": {
+        "player": {
+          "x": 190,
+          "y": 340,
+          "w": 112,
+          "h": 52,
+          "barX": 198,
+          "barY": 360,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 199,
+            "y": 347,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 198,
+            "y": 360,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 199,
+            "y": 373,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 722,
+          "y": 340,
+          "w": 112,
+          "h": 52,
+          "barX": 730,
+          "barY": 360,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 731,
+            "y": 347,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 730,
+            "y": 360,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 731,
+            "y": 373,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "pipeline": {
+        "x": 352,
+        "y": 52,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 448,
+            "y": 54,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 556,
+            "y": 54,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 352,
+        "y": 52,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 82,
+        "y": 492,
+        "w": 860,
+        "h": 26,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 82,
+        "y": 492,
+        "w": 860,
+        "h": 26,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 526,
+        "w": 1024,
+        "h": 114,
+        "cells": [
+          {
+            "x": 26,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 166,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 306,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 446,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 586,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 726,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 866,
+            "y": 544,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 540,
+        "footerY": 636,
+        "cellH": 64
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 1024,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 338,
+        "bottom": 486
+      }
+    }
+  },
+  "1280x800-f1-slime-vertical": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "vertical",
+    "geo": {
+      "cssW": 1024,
+      "cssH": 640,
+      "layout": "vertical",
+      "resolved": "vertical",
+      "player": {
+        "x": 488,
+        "y": 377,
+        "w": 48,
+        "h": 84,
+        "baseTop": 377,
+        "groundY": 461,
+        "knock": 0
+      },
+      "monster": {
+        "x": 488,
+        "y": 144,
+        "w": 48,
+        "h": 48,
+        "baseTop": 144,
+        "groundY": 192,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 401,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 421,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 408,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 421,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 434,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "roundBar": {
+        "x": 352,
+        "y": 247,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 166,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 306,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 446,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 586,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 726,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 866,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 558,
+        "footerY": 636,
+        "cellH": 64
+      },
+      "fx": null,
+      "hash": "b2b9e785"
+    },
+    "box": {
+      "layout": "vertical",
+      "W": 1024,
+      "H": 640,
+      "monster": {
+        "x": 488,
+        "y": 144,
+        "w": 48,
+        "h": 48,
+        "baseTop": 144,
+        "groundY": 192,
+        "knock": 0
+      },
+      "monsterPlate": {
+        "x": 8,
+        "y": 46,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 66,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 53,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 66,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 79,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "史莱姆",
+        "hp": 40,
+        "hpMax": 40
+      },
+      "pipeline": {
+        "x": 352,
+        "y": 247,
+        "w": 320,
+        "h": 26,
+        "roundText": "第 1 回合",
+        "nodes": [
+          {
+            "x": 448,
+            "y": 249,
+            "w": 104,
+            "h": 22
+          },
+          {
+            "x": 556,
+            "y": 249,
+            "w": 112,
+            "h": 22
+          }
+        ],
+        "progress": [
+          0,
+          0
+        ]
+      },
+      "roundBar": {
+        "x": 352,
+        "y": 247,
+        "w": 320,
+        "h": 26,
+        "text": "第 1 回合"
+      },
+      "log": {
+        "x": 8,
+        "y": 279,
+        "w": 1008,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "battleLog": {
+        "x": 8,
+        "y": 279,
+        "w": 1008,
+        "h": 20,
+        "lines": [
+          "遭遇 史莱姆，战斗开始"
+        ]
+      },
+      "mid": {
+        "top": 198,
+        "bottom": 365,
+        "logs": 2
+      },
+      "player": {
+        "x": 488,
+        "y": 377,
+        "w": 48,
+        "h": 84,
+        "baseTop": 377,
+        "groundY": 461,
+        "knock": 0
+      },
+      "playerPlate": {
+        "x": 8,
+        "y": 401,
+        "w": 112,
+        "h": 52,
+        "barX": 16,
+        "barY": 421,
+        "barW": 96,
+        "barH": 9,
+        "l1": {
+          "x": 17,
+          "y": 408,
+          "w": 94,
+          "h": 12
+        },
+        "l2": {
+          "x": 16,
+          "y": 421,
+          "w": 96,
+          "h": 9
+        },
+        "l3": {
+          "x": 17,
+          "y": 434,
+          "w": 94,
+          "h": 14
+        },
+        "chips": [],
+        "name": "勇者",
+        "hp": 100,
+        "hpMax": 140
+      },
+      "cards": {
+        "player": {
+          "x": 8,
+          "y": 401,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 421,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 408,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 421,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 434,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "勇者",
+          "hp": 100,
+          "hpMax": 140
+        },
+        "monster": {
+          "x": 8,
+          "y": 46,
+          "w": 112,
+          "h": 52,
+          "barX": 16,
+          "barY": 66,
+          "barW": 96,
+          "barH": 9,
+          "l1": {
+            "x": 17,
+            "y": 53,
+            "w": 94,
+            "h": 12
+          },
+          "l2": {
+            "x": 16,
+            "y": 66,
+            "w": 96,
+            "h": 9
+          },
+          "l3": {
+            "x": 17,
+            "y": 79,
+            "w": 94,
+            "h": 14
+          },
+          "chips": [],
+          "name": "史莱姆",
+          "hp": 40,
+          "hpMax": 40
+        }
+      },
+      "playerBar": {
+        "x": 16,
+        "y": 421,
+        "w": 96,
+        "h": 9
+      },
+      "commandBar": {
+        "x": 0,
+        "y": 544,
+        "w": 1024,
+        "h": 96,
+        "cells": [
+          {
+            "x": 26,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 1,
+            "cmd": "attack",
+            "label": "攻击",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 166,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 2,
+            "cmd": "defend",
+            "label": "防御",
+            "sub": "无消耗",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 306,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 3,
+            "cmd": "run",
+            "label": "逃跑",
+            "sub": "—",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          },
+          {
+            "x": 446,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 4,
+            "cmd": "skill:fireball",
+            "label": "火球",
+            "sub": "MP 12",
+            "disabled": false,
+            "cost": 12,
+            "reason": ""
+          },
+          {
+            "x": 586,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 5,
+            "cmd": "skill:dash",
+            "label": "冲刺",
+            "sub": "MP 8",
+            "disabled": false,
+            "cost": 8,
+            "reason": ""
+          },
+          {
+            "x": 726,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 6,
+            "cmd": "skill:shield",
+            "label": "护盾",
+            "sub": "MP 10",
+            "disabled": false,
+            "cost": 10,
+            "reason": ""
+          },
+          {
+            "x": 866,
+            "y": 562,
+            "w": 132,
+            "h": 64,
+            "key": 7,
+            "cmd": "item",
+            "label": "用药",
+            "sub": "×0",
+            "disabled": false,
+            "cost": 0,
+            "reason": ""
+          }
+        ],
+        "compact": false,
+        "headerY": 558,
+        "footerY": 636,
+        "cellH": 64
+      },
+      "hudBand": {
+        "x": 0,
+        "y": 0,
+        "w": 1024,
+        "h": 42
+      },
+      "safeBand": {
+        "top": 258,
+        "bottom": 395
+      },
+      "bars": {
+        "playerY": 401,
+        "gapBand": 10
+      }
+    }
+  }
+}
