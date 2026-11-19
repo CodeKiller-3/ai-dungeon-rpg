@@ -56,13 +56,17 @@
         }
         return s;
       },
-      expToNext: function (level) {
+      expToNext: function (level, override) {
         var lv = (typeof level === 'number' && level >= 1) ? Math.floor(level) : 1;
         /* D-84 r3/r4/r5：只改最后两格——L10→L11 600→200（满级觉醒在 F5 尾段稳定触发）、
          * L11→L12 660→1400（累计到 L12 = 3850 > 含 expPct 的经验池上界约 3600，L12 封死）。
-         * 其余等级仍按 base×level，全图经验池与升级曲线前 9 格一个字未动。 */
+         * 其余等级仍按 base×level，全图经验池与升级曲线前 9 格一个字未动。
+         * D-96：override.early / override.late 是给 D-41/D-37 负例还原旧曲线的可选覆盖，
+         * 正常调用不传，行为与只看 cfg.expBase 完全一致。 */
         if (cfg.lastStep && typeof cfg.lastStep[lv] === 'number') return cfg.lastStep[lv];
-        var b = (lv < cfg.expBase.split) ? cfg.expBase.early : cfg.expBase.late;
+        var early = (override && typeof override.early === 'number') ? override.early : cfg.expBase.early;
+        var late = (override && typeof override.late === 'number') ? override.late : cfg.expBase.late;
+        var b = (lv < cfg.expBase.split) ? early : late;
         return b * lv;
       }
     };

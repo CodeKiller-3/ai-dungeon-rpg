@@ -82,6 +82,15 @@
       var p = Game.Data.Player;
       var item = Game.Data.ITEMS[id];
       if (!item) return { ok: false, msg: '商品不存在' };
+      /* D-96：只卖货架上的东西。精英战利品（elite）与救援武器（rescue）是 drop-only，
+       * 其余按 id 直接购买也必须落在本层 getStock() 里，防止绕过货架买到未上架物品。 */
+      if (item.elite || item.rescue) return { ok: false, msg: '该物品不出售' };
+      var stock = Game.Systems.Shop.getStock();
+      var onShelf = false;
+      for (var i = 0; i < stock.length; i++) {
+        if (stock[i].id === id) { onShelf = true; break; }
+      }
+      if (!onShelf) return { ok: false, msg: '该商品不在本层货架' };
       if (p.gold < item.price) return { ok: false, msg: '金币不足' };
       p.gold -= item.price;
       Game.Systems.Inventory.add(id, 1);
