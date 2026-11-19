@@ -1,0 +1,84 @@
+{
+ "view": "menu",
+ "W": 900,
+ "H": 700,
+ "scale": 1,
+ "dpr": 1,
+ "tier": "wide",
+ "panel": {
+  "x": 516,
+  "y": 112,
+  "w": 360,
+  "h": 448
+ },
+ "menu": {
+  "x": 540,
+  "y": 238,
+  "w": 312,
+  "rowH": 42,
+  "font": 18,
+  "label": 18,
+  "note": 12,
+  "detail": 11
+ },
+ "title": {
+  "x": 548,
+  "smallY": 154,
+  "mainY": 186,
+  "subY": 208,
+  "small": 11,
+  "main": 24,
+  "sub": 12
+ },
+ "progress": {
+  "x": 548,
+  "pipY": 520,
+  "pip": 20,
+  "gap": 12,
+  "end": {
+   "name": "dragon_idle_anim_f0",
+   "x": 654,
+   "y": 474,
+   "k": 1
+  },
+  "label": "Lv.1 → 第 5 层",
+  "fontSize": 12
+ },
+ "hint": {
+  "x": 542,
+  "y": 468
+ },
+ "items": [
+  {
+   "id": "new",
+   "label": "开始新游戏",
+   "note": "",
+   "detail": null
+  },
+  {
+   "id": "continue",
+   "label": "继续游戏",
+   "note": "暂无存档",
+   "detail": ""
+  },
+  {
+   "id": "help",
+   "label": "玩法说明",
+   "note": null,
+   "detail": null
+  },
+  {
+   "id": "settings",
+   "label": "设置",
+   "note": null,
+   "detail": null
+  },
+  {
+   "id": "about",
+   "label": "关于",
+   "note": null,
+   "detail": null
+  }
+ ],
+ "booted": true
+}

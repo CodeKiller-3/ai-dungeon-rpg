@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>D-111 后墙实拍</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../../../js/core/eventBus.js"></script>
+<script src="../../../js/core/sprites.js"></script>
+<script src="../../../js/core/input.js"></script>
+<script src="../../../js/core/render.js"></script>
+<script>if (new URLSearchParams(location.search).get('old') === '1') document.write('<script src="render_old.js"><\/script>');</script>
+<script src="../../../js/data/maps.js"></script>
+<script src="../../../js/data/monsters.js"></script>
+<script src="../../../js/data/items.js"></script>
+<script src="../../../js/data/quests.js"></script>
+<script src="../../../js/data/skills.js"></script>
+<script src="../../../js/data/dialogue.js"></script>
+<script src="../../../js/data/reactions.js"></script>
+<script src="../../../js/data/config.js"></script>
+<script src="../../../js/vendor/astar.js"></script>
+<script src="../../../js/vendor/howler.min.js"></script>
+<script src="../../../js/vendor/rot.min.js"></script>
+<script src="../../../js/systems/map.js"></script>
+<script src="../../../js/systems/fov.js"></script>
+<script src="../../../js/systems/hud.js"></script>
+<script src="../../../js/systems/modal.js"></script>
+<script src="../../../js/systems/feedback.js"></script>
+<script src="../../../js/systems/notice.js"></script>
+<script src="../../../js/systems/lighting.js"></script>
+<script src="../../../js/systems/motion.js"></script>
+<script src="../../../js/systems/particles.js"></script>
+<script src="../../../js/systems/fx.js"></script>
+<script src="../../../js/systems/quest.js"></script>
+<script src="../../../js/systems/skills.js"></script>
+<script src="../../../js/systems/bestiary.js"></script>
+<script src="../../../js/systems/battle.js"></script>
+<script src="../../../js/systems/inventory.js"></script>
+<script src="../../../js/systems/shop.js"></script>
+<script src="../../../js/systems/save.js"></script>
+<script src="../../../js/systems/leaderboard.js"></script>
+<script src="../../../js/systems/ai.js"></script>
+<script src="../../../js/systems/npc.js"></script>
+<script src="../../../js/systems/audio.js"></script>
+<script src="../../../js/systems/learner.js"></script>
+<script src="../../../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = new URLSearchParams(location.search);
+  var f = Math.max(1, Math.min(5, parseInt(q.get('f') || '1', 10)));
+  var mode = q.get('mode') === 'crop' ? 'crop' : 'full';
+  var cv = document.getElementById('game'), ctx = cv.getContext('2d');
+  var R = Game.Core.Render;
+  var W = 1024, H = 640;
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  try {
+    R._battleBackdrop(ctx, W, H, f, 'horizontal');
+    document.title = 'D111 DONE F' + f + ' ' + mode + ' bg=' + (window.__BGN || 0);
+  } catch (e) {
+    document.title = 'D111 ERR ' + (e && e.message || e);
+    ctx.fillStyle = '#f00'; ctx.fillRect(0, 0, W, 40);
+  }
+  /* 砖面裁切：取该层取样矩形并放大到全屏，能看清单块砖与砖缝 */
+  var S = {
+    1: [[0.30, 0.08, 0.70, 0.52]],
+    2: [[0.30, 0.08, 0.70, 0.52]],
+    3: [[0.06, 0.06, 0.27, 0.27]],
+    4: [[0.40, 0.08, 0.60, 0.55]],
+    5: [[0.35, 0.06, 0.65, 0.52]]
+  }[f][0];
+  if (mode === 'crop') {
+    var sx = Math.round(W * S[0]) + 3, sy = Math.round(H * S[1]) + 3;
+    var sw = Math.round(W * S[2]) - sx - 3, sh = Math.round(H * S[3]) - sy - 3;
+    var scale = Math.min(W / sw, H / sh);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(cv, sx, sy, sw, sh, 0, 0, Math.round(sw * scale), Math.round(sh * scale));
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+ "total": 32,
+ "paint": 28,
+ "ms": 0.4,
+ "counts": {
+  "setTransform": 2,
+  "save": 1,
+  "drawImage": 2,
+  "restore": 1,
+  "fillRect": 9,
+  "strokeRect": 6,
+  "fillText": 11
+ }
+}

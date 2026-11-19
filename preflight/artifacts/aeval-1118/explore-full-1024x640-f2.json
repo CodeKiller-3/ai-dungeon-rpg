@@ -1,0 +1,13 @@
+{
+ "view": "explore",
+ "W": 1024,
+ "H": 640,
+ "scale": 1,
+ "dpr": 1,
+ "player": {
+  "x": 13,
+  "y": 9
+ },
+ "floor": 2,
+ "booted": true
+}

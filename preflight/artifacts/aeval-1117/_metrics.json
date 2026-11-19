@@ -1,0 +1,992 @@
+{
+ "spriteFiles": 339,
+ "dims": {
+  "24x24": 207,
+  "48x54": 44,
+  "24x35": 44,
+  "16x16": 15,
+  "72x72": 12,
+  "24x42": 12,
+  "32x36": 2,
+  "16x23": 2,
+  "16x28": 1
+ },
+ "animGroups": {
+  "angel_idle": 4,
+  "big_demon_idle": 4,
+  "big_demon_run": 4,
+  "big_zombie_idle": 4,
+  "dragon_attack": 4,
+  "dragon_hurt": 4,
+  "dragon_idle": 4,
+  "goblin_idle": 4,
+  "goblin_run": 4,
+  "imp_idle": 4,
+  "imp_run": 4,
+  "knight_m_hit": 4,
+  "knight_m_idle": 4,
+  "knight_m_run": 4,
+  "masked_orc_idle": 4,
+  "masked_orc_run": 4,
+  "necromancer": 4,
+  "ogre_boss_attack": 4,
+  "ogre_boss_hurt": 4,
+  "ogre_boss_idle": 4,
+  "ogre_idle": 4,
+  "ogre_run": 4,
+  "orc_shaman_idle": 4,
+  "orc_shaman_run": 4,
+  "orc_warrior_idle": 4,
+  "orc_warrior_run": 4,
+  "pumpkin_dude_idle": 4,
+  "pumpkin_dude_run": 4,
+  "skelet_idle": 4,
+  "skelet_run": 4,
+  "tiny_slug": 4,
+  "tiny_zombie_idle": 4,
+  "tiny_zombie_run": 4,
+  "wogol_idle": 4,
+  "wogol_run": 4,
+  "zombie_king_attack": 4,
+  "zombie_king_hurt": 4,
+  "zombie_king_idle": 4
+ },
+ "animGroupCount": 38,
+ "animFrameTotal": 152,
+ "iconsChecked": 50,
+ "iconsNot24": [],
+ "contrast": {
+  "SYS text #cfcfcf / #14142a": [
+   "#cfcfcf",
+   "#14142a"
+  ],
+  "SYS label #8a8aa0 / #14142a": [
+   "#8a8aa0",
+   "#14142a"
+  ],
+  "SYS dim #5f6578 / #14142a": [
+   "#5f6578",
+   "#14142a"
+  ],
+  "SYS gold #ffcf6e / #14142a": [
+   "#ffcf6e",
+   "#14142a"
+  ],
+  "SYS cyan #7fd1ff / #14142a": [
+   "#7fd1ff",
+   "#14142a"
+  ],
+  "menu body #cfcfcf / #07080e": [
+   "#cfcfcf",
+   "#07080e"
+  ],
+  "menu sub #9aa0b4 / #07080e": [
+   "#9aa0b4",
+   "#07080e"
+  ],
+  "menu hint #7f879c / #07080e": [
+   "#7f879c",
+   "#07080e"
+  ],
+  "menu kicker #8a7a56 / #07080e": [
+   "#8a7a56",
+   "#07080e"
+  ],
+  "HUD hint #9bbbf4 / #0b0c14": [
+   "#9bbbf4",
+   "#0b0c14"
+  ],
+  "battle log #6fae6a / #07070c": [
+   "#6fae6a",
+   "#07070c"
+  ],
+  "battle log last #9fe08f / #07070c": [
+   "#9fe08f",
+   "#07070c"
+  ]
+ },
+ "tiles": {
+  "t2_floor_1.png": {
+   "rgb": [
+    117,
+    86,
+    47
+   ],
+   "lum": 90.1,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_floor_2.png": {
+   "rgb": [
+    117,
+    86,
+    47
+   ],
+   "lum": 89.3,
+   "hue": 33,
+   "sat": 60
+  },
+  "t2_floor_3.png": {
+   "rgb": [
+    117,
+    86,
+    47
+   ],
+   "lum": 89.6,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_floor_4.png": {
+   "rgb": [
+    117,
+    86,
+    46
+   ],
+   "lum": 89.6,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_floor_5.png": {
+   "rgb": [
+    117,
+    86,
+    47
+   ],
+   "lum": 89.3,
+   "hue": 33,
+   "sat": 60
+  },
+  "t2_floor_6.png": {
+   "rgb": [
+    118,
+    87,
+    47
+   ],
+   "lum": 90.4,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_floor_7.png": {
+   "rgb": [
+    115,
+    85,
+    46
+   ],
+   "lum": 88.4,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_floor_8.png": {
+   "rgb": [
+    117,
+    86,
+    47
+   ],
+   "lum": 89.9,
+   "hue": 34,
+   "sat": 60
+  },
+  "t2_wall_left.png": {
+   "rgb": [
+    95,
+    70,
+    39
+   ],
+   "lum": 72.8,
+   "hue": 33,
+   "sat": 58
+  },
+  "t2_wall_mid.png": {
+   "rgb": [
+    85,
+    63,
+    35
+   ],
+   "lum": 65.7,
+   "hue": 33,
+   "sat": 59
+  },
+  "t2_wall_right.png": {
+   "rgb": [
+    84,
+    62,
+    35
+   ],
+   "lum": 64.9,
+   "hue": 33,
+   "sat": 59
+  },
+  "t2_wall_top_left.png": {
+   "rgb": [
+    112,
+    83,
+    52
+   ],
+   "lum": 86.5,
+   "hue": 31,
+   "sat": 54
+  },
+  "t2_wall_top_mid.png": {
+   "rgb": [
+    106,
+    78,
+    49
+   ],
+   "lum": 82.1,
+   "hue": 31,
+   "sat": 53
+  },
+  "t2_wall_top_right.png": {
+   "rgb": [
+    104,
+    77,
+    48
+   ],
+   "lum": 80.4,
+   "hue": 31,
+   "sat": 53
+  },
+  "t3_floor_1.png": {
+   "rgb": [
+    134,
+    42,
+    19
+   ],
+   "lum": 60.2,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_2.png": {
+   "rgb": [
+    134,
+    43,
+    19
+   ],
+   "lum": 60.3,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_3.png": {
+   "rgb": [
+    133,
+    42,
+    19
+   ],
+   "lum": 59.8,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_4.png": {
+   "rgb": [
+    133,
+    42,
+    19
+   ],
+   "lum": 59.6,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_5.png": {
+   "rgb": [
+    134,
+    43,
+    19
+   ],
+   "lum": 60.3,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_6.png": {
+   "rgb": [
+    135,
+    43,
+    19
+   ],
+   "lum": 60.7,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_7.png": {
+   "rgb": [
+    133,
+    41,
+    19
+   ],
+   "lum": 59.0,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_floor_8.png": {
+   "rgb": [
+    134,
+    42,
+    19
+   ],
+   "lum": 59.9,
+   "hue": 12,
+   "sat": 86
+  },
+  "t3_wall_left.png": {
+   "rgb": [
+    97,
+    36,
+    20
+   ],
+   "lum": 47.7,
+   "hue": 12,
+   "sat": 79
+  },
+  "t3_wall_mid.png": {
+   "rgb": [
+    84,
+    29,
+    19
+   ],
+   "lum": 40.2,
+   "hue": 9,
+   "sat": 77
+  },
+  "t3_wall_right.png": {
+   "rgb": [
+    83,
+    29,
+    19
+   ],
+   "lum": 39.6,
+   "hue": 9,
+   "sat": 77
+  },
+  "t3_wall_top_left.png": {
+   "rgb": [
+    121,
+    59,
+    35
+   ],
+   "lum": 70.3,
+   "hue": 17,
+   "sat": 71
+  },
+  "t3_wall_top_mid.png": {
+   "rgb": [
+    113,
+    55,
+    34
+   ],
+   "lum": 65.7,
+   "hue": 16,
+   "sat": 70
+  },
+  "t3_wall_top_right.png": {
+   "rgb": [
+    110,
+    53,
+    34
+   ],
+   "lum": 64.0,
+   "hue": 16,
+   "sat": 69
+  },
+  "t4_floor_1.png": {
+   "rgb": [
+    44,
+    84,
+    104
+   ],
+   "lum": 76.9,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_2.png": {
+   "rgb": [
+    44,
+    84,
+    104
+   ],
+   "lum": 76.9,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_3.png": {
+   "rgb": [
+    44,
+    83,
+    103
+   ],
+   "lum": 76.3,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_4.png": {
+   "rgb": [
+    44,
+    83,
+    103
+   ],
+   "lum": 76.0,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_5.png": {
+   "rgb": [
+    44,
+    84,
+    104
+   ],
+   "lum": 76.9,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_6.png": {
+   "rgb": [
+    45,
+    84,
+    104
+   ],
+   "lum": 77.5,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_floor_7.png": {
+   "rgb": [
+    43,
+    82,
+    102
+   ],
+   "lum": 75.1,
+   "hue": 200,
+   "sat": 58
+  },
+  "t4_floor_8.png": {
+   "rgb": [
+    44,
+    83,
+    103
+   ],
+   "lum": 76.4,
+   "hue": 200,
+   "sat": 57
+  },
+  "t4_wall_left.png": {
+   "rgb": [
+    37,
+    66,
+    82
+   ],
+   "lum": 61.1,
+   "hue": 202,
+   "sat": 55
+  },
+  "t4_wall_mid.png": {
+   "rgb": [
+    30,
+    55,
+    71
+   ],
+   "lum": 51.3,
+   "hue": 203,
+   "sat": 57
+  },
+  "t4_wall_right.png": {
+   "rgb": [
+    30,
+    54,
+    70
+   ],
+   "lum": 50.4,
+   "hue": 203,
+   "sat": 57
+  },
+  "t4_wall_top_left.png": {
+   "rgb": [
+    61,
+    90,
+    104
+   ],
+   "lum": 85.0,
+   "hue": 199,
+   "sat": 41
+  },
+  "t4_wall_top_mid.png": {
+   "rgb": [
+    57,
+    84,
+    97
+   ],
+   "lum": 79.0,
+   "hue": 200,
+   "sat": 41
+  },
+  "t4_wall_top_right.png": {
+   "rgb": [
+    56,
+    81,
+    94
+   ],
+   "lum": 76.9,
+   "hue": 200,
+   "sat": 41
+  },
+  "t5_floor_1.png": {
+   "rgb": [
+    69,
+    41,
+    88
+   ],
+   "lum": 50.2,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_floor_2.png": {
+   "rgb": [
+    69,
+    41,
+    88
+   ],
+   "lum": 50.1,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_floor_3.png": {
+   "rgb": [
+    68,
+    40,
+    87
+   ],
+   "lum": 49.8,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_floor_4.png": {
+   "rgb": [
+    68,
+    40,
+    87
+   ],
+   "lum": 49.6,
+   "hue": 275,
+   "sat": 54
+  },
+  "t5_floor_5.png": {
+   "rgb": [
+    69,
+    41,
+    88
+   ],
+   "lum": 50.1,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_floor_6.png": {
+   "rgb": [
+    69,
+    41,
+    88
+   ],
+   "lum": 50.6,
+   "hue": 276,
+   "sat": 53
+  },
+  "t5_floor_7.png": {
+   "rgb": [
+    67,
+    40,
+    87
+   ],
+   "lum": 49.1,
+   "hue": 275,
+   "sat": 54
+  },
+  "t5_floor_8.png": {
+   "rgb": [
+    68,
+    41,
+    88
+   ],
+   "lum": 49.9,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_wall_left.png": {
+   "rgb": [
+    53,
+    31,
+    68
+   ],
+   "lum": 38.6,
+   "hue": 276,
+   "sat": 54
+  },
+  "t5_wall_mid.png": {
+   "rgb": [
+    44,
+    26,
+    59
+   ],
+   "lum": 32.1,
+   "hue": 273,
+   "sat": 57
+  },
+  "t5_wall_right.png": {
+   "rgb": [
+    44,
+    25,
+    58
+   ],
+   "lum": 31.5,
+   "hue": 273,
+   "sat": 57
+  },
+  "t5_wall_top_left.png": {
+   "rgb": [
+    77,
+    51,
+    87
+   ],
+   "lum": 59.0,
+   "hue": 284,
+   "sat": 42
+  },
+  "t5_wall_top_mid.png": {
+   "rgb": [
+    72,
+    47,
+    81
+   ],
+   "lum": 55.1,
+   "hue": 283,
+   "sat": 42
+  },
+  "t5_wall_top_right.png": {
+   "rgb": [
+    70,
+    46,
+    79
+   ],
+   "lum": 53.7,
+   "hue": 283,
+   "sat": 42
+  }
+ },
+ "shots": {
+  "01-menu-root-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 13458,
+   "meanLum": 6.9,
+   "bright170Pct": 0.33,
+   "dark16Pct": 90.67
+  },
+  "02-menu-root-save-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 13659,
+   "meanLum": 7.1,
+   "bright170Pct": 0.43,
+   "dark16Pct": 90.37
+  },
+  "03-menu-help-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 6259,
+   "meanLum": 4.8,
+   "bright170Pct": 0.05,
+   "dark16Pct": 91.11
+  },
+  "04-menu-settings-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 2471,
+   "meanLum": 1.8,
+   "bright170Pct": 0.02,
+   "dark16Pct": 98.67
+  },
+  "05-menu-about-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 2979,
+   "meanLum": 2.1,
+   "bright170Pct": 0.16,
+   "dark16Pct": 98.33
+  },
+  "06-menu-confirm-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 2201,
+   "meanLum": 2.0,
+   "bright170Pct": 0.0,
+   "dark16Pct": 98.31
+  },
+  "07-menu-root-800.png": {
+   "size": [
+    800,
+    700
+   ],
+   "uniqueColorsHalf": 9551,
+   "meanLum": 6.1,
+   "bright170Pct": 0.27,
+   "dark16Pct": 91.62
+  },
+  "08-menu-root-420.png": {
+   "size": [
+    420,
+    760
+   ],
+   "uniqueColorsHalf": 9443,
+   "meanLum": 9.5,
+   "bright170Pct": 0.47,
+   "dark16Pct": 86.02
+  },
+  "09-menu-root-320.png": {
+   "size": [
+    320,
+    640
+   ],
+   "uniqueColorsHalf": 9358,
+   "meanLum": 13.0,
+   "bright170Pct": 0.75,
+   "dark16Pct": 79.2
+  },
+  "10-menu-help-800.png": {
+   "size": [
+    800,
+    700
+   ],
+   "uniqueColorsHalf": 2386,
+   "meanLum": 3.2,
+   "bright170Pct": 0.03,
+   "dark16Pct": 95.09
+  },
+  "11-menu-settings-800.png": {
+   "size": [
+    800,
+    700
+   ],
+   "uniqueColorsHalf": 1980,
+   "meanLum": 2.0,
+   "bright170Pct": 0.01,
+   "dark16Pct": 98.6
+  },
+  "12-menu-about-800.png": {
+   "size": [
+    800,
+    700
+   ],
+   "uniqueColorsHalf": 2570,
+   "meanLum": 2.3,
+   "bright170Pct": 0.06,
+   "dark16Pct": 97.84
+  },
+  "13-menu-help-420.png": {
+   "size": [
+    420,
+    760
+   ],
+   "uniqueColorsHalf": 2378,
+   "meanLum": 5.1,
+   "bright170Pct": 0.06,
+   "dark16Pct": 91.43
+  },
+  "14-menu-confirm-420.png": {
+   "size": [
+    420,
+    760
+   ],
+   "uniqueColorsHalf": 1801,
+   "meanLum": 3.0,
+   "bright170Pct": 0.0,
+   "dark16Pct": 96.32
+  },
+  "15-sys-tab1-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 3414,
+   "meanLum": 2.7,
+   "bright170Pct": 0.0,
+   "dark16Pct": 97.02
+  },
+  "16-sys-tab4-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 4162,
+   "meanLum": 2.8,
+   "bright170Pct": 0.09,
+   "dark16Pct": 97.25
+  },
+  "17-sys-tab4-500.png": {
+   "size": [
+    500,
+    700
+   ],
+   "uniqueColorsHalf": 3349,
+   "meanLum": 4.0,
+   "bright170Pct": 0.1,
+   "dark16Pct": 95.2
+  },
+  "18-sys-tab4-360.png": {
+   "size": [
+    360,
+    700
+   ],
+   "uniqueColorsHalf": 2784,
+   "meanLum": 4.6,
+   "bright170Pct": 0.13,
+   "dark16Pct": 94.24
+  },
+  "19-explore-f1.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 7722,
+   "meanLum": 3.5,
+   "bright170Pct": 0.03,
+   "dark16Pct": 98.19
+  },
+  "20-explore-f2.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 6377,
+   "meanLum": 3.6,
+   "bright170Pct": 0.02,
+   "dark16Pct": 98.18
+  },
+  "21-explore-f3.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 7616,
+   "meanLum": 2.6,
+   "bright170Pct": 0.02,
+   "dark16Pct": 98.36
+  },
+  "22-explore-f4.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 5560,
+   "meanLum": 3.1,
+   "bright170Pct": 0.02,
+   "dark16Pct": 98.62
+  },
+  "23-explore-f5.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 6052,
+   "meanLum": 2.2,
+   "bright170Pct": 0.04,
+   "dark16Pct": 99.02
+  },
+  "24-battle-h-f2.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 7838,
+   "meanLum": 3.3,
+   "bright170Pct": 0.09,
+   "dark16Pct": 97.75
+  },
+  "25-battle-h-dragon.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 10446,
+   "meanLum": 3.2,
+   "bright170Pct": 0.11,
+   "dark16Pct": 97.22
+  },
+  "26-battle-v-f2.png": {
+   "size": [
+    800,
+    900
+   ],
+   "uniqueColorsHalf": 6826,
+   "meanLum": 5.3,
+   "bright170Pct": 0.15,
+   "dark16Pct": 95.99
+  },
+  "27-battle-v-dragon.png": {
+   "size": [
+    800,
+    900
+   ],
+   "uniqueColorsHalf": 7084,
+   "meanLum": 4.8,
+   "bright170Pct": 0.19,
+   "dark16Pct": 95.47
+  },
+  "28-fx-hit.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 8589,
+   "meanLum": 3.3,
+   "bright170Pct": 0.09,
+   "dark16Pct": 97.73
+  },
+  "29-fx-level.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 8952,
+   "meanLum": 3.8,
+   "bright170Pct": 0.12,
+   "dark16Pct": 97.13
+  },
+  "30-dread.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 10662,
+   "meanLum": 3.2,
+   "bright170Pct": 0.11,
+   "dark16Pct": 97.14
+  },
+  "31-bag-1280.png": {
+   "size": [
+    1280,
+    800
+   ],
+   "uniqueColorsHalf": 4523,
+   "meanLum": 2.1,
+   "bright170Pct": 0.01,
+   "dark16Pct": 98.39
+  },
+  "32-battle-v-phone.png": {
+   "size": [
+    390,
+    844
+   ],
+   "uniqueColorsHalf": 6292,
+   "meanLum": 8.5,
+   "bright170Pct": 0.35,
+   "dark16Pct": 92.29
+  }
+ }
+}

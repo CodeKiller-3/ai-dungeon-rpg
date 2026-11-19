@@ -1,0 +1,18 @@
+{
+ "total": 122,
+ "paint": 100,
+ "ms": 0.8,
+ "counts": {
+  "setTransform": 2,
+  "drawImage": 19,
+  "fillRect": 27,
+  "save": 3,
+  "beginPath": 2,
+  "ellipse": 2,
+  "fill": 2,
+  "restore": 3,
+  "strokeRect": 11,
+  "measureText": 12,
+  "fillText": 39
+ }
+}

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1;"><head>
+<meta charset="UTF-8">
+<title>FAIL d104 191/196</title>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script>
+/* D-104：每帧 canvas 调用计数（口径同 verify_d102：只数触达 ctx 的 28 个方法，
+ * 不含 measureText、不含属性赋值；__DCMARK 只决定记到哪个元素名下）。 */
+(function () {
+  var names = ['save', 'restore', 'translate', 'rotate', 'scale', 'setTransform',
+    'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+    'arc', 'ellipse', 'rect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'clip',
+    'fillText', 'strokeText', 'drawImage', 'createRadialGradient', 'createLinearGradient',
+    'createPattern', 'setLineDash'];
+  var P = CanvasRenderingContext2D.prototype;
+  window.__DC = { n: 0, by: {}, elem: {}, cur: 'init' };
+  window.__DCMARK = function (label) { window.__DC.cur = label; };
+  names.forEach(function (nm) {
+    var orig = P[nm];
+    if (typeof orig !== 'function') return;
+    P[nm] = function () {
+      var d = window.__DC;
+      d.n++;
+      d.by[nm] = (d.by[nm] || 0) + 1;
+      d.elem[d.cur] = (d.elem[d.cur] || 0) + 1;
+      return orig.apply(this, arguments);
+    };
+  });
+})();
+</script>
+</head>
+<body>
+<pre id="result">FAIL {"page":"d104","total":196,"pass":191,"fail":5,"scale":[{"id":"slime","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"bat","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"skeleton","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"goblin","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"tiny_zombie","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"angel","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"imp","native":[24,24],"drawn":[48,48],"mul":[2,2],"ok":true},{"id":"orc_warrior","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"orc_shaman","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"wogol","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"necromancer","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"masked_orc","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"pumpkin_dude","native":[24,35],"drawn":[48,70],"mul":[2,2],"ok":true},{"id":"ogre","native":[48,54],"drawn":[96,108],"mul":[2,2],"ok":true},{"id":"big_zombie","native":[48,54],"drawn":[96,108],"mul":[2,2],"ok":true},{"id":"zombie_king","native":[48,54],"drawn":[96,108],"mul":[2,2],"ok":true},{"id":"dragon","native":[72,72],"drawn":[144,144],"mul":[2,2],"ok":true}],"geo":[{"id":"horizontal@960x540","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":416,"barY":444},{"id":"horizontal@1024x640","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":492,"barY":526},{"id":"vertical@320x568","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":208,"barY":418},{"id":"vertical@390x844","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":291,"barY":694},{"id":"vertical@960x540","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":200,"barY":444},{"id":"vertical@1024x640","monster":[48,48],"player":[48,84],"mul":2,"violations":0,"logY":230,"barY":544},{"id":"vertical@320x568+dragon","monster":[144,144],"player":[48,84],"mul":2,"violations":0,"logY":288,"barY":418},{"id":"horizontal@1024x640+dragon","monster":[144,144],"player":[48,84],"mul":2,"violations":0,"logY":492,"barY":526}],"calls":{"rows":[{"id":"horizontal@960x540","n":171,"bg":0},{"id":"horizontal@1024x640","n":175,"bg":0},{"id":"vertical@320x568","n":122,"bg":0},{"id":"vertical@390x844","n":124,"bg":0},{"id":"vertical@960x540","n":175,"bg":0},{"id":"vertical@1024x640","n":179,"bg":0},{"id":"vertical@320x568+dragon","n":127,"bg":0},{"id":"horizontal@1024x640+dragon","n":183,"bg":0},{"id":"horizontal@1024x640+chips","n":212,"bg":0}],"worst":212,"elem":{"hud":92,"backdrop":1,"sprite":33,"card.bg":5,"card.text":2,"card.hp":8,"chip":10,"pipeline":7,"log":4,"fx.float":8,"fx.particles":2,"bar.frame":5,"cell.bg":7,"cell.icon":7,"cell.key":7,"cell.label":7,"cell.sub":7}},"backdrop":{"rows":[{"f":1,"before":11.4,"wall":16.2,"mid":36.5,"floor":34.7,"seam":17.2,"wallMax":198.1,"peak":198.1,"pure":16.12,"pureP05":8.46,"pureP95":20.57,"pureRange":12.1,"pureKept":1,"oldPure":11.84,"oldBand":14.9,"edgePure":11.84,"edgeBand":19.2},{"f":2,"before":8.9,"wall":16.4,"mid":40.3,"floor":35.3,"seam":22.3,"wallMax":196.1,"peak":196.1,"pure":16,"pureP05":5.37,"pureP95":19.57,"pureRange":14.2,"pureKept":1,"oldPure":11.14,"oldBand":14.8,"edgePure":11.14,"edgeBand":19.2},{"f":3,"before":8,"wall":15.1,"mid":38.1,"floor":41.8,"seam":19.9,"wallMax":41.4,"peak":225,"pure":19.82,"pureP05":11.4,"pureP95":23.68,"pureRange":12.3,"pureKept":1,"oldPure":22.56,"oldBand":15.5,"edgePure":22.56,"edgeBand":20},{"f":4,"before":14,"wall":17.7,"mid":47.2,"floor":38,"seam":22.3,"wallMax":65.9,"peak":224,"pure":16.98,"pureP05":7.45,"pureP95":21.11,"pureRange":13.7,"pureKept":1,"oldPure":12.58,"oldBand":17.2,"edgePure":12.58,"edgeBand":21.4},{"f":5,"before":7.5,"wall":16.7,"mid":34.7,"floor":33.7,"seam":14.4,"wallMax":203.1,"peak":203.1,"pure":16.1,"pureP05":7.75,"pureP95":21.34,"pureRange":13.6,"pureKept":1,"oldPure":12.4,"oldBand":15.8,"edgePure":12.4,"edgeBand":20.3}],"vRows":[{"f":1,"wall":16.4,"mid":12.6,"floor":22.4},{"f":2,"wall":17.7,"mid":9.4,"floor":29.8},{"f":3,"wall":10.8,"mid":7.9,"floor":19.2},{"f":4,"wall":21.4,"mid":12.7,"floor":32},{"f":5,"wall":11,"mid":11.9,"floor":19.4}]},"failed":[{"id":"d111.neg.1.oldBrickFails","ok":false,"detail":"旧砖面 pureMean=11.84、p95-p05=4.46 必须判负"},{"id":"d111.neg.2.oldBrickFails","ok":false,"detail":"旧砖面 pureMean=11.14、p95-p05=0.00 必须判负"},{"id":"d111.neg.3.oldBrickFails","ok":false,"detail":"旧砖面 pureMean=22.56、p95-p05=0.00 必须判负"},{"id":"d111.neg.4.oldBrickFails","ok":false,"detail":"旧砖面 pureMean=12.58、p95-p05=2.70 必须判负"},{"id":"d111.neg.5.oldBrickFails","ok":false,"detail":"旧砖面 pureMean=12.4、p95-p05=0.00 必须判负"}]}</pre>
+<canvas id="game" width="1024" height="640" style="position: fixed; left: -9999px; width: 1024px; height: 640px;"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/geom.js"></script>
+<script>
+(function () {
+  'use strict';
+  var G = window.PreflightGeom;
+  var R = Game.Core.Render, B = Game.Systems.Battle, S = Game.Core.Sprites;
+  var P = Game.Data.Player, Fx = Game.Fx, Fb = Game.Feedback, PT = Game.Particles;
+  var M = Game.Core.Main;
+  var checks = [];
+  var W0 = 1024, H0 = 640;
+
+  function ck(id, ok, detail) {
+    checks.push({ id: id, ok: !!ok, detail: detail === undefined ? '' : detail });
+  }
+  function vp(w, h) {
+    try {
+      Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+    } catch (e) {}
+  }
+  function mk(lay, w, h, floor, mid) {
+    vp(w, h);
+    R._setBattleLayout(lay);
+    Fx._reset();
+    if (PT && PT.clear) PT.clear();
+    if (Fb && Fb._clear) Fb._clear();
+    P.floor = floor; P.level = 5; P.exp = 24; P.gold = 268;
+    P.hp = 100; P.maxHp = 140; P.mp = 30; P.maxMp = 30;
+    P.atk = 14; P.def = 6;
+    Game.Systems.Map.setFloor(floor);
+    B.start(mid || 'slime');
+    M.switchScene('battle');
+    R.resize();
+    if (Game.hud && Game.hud.update) {
+      Game.hud.update({ hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, kills: 1, killTarget: 10, status: [] });
+    }
+    B._setClock(null); Fx._setClock(null);
+    R.drawBattle(B.getState());
+    return R._lastBattleBox;
+  }
+  function isIntMul(drawn, native) {
+    if (!(native > 0) || !(drawn > 0)) return false;
+    return drawn === native * Math.round(drawn / native);
+  }
+  function eq(a, b) { return a && b && a.x === b.x && a.y === b.y; }
+  function inside(pt, r) {
+    return pt.x >= r.x && pt.x <= r.x + r.w && pt.y >= r.y && pt.y <= r.y + r.h;
+  }
+  var NATIVE = {
+    slime: [24, 24], bat: [24, 24], skeleton: [24, 24], goblin: [24, 24],
+    tiny_zombie: [24, 24], angel: [24, 24], imp: [24, 24],
+    orc_warrior: [24, 35], orc_shaman: [24, 35], wogol: [24, 35],
+    necromancer: [24, 35], masked_orc: [24, 35], pumpkin_dude: [24, 35],
+    ogre: [48, 54], big_zombie: [48, 54], zombie_king: [48, 54], ogre_boss: [48, 54],
+    dragon: [72, 72]
+  };
+
+  var CASES = [
+    { lay: 'horizontal', w: 960, h: 540 },
+    { lay: 'horizontal', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568 },
+    { lay: 'vertical', w: 390, h: 844 },
+    { lay: 'vertical', w: 960, h: 540 },
+    { lay: 'vertical', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568, mid: 'dragon', floor: 5, tag: 'dragon' },
+    { lay: 'horizontal', w: 1024, h: 640, mid: 'dragon', floor: 5, tag: 'dragon' }
+  ];
+  var geoRows = [];
+
+  function geometryAndScale() {
+    CASES.forEach(function (cs) {
+      var id = cs.lay + '@' + cs.w + 'x' + cs.h + (cs.tag ? '+' + cs.tag : '');
+      var box;
+      try {
+        box = mk(cs.lay, cs.w, cs.h, cs.floor || 1, cs.mid || 'slime');
+      } catch (e) {
+        ck('d104.geom.' + id + '.draw', false, String(e && e.message || e));
+        return;
+      }
+      var st = B.getState();
+      var nat = NATIVE[st.monster.id] || [0, 0];
+      var mul = nat[1] > 0 ? box.monster.h / nat[1] : 0;
+      ck('d104.scale.' + id + '.monsterInt', isIntMul(box.monster.h, nat[1]) &&
+        isIntMul(box.monster.w, nat[0]), 'drawn=' + box.monster.w + 'x' + box.monster.h +
+        ' native=' + nat[0] + 'x' + nat[1] + ' mul=' + mul);
+      ck('d104.scale.' + id + '.monsterMul2', mul === 2, String(mul));
+      ck('d104.scale.' + id + '.playerInt', isIntMul(box.player.h, 42) && isIntMul(box.player.w, 24),
+        'drawn=' + box.player.w + 'x' + box.player.h + ' native=24x42 mul=' + (box.player.h / 42));
+      ck('d104.scale.' + id + '.playerMul2', box.player.h === 84 && box.player.w === 48,
+        box.player.w + 'x' + box.player.h);
+
+      var cards = [box.playerPlate, box.monsterPlate].filter(Boolean);
+      ck('d104.geom.' + id + '.cards2', cards.length === 2, 'cards=' + cards.length);
+      var hpBars = cards.map(function (c) { return { x: c.barX, y: c.barY, w: c.barW, h: c.barH }; });
+      var groups = [
+        { name: 'hudBand', rects: [box.hudBand] },
+        { name: 'cards', rects: cards.map(function (c) { return { x: c.x, y: c.y, w: c.w, h: c.h }; }) },
+        { name: 'hpBars', rects: hpBars },
+        { name: 'sprites', rects: [box.player, box.monster] },
+        { name: 'log', rects: [box.log] },
+        { name: 'commandBar', rects: [box.commandBar] }
+      ];
+      var pw = G.pairwise(groups, [['cards', 'hpBars']]);
+      ck('d104.geom.' + id + '.disjoint6', pw.violations.length === 0,
+        'violations=' + pw.violations.length + ' ' + JSON.stringify(pw.violations.slice(0, 3)));
+      ck('d104.geom.' + id + '.inView', G.allInViewport([box.player, box.monster, box.log,
+        box.commandBar, box.hudBand].concat(groups[1].rects), cs.w, cs.h).ok, '');
+      geoRows.push({ id: id, monster: [box.monster.w, box.monster.h], player: [box.player.w, box.player.h],
+        mul: mul, violations: pw.violations.length, logY: box.log.y, barY: box.commandBar.y });
+    });
+  }
+
+  function scaleMatrix() {
+    var rows = [];
+    Object.keys(NATIVE).forEach(function (mid) {
+      if (mid === 'ogre_boss') return; /* 与 ogre 同尺寸，避免重复 */
+      var box;
+      try { box = mk('vertical', 960, 540, mid === 'dragon' ? 5 : 1, mid); }
+      catch (e) { rows.push({ id: mid, err: String(e && e.message || e) }); return; }
+      var nat = NATIVE[mid];
+      var ok = isIntMul(box.monster.h, nat[1]) && isIntMul(box.monster.w, nat[0]) &&
+        box.monster.h === nat[1] * 2;
+      if (!ok) ck('d104.scaleMatrix.' + mid, false, JSON.stringify({ nat: nat, box: box.monster }));
+      rows.push({ id: mid, native: nat, drawn: [box.monster.w, box.monster.h],
+        mul: [box.monster.w / nat[0], box.monster.h / nat[1]], ok: ok });
+    });
+    ck('d104.scaleMatrix.all', rows.every(function (r) { return r.ok; }),
+      rows.filter(function (r) { return !r.ok; }).map(function (r) { return r.id; }).join(','));
+    return rows;
+  }
+
+  /* 整数倍负例：D-104 明确 2.143× / 2.571× 必须判负 */
+  function scaleNegatives() {
+    ck('d104.neg.frac2143', !isIntMul(90, 42), '90/42=' + (90 / 42));
+    ck('d104.neg.frac2571', !isIntMul(90, 35), '90/35=' + (90 / 35));
+    ck('d104.neg.oldRuleFails', !isIntMul(90, 42) && !isIntMul(90, 35) && !isIntMul(90, 24),
+      '旧固定 90 对 24/35/42 全部判负');
+    ck('d104.pos.int2', isIntMul(84, 42) && isIntMul(144, 72) && isIntMul(70, 35) && isIntMul(48, 24), '');
+    ck('d104.api.mul', R.BATTLE_SPRITE_MUL === 2 && R.battleSpriteHeight({ naturalHeight: 35 }) === 70 &&
+      R.battleSpriteHeight({ naturalHeight: 42 }) === 84, 'mul=' + R.BATTLE_SPRITE_MUL);
+  }
+
+  /* 锚点：contact 落在新包围盒内，冲击圈/火花/飘字全部等于 contact 返回值 */
+  function anchors(lay, mid, floor, tag) {
+    mk(lay, 960, 540, floor || 1, mid);
+    var T = 0;
+    B._setClock(function () { return T; });
+    Fx._setClock(function () { return T; });
+    var b = R._lastBattleBox;
+    var cm = B._contact('monster'), cp = B._contact('player');
+    ck('d104.anchor.' + tag + '.contactInMonster', inside(cm, b.monster),
+      JSON.stringify({ c: cm, box: b.monster }));
+    ck('d104.anchor.' + tag + '.contactInPlayer', inside(cp, b.player),
+      JSON.stringify({ c: cp, box: b.player }));
+    var expectM = (lay === 'horizontal')
+      ? { x: b.monster.x + Math.round(b.monster.w * 0.22), y: b.monster.y + Math.round(b.monster.h * 0.52) }
+      : { x: Math.round(b.monster.x + b.monster.w / 2) + Math.round(b.monster.w * 0.25),
+          y: b.monster.y + Math.round(b.monster.h * 0.84) };
+    ck('d104.anchor.' + tag + '.contactFollowsBox', eq(cm, expectM),
+      JSON.stringify({ got: cm, want: expectM }));
+
+    var cap = [], realSpawn = Fb.spawn;
+    Fb.spawn = function (o) { cap.push(o); return realSpawn.call(Fb, o); };
+    try { B.playerAction('attack'); } finally { Fb.spawn = realSpawn; }
+    var ring = Fx._state().ringPos;
+    ck('d104.anchor.' + tag + '.ringEqualsContact', eq(ring, cm),
+      JSON.stringify({ ring: ring, contact: cm }));
+    var parts = PT._list().filter(function (p) { return p.kind === 'impact' || p.kind === 'spark'; });
+    ck('d104.anchor.' + tag + '.sparksAtContact', parts.length > 0 &&
+      parts.every(function (p) { return eq(p, cm); }), 'n=' + parts.length);
+    var texts = cap.filter(function (o) { return o.who === 'monster' && o.text; });
+    var tBase = B._text('monster');
+    var lane0 = (B.getState().roundNo - 1) % 3 * 12;
+    ck('d104.anchor.' + tag + '.textFollows', texts.length === 1 &&
+      Math.abs(texts[0].x - tBase.x) <= 1 && Math.abs(texts[0].y - (tBase.y - lane0)) <= 1,
+      JSON.stringify({ spawn: texts[0] || null, base: tBase }));
+    var inBoxX = tBase.x >= b.monster.x - 80 && tBase.x <= b.monster.x + b.monster.w + 80;
+    var inBoxY = tBase.y >= b.monster.y - 40 && tBase.y <= b.monster.y + b.monster.h + 40;
+    ck('d104.anchor.' + tag + '.textNearMonster', inBoxX && inBoxY, JSON.stringify(tBase));
+  }
+
+  function measureCalls(lay, w, h, floor, mid, decorate) {
+    mk(lay, w, h, floor, mid);
+    var st = B.getState();
+    if (decorate) {
+      st.defending = true; st.defendRound = st.roundNo; st.shieldValue = 30;
+      st.enraged = true; st.roundNo = 13;
+      /* 同口径的最坏叠加：2 条飘字 + 1 次怪物受击闪白（tintSprite）。
+       * 上一版 d102 的 206 就包含这两层；这里显式补上，避免"清空后测出更低"的假省钱。 */
+      Fb.spawn({ x: 700, y: 300, text: '-12', color: '#ffffff', life: 900, vy: -20 });
+      Fb.spawn({ x: 820, y: 330, text: '-8', color: '#ff6b6b', life: 900, vy: -20 });
+      Fb.spawn({ x: 778, y: 400, kind: 'hit', who: 'monster', life: 900, w: 144, h: 144 });
+      Fb.spawn({ x: 246, y: 490, kind: 'hurt', who: 'player', life: 900, w: 48, h: 84 });
+    }
+    var seq = [];
+    for (var i = 0; i < 4; i++) {
+      window.__DC.n = 0; window.__DC.by = {}; window.__DC.elem = {}; window.__BGN = 0;
+      R.drawBattle(B.getState());
+      seq.push(window.__DC.n);
+      if (i === 3) { window.__BGF = window.__BGN; window.__LASTELEM = window.__DC.elem; }
+    }
+    return seq[3];
+  }
+  function calls() {
+    var rows = [], worst = 0, worstElem = null;
+    CASES.forEach(function (cs) {
+      var id = cs.lay + '@' + cs.w + 'x' + cs.h + (cs.tag ? '+' + cs.tag : '');
+      try {
+        var n = measureCalls(cs.lay, cs.w, cs.h, cs.floor || 1, cs.mid || 'slime', false);
+        rows.push({ id: id, n: n, bg: window.__BGF });
+        ck('d104.calls.' + id + '.stableBG', window.__BGF === 0, String(window.__BGF));
+        ck('d104.calls.' + id + '.le214', n <= 214, n + ' > 214');
+      } catch (e) { ck('d104.calls.' + id, false, String(e && e.message || e)); }
+    });
+    var nw = measureCalls('horizontal', 1024, 640, 5, 'dragon', true);
+    worst = nw; worstElem = Object.assign({}, window.__LASTELEM);
+    rows.push({ id: 'horizontal@1024x640+chips', n: nw, bg: window.__BGF });
+    ck('d104.calls.worst.le214', nw <= 214, nw + ' > 214');
+    ck('d104.calls.worst.stableBG', window.__BGF === 0, String(window.__BGF));
+    var sum = 0;
+    Object.keys(worstElem).forEach(function (k) { sum += worstElem[k]; });
+    ck('d104.calls.elemSum', sum === nw, 'sum=' + sum + ' n=' + nw);
+    return { rows: rows, worst: nw, elem: worstElem };
+  }
+
+  /* 背景三层灰度：后墙 / 中景 / 地面。区域口径写死并在报告里给出：
+   *   后墙 = y∈[48, backWallY−4)（避开 HUD 读数带 42px；不含 4px 墙脚线）
+   *   中景 = y∈[backWallY, 0.766H)
+   *   地面 = y∈[0.766H, H)
+   * 亮度 = 0.299R+0.587G+0.114B（与 verify_d88 同一公式）。 */
+  function stats(x0, y0, x1, y1) {
+    var d = c.getImageData(x0, y0, x1 - x0, y1 - y0).data;
+    var sum = 0, n = 0, max = 0, vals = [];
+    for (var i = 0; i < d.length; i += 4) {
+      var L = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      sum += L; n++; if (L > max) max = L; vals.push(L);
+    }
+    vals.sort(function (a, b) { return a - b; });
+    function p(q) { return vals[Math.min(vals.length - 1, Math.floor(vals.length * q))]; }
+    return { mean: +(sum / n).toFixed(1), max: +max.toFixed(1), p05: +p(0.05).toFixed(1), p95: +p(0.95).toFixed(1) };
+  }
+  var BEFORE_WALL = [11.4, 8.9, 8.0, 14.0, 7.5];
+  /* D-111 纯砖面取样（代码可复算，不靠人眼挑）：
+   * 每层给若干"连续砖面矩形"（比例坐标），矩形本身避开拱门/王座/帐篷/栅栏/崖壁内缘；
+   * 每个矩形再向内缩 3px（排除边缘像素）；矩形内再剔除彩色像素：
+   *   max(R,G,B)-min(R,G,B) > 28 → 金脉、熔岩、火光、冷白烛光、垂旗等装饰/发光像素，
+   *   灰阶砖面（色差 ≤22）保留。
+   * 这样"纯砖面"里只剩砖缝与砖块，带均值（全宽）不参与本判据。 */
+  var WALL_SAMPLES = {
+    1: [[0.30, 0.08, 0.70, 0.52]],
+    2: [[0.30, 0.08, 0.70, 0.52]],
+    3: [[0.06, 0.06, 0.27, 0.27], [0.73, 0.06, 0.94, 0.27]],
+    4: [[0.40, 0.08, 0.60, 0.55]],
+    5: [[0.35, 0.06, 0.65, 0.52]]
+  };
+  function wallSampleStats(rects, W, H) {
+    var d = c.getImageData(0, 0, W, H).data;
+    var vals = [], total = 0;
+    for (var ri = 0; ri < rects.length; ri++) {
+      var r = rects[ri];
+      var x0 = Math.round(W * r[0]) + 3, x1 = Math.round(W * r[2]) - 3;
+      var y0 = Math.round(H * r[1]) + 3, y1 = Math.round(H * r[3]) - 3;
+      for (var y = y0; y < y1; y++) {
+        for (var x = x0; x < x1; x++) {
+          var i = (y * W + x) * 4, R = d[i], G = d[i + 1], B = d[i + 2];
+          total++;
+          var mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+          if (mx - mn > 28) continue;
+          vals.push(0.299 * R + 0.587 * G + 0.114 * B);
+        }
+      }
+    }
+    vals.sort(function (a, b) { return a - b; });
+    function p(q) { return vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * q))] : 0; }
+    var sum = 0;
+    for (var vi = 0; vi < vals.length; vi++) sum += vals[vi];
+    return { mean: vals.length ? +(sum / vals.length).toFixed(2) : 0,
+      p05: +p(0.05).toFixed(2), p95: +p(0.95).toFixed(2),
+      keptShare: +(vals.length / Math.max(1, total)).toFixed(3) };
+  }
+  /* 负例用的旧砖面回放：把取样矩形恢复成 D-110 之前的底色与明暗，
+   * 其余像素（拱门/火把/边缘）保持现行版本——正是复判说的"带亮砖不亮"。
+   * OLD_DIM = 旧版"中心压暗 × 墙压暗"在样本区的等效衰减，用来复现旧渲染值
+   * （F1 ≈11.9、F2 ≈11.9、F3≈22 但平涂无层次、F4≈13.5、F5≈11.9）。 */
+  var OLD_WALL = {
+    1: ['#131320', '#101018', '#161625'],
+    2: ['#15120b', '#15120b', '#15120b'],
+    3: ['#1d1927', '#191622', '#1d1927'],
+    4: ['#101d26', '#0d1820', '#101d26'],
+    5: ['#15121c', '#15121c', '#15121c']
+  };
+  var OLD_DIM = { 1: 0.40, 2: 0.34, 3: 0.16, 4: 0.48, 5: 0.34 };
+  function paintOldWall(f, W, H, bwY) {
+    var tones = OLD_WALL[f];
+    for (var ri = 0; ri < WALL_SAMPLES[f].length; ri++) {
+      var r = WALL_SAMPLES[f][ri];
+      var x0 = Math.round(W * r[0]), x1 = Math.round(W * r[2]);
+      var y0 = Math.round(H * r[1]), y1 = Math.round(H * r[3]);
+      c.fillStyle = tones[0];
+      c.fillRect(x0, y0, x1 - x0, y1 - y0);
+      if (f === 1 || f === 4) {
+        /* 旧砖格：48×22 / 56×25.6，只有两档平涂，不做砖缝暗底 */
+        for (var y = y0, row = 0; y < y1; y += 22, row++) {
+          var off = (row % 2) ? -24 : 0;
+          for (var x = x0 + off; x < x1; x += 48) {
+            var ki = Math.abs(Math.floor(x / 48) + row) % tones.length;
+            c.fillStyle = tones[ki];
+            c.fillRect(x + 1, y + 1, 46, Math.min(20, y1 - y - 2));
+          }
+        }
+      }
+      c.fillStyle = 'rgba(0,0,0,' + OLD_DIM[f] + ')';
+      c.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+  }
+
+  function backdrop() {
+    var rows = [], vRows = [];
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    var cw = c.canvas.width, ch = c.canvas.height;
+    for (var f = 1; f <= 5; f++) {
+      var bwY = Math.round(H0 * R._battleSceneH[f - 1].backWall);
+      var GY = Math.round(H0 * 0.766);
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, cw, ch);
+      R._battleBackdrop(c, W0, H0, f, 'horizontal');
+      var wall = stats(0, 48, W0, bwY - 4);
+      var mid = stats(0, bwY, W0, GY);
+      var floor = stats(0, GY, W0, H0);
+      var whole = stats(0, 0, W0, H0);
+      var seam = +(wall.p95 - wall.p05).toFixed(1);
+      var pure = wallSampleStats(WALL_SAMPLES[f], W0, H0);
+      rows.push({ f: f, before: BEFORE_WALL[f - 1], wall: wall.mean, mid: mid.mean,
+        floor: floor.mean, seam: seam, wallMax: wall.max, peak: whole.max,
+        pure: pure.mean, pureP05: pure.p05, pureP95: pure.p95,
+        pureRange: +(pure.p95 - pure.p05).toFixed(1), pureKept: pure.keptShare });
+      ck('d104.wall.' + f + '.lower', wall.mean >= 14.0, wall.mean + ' < 14.0');
+      ck('d104.wall.' + f + '.subordinate', wall.mean <= floor.mean / 2,
+        wall.mean + ' > floor/2=' + (floor.mean / 2).toFixed(1));
+      ck('d104.wall.' + f + '.seam', seam >= 5, 'p95-p05=' + seam);
+      ck('d104.wall.' + f + '.lowLightFloor', floor.mean >= 30, floor.mean + ' < 30');
+      ck('d104.wall.' + f + '.lightPeak', whole.max >= 190, 'peak=' + whole.max);
+      /* D-111：砖面本身必须读得出是墙（不是只有拱门/火把在亮） */
+      ck('d111.wall.' + f + '.pureLower', pure.mean >= 16, 'pureMean=' + pure.mean + ' < 16');
+      ck('d111.wall.' + f + '.pureRange', pure.p95 - pure.p05 >= 10,
+        'p95-p05=' + (pure.p95 - pure.p05).toFixed(2) + ' < 10');
+      ck('d111.wall.' + f + '.pureSubordinate', pure.mean <= floor.mean * 0.55,
+        'pureMean=' + pure.mean + ' > 0.55×floor=' + (floor.mean * 0.55).toFixed(2));
+      ck('d111.wall.' + f + '.pureShare', pure.keptShare >= 0.60,
+        'keptShare=' + pure.keptShare + ' < 0.60（样本被装饰像素吃掉太多）');
+      /* 负例 1（真实回放旧砖面）：把取样矩形恢复旧底色 → 砖面判据必须判负 */
+      paintOldWall(f, W0, H0, bwY);
+      var oldPure = wallSampleStats(WALL_SAMPLES[f], W0, H0);
+      var oldBand = stats(0, 48, W0, bwY - 4).mean;
+      /* 负例 2：在旧砖面上只提亮边缘/拱门（上一轮做法），砖面不动 */
+      c.fillStyle = 'rgba(255,196,120,0.20)';
+      c.fillRect(0, 0, W0, 12);
+      c.fillRect(0, 0, 12, bwY);
+      c.fillRect(W0 - 12, 0, 12, bwY);
+      var g2 = c.createRadialGradient(W0 * 0.155, bwY - 40, 4, W0 * 0.155, bwY - 40, 120);
+      g2.addColorStop(0, 'rgba(255,190,120,0.60)');
+      g2.addColorStop(1, 'rgba(255,190,120,0)');
+      c.fillStyle = g2;
+      c.fillRect(W0 * 0.155 - 120, bwY - 160, 240, 240);
+      var edgePure = wallSampleStats(WALL_SAMPLES[f], W0, H0);
+      var edgeBand = stats(0, 48, W0, bwY - 4).mean;
+      var oldRuleOk = oldPure.mean >= 16 && (oldPure.p95 - oldPure.p05) >= 10 &&
+        oldPure.mean <= floor.mean * 0.55;
+      ck('d111.neg.' + f + '.oldBrickFails', oldRuleOk === true,
+        '旧砖面 pureMean=' + oldPure.mean + '、p95-p05=' + (oldPure.p95 - oldPure.p05).toFixed(2) + ' 必须判负');
+      ck('d111.neg.' + f + '.edgeOnlyFails',
+        !(edgePure.mean >= 16 && (edgePure.p95 - edgePure.p05) >= 10 && edgePure.mean <= floor.mean * 0.55) &&
+        edgeBand > oldBand + 2,
+        '只提边后 pureMean=' + edgePure.mean + '、range=' + (edgePure.p95 - edgePure.p05).toFixed(2) +
+        '、band ' + oldBand + '→' + edgeBand + '（带均值必须被抬高、砖面判据必须仍判负）');
+      rows[rows.length - 1].oldPure = oldPure.mean;
+      rows[rows.length - 1].oldBand = oldBand;
+      rows[rows.length - 1].edgePure = edgePure.mean;
+      rows[rows.length - 1].edgeBand = edgeBand;
+
+      /* 纵置只做参照记录：本卡不改纵置构图（崖壁/裂隙不是一堵平墙） */
+      var hor = R._battleScene[f - 1].horizon;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, cw, ch);
+      R._battleBackdrop(c, W0, H0, f, 'vertical');
+      vRows.push({ f: f, wall: stats(0, 48, W0, hor - 4).mean,
+        mid: stats(0, 192, W0, 432).mean, floor: stats(0, 432, W0, H0).mean });
+    }
+    return { rows: rows, vRows: vRows };
+  }
+
+  var geo, scaleRows, callData, bgData;
+  /* D-105：地图与战斗必须请求同一帧组。战斗中 monsterFrame(monsterAnimId(m))；
+   * 地图普通怪走 monsterFrame(m.monsterId)；对 bat/slime 两者解析结果相同。
+   * 这里直接记录两边实际请求的 Sprites.getFrame 组名，避免"只改表不生效"。 */
+  function frameGroupsDuring(fn) {
+    var seen = [], real = S.getFrame;
+    S.getFrame = function (name, idx) { seen.push(name); return real.call(S, name, idx); };
+    try { fn(); } finally { S.getFrame = real; }
+    return seen;
+  }
+  function assetWiring() {
+    var m = R.MONSTER_ANIM;
+    ck('d105.map.batGroup', !!m.bat && m.bat.idle === 'bat_idle' && m.bat.run === 'bat_run',
+      JSON.stringify(m.bat));
+    ck('d105.map.slimeGroup', !!m.slime && m.slime.idle === 'slime_idle' && m.slime.run === 'slime_run',
+      JSON.stringify(m.slime));
+    ck('d105.neg.batNotImp', m.bat.idle !== 'imp_idle' && m.bat.run !== 'imp_run', '');
+    ck('d105.neg.slimeNotTiny', m.slime.idle !== 'tiny_slug' && m.slime.run !== 'tiny_slug', '');
+
+    ['bat', 'slime'].forEach(function (id) {
+      var groups = [m[id].idle, m[id].run];
+      var okFrames = groups.every(function (g) {
+        var imgs = [];
+        for (var i = 0; i < 4; i++) {
+          var im = S.getFrame(g, i);
+          if (!im || !im.naturalWidth) return false;
+          imgs.push(im);
+        }
+        /* 4 帧互不相同；越界索引按既有取模回环，不得返回 null */
+        var uniq = {};
+        imgs.forEach(function (im) { uniq[im.src] = 1; });
+        return Object.keys(uniq).length === 4 && !!S.getFrame(g, 4) && !!S.getFrame(g, -1);
+      });
+      ck('d105.frames.' + id, okFrames, groups.join('+'));
+
+      var battleSeen = frameGroupsDuring(function () { mk('vertical', 960, 540, 1, id); });
+      ck('d105.battleGroup.' + id, battleSeen.indexOf(m[id].idle) >= 0, battleSeen.join(','));
+      ck('d105.neg.battleFallback.' + id,
+        battleSeen.indexOf('imp_idle') < 0 && battleSeen.indexOf('tiny_slug') < 0, battleSeen.join(','));
+
+      var oldE = Game.Systems.Map.getEnemies, oldEl = Game.Systems.Map.getElites;
+      var oldVis = Game.fov && Game.fov.isVisible;
+      var grid = [];
+      for (var y = 0; y < 30; y++) { grid[y] = []; for (var x = 0; x < 30; x++) grid[y][x] = 1; }
+      Game.Systems.Map.getEnemies = function () { return [{ x: 2, y: 2, monsterId: id }]; };
+      Game.Systems.Map.getElites = function () { return []; };
+      if (Game.fov) Game.fov.isVisible = function () { return true; };
+      var mapSeen = [];
+      try {
+        mapSeen = frameGroupsDuring(function () {
+          R.drawMap(grid, { x: 3, y: 3, dir: 'down' });
+        });
+      } catch (e) {
+        ck('d105.mapDraw.error', false, String(e && e.stack || e));
+      } finally {
+        Game.Systems.Map.getEnemies = oldE;
+        Game.Systems.Map.getElites = oldEl;
+        if (Game.fov && oldVis) Game.fov.isVisible = oldVis;
+      }
+      ck('d105.mapDraw.' + id, mapSeen.length > 0, mapSeen.slice(0, 8).join(','));
+      ck('d105.mapGroup.' + id, mapSeen.indexOf(m[id].idle) >= 0, mapSeen.join(','));
+      ck('d105.neg.mapFallback.' + id,
+        mapSeen.indexOf('imp_idle') < 0 && mapSeen.indexOf('tiny_slug') < 0, mapSeen.join(','));
+    });
+
+    ck('d105.frames.distinct', (function () {
+      var a = S.getFrame('bat_idle', 0), b = S.getFrame('slime_idle', 0);
+      var c = S.getFrame('imp_idle', 0), d = S.getFrame('tiny_slug', 0);
+      return !!a && !!b && a.src !== c.src && b.src !== d.src;
+    })(), '');
+  }
+
+  /* D-105：濒死缩小的纯函数采样 + 实际 drawImage 高度采样，两个布局都测。 */
+  function dyingChecks() {
+    var bad = [];
+    for (var p = 0; p <= 1.0001; p += 0.02) {
+      var v = R.battleDyingMul(p);
+      if (v !== 2 && v !== 1) bad.push([+p.toFixed(2), v]);
+    }
+    ck('d105.dying.pureInt', bad.length === 0, JSON.stringify(bad.slice(0, 5)));
+    ck('d105.dying.neg1_5', !isIntMul(42 * 1.5, 42) && !isIntMul(63, 42),
+      '1.5x=' + (42 * 1.5) + ' ratio=' + (42 * 1.5 / 42));
+    ck('d105.dying.api', R.battleDyingMul(0.1) === 2 && R.battleDyingMul(0.9) === 1, '');
+
+    ['vertical', 'horizontal'].forEach(function (lay) {
+      var size = lay === 'vertical' ? [960, 540] : [960, 540];
+      [0.10, 0.30, 0.49, 0.50, 0.70, 0.90].forEach(function (prog) {
+        mk(lay, size[0], size[1], 1, 'slime');
+        var st = B.getState();
+        st.dying = true; st.dyingAt = 0; st.dyingMs = 700;
+        Fx._setClock(function () { return prog * 700; });
+        var hs = [], proto = CanvasRenderingContext2D.prototype;
+        var orig = proto.drawImage;
+        proto.drawImage = function (img, dx, dy, dw, dh) {
+          if (img && img.src && img.src.indexOf('slime_idle') >= 0 && arguments.length >= 5) hs.push(dh);
+          return orig.apply(this, arguments);
+        };
+        try { R.drawBattle(st); } finally { proto.drawImage = orig; Fx._setClock(null); }
+        var ok = hs.length > 0 && hs.every(function (h) { return h % 24 === 0 && (h / 24 === 2 || h / 24 === 1); });
+        ck('d105.dying.' + lay + '.' + prog, ok, 'h=' + hs.join(','));
+      });
+    });
+  }
+
+  function boot() {
+    try {
+      vp(W0, H0);
+      M.init({ menu: false });
+      R._animNow = function () { return 1234; };
+      R.resize();
+      c = document.getElementById('game').getContext('2d');
+      c.imageSmoothingEnabled = false;
+
+      geometryAndScale();
+      scaleRows = scaleMatrix();
+      scaleNegatives();
+      assetWiring();
+      dyingChecks();
+      anchors('vertical', 'slime', 1, 'v-slime');
+      anchors('horizontal', 'slime', 1, 'h-slime');
+      anchors('vertical', 'dragon', 5, 'v-dragon');
+      anchors('horizontal', 'dragon', 5, 'h-dragon');
+      callData = calls();
+      bgData = backdrop();
+    } catch (e) {
+      ck('d104.run', false, String(e && e.stack || e));
+    }
+    var failed = checks.filter(function (x) { return !x.ok; });
+    var out = {
+      page: 'd104', total: checks.length, pass: checks.length - failed.length, fail: failed.length,
+      scale: scaleRows, geo: geoRows, calls: callData, backdrop: bgData,
+      failed: failed.slice(0, 10)
+    };
+    var text = (failed.length ? 'FAIL ' : 'PASS ') + JSON.stringify(out);
+    document.getElementById('result').textContent = text;
+    document.title = (failed.length ? 'FAIL' : 'PASS') + ' d104 ' + (checks.length - failed.length) + '/' + checks.length;
+  }
+
+  var c = null;
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+  S.load();
+  (function poll() {
+    if (S.isReady() && S.get('t5_floor_1') && S.get('dragon_idle_anim_f0') &&
+      S.get('knight_m_idle_anim_f0') && S.get('zombie_king_idle_anim_f0') &&
+      S.get('bat_idle_anim_f3') && S.get('bat_run_anim_f3') &&
+      S.get('slime_idle_anim_f3') && S.get('slime_run_anim_f3')) { boot(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+
+
+</body></html>

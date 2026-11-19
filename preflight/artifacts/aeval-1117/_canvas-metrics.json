@@ -1,0 +1,58 @@
+﻿{
+ "W": 1004.8,
+ "H": 566.4,
+ "scale": 1.25,
+ "items": [
+  {
+   "label": "menu-root",
+   "perFrame": 401,
+   "msPerFrame": 0.3
+  },
+  {
+   "label": "explore-drawMap",
+   "perFrame": 100,
+   "msPerFrame": 0.44
+  },
+  {
+   "label": "explore-drawMap-cold",
+   "perFrame": 713,
+   "msPerFrame": 12.99
+  },
+  {
+   "label": "explore-hudband",
+   "perFrame": 86,
+   "msPerFrame": 0.12
+  },
+  {
+   "label": "modal-system-page",
+   "perFrame": 107,
+   "msPerFrame": 0.43
+  },
+  {
+   "label": "juice-3cards",
+   "perFrame": 32,
+   "msPerFrame": 0.07
+  },
+  {
+   "label": "juice-ops-returned",
+   "perFrame": 24,
+   "msPerFrame": 0
+  },
+  {
+   "label": "battle-horizontal",
+   "perFrame": 183,
+   "msPerFrame": 0.39
+  },
+  {
+   "label": "sysviz-underlay",
+   "perFrame": 2,
+   "msPerFrame": 0.01
+  },
+  {
+   "label": "sysviz-hudband",
+   "perFrame": 69,
+   "msPerFrame": 0.05
+  }
+ ],
+ "dpr": 1
+}

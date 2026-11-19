@@ -1,0 +1,84 @@
+{
+ "view": "menu",
+ "W": 390,
+ "H": 844,
+ "scale": 1,
+ "dpr": 1,
+ "tier": "narrow",
+ "panel": {
+  "x": 12,
+  "y": 396,
+  "w": 366,
+  "h": 436
+ },
+ "menu": {
+  "x": 24,
+  "y": 420,
+  "w": 342,
+  "rowH": 30,
+  "font": 14,
+  "label": 14,
+  "note": 10,
+  "detail": 0
+ },
+ "title": {
+  "x": 16,
+  "smallY": 28,
+  "mainY": 52,
+  "subY": 72,
+  "small": 10,
+  "main": 20,
+  "sub": 11
+ },
+ "progress": {
+  "x": 16,
+  "pipY": 352,
+  "pip": 12,
+  "gap": 10,
+  "end": {
+   "name": null,
+   "x": 114,
+   "y": 328,
+   "k": 1
+  },
+  "label": "Lv.1 → 第 5 层",
+  "fontSize": 11
+ },
+ "hint": {
+  "x": 26,
+  "y": 590
+ },
+ "items": [
+  {
+   "id": "new",
+   "label": "开始新游戏",
+   "note": "",
+   "detail": null
+  },
+  {
+   "id": "continue",
+   "label": "继续游戏",
+   "note": "暂无存档",
+   "detail": ""
+  },
+  {
+   "id": "help",
+   "label": "玩法说明",
+   "note": null,
+   "detail": null
+  },
+  {
+   "id": "settings",
+   "label": "设置",
+   "note": null,
+   "detail": null
+  },
+  {
+   "id": "about",
+   "label": "关于",
+   "note": null,
+   "detail": null
+  }
+ ],
+ "booted": true
+}

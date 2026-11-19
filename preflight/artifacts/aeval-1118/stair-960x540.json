@@ -1,0 +1,9 @@
+{
+ "view": "stair",
+ "W": 960,
+ "H": 540,
+ "scale": 1,
+ "open": true,
+ "kind": "stairconfirm",
+ "booted": true
+}

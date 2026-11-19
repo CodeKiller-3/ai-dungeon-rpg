@@ -1,0 +1,1928 @@
+{
+  "explore-live-f1-1024x640": {
+    "view": "explore",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 2
+    },
+    "survey": null
+  },
+  "explore-live-f1-960x540": {
+    "view": "explore",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 960,
+    "cssH": 540,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 960,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 447,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 878,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 869,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 2
+    },
+    "survey": null
+  },
+  "explore-live-f2": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "explore-f1": {
+    "view": "explore",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 20
+    },
+    "survey": null
+  },
+  "explore-f2": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 20
+    },
+    "survey": null
+  },
+  "explore-f3": {
+    "view": "explore",
+    "f": 3,
+    "floor": 3,
+    "pos": {
+      "x": 16,
+      "y": 11
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.1,
+      "count": 24
+    },
+    "survey": null
+  },
+  "explore-f4": {
+    "view": "explore",
+    "f": 4,
+    "floor": 4,
+    "pos": {
+      "x": 18,
+      "y": 11
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.12,
+      "count": 35
+    },
+    "survey": null
+  },
+  "explore-f5": {
+    "view": "explore",
+    "f": 5,
+    "floor": 5,
+    "pos": {
+      "x": 19,
+      "y": 13
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.14,
+      "count": 28
+    },
+    "survey": null
+  },
+  "explore-f1-960": {
+    "view": "explore",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 960,
+    "cssH": 540,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 960,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 447,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 878,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 869,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 20
+    },
+    "survey": null
+  },
+  "explore-f2-sysoff": {
+    "view": "sysoff",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": null,
+    "grid": {
+      "alpha": 0,
+      "count": 0
+    },
+    "survey": null
+  },
+  "survey-f2-t200": {
+    "survey": {
+      "t": 200,
+      "phase": "survey",
+      "black": 0.72,
+      "gridAlpha": 0.18,
+      "textAlpha": 1,
+      "roomAlpha": 0,
+      "floor": 2,
+      "w": 29,
+      "h": 21,
+      "rooms": 1,
+      "title": "F2",
+      "sub": "29 × 21 · 已测绘"
+    },
+    "view": "survey",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.18,
+      "count": 2
+    }
+  },
+  "survey-f2-t300": {
+    "survey": {
+      "t": 300,
+      "phase": "survey",
+      "black": 0.72,
+      "gridAlpha": 0.18,
+      "textAlpha": 1,
+      "roomAlpha": 1,
+      "floor": 2,
+      "w": 29,
+      "h": 21,
+      "rooms": 1,
+      "title": "F2",
+      "sub": "29 × 21 · 已测绘"
+    },
+    "view": "survey",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.18,
+      "count": 2
+    }
+  },
+  "survey-f2-t450": {
+    "survey": {
+      "t": 450,
+      "phase": "out",
+      "black": 0.315,
+      "gridAlpha": 0.079,
+      "textAlpha": 0.1,
+      "roomAlpha": 0.25,
+      "floor": 2,
+      "w": 29,
+      "h": 21,
+      "rooms": 1,
+      "title": "F2",
+      "sub": "29 × 21 · 已测绘"
+    },
+    "view": "survey",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    }
+  },
+  "target-f2": {
+    "target": {
+      "x": 9,
+      "y": 17,
+      "kind": "stair"
+    },
+    "view": "target",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 9,
+      "y": 19
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [
+      {
+        "key": "stair:9,17",
+        "kind": "stair",
+        "gold": false,
+        "x": 378,
+        "y": 474,
+        "w": 28,
+        "h": 28,
+        "alpha": 0.28
+      }
+    ],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 4
+    },
+    "survey": null
+  },
+  "monster-f1": {
+    "monsterId": "slime",
+    "view": "monster",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 19,
+      "y": 8
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [
+      {
+        "key": "container:21,6",
+        "kind": "container",
+        "gold": false,
+        "x": 714,
+        "y": 234,
+        "w": 28,
+        "h": 28,
+        "alpha": 0.28
+      }
+    ],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 20
+    },
+    "survey": null
+  },
+  "system-page3-1024x640": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page3-960x540": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 960,
+    "cssH": 540,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 960,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 447,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 878,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 869,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page3-500x700": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 500,
+    "cssH": 700,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 500,
+      "narrow": true,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": {
+        "x": 418,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 409,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page0": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page1": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page2": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "hud-band-960": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 960,
+    "cssH": 540,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 960,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 447,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 878,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 869,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 20
+    },
+    "survey": null
+  },
+  "hud-band-500": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 500,
+    "cssH": 700,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 500,
+      "narrow": true,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": {
+        "x": 418,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 409,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 16
+    },
+    "survey": null
+  },
+  "monsters": {
+    "player": {
+      "map": {
+        "x": -12,
+        "y": 58,
+        "w": 24,
+        "h": 42
+      },
+      "battleH": 84
+    },
+    "view": "monsters",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": null,
+    "grid": {
+      "alpha": 0,
+      "count": 0
+    },
+    "survey": null
+  },
+  "metrics": {
+    "metrics": [
+      {
+        "floor": 1,
+        "mapW": 600,
+        "mapH": 456,
+        "fill": 41.7,
+        "floorL": 0.032,
+        "wallL": 0.015,
+        "contrast": 1.26,
+        "floorStd": 0.047,
+        "wallStd": 0.044,
+        "edgeDL": 0.023,
+        "edgeN": 424,
+        "floorRGB": [
+          49,
+          45,
+          48
+        ],
+        "wallRGB": [
+          25,
+          27,
+          32
+        ],
+        "decor": 22,
+        "floorN": 246,
+        "enemies": 8,
+        "elites": 1
+      },
+      {
+        "floor": 2,
+        "mapW": 696,
+        "mapH": 504,
+        "fill": 53.5,
+        "floorL": 0.044,
+        "wallL": 0.014,
+        "contrast": 1.47,
+        "floorStd": 0.033,
+        "wallStd": 0.033,
+        "edgeDL": 0.033,
+        "edgeN": 538,
+        "floorRGB": [
+          73,
+          55,
+          36
+        ],
+        "wallRGB": [
+          37,
+          27,
+          20
+        ],
+        "decor": 29,
+        "floorN": 302,
+        "enemies": 10,
+        "elites": 1
+      },
+      {
+        "floor": 3,
+        "mapW": 792,
+        "mapH": 552,
+        "fill": 66.7,
+        "floorL": 0.03,
+        "wallL": 0.009,
+        "contrast": 1.35,
+        "floorStd": 0.035,
+        "wallStd": 0.03,
+        "edgeDL": 0.023,
+        "edgeN": 688,
+        "floorRGB": [
+          83,
+          28,
+          19
+        ],
+        "wallRGB": [
+          35,
+          16,
+          16
+        ],
+        "decor": 33,
+        "floorN": 384,
+        "enemies": 12,
+        "elites": 1
+      },
+      {
+        "floor": 4,
+        "mapW": 888,
+        "mapH": 600,
+        "fill": 81.3,
+        "floorL": 0.038,
+        "wallL": 0.016,
+        "contrast": 1.33,
+        "floorStd": 0.035,
+        "wallStd": 0.042,
+        "edgeDL": 0.027,
+        "edgeN": 836,
+        "floorRGB": [
+          32,
+          56,
+          74
+        ],
+        "wallRGB": [
+          19,
+          31,
+          44
+        ],
+        "decor": 37,
+        "floorN": 475,
+        "enemies": 15,
+        "elites": 1
+      },
+      {
+        "floor": 5,
+        "mapW": 984,
+        "mapH": 648,
+        "fill": 97.3,
+        "floorL": 0.02,
+        "wallL": 0.011,
+        "contrast": 1.16,
+        "floorStd": 0.042,
+        "wallStd": 0.041,
+        "edgeDL": 0.017,
+        "edgeN": 1016,
+        "floorRGB": [
+          46,
+          27,
+          65
+        ],
+        "wallRGB": [
+          25,
+          16,
+          36
+        ],
+        "decor": 42,
+        "floorN": 577,
+        "enemies": 17,
+        "elites": 1
+      }
+    ],
+    "view": "metrics",
+    "f": 1,
+    "floor": 5,
+    "pos": {
+      "x": 19,
+      "y": 13
+    },
+    "cssW": 1024,
+    "cssH": 640,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 1024,
+      "narrow": false,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": {
+        "x": 479,
+        "w": 65,
+        "text": "ATK 25 刀 5"
+      },
+      "right": {
+        "x": 942,
+        "w": 74,
+        "text": "突破 还差 940",
+        "kind": "next",
+        "notch": {
+          "x": 933,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.14,
+      "count": 28
+    },
+    "survey": null
+  },
+  "explore-f2-500x700.png": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 500,
+    "cssH": 700,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 500,
+      "narrow": true,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": {
+        "x": 418,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 409,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 16
+    },
+    "survey": null
+  },
+  "system-page3-f2-500x700.png": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 500,
+    "cssH": 700,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 500,
+      "narrow": true,
+      "tiny": false,
+      "left": {
+        "x": 8,
+        "w": 119,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 44,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": {
+        "x": 418,
+        "w": 74,
+        "text": "突破 还差 980",
+        "kind": "next",
+        "notch": {
+          "x": 409,
+          "y": 32,
+          "w": 2,
+          "h": 6
+        }
+      },
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "explore-f2-390x844.png": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 8
+    },
+    "survey": null
+  },
+  "explore-f2-320x568.png": {
+    "view": "explore",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 320,
+    "cssH": 568,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 320,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 8
+    },
+    "survey": null
+  },
+  "explore-f1-390x844.png": {
+    "view": "explore",
+    "f": 1,
+    "floor": 1,
+    "pos": {
+      "x": 12,
+      "y": 9
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.06,
+      "count": 12
+    },
+    "survey": null
+  },
+  "system-page3-f2-390x844.png": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page3-f2-320x568.png": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 320,
+    "cssH": 568,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 320,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "system-page0-f2-390x844.png": {
+    "view": "system",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 2
+    },
+    "survey": null
+  },
+  "target-f2-390x844.png": {
+    "target": {
+      "x": 9,
+      "y": 17,
+      "kind": "stair"
+    },
+    "view": "target",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 9,
+      "y": 19
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [
+      {
+        "key": "stair:9,17",
+        "kind": "stair",
+        "gold": false,
+        "x": 181,
+        "y": 576,
+        "w": 28,
+        "h": 28,
+        "alpha": 0.28
+      }
+    ],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.08,
+      "count": 4
+    },
+    "survey": null
+  },
+  "survey-f2-390x844.png": {
+    "survey": {
+      "t": 300,
+      "phase": "survey",
+      "black": 0.72,
+      "gridAlpha": 0.18,
+      "textAlpha": 1,
+      "roomAlpha": 1,
+      "floor": 2,
+      "w": 29,
+      "h": 21,
+      "rooms": 1,
+      "title": "F2",
+      "sub": "29 × 21 · 已测绘"
+    },
+    "view": "survey",
+    "f": 2,
+    "floor": 2,
+    "pos": {
+      "x": 14,
+      "y": 9
+    },
+    "cssW": 390,
+    "cssH": 844,
+    "scale": 1,
+    "brackets": [],
+    "hud": {
+      "W": 390,
+      "narrow": true,
+      "tiny": true,
+      "left": {
+        "x": 8,
+        "w": 107,
+        "text": "LV8 240/480",
+        "bar": {
+          "x": 35.1435546875,
+          "y": 34,
+          "w": 32,
+          "h": 4,
+          "seg": 10,
+          "ratio": 0.5
+        }
+      },
+      "mid": null,
+      "right": null,
+      "y": 28
+    },
+    "grid": {
+      "alpha": 0.18,
+      "count": 2
+    }
+  }
+}
