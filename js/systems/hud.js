@@ -8,6 +8,7 @@
  *   - hp/mp/gold/floor：main.js 每帧由 Game.Data.Player 汇总后经 update 传入
  *   - mp：M8-1 起传真实 mp/maxMp（Player Schema 已含 mp 字段，默认 50）
  *   - kills/killTarget：本模块自维护（订阅 battle:end 计胜场；map:floorChanged 重置并按本层怪物数取目标）
+ *   - D-114：顶栏只画资源。level/exp 仍收进 last（系统页/读数带读取），但不在顶栏出字。
  * 事件：不新增频道（无消费方，避免频道膨胀）
  * 降级：stats 字段缺失显示 '--'；Game.Core.Render 未就绪时 draw 静默返回，不抛错
  * 来源：自写 */
@@ -342,17 +343,8 @@
         x = drawText(ctx, x, (narrow ? '杀 ' : '击杀 ') + fmt(s.kills) + '/' + fmt(s.killTarget),
           '#f472b6', W - 8);
       }
-      /* M8-6：等级 + 经验进度（Lv.3 60/180）；窄窗口先缩为 Lv.x，仍放不下则省略，不横向溢出 */
-      if (x !== null && typeof s.level === 'number') {
-        var lvText = 'Lv.' + s.level;
-        var xpText = ' ' + fmt(s.exp) + '/' + fmt(s.expNext);
-        ctx.font = '11px monospace';
-        if (x + ctx.measureText(lvText + xpText).width <= W - 8) {
-          drawText(ctx, x, lvText + xpText, '#a78bfa');
-        } else if (x + ctx.measureText(lvText).width <= W - 8) {
-          drawText(ctx, x, lvText, '#a78bfa');
-        }
-      }
+      /* D-114：等级/经验不再画在顶栏。顶栏只放资源（HP/MP/金币/楼层/击杀），
+       * 成长量（Lv/经验/攻击/突破）归读数带（sysviz.drawHudBand），全量归系统页。 */
       /* S-04：状态 chip 行（顶栏下方；无状态时不绘制，不占屏）。
        * D-90：H1 读数带占 y=28–42，有读数带时 chip 下移到 45，避免两行文字相撞。 */
       var bandOn = !!(Game.Sys && typeof Game.Sys.drawHudBand === 'function' &&
@@ -360,7 +352,10 @@
       if (bandOn) {
         try { Game.Sys.drawHudBand(ctx, W); } catch (e) { /* 降级：读数带异常不影响顶栏 */ }
       }
-      drawStatusRow(ctx, s.status, W, bandOn ? 45 : barH + 3);
+      /* D-102：战斗内状态 chip 已归属到双方身份卡 L3（规格 §8.1）；顶栏这一行只保留非战斗场景，
+       * 否则 y=45 的 chip 会压到敌方身份卡（y=46）。 */
+      var inBattle = !!(Game.Core && Game.Core.Main && Game.Core.Main._scene === 'battle');
+      if (!inBattle) drawStatusRow(ctx, s.status, W, bandOn ? 45 : barH + 3);
       /* D-55：任务指引（只在探索场景、已接任务、设置开启时由 guidance 返回非空） */
       var gd = null;
       try {
