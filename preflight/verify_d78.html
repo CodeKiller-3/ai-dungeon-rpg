@@ -175,17 +175,25 @@
     }
     function checkBattle(W, H) {
       M._scene = 'battle';
+      var R = Game.Core.Render;
+      /* 明确按「横置优先」求布局：窄屏仍由比例判据回退纵置（320/480），宽屏才是横置。
+       * 若沿用上一项遗留的 vertical 强制档，B2 会三档全测纵置，等于没测横置。 */
+      if (typeof R._setBattleLayout === 'function') R._setBattleLayout('horizontal');
       var lay = J._layout(W, H);
+      var res = (typeof R._resolveBattleLayout === 'function')
+        ? R._resolveBattleLayout(W, H) : ((W >= 720 && W / H >= 1.2) ? 'horizontal' : 'vertical');
+      var band = (typeof R._battleSafeBand === 'function')
+        ? R._battleSafeBand(W, H, res) : { top: 236, bottom: 410 };
       var bad = [];
       lay.cards.forEach(function (c) {
         if (c.x < 0 || c.x + c.w > W) bad.push('x越界 ' + c.x + '+' + c.w);
-        if (c.y < 236) bad.push('压敌方血条 ' + c.y);
-        if (c.y + c.h > 410) bad.push('压我方血条 ' + (c.y + c.h));
+        if (c.y < band.top) bad.push('压身份卡/战报上沿 ' + c.y + ' < ' + band.top);
+        if (c.y + c.h > band.bottom) bad.push('压身份卡/战报下沿 ' + (c.y + c.h) + ' > ' + band.bottom);
         if (Math.abs(c.x + c.w / 2 - W / 2) > 0.5) bad.push('未水平居中 ' + (c.x + c.w / 2));
       });
-      return { W: W, H: H, n: lay.cards.length, cardW: lay.cardW,
+      return { W: W, H: H, n: lay.cards.length, cardW: lay.cardW, layout: res,
         rects: lay.cards.map(function (c) { return [c.x, c.y, c.w, c.h]; }),
-        band: [236, 410], bad: bad };
+        band: [band.top, band.bottom], bad: bad };
     }
     var sizes = [[1024, 640], [960, 540], [480, 800]];
     buildThreeCards();
@@ -204,10 +212,27 @@
       measured: ex, bad: exBad
     });
     rec('B2_battleSafeCenter', btBad.length === 0 && bt.every(function (b) { return b.n >= 1; }), {
-      rule: '战斗：卡片水平居中并落在敌方血条(212~232)与己方血条(414~434)之间的安全带 236~410；' +
+      rule: '战斗：卡片水平居中并落在新口径安全带内（身份卡/战报之间，由 Render._battleSafeBand 唯一给出）；' +
         '三张装不下时由新到旧取舍（不缩字号）',
       measured: bt, bad: btBad
     });
+    /* D-102 负例：同一判据把「越上沿 1px」「越下沿 1px」都必须判负；界内卡必须通过。
+     * 旧断言 236–410 已按新分区改写，不删页、不放宽。 */
+    (function () {
+      var W = 1024, H = 640;
+      var R = Game.Core.Render;
+      var res = (typeof R._resolveBattleLayout === 'function') ? R._resolveBattleLayout(W, H) : 'horizontal';
+      var band = (typeof R._battleSafeBand === 'function') ? R._battleSafeBand(W, H, res) : { top: 236, bottom: 410 };
+      function inBand(c) { return c.y >= band.top && c.y + c.h <= band.bottom; }
+      var okCard = { x: 386, y: band.top, w: 252, h: 72 };
+      var upBad = { x: 386, y: band.top - 1, w: 252, h: 72 };
+      var downBad = { x: 386, y: band.bottom - 71, w: 252, h: 72 };
+      rec('B2n_negativeCases', inBand(okCard) && !inBand(upBad) && !inBand(downBad), {
+        rule: '新安全带负例：上沿−1 / 下沿+1 必须判负，界内必须判正',
+        band: [band.top, band.bottom], ok: inBand(okCard),
+        up: inBand(upBad), down: inBand(downBad)
+      });
+    })();
     rec('B3_notPixelHardcoded', ex.every(function (e) {
       return Math.abs(e.centerX - e.W / 2) < 1e-9 && Math.abs(e.x - Math.round((e.W - e.cardW) / 2)) <= 1;
     }), {
@@ -224,7 +249,8 @@
     var realRender = Game.Core.Render;
     Game.Core.Render = stubRender;
     var captured = null, realSpawn = Fb.spawn;
-    Fb.spawn = function (o) { captured = o; return realSpawn.call(Fb, o); };
+    /* D-101：受击闪白也走 Feedback.spawn（kind: hit/hurt），这里只捕获带 text 的飘字项 */
+    Fb.spawn = function (o) { if (o && o.text) captured = o; return realSpawn.call(Fb, o); };
     P.hp = 100; P.maxHp = 100; P.level = 1; P.atk = 11; P.def = 5;
     B.start('slime');
     B.playerAction('attack');
@@ -233,11 +259,12 @@
     Game.Core.Render = realRender;
     /* 美学整改 A1：飘字锚点由"怪物中心"上移到"头顶上方 22px"（怪物精灵顶 y=90）。
      * 本项仍守"逻辑坐标而非物理像素"，并额外钉死"锚点必须在精灵顶之上、不压剪影"。 */
-    var headY = 90 - 22;
+    var headY = ((typeof realRender._verticalBattleGeo === 'function')
+      ? realRender._verticalBattleGeo(960, 540).enemyTopMin : 90) - 22;
     rec('C1_damageTextAtLogicalCenter', !!captured && captured.x === 480 && captured.y === headY,
       {
         rule: '1920×1080 画布（cssW=960）下，怪物伤害飘字锚点必须是逻辑 x=480、y=怪物精灵顶上方 22px（' +
-          headY + '），不是物理像素 (960,135)，也不许落回精灵轮廓内（y≥90）',
+          headY + '，精灵顶随 D-102 比例锚点 = ' + (headY + 22) + '），不是物理像素，也不许落回精灵轮廓内',
         captured: captured && { x: captured.x, y: captured.y, text: captured.text },
         expected: { x: 480, y: headY }
       });
@@ -350,11 +377,13 @@
 
     /* ═══ F) 交付物 ══════════════════════════════════════════════ */
     var pb = readJson('selfcheck/page-baseline.json');
-    rec('F1_page_baseline', !!pb && pb.count === 122 && pb.pages.indexOf('verify_d78') >= 0 &&
+    rec('F1_page_baseline', !!pb && pb.count === 128 && pb.pages.indexOf('verify_d78') >= 0 &&
       pb.pages.indexOf('verify_d85') >= 0 && pb.pages.indexOf('verify_d89') >= 0 &&
       pb.pages.indexOf('verify_d90') >= 0 && pb.pages.indexOf('verify_d91') >= 0 &&
-      pb.pages.indexOf('verify_d93') >= 0, {
-      rule: 'page-baseline.json 计数 117→118→119→120→121→122（D-88 verify_d88、D-89 verify_d89、D-90 verify_d90、D-91 verify_d91、D-93 verify_d93），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d89 / verify_d90 / verify_d91 / verify_d93',
+      pb.pages.indexOf('verify_d93') >= 0 && pb.pages.indexOf('verify_d98') >= 0 &&
+      pb.pages.indexOf('verify_d100') >= 0 && pb.pages.indexOf('verify_d101') >= 0 &&
+      pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0, {
+      rule: 'page-baseline.json 计数 117→…→127→128（D-104 verify_d104、D-108 verify_d108），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d89 / verify_d90 / verify_d91 / verify_d93 / verify_d98 / verify_d100 / verify_d101 / verify_d102 / verify_d104 / verify_d108',
       count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d78') >= 0
     });
     var doc = readText('../docs/特效居中-D-78.md');

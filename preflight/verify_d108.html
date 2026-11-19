@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d108</title>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script>
+/* D-108：每帧 canvas 调用计数（口径与 verify_d102/d104 完全一致：28 个 ctx 方法、
+ * 不含 measureText、不含属性赋值；__DCMARK 只决定把调用记到哪个元素名下）。 */
+(function () {
+  var names = ['save', 'restore', 'translate', 'rotate', 'scale', 'setTransform',
+    'clearRect', 'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+    'arc', 'ellipse', 'rect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'clip',
+    'fillText', 'strokeText', 'drawImage', 'createRadialGradient', 'createLinearGradient',
+    'createPattern', 'setLineDash'];
+  var P = CanvasRenderingContext2D.prototype;
+  window.__DC = { n: 0, by: {}, elem: {}, cur: 'init' };
+  window.__DCMARK = function (label) { window.__DC.cur = label; };
+  names.forEach(function (nm) {
+    var orig = P[nm];
+    if (typeof orig !== 'function') return;
+    P[nm] = function () {
+      var d = window.__DC;
+      d.n++;
+      d.by[nm] = (d.by[nm] || 0) + 1;
+      d.elem[d.cur] = (d.elem[d.cur] || 0) + 1;
+      return orig.apply(this, arguments);
+    };
+  });
+})();
+</script>
+</head>
+<body>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640" style="position:fixed;left:-9999px"></canvas>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/sysviz.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/geom.js"></script>
+<script>
+(function () {
+  'use strict';
+  var G = window.PreflightGeom;
+  var R = Game.Core.Render, B = Game.Systems.Battle, S = Game.Core.Sprites;
+  var P = Game.Data.Player, Fx = Game.Fx, Fb = Game.Feedback, PT = Game.Particles;
+  var M = Game.Core.Main;
+  var checks = [];
+
+  function ck(id, ok, detail) {
+    checks.push({ id: id, ok: !!ok, detail: detail === undefined ? '' : detail });
+  }
+  function vp(w, h) {
+    try {
+      Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
+    } catch (e) {}
+  }
+
+  /* ── 语义表（七格 × 素材名）——报告里逐条核的就是这张表 ────────────
+   * 普攻=直剑 / 防御=板甲 / 逃跑=骑士奔跑帧 / 火球=红法杖 /
+   * 冲刺=长矛（突刺）/ 护盾=法袍（法术护体）/ 用药=红药瓶。
+   * 全部来自既有素材（ITEM_ICONS 同源武器/防具/药水 + 怪物帧表里的骑士奔跑帧），
+   * 不新画、不改素材、不放大。 */
+  var EXPECT = [
+    { key: 1, cmd: 'attack', label: '攻击', icon: 'weapon_regular_sword' },
+    { key: 2, cmd: 'defend', label: '防御', icon: 'icon_armor_plate' },
+    { key: 3, cmd: 'run', label: '逃跑', icon: 'knight_m_run_anim_f0' },
+    { key: 4, cmd: 'skill:fireball', label: '火球', icon: 'weapon_red_magic_staff' },
+    { key: 5, cmd: 'skill:dash', label: '冲刺', icon: 'weapon_spear' },
+    { key: 6, cmd: 'skill:shield', label: '护盾', icon: 'icon_armor_robe' },
+    { key: 7, cmd: 'item', label: '用药', icon: 'flask_red' }
+  ];
+  var ICON_NAMES = EXPECT.map(function (e) { return e.icon; });
+  var CASES = [
+    { lay: 'horizontal', w: 960, h: 540 },
+    { lay: 'horizontal', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568 },
+    { lay: 'vertical', w: 390, h: 844 },
+    { lay: 'vertical', w: 960, h: 540 },
+    { lay: 'vertical', w: 1024, h: 640 },
+    { lay: 'vertical', w: 320, h: 568, mid: 'dragon', floor: 5, tag: 'dragon' },
+    { lay: 'horizontal', w: 1024, h: 640, mid: 'dragon', floor: 5, tag: 'dragon' }
+  ];
+
+  function nativeOf(name) {
+    var im = S.get(name);
+    return im ? [im.naturalWidth || 0, im.naturalHeight || 0] : [0, 0];
+  }
+
+  function mk(lay, w, h, floor, mid) {
+    vp(w, h);
+    R._setBattleLayout(lay);
+    Fx._reset();
+    if (PT && PT.clear) PT.clear();
+    if (Fb && Fb._clear) Fb._clear();
+    P.floor = floor; P.level = 5; P.exp = 24; P.gold = 268;
+    P.hp = 100; P.maxHp = 140; P.mp = 30; P.maxMp = 30;
+    P.atk = 14; P.def = 6;
+    Game.Systems.Map.setFloor(floor);
+    B.start(mid || 'slime');
+    M.switchScene('battle');
+    R.resize();
+    if (Game.hud && Game.hud.update) {
+      Game.hud.update({ hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+        floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, kills: 1, killTarget: 10, status: [] });
+    }
+    B._setClock(null); Fx._setClock(null);
+    R.drawBattle(B.getState());
+    return R._lastBattleBox;
+  }
+
+  /* 图标判定：原生尺寸 1:1（倍率恰为 1）、不得等于格高、必须在格内。
+   * 这是负例与正例共用的唯一口径，避免"页面按一套、渲染按另一套"。 */
+  function iconOk(ic, native, cell) {
+    if (!G.isRect(ic) || !native || !(native[0] > 0) || !(native[1] > 0)) return false;
+    if (ic.w !== native[0] || ic.h !== native[1]) return false;   /* 非整数倍 / 非原生 */
+    if (ic.w % native[0] !== 0 || ic.h % native[1] !== 0) return false;
+    if (ic.h === cell.h || ic.w === cell.w) return false;         /* 禁止放大到格高/格宽 */
+    return ic.x >= cell.x && ic.y >= cell.y &&
+      ic.x + ic.w <= cell.x + cell.w && ic.y + ic.h <= cell.y + cell.h;
+  }
+
+  function textRect(txt, font, midY, x) {
+    var c = document.getElementById('game').getContext('2d');
+    c.save();
+    c.font = font;
+    var m = c.measureText(txt);
+    var size = Number(/(\d+)px/.exec(font)[1]);
+    var asc = (typeof m.actualBoundingBoxAscent === 'number') ? m.actualBoundingBoxAscent : size * 0.78;
+    var desc = (typeof m.actualBoundingBoxDescent === 'number') ? m.actualBoundingBoxDescent : size * 0.22;
+    c.restore();
+    return { x: x, y: midY - asc, w: Math.max(1, m.width), h: Math.max(1, asc + desc) };
+  }
+
+  /* ── A. 七格语义对应（key / cmd / label / 素材名）────────────────── */
+  var semRows = [];
+  function semantics() {
+    var box = mk('horizontal', 1024, 640, 1, 'slime');
+    var cells = box.commandBar.cells;
+    ck('d108.sem.cell7', cells.length === 7, 'n=' + cells.length);
+    for (var i = 0; i < EXPECT.length; i++) {
+      var e = EXPECT[i], c = cells[i] || {};
+      var ok = c.key === e.key && c.cmd === e.cmd && c.label === e.label && c.iconName === e.icon;
+      ck('d108.sem.' + e.key + '.' + e.cmd, ok,
+        'got=' + [c.key, c.cmd, c.label, c.iconName].join('/'));
+      semRows.push({ key: e.key, cmd: e.cmd, label: e.label, icon: e.icon, got: c.iconName || null, ok: ok });
+    }
+    /* 素材必须真实存在且不新画：Sprites.get 能取到 = 在既有 NAMES 里 */
+    var missing = ICON_NAMES.filter(function (n) { return !S.get(n); });
+    ck('d108.sem.assetsExist', missing.length === 0, missing.join(','));
+    ck('d108.sem.sevenDistinct', ICON_NAMES.filter(function (n, i) {
+      return ICON_NAMES.indexOf(n) === i;
+    }).length === 7, ICON_NAMES.join(','));
+  }
+
+  /* ── B. 几何：图标 / 名称 / 代价 两两不交且在格内（8 档）─────────── */
+  var geoRows = [];
+  function geometry() {
+    CASES.forEach(function (cs) {
+      var id = cs.lay + '@' + cs.w + 'x' + cs.h + (cs.tag ? '+' + cs.tag : '');
+      var box;
+      try { box = mk(cs.lay, cs.w, cs.h, cs.floor || 1, cs.mid || 'slime'); }
+      catch (e) { ck('d108.geo.' + id + '.draw', false, String(e && e.message || e)); return; }
+      var bar = box.commandBar, cells = bar.cells;
+      var bad = [];
+      var pairwiseBad = [];
+      var row = { id: id, compact: bar.compact, cells: [] };
+      for (var i = 0; i < cells.length; i++) {
+        var c = cells[i];
+        var nat = nativeOf(c.iconName);
+        if (!iconOk(c.icon, nat, c)) {
+          bad.push(c.key + ':' + JSON.stringify(c.icon) + ' nat=' + nat + ' cell=' + c.h);
+          continue;
+        }
+        var lx = c.x + (bar.compact ? 28 : 34);
+        var fontL = (bar.compact ? 'bold 12px ' : 'bold 13px ') + 'monospace';
+        var lab = textRect(c.label, fontL, c.y + (bar.compact ? 24 : 30), lx);
+        var sub = textRect(c.sub, '11px monospace', c.y + (bar.compact ? 41 : 48), lx);
+        var inCell = [c.icon, lab, sub].every(function (r) {
+          return r.x >= c.x && r.y >= c.y && r.x + r.w <= c.x + c.w && r.y + r.h <= c.y + c.h;
+        });
+        if (!inCell) bad.push(c.key + ':outOfCell');
+        var pd = G.pairwise([{ name: 'icon', rects: [c.icon] }, { name: 'label', rects: [lab] },
+          { name: 'sub', rects: [sub] }], []);
+        if (!pd.ok) {
+          pairwiseBad.push(c.key + ':' + JSON.stringify(pd.violations));
+        }
+        if (lab.x + lab.w > c.x + c.w) bad.push(c.key + ':labelOut');
+        row.cells.push({ key: c.key, icon: [c.icon.w, c.icon.h], native: nat,
+          label: [lab.x, Math.round(lab.y), Math.round(lab.w), Math.round(lab.h)],
+          sub: [sub.x, Math.round(sub.y), Math.round(sub.w), Math.round(sub.h)] });
+      }
+      ck('d108.geo.' + id + '.iconOk', bad.length === 0, bad.join(' | '));
+      ck('d108.geo.' + id + '.pairwise', pairwiseBad.length === 0, pairwiseBad.join(' | '));
+      geoRows.push(row);
+    });
+  }
+
+  /* ── C. 负例：1.5× / 格高 必须判负，正例必须判过 ───────────────── */
+  function negatives() {
+    var cell = { x: 100, y: 500, w: 132, h: 64 };
+    var nat = [24, 24];
+    ck('d108.neg.oneToOne', iconOk({ x: 104, y: 520, w: 24, h: 24 }, nat, cell), '24×24 原生 1:1');
+    ck('d108.neg.scale15', !iconOk({ x: 104, y: 520, w: 36, h: 36 }, nat, cell), '1.5× 必须判负');
+    ck('d108.neg.cellHeight', !iconOk({ x: 104, y: 500, w: 24, h: 64 }, nat, cell), '拉满格高必须判负');
+    ck('d108.neg.cellWidth', !iconOk({ x: 100, y: 520, w: 132, h: 24 }, nat, cell), '拉满格宽必须判负');
+    ck('d108.neg.frac', !iconOk({ x: 104, y: 520, w: 30, h: 30 }, nat, cell), '1.25× 必须判负');
+    ck('d108.neg.outside', !iconOk({ x: 90, y: 520, w: 24, h: 24 }, nat, cell), '出格必须判负');
+    /* 文字与图标的相交负例：把图标右移到名称起点，必须命中相交 */
+    var lab = { x: 134, y: 522, w: 26, h: 14 };
+    ck('d108.neg.overlapDetected',
+      !!G.intersect({ x: 126, y: 520, w: 24, h: 24 }, lab), '图标压到名称必须能被 pairwise 抓到');
+  }
+
+  /* ── D. 绘制调用：图标 7 次、总量 ≤214、分桶对账 ───────────────── */
+  function measureCalls(lay, w, h, floor, mid, decorate) {
+    mk(lay, w, h, floor, mid);
+    var st = B.getState();
+    if (decorate) {
+      st.defending = true; st.defendRound = st.roundNo; st.shieldValue = 30;
+      st.enraged = true; st.roundNo = 13;
+    }
+    var seq = [];
+    for (var i = 0; i < 4; i++) {
+      window.__DC.n = 0; window.__DC.by = {}; window.__DC.elem = {};
+      R.drawBattle(B.getState());
+      seq.push(window.__DC.n);
+      if (i === 3) window.__LASTELEM = Object.assign({}, window.__DC.elem);
+    }
+    return seq[3];
+  }
+  function iconsOff(fn) {
+    var old = S.get;
+    S.get = function (n) {
+      if (ICON_NAMES.indexOf(n) >= 0) return null;
+      return old.call(S, n);
+    };
+    try { return fn(); } finally { S.get = old; }
+  }
+  function calls() {
+    var rows = [];
+    CASES.forEach(function (cs) {
+      var id = cs.lay + '@' + cs.w + 'x' + cs.h + (cs.tag ? '+' + cs.tag : '');
+      try {
+        var n = measureCalls(cs.lay, cs.w, cs.h, cs.floor || 1, cs.mid || 'slime', false);
+        var elem = Object.assign({}, window.__LASTELEM);
+        var sum = 0;
+        Object.keys(elem).forEach(function (k) { sum += elem[k]; });
+        rows.push({ id: id, n: n, icon: elem['cell.icon'] || 0, sum: sum, elem: elem });
+        ck('d108.calls.' + id + '.le214', n <= 214, n + ' > 214');
+        ck('d108.calls.' + id + '.sum', sum === n, 'sum=' + sum + ' n=' + n);
+        ck('d108.calls.' + id + '.icon7', (elem['cell.icon'] || 0) === 7, 'icon=' + elem['cell.icon']);
+      } catch (e) { ck('d108.calls.' + id, false, String(e && e.message || e)); }
+    });
+    /* 最坏档：横置 1024×640 龙战 + 防御/护盾/龙威 chip */
+    var offN = iconsOff(function () { return measureCalls('horizontal', 1024, 640, 5, 'dragon', true); });
+    var offElem = Object.assign({}, window.__LASTELEM);
+    var onN = measureCalls('horizontal', 1024, 640, 5, 'dragon', true);
+    var onElem = Object.assign({}, window.__LASTELEM);
+    var sum = 0;
+    Object.keys(onElem).forEach(function (k) { sum += onElem[k]; });
+    ck('d108.calls.worst.le214', onN <= 214, onN + ' > 214');
+    ck('d108.calls.worst.sum', sum === onN, 'sum=' + sum + ' n=' + onN);
+    ck('d108.calls.worst.icon7', (onElem['cell.icon'] || 0) === 7, 'icon=' + onElem['cell.icon']);
+    ck('d108.calls.worst.delta7', onN - offN === 7,
+      'on=' + onN + ' off=' + offN + ' delta=' + (onN - offN));
+    ck('d108.calls.worst.offNoIcon', !offElem['cell.icon'], 'off icon=' + offElem['cell.icon']);
+    rows.push({ id: 'horizontal@1024x640+chips', n: onN, off: offN, delta: onN - offN,
+      icon: onElem['cell.icon'] || 0, sum: sum, elem: onElem });
+    return { rows: rows, worst: { n: onN, off: offN, delta: onN - offN, elem: onElem } };
+  }
+
+  /* ── E. drawImage 实参：7 次、每次 w/h == 原生尺寸、素材名对得上 ── */
+  function iconDrawArgs() {
+    var P2 = CanvasRenderingContext2D.prototype;
+    var old = P2.drawImage, log = [];
+    P2.drawImage = function (img, x, y, w, h) {
+      if (window.__DC && window.__DC.cur === 'cell.icon') {
+        log.push({ name: String((img && img.src) || '').replace(/^.*\//, '').replace(/\.png.*$/, ''),
+          nw: img && img.naturalWidth, nh: img && img.naturalHeight, x: x, y: y, w: w, h: h });
+      }
+      return old.apply(this, arguments);
+    };
+    try { mk('horizontal', 1024, 640, 1, 'slime'); } finally { P2.drawImage = old; }
+    var names = EXPECT.map(function (e) { return e.icon; }).join(',');
+    var bad = log.filter(function (r) {
+      return !(r.nw > 0) || r.w !== r.nw || r.h !== r.nh;
+    });
+    ck('d108.args.count7', log.length === 7, 'n=' + log.length);
+    ck('d108.args.oneToOne', bad.length === 0, JSON.stringify(bad));
+    ck('d108.args.semantics', log.map(function (r) { return r.name; }).join(',') === names,
+      log.map(function (r) { return r.name; }).join(','));
+    return log;
+  }
+
+  function boot() {
+    var callData = null, argsData = null;
+    try {
+      M.init({ menu: false });
+      R._animNow = function () { return 1234; };
+      R.resize();
+      semantics();
+      geometry();
+      negatives();
+      argsData = iconDrawArgs();
+      callData = calls();
+    } catch (e) {
+      ck('d108.run', false, String(e && e.stack || e));
+    }
+    var failed = checks.filter(function (x) { return !x.ok; });
+    var out = {
+      page: 'd108', total: checks.length, pass: checks.length - failed.length, fail: failed.length,
+      sem: semRows, geo: geoRows, calls: callData, args: argsData,
+      failed: failed.slice(0, 10)
+    };
+    var text = (failed.length ? 'FAIL ' : 'PASS ') + JSON.stringify(out);
+    document.getElementById('result').textContent = text;
+    document.title = (failed.length ? 'FAIL' : 'PASS') + ' d108 ' + (checks.length - failed.length) + '/' + checks.length;
+  }
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+  S.load();
+  (function poll() {
+    var ready = S.isReady() && ICON_NAMES.every(function (n) { return !!S.get(n); });
+    if (ready) { boot(); return; }
+    setTimeout(poll, 60);
+  })();
+})();
+</script>
+</body>
+</html>

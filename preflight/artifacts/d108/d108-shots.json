@@ -1,0 +1,898 @@
+{
+  "vertical-320x568": {
+    "asked": "vertical",
+    "actual": "vertical",
+    "W": 320,
+    "H": 568,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 418,
+      "w": 320,
+      "h": 150,
+      "compact": true
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 11,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 88,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 165,
+          "y": 439,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 242,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 50,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 127,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 204,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      1280,
+      632
+    ]
+  },
+  "horizontal-320x568": {
+    "asked": "horizontal",
+    "actual": "vertical",
+    "W": 320,
+    "H": 568,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 418,
+      "w": 320,
+      "h": 150,
+      "compact": true
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 11,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 88,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 165,
+          "y": 439,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 242,
+          "y": 448,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 50,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 127,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 204,
+          "y": 506,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      1280,
+      632
+    ]
+  },
+  "vertical-390x844": {
+    "asked": "vertical",
+    "actual": "vertical",
+    "W": 390,
+    "H": 844,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 694,
+      "w": 390,
+      "h": 150,
+      "compact": true
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 12,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 106,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 200,
+          "y": 715,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 294,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 59,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 153,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 247,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      1560,
+      632
+    ]
+  },
+  "horizontal-390x844": {
+    "asked": "horizontal",
+    "actual": "vertical",
+    "W": 390,
+    "H": 844,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 694,
+      "w": 390,
+      "h": 150,
+      "compact": true
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 12,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 106,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 200,
+          "y": 715,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 294,
+          "y": 724,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 59,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 153,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 247,
+          "y": 782,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      1560,
+      632
+    ]
+  },
+  "vertical-960x540": {
+    "asked": "vertical",
+    "actual": "vertical",
+    "W": 960,
+    "H": 540,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 444,
+      "w": 960,
+      "h": 96,
+      "compact": false
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 33,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 163,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 293,
+          "y": 473,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 423,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 553,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 683,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 813,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      3840,
+      416
+    ]
+  },
+  "horizontal-960x540": {
+    "asked": "horizontal",
+    "actual": "horizontal",
+    "W": 960,
+    "H": 540,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 444,
+      "w": 960,
+      "h": 96,
+      "compact": false
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 33,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 163,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 293,
+          "y": 473,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 423,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 553,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 683,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 813,
+          "y": 482,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      3840,
+      416
+    ]
+  },
+  "vertical-1024x640": {
+    "asked": "vertical",
+    "actual": "vertical",
+    "W": 1024,
+    "H": 640,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 544,
+      "w": 1024,
+      "h": 96,
+      "compact": false
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 30,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 170,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 310,
+          "y": 573,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 450,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 590,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 730,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 870,
+          "y": 582,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      4096,
+      416
+    ]
+  },
+  "horizontal-1024x640": {
+    "asked": "horizontal",
+    "actual": "horizontal",
+    "W": 1024,
+    "H": 640,
+    "scale": 1,
+    "dpr": 1,
+    "bar": {
+      "x": 0,
+      "y": 526,
+      "w": 1024,
+      "h": 114,
+      "compact": false
+    },
+    "cells": [
+      {
+        "key": 1,
+        "label": "攻击",
+        "sub": "无消耗",
+        "iconName": "weapon_regular_sword",
+        "icon": {
+          "x": 30,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_regular_sword"
+        }
+      },
+      {
+        "key": 2,
+        "label": "防御",
+        "sub": "无消耗",
+        "iconName": "icon_armor_plate",
+        "icon": {
+          "x": 170,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_plate"
+        }
+      },
+      {
+        "key": 3,
+        "label": "逃跑",
+        "sub": "—",
+        "iconName": "knight_m_run_anim_f0",
+        "icon": {
+          "x": 310,
+          "y": 555,
+          "w": 24,
+          "h": 42,
+          "name": "knight_m_run_anim_f0"
+        }
+      },
+      {
+        "key": 4,
+        "label": "火球",
+        "sub": "MP 12",
+        "iconName": "weapon_red_magic_staff",
+        "icon": {
+          "x": 450,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_red_magic_staff"
+        }
+      },
+      {
+        "key": 5,
+        "label": "冲刺",
+        "sub": "MP 8",
+        "iconName": "weapon_spear",
+        "icon": {
+          "x": 590,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "weapon_spear"
+        }
+      },
+      {
+        "key": 6,
+        "label": "护盾",
+        "sub": "MP 10",
+        "iconName": "icon_armor_robe",
+        "icon": {
+          "x": 730,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "icon_armor_robe"
+        }
+      },
+      {
+        "key": 7,
+        "label": "用药",
+        "sub": "×0",
+        "iconName": "flask_red",
+        "icon": {
+          "x": 870,
+          "y": 564,
+          "w": 24,
+          "h": 24,
+          "name": "flask_red"
+        }
+      }
+    ],
+    "barCrop": [
+      4096,
+      488
+    ]
+  }
+}
