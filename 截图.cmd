@@ -3,18 +3,18 @@ chcp 936 >nul
 setlocal
 cd /d "%~dp0"
 
-echo D-74 Ò»¼ü½ØÍ¼£º10 ÕÅ£¨9 ÕÅ 1280x800 + 1 ÕÅ 1920x1080£©
-echo Êä³öÄ¿Â¼£ºpreflight\artifacts\d74\£¨²»¸²¸Ç d61\¡¢d73\£©
+echo D-74 Ò»ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½10 ï¿½Å£ï¿½9 ï¿½ï¿½ 1280x800 + 1 ï¿½ï¿½ 1920x1080ï¿½ï¿½
+echo ï¿½ï¿½ï¿½Ä¿Â¼ï¿½ï¿½preflight\artifacts\d74\ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ d61\ï¿½ï¿½d73\ï¿½ï¿½
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0½ØÍ¼.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0ï¿½ï¿½Í¼.ps1"
 set "RC=%ERRORLEVEL%"
 
 echo.
 if not "%RC%"=="0" (
-  echo [Ê§°Ü] ½ØÍ¼Î´È«²¿Í¨¹ý£¬ÍË³öÂë %RC%¡£Çë¿´ÉÏÃæµÄºìÉ«±¨´í¡£
+  echo [Ê§ï¿½ï¿½] ï¿½ï¿½Í¼Î´È«ï¿½ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½Ë³ï¿½ï¿½ï¿½ %RC%ï¿½ï¿½ï¿½ë¿´ï¿½ï¿½ï¿½ï¿½Äºï¿½É«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 ) else (
-  echo [Íê³É] 10 ÕÅÒÑÂäÅÌ£¬Çåµ¥ÔÚ preflight\artifacts\d74\manifest.md
+  echo [ï¿½ï¿½ï¿½] 10 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì£ï¿½ï¿½åµ¥ï¿½ï¿½ preflight\artifacts\d74\manifest.md
 )
 pause
 exit /b %RC%

@@ -1,14 +1,14 @@
 ﻿<#
-  截图.ps1 — D-74 一键生成全部对外截图（10 张）
+  截图.ps1 — D-95 一键生成全部对外截图（11 张）
 
   用法：
     .\截图.cmd                          # 双击，或命令行直接跑
     powershell -NoProfile -ExecutionPolicy Bypass -File .\截图.ps1
 
-  口径（沿用 D-61/D-73）：
+  口径（沿用 D-61/D-73/D-74）：
     - 真实渲染、无后期；headless 下由 _shot_d73.html 隐去 FPS 段
-    - 01–07 预算 8000；08 死亡 190000；09 结局 312000；10 首屏 1920×1080 预算 5000
-    - 输出到 preflight/artifacts/d74/，不覆盖 d61/、d73/
+    - 01–07、11 预算 8000；08 死亡 190000；09 结局 312000；10 首屏 1920×1080 预算 5000
+    - 输出到 preflight/artifacts/d95/，不覆盖 d61/、d73/、d74/
     - 每张独立 --user-data-dir，跑完清理；先删旧文件，再核对"真的落盘 + 尺寸正确"
 #>
 $ErrorActionPreference = 'Stop'
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 # ── 路径全部从脚本位置推导，不写死盘符/用户名 ────────────────────
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ShotPage = Join-Path $Root 'preflight\_shot_d73.html'
-$OutDir = Join-Path $Root 'preflight\artifacts\d74'
+$OutDir = Join-Path $Root 'preflight\artifacts\d95'
 $Manifest = Join-Path $OutDir 'manifest.md'
 
 if (-not (Test-Path $ShotPage)) {
@@ -61,7 +61,8 @@ $Jobs = @(
   @{ Name = '07-levelup.png';        View = 'levelup';        W = 1280; H = 800;  Budget = 8000 },
   @{ Name = '08-death.png';          View = 'death';          W = 1280; H = 800;  Budget = 190000 },
   @{ Name = '09-ending.png';         View = 'ending';         W = 1280; H = 800;  Budget = 312000 },
-  @{ Name = '10-menu-1920.png';      View = 'menu-nosave';    W = 1920; H = 1080; Budget = 5000 }
+  @{ Name = '10-menu-1920.png';      View = 'menu-nosave';    W = 1920; H = 1080; Budget = 5000 },
+  @{ Name = '11-f5-dragon.png';      View = 'f5-dragon';      W = 1280; H = 800;  Budget = 8000 }
 )
 
 # ── 读 PNG 头里的宽高（不依赖 System.Drawing）──────────────────
@@ -82,7 +83,7 @@ try {
     $out = Join-Path $OutDir $j.Name
     if (Test-Path $out) { Remove-Item -Force $out }   # 先删旧图，避免"旧文件冒充新落盘"
 
-    $ud = Join-Path $env:TEMP ('d74-shot-' + [guid]::NewGuid().ToString('N'))
+    $ud = Join-Path $env:TEMP ('d95-shot-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $ud | Out-Null
     $url = ([System.Uri]$ShotPage).AbsoluteUri + '?view=' + $j.View
 
@@ -99,8 +100,8 @@ try {
     $log = & $Edge @argList 2>&1
     $rc = $LASTEXITCODE
 
-    # Edge 有时先退出、后落盘：最多等 4 秒
-    for ($i = 0; $i -lt 20 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 200 }
+    # Edge 有时先退出、后落盘：1920×1080 渲染更慢，最多等 60 秒
+    for ($i = 0; $i -lt 300 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 200 }
 
     if (-not (Test-Path $out)) {
       throw ("第 {0} 张未落盘：{1}（Edge 退出码 {2}）`n{3}" -f $index, $j.Name, $rc, ($log -join "`n"))
@@ -115,7 +116,7 @@ try {
     }
 
     $rows += [pscustomobject]@{
-      File  = 'd74/' + $j.Name
+      File  = 'd95/' + $j.Name
       W     = $sz.W
       H     = $sz.H
       Bytes = $len
@@ -132,11 +133,11 @@ try {
 
   # ── 清单：文件名 / 尺寸 / 字节 / 生成时间 ──────────────────────
   $lines = @(
-    '# D-74 对外截图清单',
+    '# D-95 对外截图清单',
     '',
     ('生成时间：' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')),
     ('截图页：preflight/_shot_d73.html'),
-    ('输出目录：preflight/artifacts/d74/'),
+    ('输出目录：preflight/artifacts/d95/'),
     '',
     '| 文件 | 尺寸 | 字节 | 生成时间 |',
     '| --- | --- | --- | --- |'
@@ -154,10 +155,10 @@ try {
 } catch {
   Write-Host ''
   Write-Host ('[失败] ' + $_.Exception.Message) -ForegroundColor Red
-  Write-Host '已成功的图保留在 preflight/artifacts/d74/；未覆盖 d61/、d73/。' -ForegroundColor Yellow
+  Write-Host '已成功的图保留在 preflight/artifacts/d95/；未覆盖 d61/、d73/、d74/。' -ForegroundColor Yellow
   exit 1
 } finally {
   # 兜底清理所有遗留的临时配置目录
-  Get-ChildItem $env:TEMP -Directory -Filter 'd74-shot-*' -ErrorAction SilentlyContinue |
+  Get-ChildItem $env:TEMP -Directory -Filter 'd95-shot-*' -ErrorAction SilentlyContinue |
     ForEach-Object { Remove-Item -Recurse -Force $_.FullName -ErrorAction SilentlyContinue }
 }

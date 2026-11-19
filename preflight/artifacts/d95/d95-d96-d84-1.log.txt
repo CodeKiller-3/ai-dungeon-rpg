@@ -1,0 +1,504 @@
+VERDICT=PASS
+{"ok":true,"sub":{"S1_eliteTable":{"ok":true,"d":"五把刀（3/6/9/11/12 + 分段 growth + bonus）全部一致；烬牙无 maxHp、守夜 maxHp=25；可枚举物品 48 条"},"S2_atkOf":{"ok":true,"d":"fang5@11=28 fang5@10=25 fang5@1=12 fang1@4=8 fang1@11=12 edge4@10=24 shopIron@10=3"},"S3_panels":{"ok":true,"d":"L10+烬牙 50/18/190、L11+烬牙 65/25/220、L10+守夜 49/18/215、L11+守夜 63/25/245"},"S4_saveLoad":{"ok":true,"d":"save=true → 读档 L11 exp123 装备 elite_fang_5 面板 65/25/220；KEY=ai_dungeon_rpg_save_v1"},"S5_breakpoint":{"ok":true,"d":"L10=25/18/190 L11=37/25/220 L12=40/28/230；L10→11 atk+12，L11→12 atk+3"},"S6_legacy":{"ok":true,"d":"LEGACY L10=19/14/190、L8=17/12/170，milestones=null"},"S7_expPct":{"ok":true,"d":"史莱姆 exp10：断牙 +10% → 11；商店剑 → 10；烬牙 +15% → 12（round(10×1.15)=12）"},"S8_eliteNoScroll":{"ok":true,"d":"仅烬牙 → ok=false msg=系统武器无法强化：它随你等级成长（卷轴仍 1，upg 未变 true）；ui:notice 收到=true；烬牙+护甲 → 落护甲 true；商店剑可+1 true；modal._confirm→_report 接线=true"},"S9_eliteReward":{"ok":true,"d":"匕首 26→50；守夜 49→50；已装烬牙 50→50 且背包 2 把"},"S10_dragon":{"ok":true,"d":"dragon.hp=350、def=15；两段复算 atk65→7 击、atk63→8 击、atk59→8 击；实测 atk65 一场 7 击"},"S17_dragonDread":{"ok":true,"d":"bonus: r8=0 r11=3 r15=13 r17=22 r21=46；A(8)=32、A(21)=78（未狂暴口径）；其余 17 只怪无 dread"},"S11_statusFormula":{"ok":true,"d":"STATUS=bleed/poison；65 攻对龙 def15 单击 53（期望 53 = round(65²/(65+15))）"},"S13a_b1Upper":{"ok":true,"d":"B1=3/50（上限 ≤12）"},"S13b_s1Upper":{"ok":true,"d":"S1=0/50（上限 ≤10）"},"S13c_g2Lower":{"ok":true,"d":"G2=40/50（下限 ≥32）"},"S13d_m1Equal":{"ok":true,"d":"M1=50/50（须 =50）"},"P1_fullRows":{"ok":true,"d":"全宽：龙战 12 行、非龙战 11 行（上限 12）"},"P2_dreadLadder":{"ok":true,"d":"r9/r13/r17 第 12 行与 §1.5 逐字一致（+1/+7/+22，倒计时 4）"},"P3_noDreadOutside":{"ok":true,"d":"战斗结束=true、非龙战=true、非第 4 页（page=0，任务行 12/12）"},"P4_narrowSix":{"ok":true,"d":"窄屏 320：龙战 6 行（第 6 行=龙威 未启动（第 9 回合开始））、非龙战 6 行（第 6 行=约1回合/只（估算））；截断溢出=0px"},"P5_readOnly":{"ok":true,"d":"Player 前后一致=true；禁用词命中=false；行数 12"},"P6_otherPages":{"ok":true,"d":"怪物页 18、物品页 48、系统页 11；四步切页回到 page=0"}}}
+
+<!DOCTYPE html>
+<html lang="zh-CN" style="--ui-scale: 1.25;"><head>
+<meta charset="UTF-8">
+<title>D84_DONE</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<canvas id="game" width="1256" height="708" style="width: 1256px; height: 708px;"></canvas>
+<!-- M1 / D-84 验证页：成长链数值层（C-1～C-6）
+     S1 五把刀的成长表与副加成；S2 atkOf 唯一口径；
+     S3 面板（L10/L11 × 烬牙/守夜）；S4 存读档；S5 突破时点；
+     S6 LEGACY 不受影响；S7 击杀经验吃 expPct；S8 精英刀拒绝卷轴走 _report；
+     S9 精英奖励按有效攻击比较；S10 巨龙 350 血与两段复算；S11 STATUS/伤害公式未动；
+     S13 四条独立闸门（B1 ≤12/50 / S1 ≤10/50 / G2 ≥32/50 / M1 =50/50；读改后 d84-*.json）；
+     S17 龙威档位（第 9 回合起 +1/+3/+6，只作用于巨龙）。
+     只加载逻辑模块，不启动主循环。 -->
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  Game.Core.Render._setBattleLayout('vertical');  /* D-94 P7：本页判竖置几何，不靠默认值 */
+  var out = { ok: true, sub: {} };
+  var M = Game.Core.Main, B = Game.Systems.Battle, Inv = Game.Systems.Inventory,
+      P = Game.Data.Player, G = Game.Data.GROWTH, LG = Game.Data.GROWTH_LEGACY,
+      IT = Game.Data.ITEMS, MON = Game.Data.MONSTERS;
+
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, d: detail };
+    if (!ok) out.ok = false;
+  }
+  function eq(a, b) { return a === b; }
+  function fmt(s) { return s.atk + '/' + s.def + '/' + s.maxHp; }
+  function sameArr(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return (x.responseText || '');
+    } catch (e) { return ''; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel);
+    if (!t) return null;
+    try { return JSON.parse(t); } catch (e) { return null; }
+  }
+  /* 与 D-66/D-67/D-69 同一算法：两段式（50% 血后 def×1.3） */
+  function killRounds(hp, atk, def, en) {
+    var cur = hp, nr = 0, er = false, ed = en ? Math.round(def * en.defMul) : def;
+    while (cur > 0 && nr < 200) {
+      nr++;
+      var d = Math.max(1, Math.round(atk * atk / (atk + (er ? ed : def))));
+      cur -= d;
+      if (en && !er && cur > 0 && cur <= hp * en.hpPct) er = true;
+    }
+    return nr;
+  }
+  function resetP(level, weapon, armor) {
+    P.level = level;
+    P.exp = 0;
+    P.eliteAtk = 0;
+    P.upg = {};
+    P.inventory = {};
+    P.equipment = { weapon: weapon || null, armor: armor || null };
+    Inv.recalcEquip();
+    P.hp = P.maxHp;
+    P.mp = P.maxMp;
+  }
+
+  try {
+    Game.Core.Input.bind();
+    M.init();
+    M.closeGuide();
+
+    /* ══ S1 五把刀的成长表与副加成 ═══════════════════════════════ */
+    var want = {
+      elite_fang_1: { atk: 3, g: [[1, 5, 1.6], [6, 99, 0.5]], b: { expPct: 10 }, maxHp: null },
+      elite_axe_2: { atk: 6, g: [[1, 6, 1.0], [7, 8, 2.5], [9, 99, 0.7]], b: null, maxHp: null },
+      elite_blade_3: { atk: 9, g: [[1, 99, 1.4]], b: { def: 3 }, maxHp: null },
+      elite_edge_4: { atk: 11, g: [[1, 7, 1.0], [8, 99, 2.2]], b: null, maxHp: 25 },
+      elite_fang_5: { atk: 12, g: [[1, 9, 1.2], [10, 99, 3.0]], b: { expPct: 15 }, maxHp: null }
+    };
+    var bad1 = [];
+    Object.keys(want).forEach(function (id) {
+      var it = IT[id], w = want[id];
+      if (!it) { bad1.push(id + ' 缺失'); return; }
+      if (it.elite !== true) bad1.push(id + ' elite!=true');
+      if (it.price !== 0 || it.sell !== 0) bad1.push(id + ' price/sell!=0');
+      if (!it.effect || it.effect.atk !== w.atk) bad1.push(id + ' base=' + (it.effect && it.effect.atk));
+      if (!sameArr(it.growth, w.g)) bad1.push(id + ' growth=' + JSON.stringify(it.growth));
+      if (w.b === null) { if (it.bonus !== undefined) bad1.push(id + ' bonus 应为空'); }
+      else if (!it.bonus || JSON.stringify(it.bonus) !== JSON.stringify(w.b)) {
+        bad1.push(id + ' bonus=' + JSON.stringify(it.bonus));
+      }
+      var mh = (it.effect && typeof it.effect.maxHp === 'number') ? it.effect.maxHp : null;
+      if (mh !== w.maxHp) bad1.push(id + ' maxHp=' + mh);
+    });
+    var enumN = Object.keys(IT).length;
+    rec('S1_eliteTable', bad1.length === 0 && enumN === 48,
+      '五把刀（3/6/9/11/12 + 分段 growth + bonus）全部一致；烬牙无 maxHp、守夜 maxHp=25；' +
+      '可枚举物品 ' + enumN + ' 条' + (bad1.length ? '；问题：' + bad1.join('; ') : ''));
+
+    /* ══ S2 atkOf 唯一口径 ═══════════════════════════════════════ */
+    var s2 = [
+      ['fang5@11', Inv.atkOf('elite_fang_5', 11), 28],
+      ['fang5@10', Inv.atkOf('elite_fang_5', 10), 25],
+      ['fang5@1', Inv.atkOf('elite_fang_5', 1), 12],
+      ['fang1@4', Inv.atkOf('elite_fang_1', 4), 8],
+      ['fang1@11', Inv.atkOf('elite_fang_1', 11), 12],
+      ['edge4@10', Inv.atkOf('elite_edge_4', 10), 24],
+      ['shopIron@10', Inv.atkOf('sword_iron', 10), 3]
+    ];
+    var bad2 = s2.filter(function (x) { return x[1] !== x[2]; })
+      .map(function (x) { return x[0] + '=' + x[1] + '(期望' + x[2] + ')'; });
+    rec('S2_atkOf', bad2.length === 0,
+      s2.map(function (x) { return x[0] + '=' + x[1]; }).join(' ') + (bad2.length ? '；错：' + bad2.join('; ') : ''));
+
+    /* ══ S3 面板（无护甲、无强化） ═══════════════════════════════ */
+    var panels = [
+      [10, 'elite_fang_5', 50, 18, 190],
+      [11, 'elite_fang_5', 65, 25, 220],
+      [10, 'elite_edge_4', 49, 18, 215],
+      [11, 'elite_edge_4', 63, 25, 245]
+    ];
+    var bad3 = [];
+    panels.forEach(function (t) {
+      resetP(t[0], t[1], null);
+      if (P.atk !== t[2] || P.def !== t[3] || P.maxHp !== t[4]) {
+        bad3.push('L' + t[0] + '+' + t[1] + '=' + fmt(P) + ' 期望 ' + t[2] + '/' + t[3] + '/' + t[4]);
+      }
+    });
+    rec('S3_panels', bad3.length === 0,
+      bad3.length ? bad3.join('; ') : 'L10+烬牙 50/18/190、L11+烬牙 65/25/220、L10+守夜 49/18/215、L11+守夜 63/25/245');
+
+    /* ══ S4 存读档 ═══════════════════════════════════════════════ */
+    resetP(11, 'elite_fang_5', null);
+    P.exp = 123;
+    P.inventory = { elite_fang_5: 1, potion_small: 2 };
+    var invBefore = JSON.stringify(P.inventory);
+    var eqBefore = JSON.stringify(P.equipment);
+    var saved = Game.Systems.Save.save();
+    P.level = 1; P.exp = 0; P.equipment = { weapon: null, armor: null }; P.inventory = {};
+    Inv.recalcEquip();
+    Game.Systems.Save.load();
+    var s4ok = saved === true &&
+      P.level === 11 && P.exp === 123 &&
+      JSON.stringify(P.equipment) === eqBefore &&
+      JSON.stringify(P.inventory) === invBefore &&
+      P.atk === 65 && P.def === 25 && P.maxHp === 220 &&
+      Game.Systems.Save.KEY === 'ai_dungeon_rpg_save_v1';
+    rec('S4_saveLoad', s4ok,
+      'save=' + saved + ' → 读档 L' + P.level + ' exp' + P.exp + ' 装备 ' + P.equipment.weapon +
+      ' 面板 ' + fmt(P) + '；KEY=' + Game.Systems.Save.KEY);
+    Game.Systems.Save.clear();
+
+    /* ══ S5 突破时点 ═════════════════════════════════════════════ */
+    var s10 = G.statsAt(10), s11 = G.statsAt(11), s12 = G.statsAt(12);
+    var d11 = s11.atk - s10.atk, d12 = s12.atk - s11.atk;
+    rec('S5_breakpoint', d11 === 12 && d12 === 3 && s10.atk === 25 && s10.def === 18 && s10.maxHp === 190,
+      'L10=' + fmt(s10) + ' L11=' + fmt(s11) + ' L12=' + fmt(s12) +
+      '；L10→11 atk+' + d11 + '，L11→12 atk+' + d12);
+
+    /* ══ S6 LEGACY 不受影响 ══════════════════════════════════════ */
+    var l10 = LG.statsAt(10), l8 = LG.statsAt(8);
+    rec('S6_legacy', l10.atk === 19 && l10.def === 14 && l10.maxHp === 190 &&
+      l8.atk === 17 && l8.def === 12 && l8.maxHp === 170 && !LG.milestones,
+      'LEGACY L10=' + fmt(l10) + '、L8=' + fmt(l8) + '，milestones=' + String(LG.milestones));
+
+    /* ══ S7 击杀经验吃 expPct（真实打一场史莱姆 exp10） ═════════ */
+    function fightSlime() {
+      P.hp = 9999; P.maxHp = 9999; P.atk = 65; P.exp = 0; P.level = 11;
+      P.quests = {}; /* 隔离任务奖励经验，只测击杀经验本身 */
+      B.start('slime');
+      B.playerAction('attack');
+      return P.exp;
+    }
+    resetP(11, 'elite_fang_1', null);
+    var eFang1 = fightSlime();
+    resetP(11, 'sword_iron', null);
+    var eShop = fightSlime();
+    resetP(11, 'elite_fang_5', null);
+    var eFang5 = fightSlime();
+    rec('S7_expPct', eFang1 === 11 && eShop === 10 && eFang5 === 12,
+      '史莱姆 exp10：断牙 +10% → ' + eFang1 + '；商店剑 → ' + eShop + '；烬牙 +15% → ' + eFang5 +
+      '（round(10×1.15)=12）');
+
+    /* ══ S8 精英刀拒绝卷轴：可读原因 + _report → ui:notice ══════ */
+    var notices = [];
+    Game.Core.EventBus.on('ui:notice', function (evt) { if (evt && evt.msg) notices.push(evt.msg); });
+    var modalSrc = readDoc('../js/systems/modal.js');
+    var chainWired = modalSrc.indexOf('this._report(res)') >= 0;
+
+    resetP(11, 'elite_fang_5', null);
+    P.inventory = { scroll_upgrade: 1 };
+    var upgBefore = JSON.stringify(P.upg);
+    var r1 = Inv.use('scroll_upgrade');
+    var scrollLeft = P.inventory.scroll_upgrade;
+    var upgSame = JSON.stringify(P.upg) === upgBefore;
+    var s8a = r1.ok === false && r1.msg === '系统武器无法强化：它随你等级成长' &&
+      scrollLeft === 1 && upgSame;
+    Game.Modal._report(r1);
+    var s8b = notices.length > 0 && notices[notices.length - 1] === r1.msg;
+
+    resetP(11, 'elite_fang_5', 'armor_leather');
+    P.inventory = { scroll_upgrade: 1 };
+    var r2 = Inv.use('scroll_upgrade');
+    var s8c = r2.ok === true && P.upg.armor_leather === 1 && !P.upg.elite_fang_5 &&
+      P.inventory.scroll_upgrade === undefined;
+
+    resetP(10, 'sword_iron', null);
+    P.inventory = { scroll_upgrade: 1 };
+    var r3 = Inv.use('scroll_upgrade');
+    var s8d = r3.ok === true && P.upg.sword_iron === 1;
+
+    rec('S8_eliteNoScroll', s8a && s8b && s8c && s8d && chainWired,
+      '仅烬牙 → ok=' + r1.ok + ' msg=' + r1.msg + '（卷轴仍 ' + scrollLeft +
+      '，upg 未变 ' + upgSame + '）；ui:notice 收到=' + s8b +
+      '；烬牙+护甲 → 落护甲 ' + s8c + '；商店剑可+1 ' + s8d +
+      '；modal._confirm→_report 接线=' + chainWired);
+
+    /* ══ S9 精英奖励按有效攻击比较 ═══════════════════════════════ */
+    var MapS = Game.Systems.Map;
+    var oldFloor = MapS.getFloor;
+    var s9 = {};
+    try {
+      MapS.getFloor = function () { return 5; }; /* F5 掉落表 = 烬牙 */
+      resetP(10, 'knife', null);
+      var before1 = P.atk;
+      M._grantEliteReward();
+      s9.a = P.equipment.weapon === 'elite_fang_5' && P.atk === 50;
+
+      resetP(10, 'elite_edge_4', null);
+      var before2 = P.atk;
+      M._grantEliteReward();
+      s9.b = P.equipment.weapon === 'elite_fang_5' && P.atk === 50;
+
+      resetP(10, 'elite_fang_5', null);
+      var before3 = P.atk;
+      P.inventory = { elite_fang_5: 1 };
+      M._grantEliteReward();
+      s9.c = P.equipment.weapon === 'elite_fang_5' && P.inventory.elite_fang_5 === 2 &&
+        P.atk === before3;
+      s9.detail = '匕首 ' + before1 + '→50；守夜 ' + before2 + '→50；已装烬牙 ' + before3 +
+        '→' + P.atk + ' 且背包 ' + P.inventory.elite_fang_5 + ' 把';
+    } finally {
+      MapS.getFloor = oldFloor;
+    }
+    rec('S9_eliteReward', s9.a && s9.b && s9.c, s9.detail);
+
+    /* ══ S10 巨龙 360 血 + 两段复算 ═════════════════════════════ */
+    var dr = MON.dragon;
+    var r65 = killRounds(dr.hp, 65, dr.def, dr.enrage);
+    var r63 = killRounds(dr.hp, 63, dr.def, dr.enrage);
+    var r59 = killRounds(dr.hp, 59, dr.def, dr.enrage);
+    /* 真实打一场（L11+烬牙面板 65），印证静态复算的回合数 */
+    resetP(11, 'elite_fang_5', null);
+    P.hp = 99999; P.maxHp = 99999;
+    B.start('dragon');
+    var realRounds = 0;
+    while (B.getState().monster.hp > 0 && realRounds < 20) { B.playerAction('attack'); realRounds++; }
+    /* D-84 r4：巨龙血 350、def 15、50% 狂暴 def→20。两段复算：
+     * 65/63/59 攻首段每击 53/51/47，4 击后余 138/146/162（均越过 175 半血线）进入狂暴；
+     * 狂暴后每击 50/48/44 → 65 再 3 击共 7，63/59 各再 4 击共 8。 */
+    rec('S10_dragon', dr.hp === 350 && r65 === 7 && r63 === 8 && r59 === 8 && realRounds === 7,
+      'dragon.hp=' + dr.hp + '、def=' + dr.def + '；两段复算 atk65→' + r65 + ' 击、atk63→' + r63 +
+      ' 击、atk59→' + r59 + ' 击；实测 atk65 一场 ' + realRounds + ' 击');
+
+    /* ══ S17 龙威：第 9 回合起按段递增，只作用于巨龙 ═══════════ */
+    var dr2 = MON.dragon;
+    function dreadB(r) {
+      var d = dr2.dread, sum = 0;
+      if (!d || r < d.start) return 0;
+      for (var i = 0; i < d.tiers.length; i++) {
+        var t = d.tiers[i];
+        if (r >= t[0]) sum += t[2] * (Math.min(r, t[1]) - t[0] + 1);
+      }
+      return sum;
+    }
+    var dreadOther = Object.keys(MON).filter(function (k) { return k !== 'dragon' && MON[k].dread; });
+    rec('S17_dragonDread', !!dr2.dread && dr2.dread.start === 9 &&
+      dreadB(8) === 0 && dreadB(11) === 3 && dreadB(15) === 13 && dreadB(17) === 22 && dreadB(21) === 46 &&
+      (32 + dreadB(8)) === 32 && (32 + dreadB(21)) === 78 && dreadOther.length === 0,
+      'bonus: r8=0 r11=3 r15=13 r17=22 r21=46；A(8)=32、A(21)=78（未狂暴口径）；其余 17 只怪无 dread');
+
+    /* ══ S11 STATUS / 伤害公式未动 ═══════════════════════════════ */
+    var st = Game.Data.STATUS;
+    resetP(11, 'elite_fang_5', null);
+    P.hp = 9999; P.maxHp = 9999;
+    B.start('dragon');
+    B.playerAction('attack');
+    var hpAfter = B.getState().monster.hp;
+    var expectDmg = Math.max(1, Math.round(65 * 65 / (65 + 15)));
+    rec('S11_statusFormula', st.bleed && st.poison && Object.keys(st).length === 2 &&
+      hpAfter === dr.hp - expectDmg,
+      'STATUS=' + Object.keys(st).join('/') + '；65 攻对龙 def15 单击 ' +
+      (dr.hp - hpAfter) + '（期望 ' + expectDmg + ' = round(65²/(65+15))）');
+
+    /* ══ S13 四条闸门（改后 JSON） ═══════════════════════════════ */
+    var gb = readJson('selfcheck/d84-b1-2500.json');
+    var gg = readJson('selfcheck/d84-g2-4500.json');
+    var gs = readJson('selfcheck/d84-s1-2500.json');
+    var gm = readJson('selfcheck/d84-m1-6000.json');
+    if (!gb || !gg || !gs || !gm) {
+      throw new Error('S13 缺测量 JSON：先按 §5.4 跑 d84-{b1,g2,s1,m1}');
+    }
+    var wB1 = gb.agg.b1.wins, wG2 = gg.agg.g2.wins, wS1 = gs.agg.s1.wins, wM1 = gm.agg.m1.wins;
+    var pct = function (w) { return w / 50 * 100; };
+    /* r4：判定性质改为"冲刺不该赢、短局该输"——上限与下限各算各的，四个独立断言。
+     * 单位一律是「局数 / 50」，不是百分比。 */
+    rec('S13a_b1Upper', wB1 <= 12,
+      'B1=' + wB1 + '/50（上限 ≤12）');
+    rec('S13b_s1Upper', wS1 <= 10,
+      'S1=' + wS1 + '/50（上限 ≤10）');
+    rec('S13c_g2Lower', wG2 >= 32,
+      'G2=' + wG2 + '/50（下限 ≥32）');
+    rec('S13d_m1Equal', wM1 === 50,
+      'M1=' + wM1 + '/50（须 =50）');
+
+    /* ══ P1–P6 C-7：M 面板第 4 页「系统」（只读快照） ═══════════ */
+    var Mdl = Game.Modal;
+    function sysRows(w) { return Mdl._systemRows(w); }
+    function badTok(list) {
+      return list.filter(function (s) { return /undefined|NaN/.test(String(s)); });
+    }
+
+    /* P1：全宽行数——龙战 12、非龙战 11，且都不超过 MAX_VISIBLE=12。
+     * 先走 restart（新档路径）确保 getRunGrowth 有起点 → 第 7 行存在 */
+    B.abort();
+    M.restart();
+    resetP(11, 'elite_fang_5', null);
+    P.hp = 999999; P.maxHp = 999999;
+    B.start('dragon');
+    var p1d = sysRows(900);
+    B.abort();
+    B.start('slime');
+    var p1n = sysRows(900);
+    B.abort();
+    rec('P1_fullRows', p1d.length === 12 && p1n.length === 11,
+      '全宽：龙战 ' + p1d.length + ' 行、非龙战 ' + p1n.length + ' 行（上限 12）');
+
+    /* P2：第 9/13/17 回合第 12 行逐字一致（真实推进战斗读 roundNo） */
+    resetP(11, 'elite_fang_5', null);
+    P.hp = 999999; P.maxHp = 999999; P.def = 500; P.atk = 5;
+    B.start('dragon');
+    var p2t = [
+      [9, 1, '+1（第 1/3 段，4 回合后升档）'],
+      [13, 2, '+7（第 2/3 段，4 回合后升档）'],
+      [17, 3, '+22（第 3/3 段，已到顶）']
+    ];
+    var p2bad = [], p2i = 0, p2g = 0;
+    while (p2i < p2t.length && p2g < 40) {
+      p2g++;
+      var st2 = B.getState();
+      if (!st2) break;
+      if (st2.roundNo === p2t[p2i][0]) {
+        var dd = B.dragonDread();
+        var rr = sysRows(900);
+        var lastRow = rr[rr.length - 1];
+        var wantRow = '龙威 ' + p2t[p2i][2];
+        if (!dd || dd.tier !== p2t[p2i][1] || lastRow !== wantRow) {
+          p2bad.push('r' + st2.roundNo + ' tier=' + (dd && dd.tier) + ' 行=' + lastRow + ' 期望=' + wantRow);
+        }
+        p2i++;
+      }
+      if (p2i >= p2t.length) break;
+      B.playerAction('attack');
+    }
+    rec('P2_dreadLadder', p2bad.length === 0 && p2i === 3,
+      p2bad.length ? p2bad.join('; ') : 'r9/r13/r17 第 12 行与 §1.5 逐字一致（+1/+7/+22，倒计时 4）');
+    B.abort();
+
+    /* P3：非龙战 / 战斗结束 / 非第 4 页都不出现龙威行 */
+    function noDread(rows) {
+      return rows.every(function (s) {
+        return s.indexOf('龙威') < 0 && s.indexOf('+0') < 0 && s !== '龙威 无';
+      });
+    }
+    var p3end = sysRows(900);
+    B.start('slime');
+    var p3non = sysRows(900);
+    B.abort();
+    Mdl.open('quests');
+    Mdl._setPage(0);
+    var p3dbg = Mdl._debugState();
+    var qActive = Game.Systems.Quest.getActive().length;
+    Mdl.close();
+    rec('P3_noDreadOutside', noDread(p3end) && noDread(p3non) &&
+      p3dbg.page === 0 && p3dbg.total === qActive,
+      '战斗结束=' + noDread(p3end) + '、非龙战=' + noDread(p3non) +
+      '、非第 4 页（page=' + p3dbg.page + '，任务行 ' + p3dbg.total + '/' + qActive + '）');
+
+    /* P4：窄屏恰好 6 行，第 6 行按 §1.2 顶替；截断后不溢出、无 undefined/NaN */
+    resetP(11, 'elite_fang_5', null);
+    P.hp = 999999; P.maxHp = 999999;
+    B.start('dragon');
+    var n4d = sysRows(320);
+    B.abort();
+    B.start('slime');
+    var n4n = sysRows(320);
+    B.abort();
+    var c2 = document.createElement('canvas').getContext('2d');
+    c2.font = '14px monospace';
+    var over = 0;
+    n4d.concat(n4n).forEach(function (s) {
+      var wpx = c2.measureText(Mdl._fitRow(c2, s, 253)).width;
+      if (wpx > 253) over = Math.max(over, wpx);
+    });
+    rec('P4_narrowSix', n4d.length === 6 && n4n.length === 6 &&
+      /^龙威 /.test(n4d[5]) && /^约\d+回合\/只（估算）$/.test(n4n[5]) &&
+      badTok(n4d).length === 0 && badTok(n4n).length === 0 && over === 0,
+      '窄屏 320：龙战 ' + n4d.length + ' 行（第 6 行=' + n4d[5] + '）、非龙战 ' + n4n.length +
+      ' 行（第 6 行=' + n4n[5] + '）；截断溢出=' + over + 'px');
+
+    /* P5：只读——构造行前后 Player 逐字段相等；文本不出现胜率/战力/百分比 */
+    resetP(10, 'elite_edge_4', 'armor_leather');
+    P.hp = 123; P.gold = 77; P.floor = 3; P.exp = 55;
+    B.start('dragon');
+    function pSnap() {
+      return JSON.stringify([P.atk, P.def, P.hp, P.maxHp, P.gold, P.level, P.exp, P.floor,
+        JSON.stringify(P.inventory), JSON.stringify(P.equipment), P.eliteAtk]);
+    }
+    var p5a = pSnap();
+    var p5rows = sysRows(900);
+    var p5b = pSnap();
+    B.abort();
+    var p5text = p5rows.join('|');
+    rec('P5_readOnly', p5a === p5b && !/胜率|战力|系统等级|%/.test(p5text) && badTok(p5rows).length === 0,
+      'Player 前后一致=' + (p5a === p5b) + '；禁用词命中=' + /胜率|战力|系统等级|%/.test(p5text) +
+      '；行数 ' + p5rows.length);
+
+    /* P6：其余三页不破（page 0/1/2 数据源与 kind 列表不变） */
+    Mdl.open('quests');
+    Mdl._setPage(1);
+    var tMon = Mdl._debugState().total;
+    Mdl._setPage(2);
+    var tItem = Mdl._debugState().total;
+    Mdl._setPage(3);
+    var tSys = Mdl._debugState().total;
+    Mdl._setPage(0);
+    var p6page = Mdl._debugState().page;
+    Mdl.close();
+    rec('P6_otherPages', tMon === Object.keys(MON).length && tItem === Object.keys(IT).length &&
+      p6page === 0 && tSys >= 6 && tSys <= 12,
+      '怪物页 ' + tMon + '、物品页 ' + tItem + '、系统页 ' + tSys + '；四步切页回到 page=' + p6page);
+  } catch (e) {
+    out.ok = false;
+    out.err = String((e && (e.stack || e.message)) || e);
+  }
+
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  var pre = document.createElement('pre');
+  pre.id = 'result';
+  pre.textContent = text;
+  document.body.appendChild(pre);
+  document.title = out.ok ? 'D84_DONE' : 'D84_FAIL';
+})();
+</script><pre id="result">PASS {"ok":true,"sub":{"S1_eliteTable":{"ok":true,"d":"五把刀（3/6/9/11/12 + 分段 growth + bonus）全部一致；烬牙无 maxHp、守夜 maxHp=25；可枚举物品 48 条"},"S2_atkOf":{"ok":true,"d":"fang5@11=28 fang5@10=25 fang5@1=12 fang1@4=8 fang1@11=12 edge4@10=24 shopIron@10=3"},"S3_panels":{"ok":true,"d":"L10+烬牙 50/18/190、L11+烬牙 65/25/220、L10+守夜 49/18/215、L11+守夜 63/25/245"},"S4_saveLoad":{"ok":true,"d":"save=true → 读档 L11 exp123 装备 elite_fang_5 面板 65/25/220；KEY=ai_dungeon_rpg_save_v1"},"S5_breakpoint":{"ok":true,"d":"L10=25/18/190 L11=37/25/220 L12=40/28/230；L10→11 atk+12，L11→12 atk+3"},"S6_legacy":{"ok":true,"d":"LEGACY L10=19/14/190、L8=17/12/170，milestones=null"},"S7_expPct":{"ok":true,"d":"史莱姆 exp10：断牙 +10% → 11；商店剑 → 10；烬牙 +15% → 12（round(10×1.15)=12）"},"S8_eliteNoScroll":{"ok":true,"d":"仅烬牙 → ok=false msg=系统武器无法强化：它随你等级成长（卷轴仍 1，upg 未变 true）；ui:notice 收到=true；烬牙+护甲 → 落护甲 true；商店剑可+1 true；modal._confirm→_report 接线=true"},"S9_eliteReward":{"ok":true,"d":"匕首 26→50；守夜 49→50；已装烬牙 50→50 且背包 2 把"},"S10_dragon":{"ok":true,"d":"dragon.hp=350、def=15；两段复算 atk65→7 击、atk63→8 击、atk59→8 击；实测 atk65 一场 7 击"},"S17_dragonDread":{"ok":true,"d":"bonus: r8=0 r11=3 r15=13 r17=22 r21=46；A(8)=32、A(21)=78（未狂暴口径）；其余 17 只怪无 dread"},"S11_statusFormula":{"ok":true,"d":"STATUS=bleed/poison；65 攻对龙 def15 单击 53（期望 53 = round(65²/(65+15))）"},"S13a_b1Upper":{"ok":true,"d":"B1=3/50（上限 ≤12）"},"S13b_s1Upper":{"ok":true,"d":"S1=0/50（上限 ≤10）"},"S13c_g2Lower":{"ok":true,"d":"G2=40/50（下限 ≥32）"},"S13d_m1Equal":{"ok":true,"d":"M1=50/50（须 =50）"},"P1_fullRows":{"ok":true,"d":"全宽：龙战 12 行、非龙战 11 行（上限 12）"},"P2_dreadLadder":{"ok":true,"d":"r9/r13/r17 第 12 行与 §1.5 逐字一致（+1/+7/+22，倒计时 4）"},"P3_noDreadOutside":{"ok":true,"d":"战斗结束=true、非龙战=true、非第 4 页（page=0，任务行 12/12）"},"P4_narrowSix":{"ok":true,"d":"窄屏 320：龙战 6 行（第 6 行=龙威 未启动（第 9 回合开始））、非龙战 6 行（第 6 行=约1回合/只（估算））；截断溢出=0px"},"P5_readOnly":{"ok":true,"d":"Player 前后一致=true；禁用词命中=false；行数 12"},"P6_otherPages":{"ok":true,"d":"怪物页 18、物品页 48、系统页 11；四步切页回到 page=0"}}}</pre>
+
+
+</body></html>

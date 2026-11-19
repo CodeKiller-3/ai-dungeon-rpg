@@ -58,7 +58,7 @@
 (function () {
   'use strict';
   var q = String(location.search || '');
-  var view = (q.match(/view=(menu-nosave|menu-save|guide|explore-elite|battle-crush|elite-loot|levelup|death|ending)/) || [])[1] || 'explore-elite';
+  var view = (q.match(/view=(menu-nosave|menu-save|guide|explore-elite|battle-crush|elite-loot|levelup|death|ending|f5-dragon)/) || [])[1] || 'explore-elite';
   var M = Game.Core.Main;
   var P = Game.Data.Player;
   var Map = Game.Systems.Map;
@@ -203,7 +203,9 @@
       return;
     }
 
-    /* ── 战斗：断牙打暗影蝙蝠，单次伤害 18 ≥ 半血，落在 crush 档 ── */
+    /* ── 战斗：L2 断牙面板 16，对暗影蝙蝠 round(16²/(16+1)) = 15 ──
+     * 蝙蝠 hp 30，15 ≥ 半血 → 落 crush 档（D-84 起断牙基础 3，L2 有效 5；
+     * 老截图里的 18 是旧断牙 atk 8 的值，已作废）。 */
     if (view === 'battle-crush') {
       P.floor = 1;
       P.level = 2;
@@ -219,6 +221,33 @@
         setTimeout(function () {
           Game.Systems.Battle.playerAction('attack');
           setTimeout(function () { stopAfterFrames(3); }, 150);
+        }, 300);
+      });
+      return;
+    }
+
+    /* ── F5 横置真实进度：L10 + 烬牙（F5 精英掉落的刀）────────────────
+     * 不是测试夹具的 Lv.5/ATK14：等级与刀都取自 GROWTH 的真实档位，
+     * 面板由 Inventory.recalcEquip 复算（L10 烬牙 atkOf = 25，面板 10+15+25 = 50，
+     * 与《平衡定档》§23.1 的“M1 F5 入口中位约 50”同口径）。
+     * 画面要同时有：五层背景（F5 王座厅）、玩家、巨龙 350 血、七格横向指令条。 */
+    if (view === 'f5-dragon') {
+      P.floor = 5;
+      P.level = 10;
+      P.exp = 0;
+      P.gold = 520;
+      Game.Systems.Inventory.add('elite_fang_5', 1);
+      Game.Systems.Inventory.equip('elite_fang_5');
+      Game.Systems.Inventory.recalcEquip();
+      P.hp = P.maxHp; P.mp = P.maxMp;
+      Game.Systems.Battle.start('dragon');
+      M.switchScene('battle');
+      M.start();
+      waitSprites(function () {
+        setTimeout(function () {
+          Game.Systems.Battle.playerAction('attack');
+          /* 这一张不冻结 rAF：战斗是等输入的静态画面，让主循环持续绘制，
+           * 避免 headless 在停链后因窗口 resize 清空画布拿到黑屏。 */
         }, 300);
       });
       return;
@@ -267,7 +296,7 @@
           M._updateExplore(performance.now());
           delete k[code];
 
-          /* 精英哥布林 50 血 / def 4；L3 面板 atk 13 → 每刀 9，打 6 刀。 */
+          /* 精英哥布林 50 血 / def 4；L3 面板 atk 13（基础 12 + 匕首 1）→ 每刀 10，打 5–6 刀。 */
           var swings = 0;
           var iv = setInterval(function () {
             var st = Game.Systems.Battle.getState();

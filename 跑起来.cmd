@@ -4,29 +4,29 @@ setlocal
 cd /d "%~dp0"
 
 if not exist "index.html" (
-  echo [´íÎó] ÕÒ²»µ½ index.html£ºÇë°Ñ±¾½Å±¾·ÅÔÚ²Ö¿â¸ùÄ¿Â¼£¬ºÍ index.html Í¬¼¶¡£
+  echo [ï¿½ï¿½ï¿½ï¿½] ï¿½Ò²ï¿½ï¿½ï¿½ index.htmlï¿½ï¿½ï¿½ï¿½Ñ±ï¿½ï¿½Å±ï¿½ï¿½ï¿½ï¿½Ú²Ö¿ï¿½ï¿½Ä¿Â¼ï¿½ï¿½ï¿½ï¿½ index.html Í¬ï¿½ï¿½ï¿½ï¿½
   pause
   exit /b 1
 )
 
-rem ¶ÁÈ¡ .html µÄÄ¬ÈÏ´ò¿ª·½Ê½£»Èç¹ûÊÇ¾É°æ IE£¬Ë«»÷¿ÉÄÜ°×ÆÁ£¬ÌáÇ°¸øÌáÊ¾¡£
+rem ï¿½ï¿½È¡ .html ï¿½ï¿½Ä¬ï¿½Ï´ò¿ª·ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¾É°ï¿½ IEï¿½ï¿½Ë«ï¿½ï¿½ï¿½ï¿½ï¿½Ü°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½Ê¾ï¿½ï¿½
 set "PROGID="
 for /f "tokens=3" %%A in ('reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.html\UserChoice" /v ProgId 2^>nul ^| findstr /i "ProgId"') do set "PROGID=%%A"
 
 if defined PROGID (
-  echo µ±Ç° .html Ä¬ÈÏ´ò¿ª·½Ê½£º%PROGID%
+  echo ï¿½ï¿½Ç° .html Ä¬ï¿½Ï´ò¿ª·ï¿½Ê½ï¿½ï¿½%PROGID%
   echo %PROGID% | findstr /i "IE.HTTP htmlfile" >nul
   if not errorlevel 1 (
-    echo [ÌáÊ¾] ¼ì²âµ½¾É°æ IE ¹ØÁª¡£Èô´ò¿ªºóÊÇ¿Õ°×Ò³£¬ÇëÓÒ¼ü index.html - ´ò¿ª·½Ê½ - Microsoft Edge¡£
+    echo [ï¿½ï¿½Ê¾] ï¿½ï¿½âµ½ï¿½É°ï¿½ IE ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ò¿ªºï¿½ï¿½Ç¿Õ°ï¿½Ò³ï¿½ï¿½ï¿½ï¿½ï¿½Ò¼ï¿½ index.html - ï¿½ò¿ª·ï¿½Ê½ - Microsoft Edgeï¿½ï¿½
   )
 ) else (
-  echo [ÌáÊ¾] Ã»¶Áµ½ .html Ä¬ÈÏ´ò¿ª·½Ê½£»ÈôÃ»ÓÐ×Ô¶¯´ò¿ª£¬ÇëÓÒ¼ü index.html - ´ò¿ª·½Ê½ - Microsoft Edge / Chrome¡£
+  echo [ï¿½ï¿½Ê¾] Ã»ï¿½ï¿½ï¿½ï¿½ .html Ä¬ï¿½Ï´ò¿ª·ï¿½Ê½ï¿½ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ò¿ª£ï¿½ï¿½ï¿½ï¿½Ò¼ï¿½ index.html - ï¿½ò¿ª·ï¿½Ê½ - Microsoft Edge / Chromeï¿½ï¿½
 )
 
 echo.
-echo ÕýÔÚÓÃÄ¬ÈÏä¯ÀÀÆ÷´ò¿ª£º%cd%\index.html
+echo ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ò¿ª£ï¿½%cd%\index.html
 start "" "%cd%\index.html"
 echo.
-echo ±¾×÷Áã¹¹½¨¡¢ÁãÒÀÀµ¡¢²»ÁªÍø£¬²»ÐèÒª°²×°ÈÎºÎ¶«Î÷¡£
-echo Èôä¯ÀÀÆ÷À¹½Ø±¾µØÎÄ¼þ£¬ÇëÔÊÐí·ÃÎÊ file:// ºóÔÙË¢ÐÂ¡£
+echo ï¿½ï¿½ï¿½ï¿½ï¿½ã¹¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½×°ï¿½ÎºÎ¶ï¿½ï¿½ï¿½ï¿½ï¿½
+echo ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø±ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ file:// ï¿½ï¿½ï¿½ï¿½Ë¢ï¿½Â¡ï¿½
 pause

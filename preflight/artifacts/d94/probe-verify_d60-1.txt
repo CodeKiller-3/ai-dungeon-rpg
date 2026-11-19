@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+<meta charset="UTF-8">
+<!-- D-60：读取上一轮 regression-result.json 与 d22-selftest.json，属元页面 -->
+<meta name="preflight-meta" content="1">
+<title>PASS {"ok":true,"sub":{"A_old_name_only_in_history":{"ok":true,"d":{"corpusFiles":316,"liveFiles":13,"liveViolations":0,"scannedFiles":329,"corpusBytes":3003395,"scanMs":123,"manifest":"preflight/selfcheck/d62-corpus.ps1 生成 d62-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件","hits":[{"file":"CHANGELOG.md","line":44,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"},{"file":"CHANGELOG.md","line":123,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"}],"allowed":[{"file":"CHANGELOG.md","line":44,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"},{"file":"CHANGELOG.md","line":123,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"}],"violations":[],"missing":[],"rule":"当前名《地牢：我独自升级》可出现在任何位置；两个历史名只允许出现在首行完全匹配时点声明的历史任务卡（正文随卡保留）与 CHANGELOG 的 D-62 之前条目；其余位置一律 FAIL"}},"B_title_and_menu":{"ok":true,"d":{"indexTitle":"地牢：我独自升级","canvasTitleCount":2,"aboutLine":"地牢：我独自升级 · 像素地牢 Roguelike","subtitleKept":true,"fullWidthColon":true,"oldNameRendered":[],"errors":[],"sample":["地牢：我独自升级","你的目标：往地牢更深处走，第 5 层击败地牢巨龙","往哪走：踩紫色下行梯下一层，绿色上行梯回上一层","探索 · 面板","↑↓←→ / WASD 移动 · B 背包 · E 商店 · M 任务","T 对话 · L AI 演示 · Q 设置 · K 静音 · H 重看引导"]}},"C_keys_and_legacy_save":{"ok":true,"d":{"saveKey":"ai_dungeon_rpg_save_v1","settingsKey":"aiDungeon_settings_v1","legacyLoadOk":true,"landingOk":true,"runStatsOk":true,"error":"","landing":{"x":1,"y":1,"reason":"saved","distance":0},"expectedLanding":{"x":1,"y":1},"note":"D-59 时期 v2 旧档（含 pos / run / npcQuests）没有任何标题字段；更名只影响显示，不改读档路径、落点与统计"}},"D_negative_fixture":{"ok":true,"d":{"currentRenameDocViolations":1,"earliestNameDocViolations":1,"earliestNameNoSpaceViolations":1,"declaredTaskCardAllowed":2,"undeclaredTaskCardViolations":1,"changelogHistoryAllowed":1,"changelogAboveD62Violations":1,"changelogWithoutD62BoundaryViolations":1,"note":"同一条扫描函数同时喂真实文件与合成文本；三种历史名与三种违规场景都必须被抓到"}},"E_regression_113":{"ok":true,"d":{"summary":{"at":"2026-11-17T03:29:04","total":122,"pass":122,"fail":0,"none":0,"mixed":0},"selfBad":0,"passExcludingSelf":121,"guard":{"ok":true,"expected":122,"actual":122,"missing":[],"extra":[]},"badRows":[],"selftest":{"allAsExpected":true,"baselineCount":122,"line":"GUARD=OK expected=122 actual=122 missing=0 extra=0 source=page-baseline.json"},"note":"元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 122/122 为准"}}}}</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-62 · 全仓更名扫描（当前名 + 两个历史名）/ index 标题与菜单渲染 / 存档键与旧档 / 负例 / 回归（A–E）</h1>
+<p style="color:#8a8f99;margin:0 0 8px">本页 D-60 建页，D-62 原地扩展；文件名保留 verify_d60，避免改页数基线。</p>
+<pre id="result">PASS {"ok":true,"sub":{"A_old_name_only_in_history":{"ok":true,"d":{"corpusFiles":316,"liveFiles":13,"liveViolations":0,"scannedFiles":329,"corpusBytes":3003395,"scanMs":123,"manifest":"preflight/selfcheck/d62-corpus.ps1 生成 d62-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件","hits":[{"file":"CHANGELOG.md","line":44,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"},{"file":"CHANGELOG.md","line":123,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"}],"allowed":[{"file":"CHANGELOG.md","line":44,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"},{"file":"CHANGELOG.md","line":123,"names":["地牢回响"],"text":"- 更名（D-60）：作品名统一为《地牢回响》。只换中文主标题，不新增副标题、英文名或标点变体：`index.html` 的 `&lt;title&gt;`、主菜单与首次引导的大标题、关于页首行（保留原有「· 像素地牢 Roguelike」后缀）、RE","why":"changelog-history"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":1,"names":["AI 勇者闯地牢","地牢回响"],"text":"&gt; 本卡成卡时项目名为《AI 勇者闯地牢》，D-60 起更名为《地牢回响》，D-62 起更名为《地牢：我独自升级》。","why":"task-card-declaration"},{"file":"docs/tasks/D-48-首屏与玩法说明.md","line":50,"names":["AI 勇者闯地牢"],"text":"- 深色网格背景 + 金色标题「AI 勇者闯地牢」+ 副标题「往地牢更深处走 · 第 5 层击败地牢巨龙」。","why":"task-card-declaration"}],"violations":[],"missing":[],"rule":"当前名《地牢：我独自升级》可出现在任何位置；两个历史名只允许出现在首行完全匹配时点声明的历史任务卡（正文随卡保留）与 CHANGELOG 的 D-62 之前条目；其余位置一律 FAIL"}},"B_title_and_menu":{"ok":true,"d":{"indexTitle":"地牢：我独自升级","canvasTitleCount":2,"aboutLine":"地牢：我独自升级 · 像素地牢 Roguelike","subtitleKept":true,"fullWidthColon":true,"oldNameRendered":[],"errors":[],"sample":["地牢：我独自升级","你的目标：往地牢更深处走，第 5 层击败地牢巨龙","往哪走：踩紫色下行梯下一层，绿色上行梯回上一层","探索 · 面板","↑↓←→ / WASD 移动 · B 背包 · E 商店 · M 任务","T 对话 · L AI 演示 · Q 设置 · K 静音 · H 重看引导"]}},"C_keys_and_legacy_save":{"ok":true,"d":{"saveKey":"ai_dungeon_rpg_save_v1","settingsKey":"aiDungeon_settings_v1","legacyLoadOk":true,"landingOk":true,"runStatsOk":true,"error":"","landing":{"x":1,"y":1,"reason":"saved","distance":0},"expectedLanding":{"x":1,"y":1},"note":"D-59 时期 v2 旧档（含 pos / run / npcQuests）没有任何标题字段；更名只影响显示，不改读档路径、落点与统计"}},"D_negative_fixture":{"ok":true,"d":{"currentRenameDocViolations":1,"earliestNameDocViolations":1,"earliestNameNoSpaceViolations":1,"declaredTaskCardAllowed":2,"undeclaredTaskCardViolations":1,"changelogHistoryAllowed":1,"changelogAboveD62Violations":1,"changelogWithoutD62BoundaryViolations":1,"note":"同一条扫描函数同时喂真实文件与合成文本；三种历史名与三种违规场景都必须被抓到"}},"E_regression_113":{"ok":true,"d":{"summary":{"at":"2026-11-17T03:29:04","total":122,"pass":122,"fail":0,"none":0,"mixed":0},"selfBad":0,"passExcludingSelf":121,"guard":{"ok":true,"expected":122,"actual":122,"missing":[],"extra":[]},"badRows":[],"selftest":{"allAsExpected":true,"baselineCount":122,"line":"GUARD=OK expected=122 actual=122 missing=0 extra=0 source=page-baseline.json"},"note":"元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 122/122 为准"}}}}</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: true, sub: {} };
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  window.__D60ERR = [];
+  window.addEventListener('error', function (e) {
+    window.__D60ERR.push(String(e.message || e));
+    var el = document.getElementById('result');
+    if (el) el.textContent = 'ERR ' + (e.message || e) + ' @' + (e.lineno || '?');
+  });
+  function readDoc(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', rel, false);
+      x.send(null);
+      if (x.status >= 400) return null;
+      return x.responseText;
+    } catch (e) { return null; }
+  }
+  function readJson(rel) {
+    var t = readDoc(rel);
+    if (t === null) return null;
+    try { return JSON.parse(t.replace(/^\uFEFF/, '')); } catch (e) { return null; }
+  }
+
+  /* 当前名与两个历史名都不在源码里写死历史名，避免扫描器扫到自己：
+   * 运行时才拼出带空格 / 不带空格两种历史写法。 */
+  var CUR = '地牢：我独自升级';
+  var OLD_SP = 'AI 勇' + '者闯地牢';
+  var OLD_NS = 'AI勇' + '者闯地牢';
+  var MID = '地牢' + '回响';
+  var HISTORY = [OLD_SP, OLD_NS, MID];
+  var DECL = '> 本卡成卡时项目名为《' + OLD_SP + '》，D-60 起更名为《' + MID + '》，D-62 起更名为《' + CUR + '》。';
+
+  /* ── A：全仓扫描 ─────────────────────────────────────────────
+   * 扫的是「历史名清单」（两个历史名），当前名可以出现在任何位置。
+   * 允许区只有两类：
+   *   ① docs/tasks/ 下、首行正好是 DECL 的历史任务卡（正文按约定不改）；
+   *   ② CHANGELOG.md 中排在 D-62 条目之后的历史条目。
+   * 其余任何命中都进 violations。 */
+  function scanText(rel, text) {
+    var lines = String(text || '').split(/\r?\n/);
+    var isTask = rel.indexOf('docs/tasks/') === 0 && lines[0] === DECL;
+    var d62Line = -1;
+    if (rel === 'CHANGELOG.md') {
+      for (var k = 0; k < lines.length; k++) {
+        if (lines[k].indexOf('更名（D-62）') >= 0) { d62Line = k; break; }
+      }
+    }
+    var hits = [], allowed = [], bad = [];
+    for (var i = 0; i < lines.length; i++) {
+      var matched = [];
+      for (var hi = 0; hi < HISTORY.length; hi++) {
+        if (lines[i].indexOf(HISTORY[hi]) >= 0) matched.push(HISTORY[hi]);
+      }
+      if (!matched.length) continue;
+      var h = { file: rel, line: i + 1, names: matched, text: lines[i].replace(/^\s+|\s+$/g, '').slice(0, 120) };
+      if (isTask) { h.why = 'task-card-declaration'; allowed.push(h); }
+      else if (rel === 'CHANGELOG.md' && d62Line >= 0 && i > d62Line) { h.why = 'changelog-history'; allowed.push(h); }
+      else { h.why = 'violation'; bad.push(h); }
+      hits.push(h);
+    }
+    return { hits: hits, allowed: allowed, bad: bad };
+  }
+
+  var hits = [], allowed = [], bad = [], missing = [], done = 0, finished = false;
+  function collect(rel, text) {
+    if (text === null) { missing.push(rel); return; }
+    var r = scanText(rel, text);
+    for (var a = 0; a < r.allowed.length; a++) allowed.push(r.allowed[a]);
+    for (var b = 0; b < r.bad.length; b++) bad.push(r.bad[b]);
+    for (var h = 0; h < r.hits.length; h++) hits.push(r.hits[h]);
+    done++;
+  }
+
+  /* 全仓语料：preflight/selfcheck/d62-corpus.ps1 在提交前把每个文本文件
+   * 以「@@D62FILE@@ 路径」分段写成一份约 3.6MB 语料。一次同步读取即可扫完，
+   * 避免 300+ 次 file:// XHR 被 3500ms 虚拟预算截断。 */
+  var scanT0 = Date.now();
+  var corpus = readDoc('selfcheck/d62-corpus.txt');
+  var corpusFiles = 0;
+  if (corpus === null) {
+    missing.push('preflight/selfcheck/d62-corpus.txt');
+  } else {
+    var blocks = corpus.split(/^@@D62FILE@@ /m);
+    for (var bi = 1; bi < blocks.length; bi++) {
+      var nl = blocks[bi].indexOf('\n');
+      if (nl < 0) continue;
+      var rel = blocks[bi].slice(0, nl).replace(/\r$/, '');
+      collect(rel, blocks[bi].slice(nl + 1));
+      corpusFiles++;
+    }
+  }
+
+  /* 实时复核：13 个高危文件不依赖语料，改坏了当场能被抓住 */
+  var LIVE = [
+    'index.html', 'README.md', 'CHANGELOG.md',
+    'js/core/render.js', 'js/data/dialogue.js', 'css/style.css',
+    'docs/演示脚本.md', 'docs/运行说明.md', 'docs/答辩讲稿.md', 'docs/参考资料.md',
+    'docs/process/诊断报告.md', 'preflight/_render_old.js',
+    'docs/tasks/D-48-首屏与玩法说明.md'
+  ];
+  var liveBad = 0;
+  for (var li = 0; li < LIVE.length; li++) {
+    var before = bad.length;
+    collect(LIVE[li], readDoc('../' + LIVE[li]));
+    if (bad.length > before) liveBad += bad.length - before;
+  }
+  var scanMs = Date.now() - scanT0;
+  finish();
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    rec('A_old_name_only_in_history', bad.length === 0 && missing.length === 0 &&
+      allowed.length >= 2 && corpusFiles >= 300 && liveBad === 0, {
+      corpusFiles: corpusFiles,
+      liveFiles: LIVE.length,
+      liveViolations: liveBad,
+      scannedFiles: corpusFiles + LIVE.length,
+      corpusBytes: corpus ? corpus.length : 0,
+      scanMs: scanMs,
+      manifest: 'preflight/selfcheck/d62-corpus.ps1 生成 d62-corpus.txt（md/html/js/css/ps1），另实时复核 13 个高危文件',
+      hits: hits.slice(0, 12),
+      allowed: allowed.slice(0, 8),
+      violations: bad.slice(0, 20),
+      missing: missing.slice(0, 10),
+      rule: '当前名《地牢：我独自升级》可出现在任何位置；两个历史名只允许出现在首行完全匹配时点声明的历史任务卡（正文随卡保留）与 CHANGELOG 的 D-62 之前条目；其余位置一律 FAIL'
+    });
+
+    /* ── B：index 标题 + 菜单/引导/关于的实际绘制文本 ─────────── */
+    var idx = readDoc('../index.html') || '';
+    var tm = /<title>([\s\S]*?)<\/title>/i.exec(idx);
+    var title = tm ? tm[1].replace(/^\s+|\s+$/g, '') : '';
+    var R = Game.Core.Render, M = Game.Core.Main;
+    var texts = [];
+    var stub = {
+      fillStyle: '', strokeStyle: '', lineWidth: 1, font: '', textAlign: '', globalAlpha: 1,
+      fillRect: function () {}, strokeRect: function () {}, beginPath: function () {},
+      moveTo: function () {}, lineTo: function () {}, stroke: function () {},
+      setTransform: function () {}, fillText: function (t) { texts.push(String(t)); },
+      measureText: function (t) { return { width: String(t).length * 7 }; }
+    };
+    var oldCtx = R._ctx;
+    R._ctx = stub; R.cssW = 1024; R.cssH = 640; R.dpr = 1; R.scale = 1;
+    try {
+      R.drawGuide();
+      R._drawMenuRoot(M._menuSpec(), 1024, 640);
+      R._drawMenuAbout(1024, 640);
+    } catch (e) {
+      texts.push('__ERR__' + (e && e.message));
+    } finally { R._ctx = oldCtx; }
+    var oldHits = [];
+    for (var ti = 0; ti < texts.length; ti++) {
+      for (var hj = 0; hj < HISTORY.length; hj++) {
+        if (texts[ti].indexOf(HISTORY[hj]) >= 0) { oldHits.push(texts[ti]); break; }
+      }
+    }
+    var menuTitle = texts.filter(function (s) { return s === CUR; });
+    var aboutLine = texts.filter(function (s) { return s.indexOf(CUR + ' · 像素地牢 Roguelike') >= 0; });
+    var subtitleOk = texts.some(function (s) { return s.indexOf('往地牢更深处走') >= 0; }) &&
+      texts.some(function (s) { return s.indexOf('第 5 层击败地牢巨龙') >= 0; });
+    var colonOk = CUR.indexOf('：') > 0 && CUR.indexOf(':') < 0;
+    rec('B_title_and_menu', title === CUR && colonOk && subtitleOk && oldHits.length === 0 &&
+      menuTitle.length >= 2 && aboutLine.length === 1, {
+      indexTitle: title,
+      canvasTitleCount: menuTitle.length,
+      aboutLine: aboutLine[0] || '',
+      subtitleKept: subtitleOk,
+      fullWidthColon: colonOk,
+      oldNameRendered: oldHits,
+      errors: window.__D60ERR.slice(0, 5),
+      sample: texts.slice(0, 6)
+    });
+
+    /* ── C：存档键 / 设置键 / 读取 D-59 时期旧档 ───────────────── */
+    var S = Game.Systems.Save, Map = Game.Systems.Map, P = Game.Data.Player;
+    var mainSrc = readDoc('../js/core/main.js') || '';
+    var sm = /SETTINGS_KEY\s*=\s*'([^']+)'/.exec(mainSrc);
+    var settingsKey = sm ? sm[1] : '';
+    Map.generate();
+    Map.setFloor(1);
+    var spawn = Map.getSpawn();
+    var legacy = {
+      saveVersion: 2,
+      savedAt: '2026-11-13T12:00:00',
+      floor: 1,
+      /* D-53/D-59：落点与 run 统计都带上的旧档（不是更早的缺字段档） */
+      pos: { floor: 1, x: spawn.x, y: spawn.y },
+      run: { known: true, floorReached: 2, kills: 3, maxLevel: 2, turns: 44, potions: 1 },
+      player: {
+        hp: 77, maxHp: 100, mp: 20, maxMp: 50, atk: 11, def: 5,
+        gold: 42, exp: 12, level: 2,
+        inventory: { potion_small: 2 }, equipment: { weapon: 'knife', armor: null },
+        quests: {}, upg: {}, npcQuests: {},
+        adaptive: { deaths: {}, triggers: 0, spent: 0, log: [], trace: [], gearGranted: false }
+      },
+      bestiary: {}, map: null
+    };
+    var loadOk = false, loadErr = '', landed = null, runOk = false;
+    try {
+      localStorage.setItem(S.KEY, JSON.stringify(legacy));
+      var got = S.load();
+      loadOk = !!got && P.hp === 77 && P.gold === 42 && P.level === 2;
+      landed = S.lastLanding || null;
+      var rs = Game.Core.Main.getRunStats(false);
+      runOk = rs.known === true && rs.turns === 44 && rs.kills === 3 && rs.floorReached === 2;
+    } catch (e) { loadErr = String(e && e.message || e); }
+    var landedOk = !!landed && typeof landed.x === 'number' && typeof landed.y === 'number' &&
+      P.floor === 1 && P.x === landed.x && P.y === landed.y && landed.x === spawn.x && landed.y === spawn.y;
+    rec('C_keys_and_legacy_save', S.KEY === 'ai_dungeon_rpg_save_v1' &&
+      settingsKey === 'aiDungeon_settings_v1' && loadOk && landedOk && runOk && !loadErr, {
+      saveKey: S.KEY,
+      settingsKey: settingsKey,
+      legacyLoadOk: loadOk,
+      landingOk: landedOk,
+      runStatsOk: runOk,
+      error: loadErr,
+      landing: landed,
+      expectedLanding: spawn,
+      note: 'D-59 时期 v2 旧档（含 pos / run / npcQuests）没有任何标题字段；更名只影响显示，不改读档路径、落点与统计'
+    });
+
+    /* ── D：负例——普通文档留一处历史名必须 FAIL ──────────────── */
+    var negMid = scanText('docs/__negative_fixture__.md', '# 普通文档\n\n《' + MID + '》\n');
+    var negOld = scanText('docs/__negative_fixture_2__.md', '正文 ' + OLD_SP + ' 出现在句中\n');
+    var negNs = scanText('docs/__negative_fixture_3__.md', '正文 ' + OLD_NS + ' 出现在句中\n');
+    var taskOk = scanText('docs/tasks/__fixture__.md', DECL + '\n\n# 旧卡\n\n标题：' + MID + '\n');
+    var undeclaredTask = scanText('docs/tasks/__fixture_2__.md', '# 旧卡（无时点声明）\n\n标题：' + MID + '\n');
+    var logOk = scanText('CHANGELOG.md', '# 变更\n\n- 更名（D-62）：新名' + CUR + '\n- 历史（D-60）：《' + MID + '》\n');
+    var logAbove = scanText('CHANGELOG.md', '# 变更\n\n- 新条目（D-62）：《' + MID + '》\n- 更名（D-62）：新名' + CUR + '\n');
+    var logNoBoundary = scanText('CHANGELOG.md', '# 变更\n\n- 历史（D-60）：《' + MID + '》\n');
+    rec('D_negative_fixture', negMid.bad.length === 1 && negOld.bad.length === 1 && negNs.bad.length === 1 &&
+      taskOk.bad.length === 0 && taskOk.allowed.length === 2 && taskOk.allowed[0].names.length === 2 &&
+      undeclaredTask.bad.length === 1 &&
+      logOk.bad.length === 0 && logOk.allowed.length === 1 &&
+      logAbove.bad.length === 1 && logNoBoundary.bad.length === 1, {
+      currentRenameDocViolations: negMid.bad.length,
+      earliestNameDocViolations: negOld.bad.length,
+      earliestNameNoSpaceViolations: negNs.bad.length,
+      declaredTaskCardAllowed: taskOk.allowed.length,
+      undeclaredTaskCardViolations: undeclaredTask.bad.length,
+      changelogHistoryAllowed: logOk.allowed.length,
+      changelogAboveD62Violations: logAbove.bad.length,
+      changelogWithoutD62BoundaryViolations: logNoBoundary.bad.length,
+      note: '同一条扫描函数同时喂真实文件与合成文本；三种历史名与三种违规场景都必须被抓到'
+    });
+
+    /* ── E：全量回归 122/122 + GUARD（…；D-89 118→119；D-90 119→120；D-91 120→121；D-93 121→122，新增 verify_d93） ── */
+    var rr = readJson('selfcheck/regression-result.json');
+    var st = readJson('selfcheck/d22-selftest.json');
+    var sum = rr && rr.summary ? rr.summary : {};
+    var guard = rr && rr.guard ? rr.guard : {};
+    var badRows = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page !== 'verify_d60'; }) : [];
+    var selfBad = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page === 'verify_d60'; }) : [];
+    var caseA = st && st.cases ? st.cases.filter(function (c) { return c.id === 'A_normal'; })[0] : null;
+    var selftestOk = !!(st && st.allAsExpected === true && st.baselineCount === 122 &&
+      caseA && String(caseA.line || '').indexOf('GUARD=OK expected=122 actual=122') >= 0);
+    rec('E_regression_113', sum.total === 122 && sum.none === 0 && sum.mixed === 0 &&
+      badRows.length === 0 && (sum.fail === 0 || (sum.fail === 1 && selfBad.length === 1)) &&
+      guard.ok === true && guard.expected === 122 && guard.actual === 122 && selftestOk, {
+      summary: sum,
+      selfBad: selfBad.length,
+      passExcludingSelf: 121 - badRows.length - selfBad.length,
+      guard: { ok: guard.ok, expected: guard.expected, actual: guard.actual, missing: guard.missing, extra: guard.extra },
+      badRows: badRows.slice(0, 10),
+      selftest: { allAsExpected: st ? st.allAsExpected : null, baselineCount: st ? st.baselineCount : null, line: caseA ? caseA.line : null },
+      note: '元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 122/122 为准'
+    });
+
+    var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = text;
+    document.getElementById('result').textContent = text;
+  }
+})();
+</script>
+
+
+</body></html>
