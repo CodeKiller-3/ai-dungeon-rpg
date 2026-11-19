@@ -1,0 +1,30 @@
+{
+    "protocol":  "D-99",
+    "note":  "去掉陷阱格后，D-98/D-99 改动前后逐格同构；陷阱位置由独立 PRNG 生成",
+    "floorsCompared":  250,
+    "seeds":  {
+                  "to":  1050,
+                  "from":  1001
+              },
+    "structureHashDiff":  0,
+    "componentDiff":  {
+                          "en":  0,
+                          "g":  0,
+                          "el":  0,
+                          "de":  0,
+                          "mv":  0,
+                          "npc":  0,
+                          "pa":  0
+                      },
+    "trapPositionDiff":  250,
+    "legacyShadowVsHeadTrapDiff":  0,
+    "runLevel":  {
+                     "legacyTraps_calibratedConfirm_vs_base":  {
+                                                                   "s1":  "1 seed: 1010 stuck\u003edead",
+                                                                   "m1":  "0 outcome/0 field diffs",
+                                                                   "b1":  "0 outcome/0 field diffs (50/50)",
+                                                                   "g2":  "0 outcome/0 field diffs"
+                                                               },
+                     "seed1010_legacy_nocfm":  "stuck 2500/2333 == base（证明 1010 仅由确认框动作触发）"
+                 }
+}

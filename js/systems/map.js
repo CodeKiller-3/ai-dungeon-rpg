@@ -14,6 +14,11 @@
   var details = null;   /* M9-1：2D 数组，每格细节类型 string|null（纯视觉） */
   var decor = null;     /* M9-1：2D 数组，每格装饰物 id string|null（chest 可拾取） */
   var traps = null;     /* S-04：2D 数组，每格 {id, seen}|null；seen=true 表示已触发并永久显现 */
+  /* D-99：D-98 之前的陷阱位置（影子）。只给"布局期间要避开陷阱"的确定性取点用
+   * （奖励点/精英/NPC/开门格），使这些系统与改动前的接受/拒绝结果逐格一致。
+   * 真正的陷阱在最后用独立随机流放到合法格集合里。 */
+  var legacyTraps = null;
+  var pendingTrap = null;
   var rooms = [];       /* S-05：特殊房间 [{x,y,w,h,cx,cy,doorX,doorY}]，坐标均为室内/门所在格 */
   var floorIndex = 0;
   var spawn = { x: 1, y: 1 };
@@ -369,7 +374,7 @@
     if (grid[c.y][c.x] !== 0) return false;               /* 只开墙 */
     if (inRoomRing(c.x, c.y)) return false;               /* 不动密室 */
     if (decor && decor[c.y] && decor[c.y][c.x]) return false;
-    if (traps && traps[c.y] && traps[c.y][c.x]) return false;
+    if (legacyTrapAt(c.x, c.y)) return false;
     if (enemyAtCell(c.x, c.y)) return false;
     if (eliteAtCell(c.x, c.y)) return false;
     var ns = npcs || [];
@@ -651,6 +656,8 @@
         traps[y][x] = null;
       }
     }
+    legacyTraps = null;
+    pendingTrap = null;
     /* 地板细节：约 25% 概率按权重抽取 */
     var pool = (Game.Data.TILE_DETAILS && Game.Data.TILE_DETAILS.floor) || [];
     var totalW = 0;
@@ -706,6 +713,7 @@
     placeRewards(w, h); /* D-46：每层固定奖励点（金币/药），放在陷阱之后，互不侵占 */
     placeElite(w, h);   /* D-69：层内精英（确定性取主路 55%±10% 割点，不消耗随机数） */
     placeNpc(w, h);     /* D-47：实体 NPC（不消耗随机数，放在最后；显式避开精英格） */
+    placeTrapsFinal(w, h); /* D-99：实体全部落位后再用独立随机流放陷阱（主随机流不动） */
   }
 
   /* ── D-47：实体 NPC ────────────────────────────────────────────
@@ -770,7 +778,7 @@
       if (ps[i].x === c.x && ps[i].y === c.y) return false;
     }
     if (decor[c.y] && decor[c.y][c.x]) return false;                    /* 不压宝箱 / 奖励点 */
-    if (traps[c.y] && traps[c.y][c.x]) return false;                    /* 不压陷阱 */
+    if (legacyTrapAt(c.x, c.y)) return false;                           /* 不压陷阱（D-99：按改前位置判，保持取点一致） */
     return true;
   }
 
@@ -853,7 +861,7 @@
       var c = path[j];
       if (grid[c.y][c.x] !== 1) continue;
       if (decor[c.y][c.x]) continue;
-      if (traps[c.y] && traps[c.y][c.x]) continue;
+      if (legacyTrapAt(c.x, c.y)) continue;
       if (enemyAtCell(c.x, c.y)) continue;
       if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) continue;
       if (Math.abs(c.x - spawn.x) + Math.abs(c.y - spawn.y) < minSpawn) continue;
@@ -887,7 +895,7 @@
     if (c.x === spawn.x && c.y === spawn.y) return false;
     if (inRoom(c.x, c.y) || inRoomDoor(c.x, c.y)) return false;
     if (decor[c.y] && decor[c.y][c.x]) return false;
-    if (traps[c.y] && traps[c.y][c.x]) return false;
+    if (legacyTrapAt(c.x, c.y)) return false;
     if (enemyAtCell(c.x, c.y)) return false;
     var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
       ? Game.Systems.AI.getPatrols() : [];
@@ -1041,27 +1049,57 @@
     }
   }
 
-  /* S-04：陷阱放置——每层 3~6 个，只放地板格；
-   * 排除出生点 safeRadius 格内、敌人格、已放宝箱格；F1 只放地刺，F2 起按 gasRate 抽毒气 */
-  function placeTraps(w, h) {
-    var cfgT = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6, safeRadius: 3, gasRate: 0.45 };
-    /* D-64：先按原规则取 3~6，再按面积等比放大；陷阱伤害/触发逻辑不变。 */
-    var baseCount = cfgT.min + Math.floor(Math.random() * (Math.max(cfgT.min, cfgT.max) - cfgT.min + 1));
-    var count = areaScale(baseCount, w, h);
-    var gasRate = (typeof cfgT.gasRate === 'number') ? cfgT.gasRate : 0.45;
-    var only = (floorIndex === 0) ? (cfgT.firstFloorOnly || 'spike') : null;
+  /* ── D-99：陷阱独立的确定性随机流 ──────────────────────────────
+   * D-98 用"拒采"筛掉割点/单格走廊，拒采次数随地图变化，导致主 Math.random
+   * 多抽或少抽，后续楼层（乃至同层刷怪/宝箱）被整图重掷。D-99 把两件事拆开：
+   *   ① 主随机流：仍按 D-98 之前的算法逐次消耗（抽点/抽类型），但结果不参与放置，
+   *      只为让"地图/刷怪/宝箱/奖励/目标"的随机序列与改动前逐字节一致；
+   *   ② 陷阱取样：用本层布局派生的独立 PRNG，在"合法格集合"里等概率抽取。
+   * 层种子 = floorIndex + 尺寸 + 出生点 + 本层墙/地板/楼梯全图哈希（由局种子决定，
+   * 因此同局同层可复现、不同局不同层互不相同），不依赖也不消耗主随机流。 */
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function trapSeedOf(w, h) {
+    var s = floorIndex + '|' + w + 'x' + h + '|' + spawn.x + ',' + spawn.y + '|';
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) s += grid[y][x];
+      s += '/';
+    }
+    var hsh = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      hsh ^= s.charCodeAt(i);
+      hsh = Math.imul(hsh, 0x01000193) >>> 0;
+    }
+    return hsh >>> 0;
+  }
+  /* 主随机流对齐：与 D-98 之前的取样循环同序、同判据、同次数（含每次成功后的类型抽），
+   * 只是把落点记进 legacyTraps（影子表），供后续确定性取点避开；不写进 traps。
+   * 消耗量一致 → 后续系统拿到的序列与改动前一致。 */
+  function advanceLegacyTrapDraws(w, h, cfgT, count, gasRate, only) {
+    legacyTraps = [];
+    for (var yy = 0; yy < h; yy++) {
+      legacyTraps[yy] = [];
+      for (var xx = 0; xx < w; xx++) legacyTraps[yy][xx] = null;
+    }
     var placed = 0, tries = 0;
     while (placed < count && tries < 600) {
       tries++;
       var x = 1 + Math.floor(Math.random() * (w - 2));
       var y = 1 + Math.floor(Math.random() * (h - 2));
       if (grid[y][x] !== 1) continue;
-      /* 出生点周围不放（含出生点本身），玩家一落地就踩陷阱属于设计缺陷 */
       var dx = x - spawn.x, dy = y - spawn.y;
       if (dx * dx + dy * dy <= cfgT.safeRadius * cfgT.safeRadius) continue;
-      if (traps[y][x]) continue;
+      if (legacyTraps[y][x]) continue;
       if (decor[y][x] === 'chest' || decor[y][x] === 'room_chest') continue;
-      if (inRoom(x, y)) continue; /* S-05：密室内不放陷阱（房内必须靠走位，不靠踩坑） */
+      if (inRoom(x, y)) continue;
       var occupied = false;
       for (var i = 0; i < enemies.length; i++) {
         if (enemies[i].x === x && enemies[i].y === y) { occupied = true; break; }
@@ -1069,9 +1107,87 @@
       if (occupied) continue;
       var id = only || (Math.random() < gasRate ? 'gas' : 'spike');
       if (!Game.Data.TRAPS || !Game.Data.TRAPS[id]) continue;
-      traps[y][x] = { id: id, seen: false };
+      legacyTraps[y][x] = { id: id, seen: false };
       placed++;
     }
+  }
+  function legacyTrapAt(x, y) {
+    return !!(legacyTraps && legacyTraps[y] && legacyTraps[y][x]);
+  }
+  /* 合法落点集合：地板、避开出生点安全圈/敌人/宝箱与奖励点/密室/精英/NPC/巡逻，
+   * 且不是割点、不是单格走廊。 */
+  function trapPool(w, h, cfgT) {
+    var down = findTile(2, w, h);
+    var cutCache = {};
+    var list = [];
+    var ps = (Game.Systems.AI && typeof Game.Systems.AI.getPatrols === 'function')
+      ? (Game.Systems.AI.getPatrols() || []) : [];
+    for (var y = 1; y < h - 1; y++) {
+      for (var x = 1; x < w - 1; x++) {
+        if (grid[y][x] !== 1) continue;
+        var dx = x - spawn.x, dy = y - spawn.y;
+        if (dx * dx + dy * dy <= cfgT.safeRadius * cfgT.safeRadius) continue;
+        if (traps[y][x]) continue;
+        if (decor[y][x] === 'chest' || decor[y][x] === 'room_chest' ||
+          decor[y][x] === 'gold_pile' || decor[y][x] === 'potion_stash') continue;
+        if (inRoom(x, y)) continue;
+        var nb = 0;
+        if (grid[y - 1][x] !== 0) nb++;
+        if (grid[y + 1][x] !== 0) nb++;
+        if (grid[y][x - 1] !== 0) nb++;
+        if (grid[y][x + 1] !== 0) nb++;
+        if (nb <= 2) continue;
+        var ck = x + ',' + y;
+        if (cutCache[ck] === undefined) cutCache[ck] = down ? isCutCell({ x: x, y: y }, w, h, down) : false;
+        if (cutCache[ck]) continue;
+        if (enemyAtCell(x, y)) continue;
+        if (eliteAtCell(x, y)) continue;
+        var taken = false;
+        for (var i = 0; i < npcs.length; i++) {
+          if (npcs[i].x === x && npcs[i].y === y) { taken = true; break; }
+        }
+        if (taken) continue;
+        for (i = 0; i < ps.length; i++) {
+          if (ps[i].x === x && ps[i].y === y) { taken = true; break; }
+        }
+        if (taken) continue;
+        list.push({ x: x, y: y });
+      }
+    }
+    return list;
+  }
+
+  /* S-04：陷阱放置——每层 3~6 个，只放地板格；
+   * 排除出生点 safeRadius 格内、敌人格、已放宝箱格；F1 只放地刺，F2 起按 gasRate 抽毒气。
+   * D-99：本函数只在原位置"对齐主随机流 + 记录影子陷阱"，真正落点在
+   * placeTrapsFinal（实体都落位之后）用独立流完成。 */
+  function placeTraps(w, h) {
+    var cfgT = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6, safeRadius: 3, gasRate: 0.45 };
+    /* D-64：先按原规则取 3~6，再按面积等比放大；陷阱伤害/触发逻辑不变。 */
+    var baseCount = cfgT.min + Math.floor(Math.random() * (Math.max(cfgT.min, cfgT.max) - cfgT.min + 1));
+    var count = areaScale(baseCount, w, h);
+    var gasRate = (typeof cfgT.gasRate === 'number') ? cfgT.gasRate : 0.45;
+    var only = (floorIndex === 0) ? (cfgT.firstFloorOnly || 'spike') : null;
+    advanceLegacyTrapDraws(w, h, cfgT, count, gasRate, only);
+    pendingTrap = { count: count, gasRate: gasRate, only: only };
+  }
+  /* D-99：实体（敌人/精英/NPC/奖励点/巡逻）全部落位后，用本层派生的独立随机流
+   * 在合法格集合里等概率取点。主随机流在这一步完全不动。 */
+  function placeTrapsFinal(w, h) {
+    if (!pendingTrap) return;
+    var cfgT = Game.Data.TRAP_PLACEMENT || { min: 3, max: 6, safeRadius: 3, gasRate: 0.45 };
+    var count = pendingTrap.count, gasRate = pendingTrap.gasRate, only = pendingTrap.only;
+    var rng = mulberry32(trapSeedOf(w, h));
+    var pool = trapPool(w, h, cfgT);
+    for (var p = 0; p < count && p < pool.length; p++) {
+      var j = p + Math.floor(rng() * (pool.length - p));
+      var tmp = pool[p]; pool[p] = pool[j]; pool[j] = tmp;
+      var cell = pool[p];
+      var id = only || (rng() < gasRate ? 'gas' : 'spike');
+      if (!Game.Data.TRAPS || !Game.Data.TRAPS[id]) continue;
+      traps[cell.y][cell.x] = { id: id, seen: false };
+    }
+    pendingTrap = null;
   }
 
   /* ── D-58：宝箱布置 ────────────────────────────────────────────
@@ -1688,6 +1804,38 @@
       if (!traps || !traps[y]) return null;
       if (x < 0 || y < 0 || x >= traps[0].length || y >= traps.length) return null;
       return traps[y][x] || null;
+    },
+
+    /* D-98：侦测——把当前视野内的陷阱置 seen=true（渲染才画）。返回本次新显现的数量。
+     * 不在视野内的陷阱保持不可见，神秘感不变；不改陷阱数量与触发规则。 */
+    detectTraps: function () {
+      if (!traps) return 0;
+      var F = Game.fov, n = 0;
+      for (var y = 0; y < traps.length; y++) {
+        for (var x = 0; x < traps[y].length; x++) {
+          var tr = traps[y][x];
+          if (!tr || tr.seen) continue;
+          if (F && typeof F.isVisible === 'function' && !F.isVisible(x, y)) continue;
+          tr.seen = true;
+          n++;
+        }
+      }
+      return n;
+    },
+
+    /* D-98：拆除——站在相邻格（4 向）拆掉已显现的陷阱。不消耗道具、不加掉落，
+     * 拆除后该格恢复普通地面（traps=null，踩上去不再触发）。返回 {x,y,id} 或 null。 */
+    disarmTrap: function (px, py) {
+      if (!traps) return null;
+      var dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      for (var i = 0; i < dirs.length; i++) {
+        var x = px + dirs[i][0], y = py + dirs[i][1];
+        var tr = this.getTrap(x, y);
+        if (!tr || !tr.seen) continue;
+        traps[y][x] = null;
+        return { x: x, y: y, id: tr.id };
+      }
+      return null;
     },
 
     /* S-04：踩中陷阱——未触发过的陷阱结算一次后置 seen=true（永久显现且不再伤人）。
