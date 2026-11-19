@@ -1,0 +1,40 @@
+{
+ "shots": [
+  {
+   "file": "d118-320-explore.png",
+   "w": 320,
+   "h": 568,
+   "mode": "explore"
+  },
+  {
+   "file": "d118-320-sys.png",
+   "w": 320,
+   "h": 568,
+   "mode": "sys"
+  },
+  {
+   "file": "d118-390-explore.png",
+   "w": 390,
+   "h": 844,
+   "mode": "explore"
+  },
+  {
+   "file": "d118-390-sys.png",
+   "w": 390,
+   "h": 844,
+   "mode": "sys"
+  },
+  {
+   "file": "d118-320-band3x.png",
+   "w": 960,
+   "h": 60,
+   "mode": "band3x"
+  },
+  {
+   "file": "d118-390-band3x.png",
+   "w": 1170,
+   "h": 60,
+   "mode": "band3x"
+  }
+ ]
+}

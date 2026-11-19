@@ -36,6 +36,9 @@
   var kind = null;
   var data = [];
   var sel = 0;
+  /* D-100：鼠标两段式——armed 记录"已被第一次点击选中"的目标 id；
+   * 只有再次点同一目标才执行。键盘 Enter 不受影响（按键即执行）。 */
+  var armed = null;
   var shopMode = 'buy';
   var page = 0;        /* M8-4：quests 页签（0=任务 / 1=怪物 / 2=物品；D-85 起 3=系统），open 时重置 */
   var qScroll = 0;     /* P2-3b：图鉴（quests page1/2）滚动窗口起点；其他页恒为 0（行为不变） */
@@ -52,6 +55,7 @@
   var gameMenuRect = null;    /* D-52：回主菜单按钮矩形 */
   var gameoverSel = 0;        /* D-52：0=再来一局 / 1=回主菜单 */
   var npcId = null;           /* D-47：当前对话的 NPC id（npcquest 面板专用） */
+  var stairConfirm = null;    /* D-98：下行楼梯确认（{floor, onConfirm}）；确认后才真正切层 */
 
   function canvas() {
     return (Game.Core && Game.Core.Render && Game.Core.Render._canvas) || document.getElementById('game');
@@ -68,6 +72,14 @@
     return { w: w, h: h };
   }
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  /* D-100：页签/买-卖页签的唯一几何来源——绘制与命中都调这两个函数，避免第二份坐标。 */
+  function tabRect(px, py, i) {
+    return { x: px + 14 + i * 72 - 4, y: py + 8, w: 64, h: 28 };
+  }
+  function shopModeRect(px, py, i) {
+    return { x: px + 64 + i * 52, y: py + 8, w: 48, h: 28 };
+  }
 
   /* D-29：右栏可见性——只看逻辑宽，与 kind 无关（调用方叠加 kind === 'inventory'）。
    * 单独抽出便于验证页在 699/700 两个边界直接判定，而不是靠"画出来看不见"。 */
@@ -590,9 +602,7 @@
     }
     L.expBar = sysSegBar(c, barX, by, barW, bh, ePct, SYS_C.cyan, 10);
     L.expBar.ratio = ePct;
-    if (!narrow) {
-      sysTxt(c, M.exp + '/' + M.expNext, x + w, by + bh - 1, '10px monospace', SYS_C.blue, 'right');
-    }
+    /* D-114：经验读数只在表头写一次（含"还差"），这里不再重复 exp/expNext */
     var brk = M.brk;
     var bpt = 0, btxt = '';
     if (brk && brk.kind === 'done') { bpt = 1; btxt = '已突破'; }
@@ -614,9 +624,10 @@
     var narrow = L.narrow, mid = L.mid;
     var wp = M.weapon;
     var eff = wp ? wp.eff : 0;
-    /* 标题行：左「武器共鸣」，右「攻击 N」——两行分开放，避免右对齐文字互相压 */
+    /* 标题行：左「武器共鸣」，右「武器 N」——这里 N 是武器自身的有效攻击（基础+等级成长），
+     * 不是宿主总攻击（总攻击只在宿主芯片出一次，D-114 去重：同名事实不许两种数值）。 */
     sysTxt(c, '武器共鸣', x, y + (narrow ? 9 : 11), '10px monospace', SYS_C.label);
-    sysTxt(c, '攻击 ' + eff, x + w, y + (narrow ? 10 : 13),
+    sysTxt(c, '武器 ' + eff, x + w, y + (narrow ? 10 : 13),
       'bold ' + (narrow ? 12 : (mid ? 14 : 16)) + 'px monospace', SYS_C.gold, 'right');
 
     var icon = wp ? itemIcon(wp.id) : null;
@@ -673,7 +684,7 @@
     if (mid) {
       if (M.growth) {
         var gd = (M.growth.delta >= 0 ? '+' + M.growth.delta : String(M.growth.delta));
-        sysTxt(c, '本局攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk + '（' + gd + '）',
+        sysTxt(c, '本局成长：攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk + '（' + gd + '）',
           x + w, y + 11, '11px monospace', SYS_C.green, 'right');
       }
     }
@@ -684,7 +695,7 @@
     if (!mid) {
       if (M.growth) {
         var gd2 = (M.growth.delta >= 0 ? '+' + M.growth.delta : String(M.growth.delta));
-        sysTxt(c, '本局攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk,
+        sysTxt(c, '本局成长：攻击 ' + M.growth.startAtk + ' → ' + M.growth.atk,
           x, y + 55, fs + ' monospace', SYS_C.text);
         sysTxt(c, '（' + gd2 + '）', x + 96, y + 55, fs + ' monospace', SYS_C.green);
       } else {
@@ -698,8 +709,23 @@
     var narrow = L.narrow, mid = L.mid;
     var a = M.arch;
     if (narrow) {
-      sysTxt(c, '刀 ' + a.owned + '/5 · 鉴 ' + a.known + '/18 · 任 ' + a.done + '/12',
-        x, y + 10, '10px monospace', SYS_C.blue);
+      /* D-118：窄档不许单字缩写（刀/鉴/任 读不出词义）。先按完整词排一行；
+       * 只有实测真的放不下才换排版（折两行、降到既有 9px 档），绝不把词砍成一个字。 */
+      var s1 = '精英刀 ' + a.owned + '/5 · 图鉴 ' + a.known + '/18 · 任务 ' + a.done + '/12';
+      c.font = '10px monospace';
+      var tw = c.measureText(s1).width;
+      if (tw <= w) {
+        sysTxt(c, s1, x, y + 10, '10px monospace', SYS_C.blue);
+        L.arch = { text: s1, w: Math.round(tw), lines: 1, font: '10px' };
+      } else {
+        var la = '精英刀 ' + a.owned + '/5 · 图鉴 ' + a.known + '/18';
+        var lb = '任务 ' + a.done + '/12';
+        sysTxt(c, la, x, y + 9, '9px monospace', SYS_C.blue);
+        sysTxt(c, lb, x, y + 18, '9px monospace', SYS_C.blue);
+        c.font = '9px monospace';
+        L.arch = { text: la + ' | ' + lb, w: Math.round(Math.max(c.measureText(la).width, c.measureText(lb).width)),
+          lines: 2, font: '9px' };
+      }
       return;
     }
     var parts = [
@@ -830,13 +856,14 @@
       return L;
     },
     open: function (k, stats) {
-      if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover' && k !== 'npcquest') return;
+      if (k !== 'inventory' && k !== 'shop' && k !== 'quests' && k !== 'settings' && k !== 'gameover' && k !== 'npcquest' && k !== 'stairconfirm') return;
       /* D-18：连开（如死亡结算被重复触发）时先解绑旧的键盘/点击监听。
        * 原来直接 _bind() 会把上一份监听器引用覆盖掉，导致它永远删不掉：
        * 之后每次 Enter 都会被重复确认 N 次（实测长跑后一次 Enter 触发 8 次确认）。 */
       if (kind !== null) this._unbind();
       kind = k;
       sel = 0;
+      armed = null;
       shopMode = 'buy';
       /* S-01：每次开张推进一次确定性换货（同级守卫，Shop 未加载时跳过） */
       if (k === 'shop' && Game.Systems.Shop && typeof Game.Systems.Shop.refresh === 'function') {
@@ -850,6 +877,11 @@
       gameMenuRect = null;
       gameoverSel = 0;
       npcId = (k === 'npcquest' && stats && stats.id) ? stats.id : null;
+      /* D-98：下行确认——默认焦点「取消」（sel=0），确认动作由调用方以回调传入，
+       * 弹窗只负责选择与触发；changeFloor 仍是"调用即生效"，没有改成异步。 */
+      stairConfirm = (k === 'stairconfirm' && stats)
+        ? { floor: (stats.floor | 0) || 1, onConfirm: stats.onConfirm || null }
+        : null;
       this._refresh();
       this._bind();
     },
@@ -857,6 +889,7 @@
     close: function () {
       kind = null;
       data = [];
+      armed = null;
       qScroll = 0;
       volDragging = false;
       volTrack = null;
@@ -865,6 +898,7 @@
       gameRestartRect = null;
       gameMenuRect = null;
       gameoverSel = 0;
+      stairConfirm = null;
       if (kind === 'npcquest') npcId = null;
       this._unbind();
       /* 关闭时清掉 Input 残留按键，避免移动键粘滞导致关闭瞬间移动 */
@@ -901,6 +935,11 @@
           data = (Game.Systems.NpcQuest && typeof Game.Systems.NpcQuest.panel === 'function')
             ? Game.Systems.NpcQuest.panel(npcId) : [];
         }
+        /* D-98：下行确认——两行固定文案，默认停在「取消」（与 D-91 的确认页同口径） */
+        else if (kind === 'stairconfirm') {
+          var sf = (stairConfirm && stairConfirm.floor) ? stairConfirm.floor : 1;
+          data = [{ text: '取消' }, { text: '进入第 ' + sf + ' 层' }];
+        }
         /* gameover 无列表，战绩在 _drawGameover 现场拉取 */
       } catch (e) { data = []; }
       sel = clamp(sel, 0, Math.max(data.length - 1, 0));
@@ -908,6 +947,7 @@
       var maxScroll = Math.max(0, data.length - visibleRowCount(cssSize()));
       if (qScroll > maxScroll) qScroll = maxScroll;
       if (qScroll < 0) qScroll = 0;
+      armed = null; /* D-100：数据快照变了，上一次的"已选中"不再可信 */
     },
 
     _bind: function () {
@@ -934,6 +974,7 @@
         if (kind === 'gameover') {
           if (c === 'ArrowLeft' || c === 'KeyA' || c === 'ArrowRight' || c === 'KeyD' || c === 'Tab') {
             e.preventDefault();
+            armed = null;
             gameoverSel = gameoverSel === 0 ? 1 : 0;
             return;
           }
@@ -945,8 +986,18 @@
           if (c === 'KeyR' || c === 'Space') { e.preventDefault(); self._restart(); return; }
           return;
         }
-        if (c === 'ArrowUp' || c === 'KeyW') { e.preventDefault(); sel = clamp(sel - 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
-        if (c === 'ArrowDown' || c === 'KeyS') { e.preventDefault(); sel = clamp(sel + 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
+        /* D-98：下行确认——←→/Tab/↑↓ 都在两项之间切换，默认「取消」 */
+        if (kind === 'stairconfirm') {
+          if (c === 'ArrowLeft' || c === 'ArrowRight' || c === 'KeyA' || c === 'KeyD' || c === 'Tab' ||
+              c === 'ArrowUp' || c === 'ArrowDown' || c === 'KeyW' || c === 'KeyS') {
+            e.preventDefault();
+            armed = null;
+            sel = (sel === 0) ? 1 : 0;
+            return;
+          }
+        }
+        if (c === 'ArrowUp' || c === 'KeyW') { e.preventDefault(); armed = null; sel = clamp(sel - 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
+        if (c === 'ArrowDown' || c === 'KeyS') { e.preventDefault(); armed = null; sel = clamp(sel + 1, 0, Math.max(data.length - 1, 0)); self._syncScroll(); return; }
         if (c === 'Enter' || c === 'NumpadEnter') { e.preventDefault(); self._confirm(); return; }
         if (c === 'Tab' && kind === 'shop') { e.preventDefault(); self._toggleShopMode(); return; }
         /* M8-4：quests 三页签切页——Tab/→ 下一页、← 上一页（↑↓ 仍是列表选择，无冲突） */
@@ -1202,6 +1253,16 @@
     },
 
     _confirm: function () {
+      armed = null;
+      /* D-98：下行确认——只有选中「进入第 N 层」才回调；默认焦点是「取消」，
+       * Enter 落在默认焦点上即取消（与「开始新游戏」确认页一致）。 */
+      if (kind === 'stairconfirm') {
+        var go = (sel === 1);
+        var cb = stairConfirm ? stairConfirm.onConfirm : null;
+        this.close();
+        if (go && typeof cb === 'function') cb();
+        return;
+      }
       if (data.length === 0) return;
       /* D-47：NPC 任务面板——Enter 按状态执行 接取 / 交付；其余状态只给提示。
        * 交付由 NpcQuest.deliver 内部拦截"已交付"，这里不再重复判断。 */
@@ -1245,7 +1306,8 @@
       this._report(res);
     },
 
-    /* 点击：面板外→关闭；命中条目行→选中并执行；设置面板→静音开关；结算→重新开始 */
+    /* 点击：面板外→关闭；面板内按 D-100 两段式——首次只选中，第二次点同一目标才执行。
+     * 例外：页签/买-卖模式是"导航"，点一次即切换；设置页沿用原有直接操作（音量/静音）。 */
     _handleClick: function (x, y) {
       if (!rect) return;
       if (x < rect.x || x > rect.x + rect.w || y < rect.y || y > rect.y + rect.h) {
@@ -1261,27 +1323,72 @@
         }
         return;
       }
+      /* D-100：图鉴四页签——点击直接切页（不是"执行某一行"，无需二次确认） */
+      if (kind === 'quests') {
+        for (var ti = 0; ti < 4; ti++) {
+          var tr = tabRect(rect.x, rect.y, ti);
+          if (x >= tr.x && x <= tr.x + tr.w && y >= tr.y && y <= tr.y + tr.h) {
+            this._setPage(ti);
+            return;
+          }
+        }
+      }
+      /* D-100：商店「购买/出售」页签——点一次即切换 */
+      if (kind === 'shop') {
+        for (var mi = 0; mi < 2; mi++) {
+          var mr = shopModeRect(rect.x, rect.y, mi);
+          if (x >= mr.x && x <= mr.x + mr.w && y >= mr.y && y <= mr.y + mr.h) {
+            var want = (mi === 0) ? 'buy' : 'sell';
+            if (shopMode !== want) this._toggleShopMode();
+            return;
+          }
+        }
+      }
       if (kind === 'gameover') {
-        /* D-52：两个按钮——再来一局 / 回主菜单 */
+        /* D-52 两个按钮；D-100：第一次点击只选中，第二次点同一按钮才执行 */
+        var hit = null;
         if (gameRestartRect && x >= gameRestartRect.x && x <= gameRestartRect.x + gameRestartRect.w &&
-            y >= gameRestartRect.y && y <= gameRestartRect.y + gameRestartRect.h) {
-          this._restart();
-          return;
-        }
-        if (gameMenuRect && x >= gameMenuRect.x && x <= gameMenuRect.x + gameMenuRect.w &&
-            y >= gameMenuRect.y && y <= gameMenuRect.y + gameMenuRect.h) {
-          this._deathMenu();
-        }
+            y >= gameRestartRect.y && y <= gameRestartRect.y + gameRestartRect.h) hit = 0;
+        else if (gameMenuRect && x >= gameMenuRect.x && x <= gameMenuRect.x + gameMenuRect.w &&
+            y >= gameMenuRect.y && y <= gameMenuRect.y + gameMenuRect.h) hit = 1;
+        if (hit === null) return;
+        if (gameoverSel !== hit) { gameoverSel = hit; armed = 'gameover:' + hit; return; }
+        if (armed !== 'gameover:' + hit) { armed = 'gameover:' + hit; return; }
+        armed = null;
+        if (hit === 0) this._restart(); else this._deathMenu();
         return;
       }
+      /* 系统页是只读仪表盘：点击不选中不可见行、更不执行 _confirm（旧版会直接关面板） */
+      if (kind === 'quests' && page === 3) return;
       /* D-29：命中统一走 _rowAt——落在右栏（≥700 的装备栏）或列表区外一律返回 null，
        * 右栏点不中、也不会改 sel；键盘路径本就不把右栏放进 data，同样选不中。 */
       var absIdx = this._rowAt(x, y);
-      if (absIdx !== null) {
+      if (absIdx === null) return;
+      if (armed === 'row:' + absIdx) {
         sel = absIdx;
+        armed = null;
         this._confirm();
+        return;
       }
+      sel = absIdx;
+      armed = 'row:' + absIdx;
+      this._syncScroll();
     },
+
+    /* D-100：滚轮——背包/商店列表按行滚动；返回是否消费了本次滚轮 */
+    _wheel: function (deltaY) {
+      if (!this.isOpen() || !rect) return false;
+      if (kind !== 'inventory' && kind !== 'shop') return false;
+      var vr = visibleRowCount(cssSize());
+      var maxScroll = Math.max(0, data.length - vr);
+      if (maxScroll <= 0) return false;
+      var step = (deltaY > 0) ? 1 : -1;
+      qScroll = clamp(qScroll + step, 0, maxScroll);
+      return true;
+    },
+
+    /* D-100：测试/验证用只读状态——armed 目标（null 表示还没有第一次点击） */
+    _armed: function () { return armed; },
 
     /* D-29：行命中测试——返回绝对行索引；x 落在左列表之外（含右栏）返回 null。
      * 抽出独立函数是为了让"右栏不可被选中"可被验证页用真实点击坐标反复断言。 */
@@ -1328,6 +1435,9 @@
       var trackY = y + 24;
       var trackH = 8;
       volTrack = { x: left, y: trackY, w: contentW, h: trackH };
+      if (Game.Core.Render && Game.Core.Render._hotAdd) {
+        Game.Core.Render._hotAdd('modal:volume', volTrack.x, volTrack.y - 6, volTrack.w, volTrack.h + 12);
+      }
       /* 轨道背景 */
       c.fillStyle = '#3a3a55';
       c.fillRect(volTrack.x, volTrack.y, volTrack.w, volTrack.h);
@@ -1343,6 +1453,9 @@
 
       /* ---- 静音开关 ---- */
       muteRect = { x: left, y: y, w: 18, h: 18 };
+      if (Game.Core.Render && Game.Core.Render._hotAdd) {
+        Game.Core.Render._hotAdd('modal:mute', muteRect.x - 4, muteRect.y - 4, muteRect.w + 8, muteRect.h + 8);
+      }
       c.fillStyle = '#1a1a2e';
       c.fillRect(muteRect.x, muteRect.y, muteRect.w, muteRect.h);
       c.strokeStyle = '#cfcfcf';
@@ -1370,6 +1483,7 @@
         '方向键 / WASD : 移动',
         'B 背包 · E 商店 · M 任务',
         'T 对话 · L AI 演示',
+        'F 侦测 / 拆除陷阱（相邻）',
         'K 静音 · Q 设置 · H 重看引导',
         'Esc : 关闭弹窗'
       ];
@@ -1445,6 +1559,9 @@
       for (var b = 0; b < 2; b++) {
         var rx = bx + b * (bw + gap);
         var on = (gameoverSel === b);
+        if (Game.Core.Render && Game.Core.Render._hotAdd) {
+          Game.Core.Render._hotAdd('modal:gameover:' + b, rx, by, bw, bh);
+        }
         c.fillStyle = on ? 'rgba(255,207,110,0.18)' : '#3a3a5c';
         c.fillRect(rx, by, bw, bh);
         c.strokeStyle = on ? '#ffcf6e' : '#5a5f70';
@@ -1522,18 +1639,50 @@
       else if (kind === 'shop') title = '商店 · ' + (shopMode === 'buy' ? '购买' : '出售');
       else if (kind === 'settings') title = '设置';
       else if (kind === 'gameover') title = '系统评估：未达标';
+      else if (kind === 'stairconfirm') {
+        title = '进入第 ' + ((stairConfirm && stairConfirm.floor) ? stairConfirm.floor : 1) + ' 层';
+      }
       else if (kind === 'npcquest') {
         var nd = (Game.Systems.NpcQuest && Game.Systems.NpcQuest.def) ? Game.Systems.NpcQuest.def(npcId) : null;
         title = (nd ? nd.name : '???') + ' · 任务';
       }
       if (kind === 'quests') {
-        /* M8-4：三页签标题（任务/怪物/物品，当前页高亮加粗）；D-85：第 4 页「系统」 */
+        /* M8-4：四页签（任务/怪物/物品/系统，当前页高亮加粗）；D-100：页签可点击 */
         var tabs = ['任务', '怪物', '物品', '系统'];
         for (var ti = 0; ti < tabs.length; ti++) {
+          var tr = tabRect(px, py, ti);
           c.fillStyle = (ti === page) ? '#ffcf6e' : '#8a8aa0';
           c.font = (ti === page) ? 'bold 18px monospace' : '15px monospace';
-          c.fillText(tabs[ti], px + 14 + ti * 72, py + 30);
+          c.textAlign = 'left';
+          c.fillText(tabs[ti], tr.x + 4, py + 30);
+          if (Game.Core.Render && Game.Core.Render._hotAdd) {
+            Game.Core.Render._hotAdd('modal:tab:' + ti, tr.x, tr.y, tr.w, tr.h);
+          }
         }
+      } else if (kind === 'shop') {
+        /* D-100：买/卖做成两个可点页签（点一次切换），标题只留「商店」 */
+        c.fillStyle = '#ffcf6e';
+        c.font = 'bold 18px monospace';
+        c.textAlign = 'left';
+        c.fillText('商店', px + 14, py + 30);
+        var modes = [['buy', '购买'], ['sell', '出售']];
+        for (var mi = 0; mi < 2; mi++) {
+          var mr = shopModeRect(px, py, mi);
+          var mOn = (shopMode === modes[mi][0]);
+          c.fillStyle = mOn ? 'rgba(255,207,110,0.18)' : 'rgba(255,255,255,0.04)';
+          c.fillRect(mr.x, mr.y, mr.w, mr.h);
+          c.strokeStyle = mOn ? '#ffcf6e' : '#3a3a55';
+          c.lineWidth = 1;
+          c.strokeRect(mr.x + 0.5, mr.y + 0.5, mr.w - 1, mr.h - 1);
+          c.fillStyle = mOn ? '#ffcf6e' : '#9aa0b4';
+          c.font = (mOn ? 'bold ' : '') + '13px monospace';
+          c.textAlign = 'center';
+          c.fillText(modes[mi][1], mr.x + mr.w / 2, mr.y + 19);
+          if (Game.Core.Render && Game.Core.Render._hotAdd) {
+            Game.Core.Render._hotAdd('modal:shopmode:' + modes[mi][0], mr.x, mr.y, mr.w, mr.h);
+          }
+        }
+        c.textAlign = 'left';
       } else {
         c.fillStyle = '#ffcf6e';
         c.font = 'bold 18px monospace';
@@ -1578,6 +1727,9 @@
       for (var i = 0; i < rows; i++) {
         var ry = py + HEADER_H + i * ROW_H;
         var entry = data[start + i]; /* P2-3b：按滚动窗口取行数据 */
+        if (Game.Core.Render && Game.Core.Render._hotAdd) {
+          Game.Core.Render._hotAdd('modal:row:' + (start + i), px + 6, ry + 2, listW - 12, ROW_H - 4);
+        }
         if (i + start === sel) {
           c.fillStyle = 'rgba(255,207,110,0.18)';
           /* D-29：高亮只铺左列表宽（listW），不跨到右栏去 */
@@ -1668,6 +1820,7 @@
       else if (kind === 'shop') hint = '↑↓ 选择 · Enter ' + (shopMode === 'buy' ? '购买' : '出售') + ' · Tab 切换 · Esc/点遮罩关闭';
       else if (kind === 'quests') hint = 'Tab/←→ 切页 · ↑↓ 选择 · Esc/点遮罩关闭'; /* M8-4 */
       else if (kind === 'npcquest') hint = 'Enter 接取/交付 · Esc/点遮罩关闭'; /* D-47 */
+      else if (kind === 'stairconfirm') hint = '←→ 选择 · Enter 确认 · Esc 取消'; /* D-98 */
       else hint = '↑↓ 选择 · Esc/点遮罩关闭';
       /* P2-3b/C-03：列表滚动时底部显示当前位置 (sel+1)/total */
       var scrolling = data.length > visibleRowCount(sz);
@@ -1927,9 +2080,10 @@
           return entry.def.name + '   ' + itemDesc(entry.def) + '   ' + entry.def.price + ' 金币   获得x' + ic;
         }
         return entry.def.name + '   ???';
-      } else if (kind === 'npcquest') {
-        /* D-47：面板行文本由 NpcQuest.panel 统一生成（状态 / 进度 / 奖励 / 操作） */
+      } else if (kind === 'stairconfirm') {
         return entry.text || '';
+      } else if (kind === 'npcquest') {
+        /* D-47：面板行文本由 NpcQuest.panel 统一生成（状态 / 进度 / 奖励 / 操作） */        return entry.text || '';
       }
       return '';
     }

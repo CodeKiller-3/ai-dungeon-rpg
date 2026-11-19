@@ -10,12 +10,14 @@
   var Game = window.Game = window.Game || {};
   var TILE = 24;                 /* 与 render.js 的 TILE 同值（规格基线） */
   var SURVEY_MS = 520;           /* T1 总时长 */
-  var DEPTH_ALPHA = [0.06, 0.08, 0.10, 0.12, 0.14]; /* F1→F5 网格 alpha（上限 0.20） */
+  /* D-114：T1 黑场只压地图区。顶栏 0–28 + 读数带 28–42 保持原亮度，
+   * 因此黑场从 y=43 起画到底边。 */
+  var HUD_SAFE_H = 43;
 
   var injected = null;           /* 注入时钟（ms）；null = 真实时钟 */
   var survey = null;             /* {t0, floor, w, h, rooms} */
   var targets = {};              /* 目标框淡入淡出状态 key -> {x,y,kind,gold,t0,gone} */
-  var last = { gridAlpha: 0, gridCount: 0, brackets: [], hud: null, survey: null };
+  var last = { brackets: [], hud: null, survey: null };
 
   function now() {
     if (injected !== null) return injected;
@@ -31,21 +33,6 @@
   }
   function r3(v) { return Math.round(v * 1000) / 1000; }
   function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
-  function depthAlpha(floor) {
-    var i = (typeof floor === 'number' ? Math.floor(floor) : 1) - 1;
-    if (i < 0) i = 0;
-    if (i > DEPTH_ALPHA.length - 1) i = DEPTH_ALPHA.length - 1;
-    return DEPTH_ALPHA[i];
-  }
-  function isSeen(x, y) {
-    var M = Game.Systems && Game.Systems.Map;
-    if (M && typeof M.isSeen === 'function') return !!M.isSeen(x, y);
-    var F = Game.fov;
-    if (F && typeof F.isExplored === 'function') {
-      return F.isExplored(x, y) || (typeof F.isVisible === 'function' && F.isVisible(x, y));
-    }
-    return true; /* 极简验证页无 FOV：视为已点亮，不造假数据 */
-  }
   function visible(x, y) {
     var F = Game.fov;
     if (F && typeof F.isVisible === 'function') return !!F.isVisible(x, y);
@@ -128,11 +115,6 @@
     if (t < 80) { black = 0.72 * (t / 80); phase = 'in'; }
     else if (t < 360) { black = 0.72; phase = 'survey'; }
     else { black = 0.72 * (1 - (t - 360) / 160); phase = 'out'; }
-    var gridA;
-    if (t < 80) gridA = 0;
-    else if (t < 160) gridA = 0.18 * ((t - 80) / 80);
-    else if (t < 360) gridA = 0.18;
-    else gridA = 0.18 * (1 - (t - 360) / 160);
     var textA;
     if (t < 80) textA = 0;
     else if (t < 160) textA = (t - 80) / 80;
@@ -145,55 +127,15 @@
     else roomA = clamp01(1 - (t - 360) / 120);
     return {
       t: Math.round(t * 100) / 100, phase: phase,
-      black: r3(black), gridAlpha: r3(gridA), textAlpha: r3(textA), roomAlpha: r3(roomA),
+      black: r3(black), textAlpha: r3(textA), roomAlpha: r3(roomA),
       floor: survey.floor, w: survey.w, h: survey.h, rooms: survey.rooms.length,
       title: 'F' + survey.floor,
       sub: survey.w + ' × ' + survey.h + ' · 已测绘'
     };
   }
 
-  /* ── X3：六格网格残迹（只画视口内、已点亮格；画在实体之下） ── */
-  function gridPoints(grid, cam, W, H) {
-    var pts = [];
-    if (!grid || !grid.length) return pts;
-    for (var y = 0; y < grid.length; y += 6) {
-      for (var x = 0; x < grid[0].length; x += 6) {
-        if (!isSeen(x, y)) continue;
-        var px = x * TILE - cam.x, py = y * TILE - cam.y;
-        if (px < 2 || py < 2 || px > W - 2 || py > H - 2) continue;
-        pts.push({ x: px, y: py });
-      }
-    }
-    return pts;
-  }
-
-  function drawUnderlay(ctx, grid, player) {
-    var C = pal();
-    if (!C || !ctx || !grid) return;
-    var R = Game.Core.Render;
-    var cam = (R && typeof R._cam === 'function') ? R._cam() : { x: 0, y: 0 };
-    var W = R ? R.cssW : 960, H = R ? R.cssH : 540;
-    var sf = surveyFrame();
-    var floor = (player && typeof player.floor === 'number') ? player.floor : 1;
-    var alpha = depthAlpha(floor);
-    if (sf && sf.gridAlpha > alpha) alpha = sf.gridAlpha;
-    if (!(alpha > 0)) { last.gridAlpha = 0; last.gridCount = 0; return; }
-    var pts = gridPoints(grid, cam, W, H);
-    last.gridAlpha = r3(alpha);
-    last.gridCount = pts.length;
-    ctx.save();
-    ctx.strokeStyle = C.cyan;
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = 1;
-    for (var i = 0; i < pts.length; i++) {
-      var px = Math.round(pts[i].x) + 0.5, py = Math.round(pts[i].y) + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(px - 1, py); ctx.lineTo(px + 1, py);
-      ctx.moveTo(px, py - 1); ctx.lineTo(px, py + 1);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
+  /* X3（六格网格残迹）已在 D-114 整层删除：实测只改地图区 0.02–0.03% 像素，
+   * 属于"看不见却占着代码"的测量层。绘图入口 drawUnderlay 一并移除。 */
 
   /* ── X2：目标四角括号（陷阱 / 容器 / 楼梯 / 精英） ── */
   var CONTAINERS = { chest: 1, room_chest: 1, gold_pile: 1, potion_stash: 1 };
@@ -257,25 +199,8 @@
     var W = R ? R.cssW : 960, H = R ? R.cssH : 540;
     var p = player || Game.Data.Player;
 
-    /* X1：右上水印（两行；坐标逐格更新） */
-    if (p) {
-      var M = Game.Systems && Game.Systems.Map;
-      var floor = (typeof p.floor === 'number') ? p.floor : 1;
-      var sizes = (Game.Data.MAPS && Game.Data.MAPS.sizes) || [];
-      var sz = sizes[(floor - 1) % sizes.length] || null;
-      ctx.save();
-      ctx.textAlign = 'right';
-      ctx.font = '11px monospace';
-      ctx.fillStyle = C.cyan;
-      ctx.globalAlpha = 0.45;
-      ctx.fillText('F' + floor + (sz ? (' · ' + sz[0] + '×' + sz[1]) : ''), W - 8, 58);
-      ctx.font = '10px monospace';
-      ctx.fillStyle = C.label;
-      ctx.globalAlpha = 0.32;
-      var xs = (typeof p.x === 'number') ? p.x : 0, ys = (typeof p.y === 'number') ? p.y : 0;
-      ctx.fillText('x ' + (xs < 10 ? '0' + xs : xs) + '  y ' + (ys < 10 ? '0' + ys : ys), W - 8, 72);
-      ctx.restore();
-    }
+    /* X1（右上水印）已在 D-114 删除：楼层归顶栏、地图格数只由 T1 测绘临时显示，
+     * 调试坐标（x 14 y 09）不再出现在玩家可见界面。 */
 
     /* X2：目标框淡入 120ms / 淡出 200ms（时间戳只来自可注入时钟，不掷随机数） */
     var list = collectTargets(p);
@@ -335,10 +260,12 @@
     last.survey = sf;
     ctx.save();
     /* 0–80 压入 / 360–520 退去：黑场只覆盖画面，不接管输入 */
+    /* 0–80 压入 / 360–520 退去：黑场只覆盖地图区（y≥43），
+     * 顶栏 0–28 与读数带 28–42 不被压暗——一句话：黑场不碰 HUD，只压地图。 */
     if (sf.black > 0) {
       ctx.fillStyle = '#06060c';
       ctx.globalAlpha = sf.black;
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, HUD_SAFE_H, W, Math.max(0, H - HUD_SAFE_H));
     }
     /* 房间四角括号（最多 6 个，臂长 6px，青色 0.55） */
     if (sf.roomAlpha > 0 && survey && survey.rooms.length) {
@@ -425,23 +352,21 @@
       ctx.fillStyle = C.cyan; ctx.fillText(expS, expX, 39);
       m.left = { x: 8, w: Math.round(endX - 8), text: 'LV' + lvS + ' ' + expS, bar: { x: barX, y: 34, w: barW, h: 4, seg: 10, ratio: r3(ratio) } };
     }
-    /* 中簇：ATK / 刀（战斗里改为 有效攻击），以 W/2 为锚点居中 */
+    /* 中簇：ATK（唯一口径 = Player.atk，与战斗伤害公式同源；D-114 去掉了"有效攻击/刀"两种写法），
+     * 以 W/2 为锚点居中。
+     * D-118：窄档（320/390，此时 tiny）右对齐补 ATK——这三档的右侧没有突破簇，
+     * 左簇右缘 ~110px，右对齐不会与 LV/经验挤在一起；420–519 的窄档仍居中，
+     * 因为那时右簇有"突破"，右对齐会撞上去。 */
     var atk = (typeof P.atk === 'number') ? P.atk : null;
-    var I = Game.Systems && Game.Systems.Inventory;
-    var wid = P.equipment && P.equipment.weapon;
-    var eff = (I && typeof I.atkOf === 'function' && wid) ? I.atkOf(wid, lv || 1) : null;
-    var battle = (Game.Core.Main && Game.Core.Main._scene === 'battle');
-    if (!narrow && typeof atk === 'number') {
-      var parts = battle
-        ? [{ s: '有效攻击 ', c: C.label }, { s: String(eff === null ? atk : eff), c: C.cyan }]
-        : [{ s: 'ATK ', c: C.label }, { s: String(atk), c: C.cyan }];
-      if (!battle && typeof eff === 'number') {
-        parts.push({ s: ' 刀 ', c: C.label });
-        parts.push({ s: String(eff), c: C.blue });
-      }
+    if (typeof atk === 'number' && (!narrow || tiny)) {
+      var parts = [{ s: 'ATK ', c: C.label }, { s: String(atk), c: C.cyan }];
       var total = 0, i;
       for (i = 0; i < parts.length; i++) total += mw(parts[i].s);
-      var mx = Math.round(W / 2 - total / 2);
+      var mx = (narrow && tiny) ? Math.round(W - 8 - total) : Math.round(W / 2 - total / 2);
+      /* 兜底：右对齐若会压到左簇，就退回居中（320/390 实测余量 >150px，不会触发） */
+      if (narrow && tiny && m.left && mx < m.left.x + m.left.w + 6) {
+        mx = Math.round((m.left.x + m.left.w + (W - 8)) / 2 - total / 2);
+      }
       plate(mx, total);
       var cur = mx;
       for (i = 0; i < parts.length; i++) {
@@ -449,7 +374,8 @@
         ctx.fillText(parts[i].s, cur, 39);
         cur += mw(parts[i].s);
       }
-      m.mid = { x: mx, w: Math.round(total), text: parts.map(function (q) { return q.s; }).join('') };
+      m.mid = { x: mx, w: Math.round(total), text: parts.map(function (q) { return q.s; }).join(''),
+        align: (narrow && tiny) ? 'right' : 'center', bottom: 42 };
     }
     /* 右簇：突破 + 三态（与第 4 页共用 Sys.breakthrough()） */
     var brk = (typeof Game.Sys.breakthrough === 'function') ? Game.Sys.breakthrough() : null;
@@ -506,23 +432,18 @@
     _setClock: function (ms) { injected = (typeof ms === 'number') ? ms : null; },
     _reset: function () {
       injected = null; survey = null; targets = {};
-      last = { gridAlpha: 0, gridCount: 0, brackets: [], hud: null, survey: null };
+      last = { brackets: [], hud: null, survey: null };
     },
-    _peek: function () { return { clock: now(), grid: { alpha: last.gridAlpha, count: last.gridCount }, brackets: last.brackets.slice(), hud: last.hud, survey: last.survey }; },
+    _peek: function () { return { clock: now(), brackets: last.brackets.slice(), hud: last.hud, survey: last.survey }; },
+    HUD_SAFE_H: HUD_SAFE_H,
 
     /* T1 */
     armSurvey: armSurvey,
     _armSurvey: armSurvey,
     _surveyFrame: surveyFrame,
-    _gridPoints: function () {
-      var R = Game.Core.Render;
-      return gridPoints(Game.Systems.Map.getGrid(), R._cam(), R.cssW, R.cssH);
-    },
     _targets: function (player) { return collectTargets(player || Game.Data.Player); },
-    _depthAlpha: depthAlpha,
 
     /* 绘制钩子（由 render.js / main.js 调用；全部纯绘制） */
-    drawUnderlay: drawUnderlay,
     drawMarkers: drawMarkers,
     drawEvent: drawEvent,
     drawHudBand: drawHudBand
