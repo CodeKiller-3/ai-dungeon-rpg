@@ -49,9 +49,13 @@
     return item.life > 0;
   }
 
-  /* 受击闪白/红闪叠加层（在 sprite 矩形上叠一层颜色） */
+  /* 受击闪白/红闪叠加层（在 sprite 矩形上叠一层颜色）
+   * D-101：带 who 的战斗受击项不再自己画像素——闪白统一由 render 的 tintSprite
+   * 按精灵轮廓着色（A1 口径），本模块只提供 alpha 账本；无 who 的旧调用方
+   * （如 S3-4 独立验证页）保持原来的矩形叠加 + 边缘红晕行为。 */
   function drawFlash(ctx, item) {
     var ratio = Math.max(0, item.life / item.maxLife);
+    if (item.who) return;
     var shake = 0;
     if (item.type === 'hit' && (item.maxLife - item.life) < SHAKE_MS) {
       /* 水平抖动：前 SHAKE_MS 毫秒内 ±SHAKE_AMP px，用 sin 让方向交替 */
@@ -69,22 +73,22 @@
     }
     ctx.fillStyle = color;
     ctx.fillRect(dx, item.y, item.w, item.h);
+    if (item.type === 'hurt') drawVignette(ctx, ratio);
+  }
 
-    /* 玩家受击额外：屏幕边缘低强度红晕（仅 hurt 类型） */
-    if (item.type === 'hurt') {
-      var sz = cssSize();
-      if (sz.w > 0 && sz.h > 0) {
-        var a = (0.18 * ratio).toFixed(3);
-        var grd = ctx.createRadialGradient(
-          sz.w / 2, sz.h / 2, Math.min(sz.w, sz.h) * 0.3,
-          sz.w / 2, sz.h / 2, Math.max(sz.w, sz.h) * 0.75
-        );
-        grd.addColorStop(0, 'rgba(255,0,0,0)');
-        grd.addColorStop(1, 'rgba(255,0,0,' + a + ')');
-        ctx.fillStyle = grd;
-        ctx.fillRect(0, 0, sz.w, sz.h);
-      }
-    }
+  /* 玩家受击额外：屏幕边缘低强度红晕 */
+  function drawVignette(ctx, ratio) {
+    var sz = cssSize();
+    if (!(sz.w > 0 && sz.h > 0)) return;
+    var a = (0.18 * ratio).toFixed(3);
+    var grd = ctx.createRadialGradient(
+      sz.w / 2, sz.h / 2, Math.min(sz.w, sz.h) * 0.3,
+      sz.w / 2, sz.h / 2, Math.max(sz.w, sz.h) * 0.75
+    );
+    grd.addColorStop(0, 'rgba(255,0,0,0)');
+    grd.addColorStop(1, 'rgba(255,0,0,' + a + ')');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, sz.w, sz.h);
   }
 
   Game.Feedback = {
@@ -102,6 +106,11 @@
           y: opts.y || 0,
           w: (typeof opts.w === 'number') ? opts.w : 90,
           h: (typeof opts.h === 'number') ? opts.h : 90,
+          /* D-101：who / color / alpha 让"受击闪白"成为唯一账本，
+           * render 按 who 取 alpha 给 tintSprite，颜色沿用纵置既有口径。 */
+          who: opts.who || null,
+          color: opts.color || (opts.kind === 'hit' ? '#ffffff' : '#ff5a5a'),
+          alpha: (typeof opts.alpha === 'number') ? opts.alpha : (opts.kind === 'hit' ? 0.7 : 0.6),
           maxLife: (typeof opts.life === 'number') ? opts.life : (opts.kind === 'hit' ? HIT_LIFE : HURT_LIFE)
         };
       } else {
@@ -119,6 +128,11 @@
           x: opts.x || 0,
           y: opts.y || 0,
           text: (opts.text == null) ? '' : String(opts.text),
+          /* D-107：同侧伤害播报需要按 who 合并——一条存活时后续命中累加到这条，
+           * 不再生成第二条；val/hits 是只读账面字段，不参与游戏逻辑。 */
+          who: opts.who || null,
+          val: (typeof opts.val === 'number') ? opts.val : null,
+          hits: (typeof opts.hits === 'number' && opts.hits > 0) ? opts.hits : 1,
           color: crush ? (opts.who === 'player' ? '#ff3b30' : '#ff5a2a')
             : (opts.color || '#ffffff'),
           /* D-16：伤害分级——普通 18px / 高伤 24~26px（默认 18px，旧调用方行为不变） */
@@ -189,13 +203,77 @@
 
     /* 测试/调试用：清空所有反馈 */
     _clear: function () { items = []; },
+    /* D-107：同侧伤害播报合并——该侧已有一条存活飘字时，把后到的伤害累加进去，
+     * 不再生成第二条。返回 true 表示已合并。
+     * 寿命不刷新：一条飘字从首次命中起按自己的 620/760ms 走完就消散，累加窗口因此有界
+     * （180ms/回合时约 3–4 击），既不会无限长大成"全场总伤害"，也不会越飘越远离锚点；
+     * 消散后的下一次命中重新起一条，读起来是"这一小段的合计"，不是一坨。
+     * 碾压档仍按 Fx 档位重算样式；普通/高伤只升不降（26px 命中后不会缩回 18px）。 */
+    mergeText: function (who, add, opts) {
+      for (var i = items.length - 1; i >= 0; i--) {
+        var it = items[i];
+        if (it.type !== 'text' || it.who !== who || it.life <= 0) continue;
+        var crush = false, lv = 'off';
+        if (opts && opts.tier === 'crush') {
+          var Fx = Game.Fx;
+          lv = (Fx && typeof Fx.effectiveLevel === 'function') ? Fx.effectiveLevel() : 'off';
+          crush = lv !== 'off';
+        }
+        it.val = (typeof it.val === 'number' ? it.val : 0) + (add || 0);
+        it.hits = (it.hits || 1) + 1;
+        it.text = '-' + it.val;
+        if (crush) {
+          it.crush = true;
+          it.size = (lv === 'high') ? 36 : 32;
+          it.color = (who === 'player') ? '#ff3b30' : '#ff5a2a';
+          it.maxLife = 820;
+        } else if (opts && opts.size > it.size) {
+          it.size = opts.size;
+          it.color = opts.color || it.color;
+          it.maxLife = Math.max(it.maxLife, opts.life || 0);
+        }
+        return true;
+      }
+      return false;
+    },
+    /* D-107 只读账本：某侧当前存活的伤害飘字（断言同侧不叠、y 间距用） */
+    liveTexts: function (who) {
+      var out = [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (it.type !== 'text' || it.who !== who || it.life <= 0) continue;
+        out.push({ x: it.x, y: it.y, text: it.text, val: it.val, hits: it.hits, size: it.size });
+      }
+      return out;
+    },
+    /* 换场时清掉残留飘字，避免上一场的累计值被带进新战斗 */
+    clearTexts: function () {
+      for (var i = items.length - 1; i >= 0; i--) {
+        if (items[i].type === 'text') items.splice(i, 1);
+      }
+    },
     /* 测试用：当前存活数 */
     _count: function () { return items.length; },
+    /* D-101：受击闪白只读账本——render 用它给 tintSprite 取 alpha。
+     * 返回当前最强的一条 { alpha, color }，没有则 null（调用方回退 Fx）。 */
+    flashOf: function (who) {
+      var best = null;
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        if (!it.who || it.who !== who) continue;
+        if (it.type !== 'hit' && it.type !== 'hurt') continue;
+        var k = Math.max(0, it.life / it.maxLife);
+        if (!(k > 0)) continue;
+        var a = it.alpha * k;
+        if (!best || a > best.alpha) best = { alpha: a, color: it.color };
+      }
+      return best;
+    },
     /* D-70 测试用：飘字样式快照（只读；不参与游戏逻辑） */
     _items: function () {
       return items.map(function (it) {
         return { type: it.type, text: it.text, color: it.color,
-          size: it.size, life: it.maxLife, crush: !!it.crush };
+          size: it.size, life: it.maxLife, crush: !!it.crush, who: it.who || null };
       });
     }
   };

@@ -1,10 +1,10 @@
 /* js/systems/battle.js — 回合制战斗系统
  * 接口：start / playerAction / getState / tick（见 PLAN.md §4.4）
  * M8-1：playerAction 纯新增 'skill:fireball' / 'skill:dash' / 'skill:shield'（attack/defend/run 语义不变）
- * 伤害公式：max(攻击方 atk - 防御方 def, 1)；防御指令本回合减伤 50%
+ * 伤害公式：max(1, round(atk²/(atk+def)))（比例减伤）；防御指令本回合减伤 50%
  * 技能伤害：max(round(atk × 技能倍率) - 敌方 def, 1)（倍率版既有公式）
  * 护盾：battle state.shieldValue 本次战斗内抵挡等量伤害，扣完归零
- * M8-6：exp 达标自动升级（D-41 起 L1–L4 为 15×level、L5+ 为 60×level，每级 atk/def+1、maxHp+10，升级回满 HP/MP）
+ * M8-6：exp 达标自动升级（阈值见 GROWTH.expToNext，升级档位见 GROWTH.tiers / milestones，升级回满 HP/MP）
  * 来源：参考 freeCodeCamp RPG 教程重构（自写实现）
  * 事件：battle:start / battle:end */
 (function () {
@@ -78,32 +78,23 @@
     return Math.max(1, Math.round(a * a / (a + d)));
   }
 
-  /* M8-6：升级成长——经验阈值 expToNext(level) = 基数 × level（L1→L2 需 基数，全部可复算）
-   * D-41：分两段。L1–L4 基数 15（早期等级便宜，普通推进在 F2–F3 就能到 L5）；
-   * L5 起基数仍 60（后期不加速，全图清完约 L9–L10，不把终局抬到无人区）。
-   * D-40 实测旧曲线（全程 60）下 L5 要 600 经验、M1 全清必死 F2；本卡只改阈值，
-   * 每级增量（+1/+1/+10/+0）与伤害公式都不动。
-   * 两个基数挂在导出对象上，仅为 D-41 的负例能还原旧曲线（early=60）做同种子对照，正常游戏不改它。 */
-  /* D-65：经验基数的默认值来自 Game.Data.GROWTH.expBase（唯一来源）；
-   * Battle.expEarlyBase / expCurveBase 仍可覆盖，只给 D-41 的负例还原旧曲线用。 */
-  function expBase(level) {
-    var B = Game.Systems.Battle;
-    var G = Game.Data.GROWTH;
-    var early = (B && typeof B.expEarlyBase === 'number') ? B.expEarlyBase : G.expBase.early;
-    var late = (B && typeof B.expCurveBase === 'number') ? B.expCurveBase : G.expBase.late;
-    var base = (level < G.expBase.split) ? early : late;
-    return base > 0 ? base : G.expBase.early;
-  }
+  /* M8-6：升级成长——经验阈值不在这里定义，唯一来源是 Game.Data.GROWTH.expToNext
+   * （分段基数 + 末格覆写都在那张成长表里）；每级增益见 GROWTH.tiers 与 GROWTH.milestones。
+   * 本函数只做"取值"，不复制任何基数或档位数字。
+   * Battle.expEarlyBase / expCurveBase 仅在 D-41/D-37 的负例里覆盖，用于还原旧曲线做同种子对照。 */
   function expToNext(level) {
     var lv = (typeof level === 'number' && level >= 1) ? level : 1;
-    /* D-84 r3：最后一格（L10→L11）由成长表覆写为 200；其余等级仍走 base×level。
-     * 数值来源只留在 GROWTH.lastStep，battle 只读不复制。 */
-    var G0 = Game.Data.GROWTH;
-    if (G0 && G0.lastStep && typeof G0.lastStep[lv] === 'number') return G0.lastStep[lv];
-    return expBase(lv) * lv;
+    var B = Game.Systems.Battle;
+    /* D-96：实现只有一份——直接问成长表。两个基数覆盖项作为可选参数传入，
+     * 仍只服务 D-41/D-37 的负例；正常游戏不设覆盖，等价于成长表默认值。 */
+    var ov = null;
+    if (B && (typeof B.expEarlyBase === 'number' || typeof B.expCurveBase === 'number')) {
+      ov = { early: B.expEarlyBase, late: B.expCurveBase };
+    }
+    return Game.Data.GROWTH.expToNext(lv, ov);
   }
 
-  /* M8-6：exp 达标自动升级（可连续、溢出保留）；每级 atk+1/def+1/maxHp+10（L1 基础 10/5/100），
+  /* M8-6：exp 达标自动升级（可连续、溢出保留）；每级增益与 L11 觉醒见 GROWTH.tiers / milestones，
    * 升级回满 hp/mp。幂等：exp 不足时无变化，重复调用不重复升级。
    * 属性重算交给 Inventory.recalcEquip（基础属性随等级 + 装备加成），未加载时按成长公式兜底 */
   function checkLevelUp() {
@@ -240,15 +231,52 @@
       : ((cv && cv.clientHeight) || (cv && cv.height) || 380);
     return { w: w, h: h };
   }
+  /* D-101：站位随布局走——横置时敌人/玩家分别站在 groundY 上的 0.76W / 0.24W，
+   * 纵置保持 D-16 的上下站位。所有特效锚点都从这一处派生，S1 再改分区不必重写特效。 */
+  /* D-102：纵置精灵落点改比例式后，锚点必须跟"实际画出来的框"走，不能再假设 y=90 / h−190。
+   * 上一帧的 _lastBattleBox 是唯一真相；首帧之前按同一套比例公式回退（不含素材尺寸时按 90 高）。 */
+  function drawnBox(who) {
+    var R = Game.Core && Game.Core.Render;
+    var b = R && R._lastBattleBox;
+    if (!b || !b[who] || !(b[who].w > 0) || !(b[who].h > 0)) return null;
+    /* 布局/视口一换，上一帧的框立即作废（否则切布局后的第一次行动会取到旧框） */
+    var nowLay = (typeof R._battleLayoutNow === 'function') ? R._battleLayoutNow() : b.layout;
+    if (b.layout !== nowLay || b.W !== R.cssW || b.H !== R.cssH) return null;
+    return b[who];
+  }
   function monsterPos() {
     var sz = battleSize();
+    var d = drawnBox('monster');
+    if (d) {
+      var dy = (typeof d.baseTop === 'number') ? d.baseTop : d.y;
+      return { x: d.x, y: dy, w: d.w, h: d.h, cx: d.x + d.w / 2, cy: dy + d.h / 2 };
+    }
+    if (battleLayoutH()) {
+      var hg = hBattleGeo();
+      if (hg) {
+        return { x: hg.enemyCx - 45, y: hg.groundY - 90, w: 90, h: 90, cx: hg.enemyCx, cy: hg.groundY - 45 };
+      }
+    }
     var cx = sz.w / 2;
-    return { x: cx - 45, y: 90, w: 90, h: 90, cx: cx, cy: 135 };
+    var top = Math.max(Math.round(sz.h * 0.30) - 90, 106);
+    return { x: cx - 45, y: top, w: 90, h: 90, cx: cx, cy: top + 45 };
   }
   function playerPos() {
     var sz = battleSize();
+    var d = drawnBox('player');
+    if (d) {
+      var dy2 = (typeof d.baseTop === 'number') ? d.baseTop : d.y;
+      return { x: d.x, y: dy2, w: d.w, h: d.h, cx: d.x + d.w / 2, cy: dy2 + d.h / 2 };
+    }
+    if (battleLayoutH()) {
+      var hg2 = hBattleGeo();
+      if (hg2) {
+        return { x: hg2.playerCx - 45, y: hg2.groundY - 90, w: 90, h: 90, cx: hg2.playerCx, cy: hg2.groundY - 45 };
+      }
+    }
     var cx = sz.w / 2;
-    var top = sz.h - 190;
+    var barH = (sz.w < 590) ? 150 : 96;
+    var top = Math.min(sz.h - barH - 8, Math.round(sz.h * 0.72)) - 90;
     return { x: cx - 45, y: top, w: 90, h: 90, cx: cx, cy: top + 45 };
   }
 
@@ -284,22 +312,54 @@
   /* D-89：接触点——火花/冲击环的落点，必须在"我方剑锋与对方身体的交界处"。
    * 敌方：站在上方，玩家从下方上撩，落点取身体下缘偏右（骑士持剑侧）；
    * 我方：怪物从上方下劈，落点取骑士上缘偏右（盾/肩交界）。
-   * D-94 P5：横置改取"朝向对手的那一侧"——敌人在右取左缘，玩家在左取右缘。 */
+   * D-94 P5：横置改取"朝向对手的那一侧"——敌人在右取左缘，玩家在左取右缘。
+   * D-104：横置不再写死 groundY−46 / −48；落点按实际绘制框的比例取，
+   * 2× 整数倍精灵变矮后锚点仍跟着身体走（断言：锚点 == contact 返回值）。 */
   function contactMonster() {
-    if (battleLayoutH()) {
-      var hg = hBattleGeo();
-      if (hg) return { x: hg.enemyCx - 34, y: hg.groundY - 46 };
-    }
     var m = monsterPos();
-    return { x: m.cx + 24, y: m.cy + 30 };
+    if (battleLayoutH()) {
+      return { x: Math.round(m.x + m.w * 0.22), y: Math.round(m.y + m.h * 0.52) };
+    }
+    return { x: m.cx + Math.round(m.w * 0.25), y: m.y + Math.round(m.h * 0.84) };
   }
   function contactPlayer() {
+    var p = playerPos();
     if (battleLayoutH()) {
-      var hg2 = hBattleGeo();
-      if (hg2) return { x: hg2.playerCx + 24, y: hg2.groundY - 48 };
+      return { x: Math.round(p.x + p.w * 0.78), y: Math.round(p.y + p.h * 0.47) };
+    }
+    return { x: p.cx + Math.round(p.w * 0.33), y: p.y + Math.round(p.h * 0.26) };
+  }
+
+  /* D-101：飘字锚点与精灵中心也从接触点/站位派生，调用方不再自己拼坐标。
+   * 纵置沿用美学整改 A1 的"敌方头顶上方 22px / 我方右侧 70px"；
+   * 横置放在两人之间的空场，与 D-94 P5 的 enemyCx−78 / playerCx+78 完全一致。
+   * D-102：纵置的 97px 硬偏移改为随精灵框走（龙 144 高时仍是头顶上方 22px）。 */
+  function textMonster() {
+    if (battleLayoutH()) {
+      var c = contactMonster();
+      return { x: c.x - 44, y: c.y };
+    }
+    var m = monsterPos();
+    return { x: m.cx, y: m.y - 22 };
+  }
+  function textPlayer() {
+    if (battleLayoutH()) {
+      var c = contactPlayer();
+      return { x: c.x + 54, y: c.y + 2 };
     }
     var p = playerPos();
-    return { x: p.cx + 16, y: p.cy - 22 };
+    return { x: p.cx + 70, y: p.y + Math.round(p.h * 0.26) + 7 };
+  }
+  /* 精灵中心（Juice 冲击圈用）——横置是双方站位中点，不再固定 135 / h−145 */
+  function bodyPoint(who) {
+    var q = (who === 'player') ? playerPos() : monsterPos();
+    return { x: q.cx, y: q.cy };
+  }
+
+  /* D-107：同侧只保留一条飘字（后到命中在当前条目上累加），因此不再需要多车道；
+   * 车道恒为 0，保证任何时刻同侧 y 差不依赖回合号。 */
+  function textLane() {
+    return 0;
   }
 
   /* D-16：一次命中的表现打包（顿帧/震屏/挤退/局部闪白/斩击弧）——纯视觉，Game.Fx 缺失时静默跳过 */
@@ -337,11 +397,29 @@
     });
   }
 
+  /* D-101：受击闪白登记到 Feedback（把 S3-4 的 hit/hurt 分支接回调用）。
+   * 透明度/时长直接取 Fx 的 preset（0.6 / 110ms），与纵置既有闪白同一份数值，不另创；
+   * 像素仍由 render 的 tintSprite 按精灵轮廓着色（美学整改 A1），Feedback 只做
+   * "谁被打了、闪多久"的唯一账本，避免两处各画一层。 */
+  function spawnHitFlash(who) {
+    if (!Game.Feedback || typeof Game.Feedback.spawn !== 'function') return;
+    var Fx = Game.Fx;
+    var pr = (Fx && typeof Fx._state === 'function') ? (Fx._state().preset || null) : null;
+    var box = (who === 'monster') ? monsterPos() : playerPos();
+    Game.Feedback.spawn({
+      kind: (who === 'monster') ? 'hit' : 'hurt',
+      who: who,
+      x: box.x, y: box.y, w: box.w, h: box.h,
+      color: (who === 'monster') ? '#ffffff' : '#ff5a5a',
+      alpha: pr ? pr.flash : 0.6,
+      life: pr ? Math.min(pr.flashMs, 120) : 110
+    });
+  }
+
   /* S3-4：仅在统一伤害入口触发反馈，不修改任何数值与 emit
    * M9-3：命中处同时生成 spark 粒子
    * D-16：登记时间轴事件 + 记录"上次行动"（战斗界面中段信息带用）+ 触发 Fx */
   function spawnHitMonster(dmg, opt) {
-    var m = monsterPos();
     var heavy = isHeavy(dmg, state ? state.monster.maxHp : 0);
     var tier = dmgTier(dmg, state ? state.monster.maxHp : 0); /* D-70：仅展示分级 */
     var o = opt || {};
@@ -350,19 +428,25 @@
       state.lastAction = { by: 'player', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
-      /* 美学整改 A1：飘字锚点从精灵中心（m.cy）移到头顶上方 22px，
-       * 数字不再压在怪物脸上；主体轮廓始终完整可见。
-       * D-94 P5：横置改锚在敌人"面朝玩家"的一侧外沿（enemyCx−78），数字不进剪影也不飘到中线。 */
-      var hLayM = battleLayoutH();
-      var hgM = hLayM ? hBattleGeo() : null;
-      Game.Feedback.spawn({
-        x: hgM ? (hgM.enemyCx - 78) : m.cx,
-        y: hgM ? (hgM.groundY - 46) : (m.y - 22),
+      /* D-107：同侧只留一条飘字——已有存活条目时就地累加并刷新寿命，
+       * 没有才新建；这样连续命中不会在同一锚点上叠 3–4 条。 */
+      var tp = textMonster();
+      var o = {
+        x: tp.x,
+        y: tp.y + textLane(),
         text: '-' + dmg, tier: tier, who: 'monster',
+        val: dmg, hits: 1,
         color: heavy ? '#ffc14d' : '#ffffff',
         size: heavy ? 26 : 18, life: heavy ? 760 : 620
-      });
+      };
+      if (typeof Game.Feedback.mergeText === 'function' &&
+        Game.Feedback.mergeText('monster', dmg, o)) {
+        /* 已并入当前这条 */
+      } else {
+        Game.Feedback.spawn(o);
+      }
     }
+    spawnHitFlash('monster');
     fxHit('monster', dmg, { color: o.color, slash: o.slash !== false });
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
       /* 第三拨 D-88：落点火花——从命中点朝"刀刃来向"反向溅开（向上 + 左右散）。
@@ -378,7 +462,6 @@
     }
   }
   function spawnHurtPlayer(dmg) {
-    var p = playerPos();
     var heavy = isHeavy(dmg, Game.Data.Player.maxHp);
     var tier = dmgTier(dmg, Game.Data.Player.maxHp); /* D-70：仅展示分级 */
     pushEvent('monster-hit', { dmg: dmg, heavy: heavy });
@@ -386,20 +469,24 @@
       state.lastAction = { by: 'monster', name: state.monster.name, dmg: dmg, heavy: heavy, tier: tier, at: now() };
     }
     if (Game.Feedback && typeof Game.Feedback.spawn === 'function') {
-      /* 美学整改 A1：玩家头顶被血条（414~434）占满，飘字改锚在精灵右侧外沿（cx+70），
-       * 同样不进剪影；"-XX" 三/四字宽约 43px，与精灵右边缘留 ≥20px 间隙。
-       * D-94 P5：横置玩家在左，锚点放在骑士右侧外沿（playerCx+78），数字落在两人之间的
-       * 空场里，既不压剪影也不进铭牌带。 */
-      var hLayP = battleLayoutH();
-      var hgP = hLayP ? hBattleGeo() : null;
-      Game.Feedback.spawn({
-        x: hgP ? (hgP.playerCx + 78) : (p.cx + 70),
-        y: hgP ? (hgP.groundY - 46) : (p.y + 30),
+      /* D-107：玩家侧同样只留一条，后续受击并入当前数值 */
+      var tp = textPlayer();
+      var o = {
+        x: tp.x,
+        y: tp.y + textLane(),
         text: '-' + dmg, tier: tier, who: 'player',
+        val: dmg, hits: 1,
         color: heavy ? '#ff8a3d' : '#ff5555',
-        size: heavy ? 24 : 18
-      });
+        size: heavy ? 24 : 18, life: heavy ? 760 : 620
+      };
+      if (typeof Game.Feedback.mergeText === 'function' &&
+        Game.Feedback.mergeText('player', dmg, o)) {
+        /* 已并入当前这条 */
+      } else {
+        Game.Feedback.spawn(o);
+      }
     }
+    spawnHitFlash('player');
     fxHit('player', dmg, {});
     if (Game.Particles && typeof Game.Particles.spawn === 'function') {
       /* 玩家被反击：落点火花同样从接触点（骑士上缘偏右）向下/向外溅，配合 Fx 的"顶住 50ms"，
@@ -413,12 +500,13 @@
     }
   }
 
-  /* M9-3：怪物死亡——生成 soul（灵魂上浮）+ shard（碎片飞溅）粒子 */
+  /* M9-3：怪物死亡——生成 soul（灵魂上浮）+ shard（碎片飞溅）粒子
+   * D-101：锚点统一到 contactMonster()，与冲击圈/飘字同源（横置落在 0.76W 的接触点）。 */
   function spawnDeathParticles() {
     if (!Game.Particles || typeof Game.Particles.spawn !== 'function') return;
-    var m = monsterPos();
-    Game.Particles.spawn('soul', m.cx, m.cy, { count: 4 });
-    Game.Particles.spawn('shard', m.cx, m.cy, { count: 8, color: state.monster.color });
+    var c = contactMonster();
+    Game.Particles.spawn('soul', c.x, c.y, { count: 4 });
+    Game.Particles.spawn('shard', c.x, c.y, { count: 8, color: state.monster.color });
   }
 
   /* 怪物死亡结算（逻辑部分）：经验/金币/掉落 + 任务推进
@@ -501,7 +589,10 @@
     pushEvent('monster-attack');
     /* M8-2：狂暴后每回合 chance 概率用烈焰吐息替代普攻（伤害 = round(狂暴atk × dmgMul)） */
     var useBreath = !!(state.enraged && ed && ed.skill && Math.random() < ed.skill.chance);
-    state.monsterActionAt = performance.now(); /* M9-3：怪物攻击前摇帧 */
+    /* D-107：起手拍已在 monster-windup 置过前摇帧，命中帧不再把它推迟 */
+    if (!(state.monsterActionAt >= (state.turnRec ? state.turnRec.startedAt : 0))) {
+      state.monsterActionAt = now();
+    }
     var atkVal = useBreath ? Math.round(monsterAtk() * ed.skill.dmgMul) : monsterAtk();
     var raw = state.defending ? Math.max(Math.floor(damage(atkVal, p.def) / 2), 1) : damage(atkVal, p.def);
     state.defending = false;
@@ -685,6 +776,41 @@
     if (!state) return;
     state.pending = { due: t0 + TL.seg1 };
     state.phase = 'monster';
+    /* D-107 S3：两段三拍节点表。玩家段：出手（同帧结算）→ 落定；怪物段：
+     * 起手 → 命中 → 落定；最后回合收束。tick 每帧最多推进一个节点。 */
+    state.beats = [
+      { id: 'player-act', at: t0 },
+      { id: 'player-settle', at: t0 + 40 },
+      { id: 'monster-windup', at: t0 + 60 },
+      { id: 'monster-hit', at: t0 + TL.seg1 },
+      { id: 'monster-settle', at: t0 + 150 },
+      { id: 'round-end', at: t0 + TL.total }
+    ];
+    state.beatIdx = 1;   /* player-act 已在 playerAction 内当场完成 */
+    state.beatLog = state.beatLog || [];
+    state.beatLog.push({ id: 'player-act', at: t0 });
+  }
+
+  /* D-107：执行一个节点。节点本身只做"该拍的展示与结算"，不改伤害公式。 */
+  function fireBeat(b, at) {
+    if (!state || !b) return;
+    if (b.id === 'monster-windup') {
+      state.monsterActionAt = at;      /* 起手：怪物攻击前摇帧 */
+    } else if (b.id === 'monster-hit') {
+      runMonsterSegment(at);           /* 命中：沿用既有怪物段结算 */
+    }
+    /* player-settle / monster-settle 是节奏落点，无额外绘制；round-end 由既有收尾块处理 */
+  }
+
+  /* D-107：把本回合剩余节点一次性补齐（catch-up），保持"一次行动 = 一个回合" */
+  function flushBeats(at) {
+    if (!state || !state.beats) return;
+    while (state.beatIdx < state.beats.length) {
+      var b = state.beats[state.beatIdx++];
+      state.beatLog.push({ id: b.id, at: at });
+      fireBeat(b, at);
+      if (!state) return;
+    }
   }
 
   /* D-16：怪物段结算/反馈（由 tick 在到点时调用；catch-up 时由 playerAction 提前调用） */
@@ -761,10 +887,14 @@
     start: function (monsterId) {
       var def = Game.Data.MONSTERS[monsterId];
       state = {
-        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage, dread: def.dread },
+        monster: { id: def.id, name: def.name, hp: def.hp, maxHp: def.hp, atk: def.atk, def: def.def, exp: def.exp, gold: def.gold, drops: def.drops, color: def.color, enrage: def.enrage, dread: def.dread, sprite: def.sprite },
         log: ['遭遇 ' + def.name + '，战斗开始'],
         turn: 0,
         defending: false,
+        /* D-102：防御状态 chip 的展示回合——减伤仍只在当回合（monsterTurn 清 defending），
+         * 但「防御中」要按回合存活到下一次行动起拍，不再只亮 100ms 被顿帧吃掉。
+         * 与 P1 的 defendRound 同值；只读字段，不参与任何判定。 */
+        defendRound: 0,
         shieldValue: 0, /* M8-1：本次战斗临时护盾 */
         enraged: false, /* M8-2：狂暴二阶段标记 */
         enrageAtk: 0,
@@ -777,9 +907,13 @@
         buffered: null,  /* 输入锁期间缓冲的一条指令 */
         lockUntil: 0,
         turnRec: null,   /* 回合时间轴记录（时长断言读这里） */
+        /* D-107：两段三拍节点表与本回合已执行节点（验证页只读） */
+        beats: null, beatIdx: 0, beatLog: [],
         events: [],      /* [{kind:'player-hit'|'monster-hit', at, turn, dmg, heavy}] */
         lastAction: null
       };
+      /* D-107：上一场残留的伤害飘字（含合并累计值）不带到新战斗 */
+      if (Game.Feedback && typeof Game.Feedback.clearTexts === 'function') Game.Feedback.clearTexts();
       /* M8-1：新战斗冷却清零（战斗外残留冷却不带到本场） */
       if (Game.Skills && typeof Game.Skills.resetCooldowns === 'function') Game.Skills.resetCooldowns();
       Game.Core.EventBus.emit('battle:start', { monsterId: monsterId });
@@ -791,8 +925,16 @@
       if (state.dying) return state; /* M9-3：消散期间不接受任何操作 */
       var t0 = now();
       /* D-16：上一回合的怪物段还没播完（只可能来自直接 API 调用；正常输入被锁挡住）→ 先补结算，
-       * 保证"一次行动 = 一个回合"，不会把两次玩家行动压到同一时间轴。 */
-      if (state.pending) runMonsterSegment(state.pending.due);
+       * 保证"一次行动 = 一个回合"，不会把两次玩家行动压到同一时间轴。
+       * D-107：catch-up 用节点表补齐，剩余节拍全部落在本次行动这一帧之前。 */
+      if (state.beats && state.beatIdx < state.beats.length) flushBeats(t0);
+      else if (state.pending) runMonsterSegment(state.pending.due);
+      var prevRec = state.turnRec;
+      if (prevRec && !prevRec.settled) {
+        prevRec.settled = true;
+        prevRec.endedAt = prevRec.startedAt + TL.total;
+        prevRec.presentMs = TL.total;
+      }
       if (state.dying || Game.Data.Player.hp <= 0) return state;
       /* D-19：用药先判可用性——不可用时不占回合、不上输入锁、不消耗（提示走 ui:notice）。
        * 判定放在回合起拍之前，避免"按了没用的键"也被算成一次行动。 */
@@ -835,7 +977,7 @@
       };
       var skillId = null; /* M8-1：本次行动释放的技能（冷却推进时跳过它自己） */
       if (cmd === 'attack') {
-        state.playerActionAt = performance.now(); /* M9-3：玩家攻击前摇帧（纯视觉） */
+        state.playerActionAt = now(); /* M9-3：玩家攻击前摇帧（纯视觉；D-99：跟战斗时钟） */
         Game.Core.EventBus.emit('audio:play', { sfx: 'attack' });
         var dmg = damage(Game.Data.Player.atk, monsterDef());
         state.monster.hp -= dmg;
@@ -853,7 +995,7 @@
         scheduleMonster(t0);
       } else if (cmd === 'skill:fireball' || cmd === 'skill:dash' || cmd === 'skill:shield') {
         skillId = cmd.slice(6); /* 'skill:'.length === 6 */
-        state.playerActionAt = performance.now(); /* M9-3：动作帧复用玩家前摇 */
+        state.playerActionAt = now(); /* M9-3：动作帧复用玩家前摇（D-99：跟战斗时钟） */
         /* Skills.cast 负责校验 MP/冷却并触发效果；失败时不进入行动序列、不推进冷却 */
         var castOk = Game.Skills && typeof Game.Skills.cast === 'function' && Game.Skills.cast(skillId);
         if (!castOk) { state.phase = 'idle'; state.lockUntil = 0; return state; }
@@ -866,6 +1008,9 @@
         scheduleMonster(t0);
       } else if (cmd === 'defend') {
         state.defending = true;
+        /* D-102：chip 展示窗口 = 本回合。渲染读 defendRound === roundNo 才画，
+         * monsterTurn 清 defending 不影响它；下一回合起拍 roundNo 自增，chip 自然退场。 */
+        state.defendRound = state.roundNo;
         Game.Core.EventBus.emit('audio:play', { sfx: 'defend' });
         logPush('你进入防御姿态，本回合减伤 50%');
         noteTurn(); /* D-52 */
@@ -922,8 +1067,8 @@
     getState: function () { return state; },
 
     /* M8-6：升级成长接口（供 quest.js 任务奖励后调用与验证页断言）
-     * D-41：expEarlyBase（L1–L4）/ expCurveBase（L5+）是本卡改动的唯一数值入口，
-     * 默认 15 / 60；验证页可把 early 赋 60 复现旧曲线（全程 60） */
+     * D-96：实现只在 GROWTH.expToNext；下面两个基数覆盖项作为可选参数传给成长表，
+     * 仅 D-41/D-37 的负例用来复现旧曲线，正常游戏保持成长表默认值。 */
     expToNext: expToNext,
     /* D-65：默认值仍从成长表取，保持"一个常量来源"；负例仍可覆盖这两个字段 */
     expEarlyBase: Game.Data.GROWTH.expBase.early,
@@ -1002,6 +1147,7 @@
      * 主循环里由 tick 按时间推进；只有"不走帧循环、直接调 playerAction"的调用方（验证页/脚本）才需要它。 */
     flush: function () {
       if (!state) return null;
+      flushBeats(now());
       if (state.pending) runMonsterSegment(state.pending.due);
       var rec = state.turnRec;
       if (rec && !rec.settled) {
@@ -1017,6 +1163,9 @@
     _setClock: function (fn) { clock = (typeof fn === 'function') ? fn : null; return clock; },
     /* D-89：接触点只读出口（验证页据此断言火花/冲击环落在剑锋与身体交界） */
     _contact: function (who) { return (who === 'monster') ? contactMonster() : contactPlayer(); },
+    /* D-101：统一锚点只读出口——精灵中心（Juice 冲击圈）与飘字锚点（未含车道偏移） */
+    _body: function (who) { return bodyPoint(who); },
+    _text: function (who) { return (who === 'monster') ? textMonster() : textPlayer(); },
     /* D-51：暂停恢复——把"暂停期间流逝的真实时长"一次性补进偏移量。
      * 恢复后的第一帧 now() 仍等于暂停前的时刻，pending/lockUntil/finalizeAt 的剩余量分毫不动，
      * 因此不会跳帧、不会把怪物段补结算两次，输入锁也照原样继续倒数。 */
@@ -1051,6 +1200,16 @@
       if (typeof ts === 'number' && isFinite(ts)) frameNow = ts;  /* 与主循环同钟 */
       if (!state) return;
       var t = now();
+      /* D-107 S3：每帧最多推进一个节点（不合并、不跳拍） */
+      if (state.beats && state.beatIdx < state.beats.length) {
+        var bt = state.beats[state.beatIdx];
+        if (t >= bt.at) {
+          state.beatIdx++;
+          state.beatLog.push({ id: bt.id, at: bt.at });
+          fireBeat(bt, bt.at);
+        }
+      }
+      if (!state) return;
       /* 1) 怪物段到点 → 结算/反馈（玩家伤害与怪物反击因此分属两帧） */
       if (state.pending && t >= state.pending.due) runMonsterSegment(state.pending.due);
       if (!state) return;

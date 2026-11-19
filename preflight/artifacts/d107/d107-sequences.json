@@ -1,0 +1,2687 @@
+{
+  "normal": {
+    "20": {
+      "t": 20,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 370.15999999999997,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "50": {
+      "t": 50,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 368.8999999999999,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "80": {
+      "t": 80,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 367.6399999999999,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "120": {
+      "t": 120,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 365.9599999999998,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 366.99199999999996,
+          "text": "-3",
+          "val": 3,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害",
+        "史莱姆 攻击了你，造成 3 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 3,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "160": {
+      "t": 160,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 364.27999999999975,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 365.3119999999999,
+          "text": "-3",
+          "val": 3,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害",
+        "史莱姆 攻击了你，造成 3 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 3,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": false
+    },
+    "200": {
+      "t": 200,
+      "round": 1,
+      "monster": "slime",
+      "floor": 1,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 362.5999999999997,
+          "text": "-12",
+          "val": 12,
+          "hits": 1,
+          "size": 26
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 363.63199999999983,
+          "text": "-3",
+          "val": 3,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 史莱姆，战斗开始",
+        "你对 史莱姆 造成 12 伤害",
+        "史莱姆 攻击了你，造成 3 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 12,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 3,
+          "at": 112
+        }
+      ],
+      "phase": "idle",
+      "locked": false
+    }
+  },
+  "elite": {
+    "20": {
+      "t": 20,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 370.15999999999997,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "50": {
+      "t": 50,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 368.8999999999999,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "80": {
+      "t": 80,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 367.6399999999999,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "120": {
+      "t": 120,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 365.9599999999998,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 366.99199999999996,
+          "text": "-14",
+          "val": 14,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害",
+        "精英兽人战士 攻击了你，造成 14 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 14,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "160": {
+      "t": 160,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 364.27999999999975,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 365.3119999999999,
+          "text": "-14",
+          "val": 14,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害",
+        "精英兽人战士 攻击了你，造成 14 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 14,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": false
+    },
+    "200": {
+      "t": 200,
+      "round": 1,
+      "monster": "elite_orc",
+      "floor": 3,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 362.5999999999997,
+          "text": "-10",
+          "val": 10,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 363.63199999999983,
+          "text": "-14",
+          "val": 14,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "log": [
+        "遭遇 精英兽人战士，战斗开始",
+        "你对 精英兽人战士 造成 10 伤害",
+        "精英兽人战士 攻击了你，造成 14 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 10,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 14,
+          "at": 112
+        }
+      ],
+      "phase": "idle",
+      "locked": false
+    }
+  },
+  "dragon": {
+    "20": {
+      "t": 20,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 370.15999999999997,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "地牢巨龙 攻击了你，造成 27 伤害",
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": -88
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 27,
+          "at": -88
+        },
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "50": {
+      "t": 50,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 368.8999999999999,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "地牢巨龙 攻击了你，造成 27 伤害",
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": -88
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 27,
+          "at": -88
+        },
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "80": {
+      "t": 80,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 367.6399999999999,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [],
+      "log": [
+        "地牢巨龙 攻击了你，造成 27 伤害",
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害"
+      ],
+      "dmg": [
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": -88
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 27,
+          "at": -88
+        },
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "120": {
+      "t": 120,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 365.9599999999998,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 366.99199999999996,
+          "text": "-28",
+          "val": 28,
+          "hits": 1,
+          "size": 24
+        }
+      ],
+      "log": [
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害",
+        "地牢巨龙 攻击了你，造成 28 伤害（龙威 +1）"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 28,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": true
+    },
+    "160": {
+      "t": 160,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 364.27999999999975,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 365.3119999999999,
+          "text": "-28",
+          "val": 28,
+          "hits": 1,
+          "size": 24
+        }
+      ],
+      "log": [
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害",
+        "地牢巨龙 攻击了你，造成 28 伤害（龙威 +1）"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 28,
+          "at": 112
+        }
+      ],
+      "phase": "monster",
+      "locked": false
+    },
+    "200": {
+      "t": 200,
+      "round": 9,
+      "monster": "dragon",
+      "floor": 5,
+      "layout": "horizontal",
+      "beats": [
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "beatLog": [
+        {
+          "id": "player-act",
+          "at": -1600
+        },
+        {
+          "id": "player-settle",
+          "at": -1560
+        },
+        {
+          "id": "monster-windup",
+          "at": -1540
+        },
+        {
+          "id": "monster-hit",
+          "at": -1500
+        },
+        {
+          "id": "monster-settle",
+          "at": -1450
+        },
+        {
+          "id": "round-end",
+          "at": -1420
+        },
+        {
+          "id": "player-act",
+          "at": -1400
+        },
+        {
+          "id": "player-settle",
+          "at": -1360
+        },
+        {
+          "id": "monster-windup",
+          "at": -1340
+        },
+        {
+          "id": "monster-hit",
+          "at": -1300
+        },
+        {
+          "id": "monster-settle",
+          "at": -1250
+        },
+        {
+          "id": "round-end",
+          "at": -1220
+        },
+        {
+          "id": "player-act",
+          "at": -1200
+        },
+        {
+          "id": "player-settle",
+          "at": -1160
+        },
+        {
+          "id": "monster-windup",
+          "at": -1140
+        },
+        {
+          "id": "monster-hit",
+          "at": -1100
+        },
+        {
+          "id": "monster-settle",
+          "at": -1050
+        },
+        {
+          "id": "round-end",
+          "at": -1020
+        },
+        {
+          "id": "player-act",
+          "at": -1000
+        },
+        {
+          "id": "player-settle",
+          "at": -960
+        },
+        {
+          "id": "monster-windup",
+          "at": -940
+        },
+        {
+          "id": "monster-hit",
+          "at": -900
+        },
+        {
+          "id": "monster-settle",
+          "at": -850
+        },
+        {
+          "id": "round-end",
+          "at": -820
+        },
+        {
+          "id": "player-act",
+          "at": -800
+        },
+        {
+          "id": "player-settle",
+          "at": -760
+        },
+        {
+          "id": "monster-windup",
+          "at": -740
+        },
+        {
+          "id": "monster-hit",
+          "at": -700
+        },
+        {
+          "id": "monster-settle",
+          "at": -650
+        },
+        {
+          "id": "round-end",
+          "at": -620
+        },
+        {
+          "id": "player-act",
+          "at": -600
+        },
+        {
+          "id": "player-settle",
+          "at": -560
+        },
+        {
+          "id": "monster-windup",
+          "at": -540
+        },
+        {
+          "id": "monster-hit",
+          "at": -500
+        },
+        {
+          "id": "monster-settle",
+          "at": -450
+        },
+        {
+          "id": "round-end",
+          "at": -420
+        },
+        {
+          "id": "player-act",
+          "at": -400
+        },
+        {
+          "id": "player-settle",
+          "at": -360
+        },
+        {
+          "id": "monster-windup",
+          "at": -340
+        },
+        {
+          "id": "monster-hit",
+          "at": -300
+        },
+        {
+          "id": "monster-settle",
+          "at": -250
+        },
+        {
+          "id": "round-end",
+          "at": -220
+        },
+        {
+          "id": "player-act",
+          "at": -200
+        },
+        {
+          "id": "player-settle",
+          "at": -160
+        },
+        {
+          "id": "monster-windup",
+          "at": -140
+        },
+        {
+          "id": "monster-hit",
+          "at": -100
+        },
+        {
+          "id": "monster-settle",
+          "at": -50
+        },
+        {
+          "id": "round-end",
+          "at": -20
+        },
+        {
+          "id": "player-act",
+          "at": 0
+        },
+        {
+          "id": "player-settle",
+          "at": 40
+        },
+        {
+          "id": "monster-windup",
+          "at": 60
+        },
+        {
+          "id": "monster-hit",
+          "at": 100
+        },
+        {
+          "id": "monster-settle",
+          "at": 150
+        },
+        {
+          "id": "round-end",
+          "at": 180
+        }
+      ],
+      "texts": [
+        {
+          "x": 661,
+          "y": 362.5999999999997,
+          "text": "-7",
+          "val": 7,
+          "hits": 1,
+          "size": 18
+        }
+      ],
+      "textsP": [
+        {
+          "x": 309,
+          "y": 363.63199999999983,
+          "text": "-28",
+          "val": 28,
+          "hits": 1,
+          "size": 24
+        }
+      ],
+      "log": [
+        "系统：龙威启动，此后每回合攻击 +1，拖得越久越疼（第 1 段）。",
+        "你对 地牢巨龙 造成 7 伤害",
+        "地牢巨龙 攻击了你，造成 28 伤害（龙威 +1）"
+      ],
+      "dmg": [
+        {
+          "kind": "player-hit",
+          "dmg": 7,
+          "at": 0
+        },
+        {
+          "kind": "monster-attack",
+          "dmg": null,
+          "at": 112
+        },
+        {
+          "kind": "monster-hit",
+          "dmg": 28,
+          "at": 112
+        }
+      ],
+      "phase": "idle",
+      "locked": false
+    }
+  }
+}

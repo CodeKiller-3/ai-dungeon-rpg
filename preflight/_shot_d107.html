@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-107 战斗节奏实拍台</title>
+<style>html,body{margin:0;background:#05050a;overflow:hidden}canvas{display:block}
+#err{position:fixed;left:0;top:0;color:#f66;font:11px monospace;margin:0;z-index:9}</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<pre id="err"></pre>
+<!-- D-107 战斗节奏实拍台（artifacts 内部页，不登记 page-baseline.json）
+     参数：?w=960&h=540&f=1&m=slime&layout=horizontal&t=120&rounds=1
+       t      → 本回合起拍后第 t 毫秒冻结（16ms 帧步进，与真实 rAF 同粒度）
+       rounds → 先快进到第 rounds 回合再拍（巨龙龙威播报取 9）
+     时钟全部注入固定值；每回合 200ms 帧步进推进节点表，同参数同帧可复算。
+     出图后 window.__D107 = { t, round, beats, beatLog, texts, textsP, log, dmg }。 -->
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/systems/juice.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var q = {};
+  location.search.replace(/^\?/, '').split('&').forEach(function (kv) {
+    var p = kv.split('='); if (p[0]) q[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+  });
+  var W = +(q.w || 960), H = +(q.h || 540);
+  try {
+    Object.defineProperty(window, 'innerWidth', { value: W, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: H, configurable: true });
+  } catch (e) {}
+  var M = Game.Core.Main, P = Game.Data.Player, B = Game.Systems.Battle, Map = Game.Systems.Map;
+  var R = Game.Core.Render, S = Game.Core.Sprites, Fx = Game.Fx, PT = Game.Particles, Fb = Game.Feedback;
+
+  (function hideHeadlessFps() {
+    var proto = window.CanvasRenderingContext2D && window.CanvasRenderingContext2D.prototype;
+    if (!proto || proto.__d107fps) return;
+    var orig = proto.fillText;
+    proto.fillText = function (text, x, y, maxWidth) {
+      if (typeof text === 'string' && text.indexOf('FPS=') === 0) {
+        text = text.replace(/^FPS=[^|]*\|\s*/, '');
+      }
+      if (arguments.length > 3) return orig.call(this, text, x, y, maxWidth);
+      return orig.call(this, text, x, y);
+    };
+    proto.__d107fps = true;
+  })();
+
+  var spriteLoad = S.load;
+  S.load = function () { return spriteLoad.call(this, '../assets/sprites/'); };
+
+  var f = Math.max(1, Math.min(5, +(q.f || 1)));
+  var mid = q.m || 'slime';
+  var layout = (q.layout === 'vertical') ? 'vertical' : 'horizontal';
+  var targetT = Math.max(0, +(q.t || 0));
+  var rounds = Math.max(1, +(q.rounds || 1));
+  var T = 0;
+  var sceneReady = false;
+  var drawn = 0;
+
+  function allReady() {
+    if (!S.isReady()) return false;
+    for (var i = 1; i <= 8; i++) {
+      if (!S.get((f === 1 ? 'floor_' : 't' + f + '_floor_') + i)) return false;
+    }
+    var groups = ['knight_m_idle', 'knight_m_hit'];
+    var set = R.MONSTER_ANIM[mid];
+    if (set) {
+      groups.push(set.idle);
+      if (set.run && set.run !== set.idle) groups.push(set.run);
+      if (set.attack) groups.push(set.attack);
+      if (set.hurt) groups.push(set.hurt);
+    }
+    for (var k = 0; k < groups.length; k++) {
+      for (var i2 = 0; i2 < 4; i2++) {
+        var im = S.getFrame(groups[k], i2);
+        if (!im || !(im.naturalWidth > 0)) return false;
+      }
+    }
+    return true;
+  }
+
+  /* 一帧 = 16ms：B.tick 推进节点表，Fx/粒子/飘字同 dt 衰减，与主循环同一调用顺序 */
+  function step(dt) {
+    T += dt;
+    B.tick(T);
+    if (Fx.update) Fx.update(dt);
+    if (PT.update) PT.update(dt);
+    if (Fb.update) Fb.update(dt);
+  }
+  function runRound(actionAt, spanMs) {
+    T = actionAt;
+    P.hp = P.maxHp;                       /* 实拍只看节奏，不因掉血提前结束 */
+    B.playerAction('attack');
+    var left = spanMs;
+    while (left > 0) {
+      var dt = Math.min(16, left);
+      step(dt);
+      left -= dt;
+    }
+  }
+
+  function boot() {
+    try {
+      M.init({ menu: false });
+      Map.setFloor(f);
+      P.floor = f; P.level = 5; P.exp = 24; P.gold = 268;
+      P.maxHp = 140; P.hp = 140; P.maxMp = 30; P.mp = 30;
+      P.atk = 14; P.def = 6;
+      B._setClock(function () { return T; });
+      Fx._setClock(function () { return T; });
+      Fx._reset(); PT.clear();
+      B.start(mid);
+      M.switchScene('battle');
+      R.resize();
+      if (typeof R._setBattleLayout === 'function') R._setBattleLayout(layout);
+      R._animNow = function () { return 1234; };
+      if (Game.hud && Game.hud.update) {
+        Game.hud.update({
+          hp: P.hp, hpMax: P.maxHp, mp: P.mp, mpMax: P.maxMp, gold: P.gold,
+          floor: P.floor, level: P.level, exp: P.exp, expNext: 60 * P.level, status: []
+        });
+      }
+      /* 快进 rounds-1 个完整回合（每回合 200ms，覆盖 180ms 时间轴） */
+      for (var r = 1; r < rounds; r++) {
+        runRound((r - 1) * 200, 200);
+        if (Fb && Fb.clearTexts) Fb.clearTexts();
+      }
+      /* 捕获回合：起拍后推进到 targetT 冻结 */
+      var t0 = (rounds - 1) * 200;
+      T = t0;
+      P.hp = P.maxHp;
+      B.playerAction('attack');
+      var left = targetT;
+      while (left > 0) {
+        var dt = Math.min(16, left);
+        step(dt);
+        left -= dt;
+      }
+      var st = B.getState();
+      window.__D107 = {
+        t: targetT, round: st.roundNo, monster: mid, floor: f, layout: layout,
+        beats: (st.beats || []).map(function (b) { return { id: b.id, at: b.at - t0 }; }),
+        beatLog: (st.beatLog || []).map(function (b) { return { id: b.id, at: b.at - t0 }; }),
+        texts: Fb.liveTexts ? Fb.liveTexts('monster') : [],
+        textsP: Fb.liveTexts ? Fb.liveTexts('player') : [],
+        log: st.log.slice(-3),
+        dmg: st.events.slice(-3).map(function (e) { return { kind: e.kind, dmg: e.dmg, at: e.at - t0 }; }),
+        phase: st.phase, locked: B.isInputLocked()
+      };
+      sceneReady = true;
+      window.__d107Booted = true;
+    } catch (e) {
+      document.getElementById('err').textContent = String(e && (e.stack || e.message) || e);
+      document.title = 'ERR ' + e;
+    }
+  }
+
+  S.load();
+  (function frame() {
+    try {
+      if (!window.__d107Booted && allReady()) boot();
+      if (sceneReady) {
+        R.drawBattle(B.getState());
+        drawn++;
+        if (drawn === 3) {
+          document.title = 'READY D107';
+          sceneReady = 'done';
+        }
+      }
+    } catch (e) { /* 降级 */ }
+    window.requestAnimationFrame(frame);
+  })();
+})();
+</script>
+<pre id="geo" style="display:none"></pre>
+</body>
+</html>
