@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-128 主菜单四个子页：世界入口</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-128 · 玩法说明 / 设置 / 确认 / 关于 —— 介质、实物锚、预算与静止帧</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="960" height="540"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;
+window.__D128ERR = [];
+window.addEventListener('error', function (e) { window.__D128ERR.push(String(e.message || e)); });</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+(function () {
+  'use strict';
+  var out = { ok: false, sub: {} };
+  var R = Game.Core.Render, M = Game.Core.Main, S = Game.Core.Sprites;
+  function rec(id, ok, d) { out.sub[id] = { ok: !!ok, d: d }; }
+
+  var cv = document.getElementById('game');
+  var ctx = cv.getContext('2d');
+  var P = CanvasRenderingContext2D.prototype;
+  var LOG = { calls: 0, texts: [], fills: [], images: [] };
+  var TEXT_OFF = false;
+
+  /* ── 绘制调用/文本/矩形/图片的统一记录（M2/M4/M5/M6/M8/M11 共用） ── */
+  var WRAP = ['save', 'restore', 'translate', 'rotate', 'scale', 'setTransform', 'clearRect',
+    'fillRect', 'strokeRect', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'arc', 'ellipse',
+    'rect', 'quadraticCurveTo', 'bezierCurveTo', 'fill', 'stroke', 'clip', 'fillText',
+    'strokeText', 'drawImage', 'createRadialGradient', 'createLinearGradient', 'createPattern',
+    'setLineDash'];
+  WRAP.forEach(function (nm) {
+    var o = P[nm];
+    if (typeof o !== 'function' || o.__d128) return;
+    P[nm] = function () {
+      if (nm === 'fillText' && TEXT_OFF) return;
+      LOG.calls++;
+      if (nm === 'fillText') {
+        LOG.texts.push({ t: String(arguments[0]), x: +arguments[1], y: +arguments[2],
+          font: String(this.font || ''), align: String(this.textAlign || 'left') });
+      } else if (nm === 'fillRect') {
+        LOG.fills.push({ x: +arguments[0], y: +arguments[1], w: +arguments[2], h: +arguments[3],
+          style: String(this.fillStyle || '') });
+      } else if (nm === 'drawImage') {
+        var a = arguments, im = a[0] || {};
+        var rec0 = { dx: +a[1], dy: +a[2] };
+        if (a.length >= 9) {
+          rec0.sx = +a[3]; rec0.sy = +a[4]; rec0.sw = +a[5]; rec0.sh = +a[6];
+          rec0.dw = +a[7]; rec0.dh = +a[8];
+        } else if (a.length >= 5) {
+          rec0.dw = +a[3]; rec0.dh = +a[4];
+        }
+        rec0.nw = im.naturalWidth || im.width || 0;
+        rec0.nh = im.naturalHeight || im.height || 0;
+        rec0.n = a.length;
+        LOG.images.push(rec0);
+      }
+      return o.apply(this, arguments);
+    };
+    P[nm].__d128 = true;
+  });
+
+  function resetLog() { LOG = { calls: 0, texts: [], fills: [], images: [] }; }
+
+  function specFor(page) {
+    var s = M._menuSpec();
+    s.page = page;
+    if (page === 'confirmNew') {
+      s.confirm = { kind: 'new', danger: true, title: '开始新游戏',
+        lines: ['开始新游戏会清空当前存档：第 3 层 · Lv.7 · 金币 456 · 用时 3分25秒。',
+          '清空后无法恢复。想保留进度，请选「取消」，回主菜单选「继续游戏」。'],
+        opts: ['取消', '开始新游戏'] };
+      s.confirmSel = 0;
+    }
+    return s;
+  }
+
+  function setSize(W, H) {
+    if (cv.width !== W) cv.width = W;
+    if (cv.height !== H) cv.height = H;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    R.dpr = 1; R.scale = 1; R.cssW = W; R.cssH = H;
+  }
+
+  var PAGES = ['help', 'settings', 'confirmNew', 'about'];
+  var TITLE = { help: '玩法说明', settings: '设置', confirmNew: '开始新游戏', about: '关于' };
+  var KICK = { help: 'CODEX / CONTROLS', settings: 'SYSTEM', confirmNew: 'CONFIRM / DANGER', about: 'ABOUT / COLOPHON' };
+
+  function draw(page, W, H, textOff, noAnim) {
+    setSize(W, H);
+    TEXT_OFF = !!textOff;
+    R._menuNoAnim = (noAnim !== false);
+    resetLog();
+    R.drawMainMenu(specFor(page));
+    TEXT_OFF = false;
+    return LOG;
+  }
+
+  function snapshot() {
+    return ctx.getImageData(0, 0, cv.width, cv.height);
+  }
+  function cardRect(log) {
+    var best = null;
+    for (var i = 0; i < log.fills.length; i++) {
+      var f = log.fills[i];
+      if (f.style !== '#0a0b12') continue;
+      if (!best || f.w * f.h > best.w * best.h) best = f;
+    }
+    return best;
+  }
+  function hashAll() {
+    var d = ctx.getImageData(0, 0, cv.width, cv.height).data, h = 2166136261;
+    for (var i = 0; i < d.length; i += 4) {
+      h ^= (d[i] + d[i + 1] * 3 + d[i + 2] * 7 + d[i + 3] * 11);
+      h = (h * 16777619) >>> 0;
+    }
+    return h.toString(16);
+  }
+
+  /* ══ M1：64×64 灰度 → 4×4 均值 + 32 桶边缘方向直方图；任意两页平均 L1 ≥ 0.18 ══ */
+  var small = document.createElement('canvas'); small.width = 64; small.height = 64;
+  var sctx = small.getContext('2d');
+  function features(img) {
+    sctx.clearRect(0, 0, 64, 64);
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(cv, 0, 0, 64, 64);
+    var d = sctx.getImageData(0, 0, 64, 64).data, g = new Float64Array(64 * 64);
+    for (var i = 0; i < 64 * 64; i++) g[i] = (d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114) / 255;
+    var grid = [], bx, by, sx, sy, n;
+    for (by = 0; by < 4; by++) for (bx = 0; bx < 4; bx++) {
+      var s = 0;
+      for (sy = 0; sy < 16; sy++) for (sx = 0; sx < 16; sx++) s += g[(by * 16 + sy) * 64 + bx * 16 + sx];
+      grid.push(s / 256);
+    }
+    var hist = new Float64Array(32), mag = 0;
+    for (var y = 1; y < 63; y++) for (var x = 1; x < 63; x++) {
+      var gx = -g[(y - 1) * 64 + x - 1] - 2 * g[y * 64 + x - 1] - g[(y + 1) * 64 + x - 1] +
+        g[(y - 1) * 64 + x + 1] + 2 * g[y * 64 + x + 1] + g[(y + 1) * 64 + x + 1];
+      var gy = -g[(y - 1) * 64 + x - 1] - 2 * g[(y - 1) * 64 + x] - g[(y - 1) * 64 + x + 1] +
+        g[(y + 1) * 64 + x - 1] + 2 * g[(y + 1) * 64 + x] + g[(y + 1) * 64 + x + 1];
+      var m = Math.abs(gx) + Math.abs(gy);
+      if (m < 0.05) continue;
+      var ang = Math.atan2(gy, gx) + Math.PI, bin = Math.floor(ang / (2 * Math.PI) * 32) % 32;
+      hist[bin] += m; mag += m;
+    }
+    if (mag > 0) for (n = 0; n < 32; n++) hist[n] /= mag;
+    var f = grid.slice();
+    for (n = 0; n < 32; n++) f.push(hist[n]);
+    return f;
+  }
+  function l1(a, b) {
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+    return s;
+  }
+  function m1Ok(map) {
+    var keys = Object.keys(map), min = 9;
+    for (var i = 0; i < keys.length; i++) for (var j = i + 1; j < keys.length; j++) {
+      min = Math.min(min, l1(map[keys[i]], map[keys[j]]));
+    }
+    return { ok: min >= 0.18, min: +min.toFixed(4) };
+  }
+  function drawOldSkin(W, H) {
+    setSize(W, H);
+    ctx.fillStyle = '#0b0c14'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(80,90,130,0.16)';
+    for (var gx = 0; gx < W; gx += 32) ctx.fillRect(gx, 0, 1, H);
+    for (var gy = 0; gy < H; gy += 32) ctx.fillRect(0, gy, W, 1);
+    var x = 20, y = 24, w = W - 40, h = H - 48;
+    ctx.fillStyle = '#07080e'; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#3a3340'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.fillStyle = 'rgba(255,207,110,0.28)';
+    ctx.fillRect(x + 16, y + 52, w - 32, 1);
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  /* ══ M2：标题带内的 ≥24×24 非文字连通块；与标题文本框不相交、距基线 ≤48 ══ */
+  function findAnchors(img, card, baseY, titleBox) {
+    var x0 = Math.max(0, card.x + 1), x1 = Math.min(cv.width, card.x + card.w - 1);
+    var y0 = Math.max(0, card.y + 1), y1 = Math.min(cv.height, Math.min(card.y + 92, card.y + card.h - 1));
+    var w = x1 - x0, h = y1 - y0;
+    if (w <= 0 || h <= 0) return [];
+    var d = img.data, ink = new Uint8Array(w * h);
+    for (var yy = 0; yy < h; yy++) for (var xx = 0; xx < w; xx++) {
+      var o = ((y0 + yy) * cv.width + (x0 + xx)) * 4;
+      var dv = Math.abs(d[o] - 10) + Math.abs(d[o + 1] - 11) + Math.abs(d[o + 2] - 18);
+      if (dv > 40) ink[yy * w + xx] = 1;
+    }
+    var seen = new Uint8Array(w * h), outA = [];
+    for (var sy = 0; sy < h; sy++) for (var sx = 0; sx < w; sx++) {
+      var st = sy * w + sx;
+      if (!ink[st] || seen[st]) continue;
+      var stack = [st], minx = sx, maxx = sx, miny = sy, maxy = sy, cnt = 0;
+      seen[st] = 1;
+      while (stack.length) {
+        var p = stack.pop(), px = p % w, py = (p / w) | 0;
+        cnt++;
+        if (px < minx) minx = px; if (px > maxx) maxx = px;
+        if (py < miny) miny = py; if (py > maxy) maxy = py;
+        if (px > 0 && ink[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack.push(p - 1); }
+        if (px + 1 < w && ink[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack.push(p + 1); }
+        if (py > 0 && ink[p - w] && !seen[p - w]) { seen[p - w] = 1; stack.push(p - w); }
+        if (py + 1 < h && ink[p + w] && !seen[p + w]) { seen[p + w] = 1; stack.push(p + w); }
+      }
+      var bw = maxx - minx + 1, bh = maxy - miny + 1;
+      if (bw < 24 || bh < 24 || cnt < bw * bh * 0.2) continue;
+      var box = { x: x0 + minx, y: y0 + miny, w: bw, h: bh, px: cnt };
+      var gap = (box.y <= baseY && baseY <= box.y + box.h) ? 0
+        : Math.min(Math.abs(box.y - baseY), Math.abs(box.y + box.h - baseY));
+      var inter = !(box.x + box.w <= titleBox.x || titleBox.x + titleBox.w <= box.x ||
+        box.y + box.h <= titleBox.y || titleBox.y + titleBox.h <= box.y);
+      box.gap = gap; box.overlapTitle = inter;
+      if (gap <= 48 && !inter) outA.push(box);
+    }
+    return outA;
+  }
+  function titleBoxOf(log, page, card) {
+    var want = TITLE[page], t = null;
+    /* 取第一次出现：页头标题在 y+42，确认按钮的同名文字在正文下方 */
+    for (var i = 0; i < log.texts.length; i++) if (log.texts[i].t === want) { t = log.texts[i]; break; }
+    if (!t) return { x: card.x + 48, y: card.y + 22, w: 120, h: 24, base: card.y + 42 };
+    var size = parseInt((t.font.match(/(\d+)px/) || [0, 22])[1], 10) || 22;
+    return { x: t.x, y: t.y - size, w: R._menuTextW(want, size), h: size + 4, base: t.y };
+  }
+
+  /* ══ M3：五档视口卡片不越 8px 边距 ══ */
+  function rectOk(r, W, H) {
+    return !!r && r.x >= 8 && r.y >= 8 && r.x + r.w <= W - 8 && r.y + r.h <= H - 8;
+  }
+
+  /* ══ M4：字号阶梯 ══ */
+  function sizesOf(log) {
+    var a = [];
+    for (var i = 0; i < log.texts.length; i++) {
+      var m = log.texts[i].font.match(/(\d+)px/);
+      if (m) a.push({ t: log.texts[i].t, s: parseInt(m[1], 10) });
+    }
+    return a;
+  }
+  function m4Ok(log, page) {
+    var ss = sizesOf(log), bad = [], i;
+    var allowed = { 9: 1, 10: 1, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 20: 1, 22: 1 };
+    for (i = 0; i < ss.length; i++) if (!allowed[ss[i].s]) bad.push(ss[i]);
+    var title = null, kick = null;
+    for (i = 0; i < ss.length; i++) {
+      if (ss[i].t === TITLE[page] && !title) title = ss[i];
+      if (ss[i].t === KICK[page]) kick = ss[i];
+    }
+    var bodyWant = { help: '方向键', settings: '画面缩放', confirmNew: '清空', about: '移动' };
+    var body = null;
+    for (i = 0; i < ss.length; i++) if (ss[i].t.indexOf(bodyWant[page]) >= 0) body = ss[i];
+    var ok = bad.length === 0 && title && title.s >= 20 && kick && kick.s === 10 &&
+      body && body.s >= 12;
+    return { ok: !!ok, title: title && title.s, kick: kick && kick.s, body: body && body.s,
+      bad: bad.slice(0, 6) };
+  }
+
+  /* ══ M5：960×520 设置 6 行全可见 ══ */
+  function rowsVisible(log, card, rows) {
+    var hit = 0, detail = [];
+    for (var i = 0; i < rows.length; i++) {
+      var t = null;
+      for (var j = 0; j < log.texts.length; j++) if (log.texts[j].t === rows[i].label) t = log.texts[j];
+      var vis = !!t && t.y > card.y + 4 && t.y < card.y + card.h - 4 && t.x >= card.x && t.x < card.x + card.w;
+      if (vis) hit++;
+      detail.push({ label: rows[i].label, y: t && t.y, vis: vis });
+    }
+    return { ok: hit === rows.length, hit: hit, total: rows.length, detail: detail };
+  }
+
+  /* ══ M6：预算（稳态帧；改前常量取自 D-128 改动前的实测） ══ */
+  var BEFORE_960 = { help: 602, settings: 216, confirmNew: 209, about: 232 };
+  var CAP = 214, INC = 20;
+
+  /* ══ M8：drawImage 整数倍 / 整数坐标 ══ */
+  function m8Ok(imgs) {
+    var bad = [];
+    for (var i = 0; i < imgs.length; i++) {
+      var r = imgs[i];
+      if (r.n === 3) {
+        if (!Number.isInteger(r.dx) || !Number.isInteger(r.dy)) bad.push({ at: '3arg', dx: r.dx, dy: r.dy });
+        continue;
+      }
+      var kx = r.nw ? r.dw / r.nw : 1, ky = r.nh ? r.dh / r.nh : 1;
+      var kn = [1, 2];
+      if (kn.indexOf(Math.round(kx * 1000) / 1000) < 0 || kn.indexOf(Math.round(ky * 1000) / 1000) < 0 ||
+        Math.abs(kx - Math.round(kx)) > 0.001 || Math.abs(ky - Math.round(ky)) > 0.001) {
+        bad.push({ kx: kx, ky: ky, dw: r.dw, nw: r.nw });
+      }
+      if (!Number.isInteger(r.dx) || !Number.isInteger(r.dy) ||
+        !Number.isInteger(r.dw) || !Number.isInteger(r.dh)) bad.push({ at: 'coord', dx: r.dx, dy: r.dy });
+    }
+    return { ok: bad.length === 0, bad: bad.slice(0, 6), n: imgs.length };
+  }
+
+  /* ══ M9：暖棕可走质感像素（左缘 8px 留白带；实物/墙脚/封蜡不在其中） ══ */
+  function warmCount(img, card) {
+    var x0 = card.x + 2, x1 = card.x + 10;
+    var y0 = card.y + 66, y1 = card.y + card.h - 10, n = 0;
+    for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++) {
+      var o = (y * cv.width + x) * 4, r = img.data[o], g = img.data[o + 1], b = img.data[o + 2];
+      if (r > g + 10 && g > b + 4 && r > 50) n++;
+    }
+    return n;
+  }
+
+  function finish() {
+    out.errs = window.__D128ERR;
+    var ok = out.ok && (!out.errs || out.errs.length === 0);
+    document.title = (ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.getElementById('result').textContent = (ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  }
+
+  function run() {
+    try {
+      M.init({ menu: true });
+      R._menuNoAnim = true;
+    } catch (e) { rec('init', false, String(e && (e.stack || e.message))); finish(); return; }
+
+    var i, page, W, H;
+
+    /* ── M1 四页结构可分辨 + 现状皮肤回放负例 ── */
+    try {
+      var feat = {};
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        draw(page, 960, 540, true, true);
+        feat[page] = features(snapshot());
+      }
+      var pos = m1Ok(feat);
+      var oldF = {};
+      for (i = 0; i < PAGES.length; i++) { drawOldSkin(960, 540); oldF[PAGES[i]] = features(snapshot()); }
+      var neg = m1Ok(oldF);
+      rec('M1_structure_separable', pos.ok && !neg.ok,
+        { rule: '64×64 灰度：4×4 均值 + 32 桶边缘方向直方图，L1 距离（48 维求和）≥ 0.18',
+          min: pos.min, oldSkinMin: neg.min, negativeMustFail: !neg.ok });
+    } catch (e) { rec('M1_structure_separable', false, String(e && (e.stack || e.message))); }
+
+    /* ── M2 实物锚 4/4 + 旧皮肤负例 ── */
+    try {
+      var anc = {}, allOk = true;
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        var lg = draw(page, 960, 540, false, true);
+        var card = cardRect(lg);
+        var tb = titleBoxOf(lg, page, card);
+        draw(page, 960, 540, true, true);
+        /* 锚候选 1：真实 drawImage 的 ≥24×24 矩形（火把/骷髅/层徽）；
+         * 火把是「火苗 + 手柄」两个不相连的小块，按连通块会拆散，故以整张贴图矩为准。
+         * 锚候选 2：像素连通块（关于页门徽是纯绘制，没有 drawImage）。 */
+        var list = [];
+        for (var ii = 0; ii < lg.images.length; ii++) {
+          var im0 = lg.images[ii];
+          if (im0.n >= 5 && im0.dw >= 24 && im0.dh >= 24) {
+            list.push({ x: im0.dx, y: im0.dy, w: im0.dw, h: im0.dh, src: 'drawImage' });
+          }
+        }
+        list = list.concat(findAnchors(snapshot(), card, tb.base, tb));
+        var uniq = [], seenBox = {};
+        for (var iu = 0; iu < list.length; iu++) {
+          var b0 = list[iu];
+          var kk0 = b0.x + ',' + b0.y + ',' + b0.w + ',' + b0.h;
+          if (seenBox[kk0]) continue;
+          var gap0 = (b0.y <= tb.base && tb.base <= b0.y + b0.h) ? 0
+            : Math.min(Math.abs(b0.y - tb.base), Math.abs(b0.y + b0.h - tb.base));
+          var inter0 = !(b0.x + b0.w <= tb.x || tb.x + tb.w <= b0.x ||
+            b0.y + b0.h <= tb.y || tb.y + tb.h <= b0.y);
+          if (gap0 <= 48 && !inter0) { seenBox[kk0] = 1; b0.gap = gap0; uniq.push(b0); }
+        }
+        anc[page] = { card: card, title: tb, anchors: uniq };
+        if (!uniq.length) allOk = false;
+      }
+      /* 负例：现状皮肤卡（无火把/门徽/骷髅）→ 锚数 0 */
+      drawOldSkin(960, 540);
+      var oldCard = { x: 20, y: 24, w: 920, h: 492 };
+      var oldAnc = findAnchors(snapshot(), oldCard, 24 + 42,
+        { x: 20 + 48, y: 24 + 22, w: 120, h: 24 });
+      rec('M2_physical_anchor', allOk && oldAnc.length === 0,
+        { rule: '标题带内 ≥24×24 非文字实物（drawImage 整图矩形或纯绘制连通块），距标题基线 ≤48px 且不压标题', pages: anc,
+          oldSkinAnchors: oldAnc.length });
+    } catch (e) { rec('M2_physical_anchor', false, String(e && (e.stack || e.message))); }
+
+    /* ── M3 五档视口不越 8px 边距 + 无钳制负例 ── */
+    try {
+      var vps = [[320, 568], [390, 844], [960, 540], [1024, 640], [1280, 800]];
+      var m3bad = [], m3n = 0;
+      for (var vi = 0; vi < vps.length; vi++) {
+        W = vps[vi][0]; H = vps[vi][1];
+        for (i = 0; i < PAGES.length; i++) {
+          page = PAGES[i];
+          var l3 = draw(page, W, H, false, true);
+          var c3 = cardRect(l3);
+          m3n++;
+          if (!rectOk(c3, W, H)) m3bad.push({ page: page, vp: W + 'x' + H, rect: c3 });
+        }
+      }
+      /* 负例：旧口径「自然高、无底部钳制」的关于页（多两行内容）在 960×540 越底 */
+      var negRect = { x: 300, y: 16, w: 360, h: 540 - 12 };
+      rec('M3_no_overflow_margins', m3bad.length === 0 && !rectOk(negRect, 960, 540),
+        { rule: '[8,W−8]×[8,H−8]', checked: m3n, bad: m3bad, negativeMustFail: !rectOk(negRect, 960, 540) });
+    } catch (e) { rec('M3_no_overflow_margins', false, String(e && (e.stack || e.message))); }
+
+    /* ── M4 字号阶梯 + 11px 正文负例 ── */
+    try {
+      var m4 = {}, m4all = true;
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        var l4 = draw(page, 960, 540, false, true);
+        m4[page] = m4Ok(l4, page);
+        if (!m4[page].ok) m4all = false;
+      }
+      var fake11 = { title: 22, kick: 10, body: 11, bad: [] };
+      var neg4 = !(fake11.title >= 20 && fake11.kick === 10 && fake11.body >= 12);
+      rec('M4_font_ladder', m4all && neg4, { rule: '正文 ≥12 / 标题 ≥20 / kicker = 10', pages: m4,
+        negativeMustFail: neg4 });
+    } catch (e) { rec('M4_font_ladder', false, String(e && (e.stack || e.message))); }
+
+    /* ── M5 960×520 六行全可见 + 5 行卡高负例 ── */
+    try {
+      var rows = M._menuSpec().settings;
+      var l5 = draw('settings', 960, 520, false, true);
+      var c5 = cardRect(l5);
+      var pos5 = rowsVisible(l5, c5, rows);
+      /* 负例：卡高仍按 5 行算（66+5×54+20），但实际画 6 行 54 高 */
+      var negCard = { x: (960 - 560) / 2, y: Math.round((520 - (66 + 5 * 54 + 20)) / 2) - 8,
+        w: 560, h: 66 + 5 * 54 + 20 };
+      var neg5 = [];
+      for (i = 0; i < rows.length; i++) neg5.push({ t: rows[i].label, y: negCard.y + 66 + i * 54 + 21 });
+      var neg5vis = neg5.filter(function (r0) { return r0.y < negCard.y + negCard.h - 4; }).length;
+      rec('M5_settings_6rows_960x520', pos5.ok && neg5vis < rows.length,
+        { rule: '6/6 行标签在卡内可见', hit: pos5.hit, total: pos5.total, card: c5,
+          rowH: 46, negative: { fiveRowCardH: negCard.h, visible: neg5vis + '/' + rows.length } });
+    } catch (e) { rec('M5_settings_6rows_960x520', false, String(e && (e.stack || e.message))); }
+
+    /* ── M6 每帧 ≤214 且新增 ≤20 + 改前实测负例 ── */
+    try {
+      var vps6 = [[320, 568], [390, 844], [960, 540], [1024, 640], [1280, 800]];
+      var budget = {}, m6bad = [];
+      for (var vj = 0; vj < vps6.length; vj++) {
+        W = vps6[vj][0]; H = vps6[vj][1];
+        for (i = 0; i < PAGES.length; i++) {
+          page = PAGES[i];
+          draw(page, W, H, false, true);           /* 预热：素材/竖井缓存就绪 */
+          var l6 = draw(page, W, H, false, true);
+          var key = W + 'x' + H + ':' + page;
+          budget[key] = l6.calls;
+          if (l6.calls > CAP) m6bad.push({ key: key, calls: l6.calls });
+        }
+      }
+      var inc = {};
+      for (i = 0; i < PAGES.length; i++) {
+        var pg = PAGES[i];
+        inc[pg] = { before: BEFORE_960[pg], after: budget['960x540:' + pg],
+          delta: budget['960x540:' + pg] - BEFORE_960[pg] };
+        if (inc[pg].delta > INC) m6bad.push({ key: 'delta:' + pg, delta: inc[pg].delta });
+      }
+      var neg6 = BEFORE_960.help > CAP && BEFORE_960.settings > CAP && BEFORE_960.about > CAP;
+      rec('M6_budget', m6bad.length === 0 && neg6,
+        { rule: '每帧 ≤214；相对改前新增 ≤20', budget: budget, inc: inc, bad: m6bad,
+          negativeBefore: BEFORE_960, negativeMustFail: neg6 });
+    } catch (e) { rec('M6_budget', false, String(e && (e.stack || e.message))); }
+
+    /* ── M7 静止两帧同哈希 + 沿口呼吸负例 ── */
+    try {
+      var m7 = {}, m7all = true;
+      var TT = 0;
+      R._animNow = function () { return TT; };
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        R._menuNoAnim = false;
+        TT = 0; drawNoReset(page, 960, 540);
+        TT = 1000; drawNoReset(page, 960, 540);
+        var h1 = hashAll();
+        TT = 1500; drawNoReset(page, 960, 540);
+        var h2 = hashAll();
+        m7[page] = { a: h1, b: h2, same: h1 === h2 };
+        if (h1 !== h2) m7all = false;
+      }
+      R._animNow = null; R._menuNoAnim = true;
+      /* 负例：同一帧上按 t 给沿口叠 1px 呼吸亮度 → 哈希必须不同 */
+      TT = 0; drawNoReset('settings', 960, 540);
+      ctx.fillStyle = 'rgba(255,207,110,0.20)'; ctx.fillRect(20, 24, 920, 1);
+      var n1 = hashAll();
+      ctx.fillStyle = 'rgba(255,207,110,0.26)'; ctx.fillRect(20, 24, 920, 1);
+      var n2 = hashAll();
+      rec('M7_static_frames', m7all && n1 !== n2,
+        { rule: '无输入 t 与 t+500ms 像素哈希相同', pages: m7, breathNegativeDiffers: n1 !== n2 });
+    } catch (e) { rec('M7_static_frames', false, String(e && (e.stack || e.message))); }
+
+    /* ── M8 整数倍 / 整数坐标 + 1.5× 负例 ── */
+    try {
+      var imgs = [];
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        draw(page, 960, 540, true, true);
+        var l8 = draw(page, 960, 540, true, true);
+        imgs = imgs.concat(l8.images);
+      }
+      var pos8 = m8Ok(imgs);
+      /* 负例：1.5× 画火把 */
+      var tImg = S.get('t1_dc_torch');
+      var negLog = [{ n: 5, dx: 0, dy: 0, dw: Math.round(tImg.naturalWidth * 1.5),
+        dh: Math.round(tImg.naturalHeight * 1.5), nw: tImg.naturalWidth, nh: tImg.naturalHeight }];
+      var neg8 = m8Ok(negLog);
+      rec('M8_integer_scale', pos8.ok && !neg8.ok, { rule: 'drawImage 比例 ∈ {1,2} 且坐标整数',
+        n: pos8.n, bad: pos8.bad, negativeMustFail: !neg8.ok });
+    } catch (e) { rec('M8_integer_scale', false, String(e && (e.stack || e.message))); }
+
+    /* ── M9 暖棕可走质感像素 0 + 铺墙负例 ── */
+    try {
+      var m9 = {}, m9all = true, get0 = S.get;
+      S.get = function () { return null; };          /* 只关精灵，保留纯绘制门徽 */
+      for (i = 0; i < PAGES.length; i++) {
+        page = PAGES[i];
+        var l9 = draw(page, 960, 540, true, true);
+        var c9 = cardRect(l9);
+        m9[page] = warmCount(snapshot(), c9);
+        if (m9[page] !== 0) m9all = false;
+      }
+      S.get = get0;
+      draw('about', 960, 540, true, true);
+      var c9b = cardRect(LOG);
+      ctx.fillStyle = '#5a4030';
+      ctx.fillRect(c9b.x + 2, c9b.y + 66, 8, c9b.h - 76);
+      var neg9 = warmCount(snapshot(), c9b);
+      rec('M9_no_terrain_in_medium', m9all && neg9 > 0,
+        { rule: '介质左缘 8px 留白带内暖棕像素 = 0（r>g+10 && g>b+4 && r>50）',
+          pages: m9, wallFillNegative: neg9 });
+    } catch (e) { rec('M9_no_terrain_in_medium', false, String(e && (e.stack || e.message))); }
+
+    /* ── M10 零运行时请求 / 绘制零随机 + 负例 ── */
+    try {
+      var n0 = performance.getEntriesByType('resource').length;
+      var rnd0 = Math.random, rndN = 0;
+      Math.random = function () { rndN++; return rnd0(); };
+      for (i = 0; i < PAGES.length; i++) draw(PAGES[i], 960, 540, false, true);
+      Math.random = rnd0;
+      var n1r = performance.getEntriesByType('resource').length;
+      var zeroOk = function (d) { return d === 0; };
+      rec('M10_zero_requests', zeroOk(n1r - n0) && zeroOk(rndN) && !zeroOk(1),
+        { rule: 'performance resource 前后新增 = 0；四页绘制 Math.random 调用 = 0',
+          before: n0, after: n1r, delta: n1r - n0, random: rndN, negativeMustFail: !zeroOk(1) });
+    } catch (e) { rec('M10_zero_requests', false, String(e && (e.stack || e.message))); }
+
+    /* ── M11 词不缩写 + 「缩放」负例 ── */
+    try {
+      var rows11 = M._settingsRows().map(function (r) { return r.label; });
+      var l11 = draw('settings', 320, 568, false, true);
+      var txt11 = l11.texts.map(function (t) { return t.t; });
+      var allLabels = rows11.every(function (lab) { return txt11.indexOf(lab) >= 0; });
+      var l11b = draw('about', 1024, 640, false, true);
+      var txt11b = l11b.texts.map(function (t) { return t.t; });
+      var tagOk = txt11b.some(function (t) { return t.indexOf('零构建') >= 0; }) &&
+        txt11b.every(function (t) { return t.indexOf('…') < 0; });
+      var shortOk = txt11.indexOf('画面缩放') >= 0 && txt11.indexOf('缩放') < 0;
+      var fake = ['音效', '音乐', '缩放', '自适应难度', '清除存档', '任务指引'];
+      var neg11 = !(fake.every(function (lab) { return txt11.indexOf(lab) >= 0; }) &&
+        rows11.indexOf('画面缩放') >= 0);
+      rec('M11_no_abbreviation', allLabels && tagOk && shortOk && neg11,
+        { rule: '设置标签/关于标语与 main.js 源串逐字一致', labels: rows11, allLabels: allLabels,
+          taglineSeen: tagOk, shortLabelSeen: shortOk });
+    } catch (e) { rec('M11_no_abbreviation', false, String(e && (e.stack || e.message))); }
+
+    out.ok = true;
+    for (var k in out.sub) if (out.sub.hasOwnProperty(k) && !out.sub[k].ok) out.ok = false;
+    finish();
+  }
+  /* M7 专用：不重置计数器，只重画（保留 LOG 外的动画时钟路径） */
+  function drawNoReset(page, W, H) {
+    setSize(W, H);
+    TEXT_OFF = false;
+    resetLog();
+    R.drawMainMenu(specFor(page));
+  }
+
+  /* 素材必须真正加载：实物锚（火把/骷髅/门徽）、关于页墙脚与竖井缓存都依赖它 */
+  if (S && typeof S.load === 'function') S.load('../assets/sprites/');
+
+  (function wait(n) {
+    if (!S || typeof S.isReady !== 'function' || S.isReady() || n > 160) { run(); return; }
+    setTimeout(function () { wait(n + 1); }, 40);
+  })(0);})();
+</script>
+</body></html>

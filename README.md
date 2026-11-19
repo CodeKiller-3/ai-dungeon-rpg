@@ -78,8 +78,8 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 355 张、验证页 129 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
-- 验证页数不在这里维护第二个副本：以 `page-baseline.json` 的 `count` 为准（当前 129），历史文档里的旧页数是时点值。<!-- D-122 时点：验证页 128 个；D-124 起现值为 129。 -->
+- 物品 48 件、素材 355 张、验证页 130 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 验证页数不在这里维护第二个副本：以 `page-baseline.json` 的 `count` 为准（当前 130），历史文档里的旧页数是时点值。<!-- D-122 时点：验证页 128 个；D-124 起现值为 129；D-128 起现值为 130。 -->
 - 版本库当前 **232 个 commit**（D-123 本 commit 之后；D-95–D-122 已全部入库并推送 `origin/main`）。
 - **真人验收**：未做真人验收；40%–55% 是按救援口径与 F5 缺口推算的估计值，不是实测。
 

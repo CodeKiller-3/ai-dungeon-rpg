@@ -377,14 +377,14 @@
 
     /* ═══ F) 交付物 ══════════════════════════════════════════════ */
     var pb = readJson('selfcheck/page-baseline.json');
-    rec('F1_page_baseline', !!pb && pb.count === 129 && pb.pages.indexOf('verify_d78') >= 0 &&
+    rec('F1_page_baseline', !!pb && pb.count === 130 && pb.pages.indexOf('verify_d78') >= 0 &&
       pb.pages.indexOf('verify_d85') >= 0 && pb.pages.indexOf('verify_d89') >= 0 &&
       pb.pages.indexOf('verify_d90') >= 0 && pb.pages.indexOf('verify_d91') >= 0 &&
       pb.pages.indexOf('verify_d93') >= 0 && pb.pages.indexOf('verify_d98') >= 0 &&
       pb.pages.indexOf('verify_d100') >= 0 && pb.pages.indexOf('verify_d101') >= 0 &&
       pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0 &&
-      pb.pages.indexOf('verify_d124') >= 0, {
-      rule: 'page-baseline.json 计数 117→…→128→129（D-124 verify_d124），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d89 / verify_d90 / verify_d91 / verify_d93 / verify_d98 / verify_d100 / verify_d101 / verify_d102 / verify_d104 / verify_d108 / verify_d124',
+      pb.pages.indexOf('verify_d124') >= 0 && pb.pages.indexOf('verify_d128') >= 0, {
+      rule: 'page-baseline.json 计数 117→…→129→130（D-128 verify_d128），且已登记 verify_d78 / verify_d85 / verify_d86 / verify_d87 / verify_d89 / verify_d90 / verify_d91 / verify_d93 / verify_d98 / verify_d100 / verify_d101 / verify_d102 / verify_d104 / verify_d108 / verify_d124 / verify_d128',
       count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d78') >= 0
     });
     var doc = readText('../docs/特效居中-D-78.md');

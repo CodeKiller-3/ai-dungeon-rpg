@@ -31,6 +31,17 @@
    * 素材未就绪时用兜底色块直绘且不写缓存，全部到齐后 key 变化自动重绘。 */
   var menuSceneCache = { cv: null, ctx: null, key: '' };
 
+  /* D-128：子页「介质」落位动效状态（100ms 一次性，不循环）。
+   * 主菜单四页共用一套介质；验证页可用 R._menuNoAnim=true 直接取落位后的稳定帧，
+   * 或用 R._animNow 注入时钟验证「静止两帧同哈希」。 */
+  var menuEnter = { page: '', at: 0 };
+
+  /* D-128：玩法说明宽档五层竖井的静态缓存。
+   * 旧实现每帧按 24×24 逐格画 338 次 drawImage（960×540 实测单帧 602 次调用），
+   * 远超静态 UI 的 214 上限；竖井是纯静态图形，按 D-106 同款「素材就绪后烘焙、每帧 1 次 blit」处理。
+   * 只烘焙岩壁/地面/暗缝等图形，F1–F5 刻度与 BOSS 文字仍每帧直绘（验证页关文字层时缓存不受影响）。 */
+  var shaftCache = { cv: null, ctx: null, key: '' };
+
   /* 自适应缩放（2026-11）：设计基准 960×540，等比缩放系数 scale∈[1,2]，按 0.25 步进取整。
    * 逻辑视口 = 窗口 CSS 尺寸 / scale；所有绘制与命中判定仍用逻辑坐标（像素风 TILE=24 不变），
    * 因此窗口变大时画面整体放大、字体/面板同步放大，且不拉伸（横纵同一系数）。
@@ -4454,13 +4465,17 @@
     /* D-91：危险操作配色——主菜单设置页与暂停设置页共用同一套（原来只有暂停页用红）。 */
     _dangerColor: function (on) { return on ? '#ff9b6b' : '#c98a6b'; },
 
-    /* D-91/D-94：设置行绘制——主菜单与暂停面板共用，杜绝两份样式/两种危险语义。
-     * 行内加一句说明 + 右侧键帽，让 ←→ 可改这件事可见；危险行用 #ff9b6b / #c98a6b。 */
-    _drawSettingsRows: function (rows, sel, W, py, rowH, hotPrefix) {
+    /* D-91/D-94/D-128：设置行绘制——主菜单与暂停面板共用，杜绝两份样式/两种危险语义。
+     * D-128 起菜单版走「机关刻槽」：左 3px 槽 + 行底 1px 刻线 + 右端 78×18 阀值框，
+     * 不再整行铺色；opt={style:'menu',x,w} 时生效。暂停面板不传 opt，保持原样式。 */
+    _drawSettingsRows: function (rows, sel, W, py, rowH, hotPrefix, opt) {
       var ctx = this._ctx, cx = W / 2;
       var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
       var FONT_MONO = 'Consolas, "Courier New", monospace';
-      var pw = Math.min(460, W - 60);
+      var o = opt || {};
+      var menu = (o.style === 'menu');
+      var pw = menu ? (o.w - 32) : Math.min(460, W - 60);
+      var x0 = menu ? (o.x + 16) : (cx - pw / 2);
       var desc = {
         muted: '关闭音乐与音效，不影响存档',
         zoom: '画面整体放大倍数',
@@ -4469,51 +4484,68 @@
       for (var i = 0; i < rows.length; i++) {
         var y = py + i * rowH, on = (i === sel), rr = rows[i];
         var hotId = hotPrefix ? (hotPrefix + ':' + rr.id) : null;
-        if (hotId) this._hotAdd(hotId, cx - pw / 2, y, pw, rowH - 8);
-        if (!on && hotId && HOVER_ID === hotId) {
-          ctx.fillStyle = 'rgba(255,207,110,0.06)';
-          ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
-          ctx.strokeStyle = 'rgba(255,207,110,0.55)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(cx - pw / 2 + 0.5, y + 0.5, pw - 1, rowH - 9);
-        }
-        if (on) {
-          ctx.fillStyle = 'rgba(255,207,110,0.14)';
-          ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
-          ctx.strokeStyle = '#ffcf6e';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, rowH - 10);
-        }
-        /* 危险行未选中也给一条暗红左边条，风险在聚焦前就可见 */
-        if (rr.id === 'clearSave') {
-          ctx.fillStyle = on ? '#ff9b6b' : 'rgba(255,155,107,0.55)';
-          ctx.fillRect(cx - pw / 2 + 4, y + 7, 3, rowH - 20);
+        if (hotId) this._hotAdd(hotId, x0, y, pw, rowH - 8);
+        if (menu) {
+          /* 左刻槽：选中亮到 0.22，未选中 0.10；危险行恒为红槽 */
+          ctx.fillStyle = rr.danger
+            ? (on ? '#ff9b6b' : 'rgba(255,155,107,0.55)')
+            : (on ? 'rgba(255,207,110,0.22)' : 'rgba(255,207,110,0.10)');
+          ctx.fillRect(o.x + 10, y + 8, 3, rowH - 18);
+          /* 行底 1px 刻线：把行读成石面上的刻槽，而不是一张选中的卡片 */
+          ctx.fillStyle = on ? 'rgba(255,207,110,0.20)' : 'rgba(255,207,110,0.07)';
+          ctx.fillRect(x0, y + rowH - 10, pw, 1);
+        } else {
+          if (!on && hotId && HOVER_ID === hotId) {
+            ctx.fillStyle = 'rgba(255,207,110,0.06)';
+            ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
+            ctx.strokeStyle = 'rgba(255,207,110,0.55)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cx - pw / 2 + 0.5, y + 0.5, pw - 1, rowH - 9);
+          }
+          if (on) {
+            ctx.fillStyle = 'rgba(255,207,110,0.14)';
+            ctx.fillRect(cx - pw / 2, y, pw, rowH - 8);
+            ctx.strokeStyle = '#ffcf6e';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cx - pw / 2 + 1, y + 1, pw - 2, rowH - 10);
+          }
+          /* 危险行未选中也给一条暗红左边条，风险在聚焦前就可见 */
+          if (rr.id === 'clearSave') {
+            ctx.fillStyle = on ? '#ff9b6b' : 'rgba(255,155,107,0.55)';
+            ctx.fillRect(cx - pw / 2 + 4, y + 7, 3, rowH - 20);
+          }
         }
         ctx.textAlign = 'left';
         ctx.fillStyle = rows[i].danger ? this._dangerColor(on) : (on ? '#ffcf6e' : '#cfcfcf');
         ctx.font = (on ? 'bold ' : '') + '15px ' + FONT_CN;
-        ctx.fillText(rr.label, cx - pw / 2 + 18, y + 23);
+        ctx.fillText(rr.label, x0 + (menu ? 14 : 18), y + (menu ? 21 : 23));
         /* 值只显示「自动」：与下一行「自适应难度」不再撞词（原始值仍在 main.js，不改） */
         var vshow = (rr.id === 'zoom' && rr.value === '自动（自适应）') ? '自动' : rr.value;
         var vtxt = '‹ ' + vshow + ' ›';
-        var kw = Math.max(78, Math.min(pw - 170, this._menuTextW(vtxt, 12) + 16));
-        var kx = cx + pw / 2 - 18 - kw, kyy = y + 14;
+        var kw = menu ? 78 : Math.max(78, Math.min(pw - 170, this._menuTextW(vtxt, 12) + 16));
+        var kx = x0 + pw - (menu ? 0 : 18) - kw, kyy = y + (menu ? Math.round((rowH - 8 - 18) / 2) : 14);
         var ds = desc[rr.id];
-        if (ds) {
-          var descW = kx - (cx - pw / 2 + 18) - 10;
+        if (ds && (!menu || on)) {
+          var descW = kx - (x0 + (menu ? 14 : 18)) - 10;
           var dTxt = ds;
           while (dTxt.length > 1 && this._menuTextW(dTxt + '…', 10) > descW) dTxt = dTxt.slice(0, -1);
           if (dTxt !== ds) dTxt += '…';
           ctx.fillStyle = on ? '#b9a273' : '#7f879c';
           ctx.font = '10px ' + FONT_CN;
-          ctx.fillText(dTxt, cx - pw / 2 + 18, y + 39);
+          ctx.fillText(dTxt, x0 + (menu ? 14 : 18), menu ? y + rowH - 13 : y + 39);
         }
-        /* 值不再描框：全页只有一个矩形焦点（选中行本身），
-         * 否则未选中行的键帽框会被读成“第二个选中”。 */
+        if (menu) {
+          /* 阀值框：全页唯一的矩形焦点；选中时框线换成金色 */
+          ctx.fillStyle = '#0d0e16';
+          ctx.fillRect(kx, kyy, kw, 18);
+          ctx.strokeStyle = on ? '#ffcf6e' : '#3a3340';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(kx + 0.5, kyy + 0.5, kw - 1, 17);
+        }
         ctx.textAlign = 'center';
         ctx.fillStyle = rows[i].danger ? (on ? '#ffb08a' : '#9a6f5e') : (on ? '#ffcf6e' : '#9bbbf4');
         ctx.font = (on ? 'bold ' : '') + '12px ' + FONT_MONO;
-        ctx.fillText(vtxt, kx + kw / 2, kyy + 16);
+        ctx.fillText(vtxt, kx + kw / 2, kyy + 13);
       }
       ctx.textAlign = 'center';
     },
@@ -4547,6 +4579,7 @@
 
       var opts = d.opts || ['取消', '确认'];
       var bw = g.bw || 180, gap = 24;
+      var btnH = g.btnH || 40;
       var total = opts.length * bw + (opts.length - 1) * gap;
       var x0 = cx - total / 2, oy = ly + wrapped.length * lineH + (g.gapY || 34);
       for (var j = 0; j < opts.length; j++) {
@@ -4555,22 +4588,27 @@
         var x = x0 + j * (bw + gap);
         ctx.fillStyle = on ? (danger ? 'rgba(255,120,90,0.18)' : 'rgba(255,207,110,0.16)')
           : (danger ? 'rgba(255,120,90,0.07)' : 'rgba(255,255,255,0.03)');
-        ctx.fillRect(x, oy, bw, 40);
+        ctx.fillRect(x, oy, bw, btnH);
+        /* 压石：主菜单版底边压 3px 暗面，读成「放在石桌上的压石」；暂停页保持原样 */
+        if (g.style === 'menu') {
+          ctx.fillStyle = '#05060a';
+          ctx.fillRect(x, oy + btnH - 3, bw, 3);
+        }
         ctx.strokeStyle = on ? (danger ? '#ff9b6b' : '#ffcf6e')
           : (danger ? 'rgba(255,155,107,0.45)' : '#3a3a55');
         ctx.lineWidth = 2;
-        ctx.strokeRect(x + 1, oy + 1, bw - 2, 38);
+        ctx.strokeRect(x + 1, oy + 1, bw - 2, btnH - 2);
         ctx.fillStyle = on ? (danger ? '#ffb08a' : '#ffcf6e') : (danger ? '#c98a6b' : '#cfcfcf');
         ctx.font = (on ? 'bold ' : '') + '15px ' + FONT_CN;
-        ctx.fillText(opts[j], x + bw / 2, oy + 26);
+        ctx.fillText(opts[j], x + bw / 2, oy + Math.round(btnH * 0.66));
         /* D-100：确认按钮登记热区；hover 只给非当前焦点加一层描边 */
         var chId = g.hotPrefix ? (g.hotPrefix + ':' + j) : null;
         if (chId) {
-          this._hotAdd(chId, x, oy, bw, 40);
+          this._hotAdd(chId, x, oy, bw, btnH);
           if (!on && HOVER_ID === chId) {
             ctx.strokeStyle = '#ffcf6e';
             ctx.lineWidth = 1;
-            ctx.strokeRect(x + 0.5, oy + 0.5, bw - 1, 39);
+            ctx.strokeRect(x + 0.5, oy + 0.5, bw - 1, btnH - 1);
           }
         }
       }
@@ -4598,14 +4636,11 @@
       if (!isRoot) {
         ctx.fillStyle = '#0b0c14';
         ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = 'rgba(80,90,130,0.16)';
-        ctx.lineWidth = 1;
-        for (var gx = 0; gx < W; gx += 32) {
-          ctx.beginPath(); ctx.moveTo(gx + 0.5, 0); ctx.lineTo(gx + 0.5, H); ctx.stroke();
-        }
-        for (var gy = 0; gy < H; gy += 32) {
-          ctx.beginPath(); ctx.moveTo(0, gy + 0.5); ctx.lineTo(W, gy + 0.5); ctx.stroke();
-        }
+        /* D-128：网格由「47 条 stroke 路径」改为「47 次 1px fillRect」——像素结果相同
+         * （1px 线正好覆盖整数列/行），单帧调用从 188 降到 47，给子页预算腾出空间。 */
+        ctx.fillStyle = 'rgba(80,90,130,0.16)';
+        for (var gx = 0; gx < W; gx += 32) ctx.fillRect(gx, 0, 1, H);
+        for (var gy = 0; gy < H; gy += 32) ctx.fillRect(0, gy, W, 1);
       }
       /* 顶部/底部装饰线只属于首屏构图：root 由场景整幅覆盖（等同不可见），
        * 子页有自己的卡头，因此这里不再另画。 */
@@ -4637,10 +4672,37 @@
       return Math.round(w);
     },
 
+    /* D-128：子页与首屏共用同一套断点（纯函数）。首屏 _menuLayout 只认这里，
+     * 四个子页也不再各写 W<420 / cardW>=840 的第二套档位判定。 */
+    _menuTier: function (W, H) {
+      return {
+        tier: (W >= 900) ? 'wide' : ((W >= 480) ? 'mid' : 'narrow'),
+        compact: H < 620
+      };
+    },
+
+    /* D-128：介质落位系数 0→1（100ms）。st.now 优先（验证页可注入），其次 _animNow，最后真实时钟；
+     * 不使用 Math.random。动效只作用在介质本身（2px 整数位移 + 沿口 alpha），不碰正文坐标。 */
+    _menuEnterK: function (st) {
+      if (this._menuNoAnim === true) return 1;
+      var now;
+      if (st && typeof st.now === 'number') now = st.now;
+      else if (typeof this._animNow === 'function') now = this._animNow();
+      else now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      var page = (st && st.page) || 'root';
+      /* 时钟回拨（验证页注入常量时钟）时重新起算，避免永久停在未落位状态 */
+      if (menuEnter.page !== page || now < menuEnter.at) { menuEnter.page = page; menuEnter.at = now; }
+      var k = (now - menuEnter.at) / 100;
+      if (!(k > 0)) k = 0;
+      if (k > 1) k = 1;
+      return k;
+    },
+
     _menuLayout: function (W, H, hasSave, floor, level) {
       var T = 48;                       /* 24×2：地砖/墙砖/双扇门/火把 */
-      var tier = (W >= 900) ? 'wide' : ((W >= 480) ? 'mid' : 'narrow');
-      var compact = H < 620;            /* D-106 高度档：960×540/800×540 等低高度视口 */
+      var mt = this._menuTier(W, H);
+      var tier = mt.tier;
+      var compact = mt.compact;         /* D-106 高度档：960×540/800×540 等低高度视口 */
       var lay, sc, m, p, rail, hintY;
       if (tier === 'wide') {
         /* D-106 P6：右栏右缘必须 ≤ W−24。900 宽时旧 x=616 会把栏裁掉 76px；
@@ -5100,30 +5162,56 @@
       ctx.textAlign = 'left';
     },
 
-    /* D-94 P7.9：四个子页共用「暗栏卡片」——token 全部取自首屏右侧菜单栏：
-     * #07080e 底 / #3a3340 1px 边 / 金 0.28 分隔线 / mono kicker / YaHei 标题。
-     * danger=true 时顶部换 3px 危险色条、标题换 #ff9b6b（确认页沿用）。 */
-    _menuPageCard: function (x, y, w, h, kicker, title, right, danger) {
+    /* D-128：四个子页共用的「介质」——不再是「一张卡」。
+     * 底 #0a0b12 / 1px 沿口 #2b2440 / 4px 接触阴影 #040407（只在下、右）/
+     * 四角 4×4 石钉 #3a3340 + 1px 左上受光 rgba(178,158,220,0.10)。
+     * opt.drop 为落位偏移（整数），opt.alpha 为沿口 alpha（0.6→1）。 */
+    _menuMedium: function (x, y, w, h, opt) {
+      var ctx = this._ctx, o = opt || {};
+      var dy = (typeof o.drop === 'number') ? Math.round(o.drop) : 0;
+      var a = (typeof o.alpha === 'number') ? o.alpha : 1;
+      var yy = y + dy;
+      var i, sx, sy;
+      ctx.fillStyle = '#040407';
+      ctx.fillRect(x + 4, yy + h, w, 4);
+      ctx.fillRect(x + w, yy + 4, 4, h);
+      ctx.fillStyle = '#0a0b12';
+      ctx.fillRect(x, yy, w, h);
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = '#2b2440';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, yy + 0.5, w - 1, h - 1);
+      ctx.globalAlpha = 1;
+      var px = [x + 8, x + w - 12], py = [yy + 8, yy + h - 12];
+      for (i = 0; i < 4; i++) {
+        sx = px[i % 2]; sy = py[(i / 2) | 0];
+        ctx.fillStyle = '#3a3340';
+        ctx.fillRect(sx, sy, 4, 4);
+        ctx.fillStyle = 'rgba(178,158,220,0.10)';
+        ctx.fillRect(sx, sy, 4, 1);
+        ctx.fillRect(sx, sy, 1, 4);
+      }
+      return yy;
+    },
+
+    /* D-128：介质页头带（kicker 10 / 标题 22·窄档 20 / 右端 mono 10 / 金色分隔线）。
+     * 标题从 x+48 起笔，x+16..40 留给定页的 24×24 实物锚（火把 / 骷髅 / 门徽）。
+     * 返回 bodyTop 与标题文本框，绘制与验证页共用同一份坐标。 */
+    _menuHeader: function (x, y, w, kicker, title, right, danger, narrow) {
       var ctx = this._ctx;
       var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
       var FONT_MONO = 'Consolas, "Courier New", monospace';
-      ctx.fillStyle = '#07080e';
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeStyle = '#3a3340';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-      if (danger) {
-        ctx.fillStyle = '#ff9b6b';
-        ctx.fillRect(x + 1, y + 1, w - 2, 3);
-      }
+      var ts = narrow ? 20 : 22;
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8a7a56';
       ctx.font = '10px ' + FONT_MONO;
       ctx.fillText(kicker || '', x + 16, y + 18);
+      var tw = 0;
       if (title) {
         ctx.fillStyle = danger ? '#ff9b6b' : '#ffcf6e';
-        ctx.font = 'bold 22px ' + FONT_CN;
-        ctx.fillText(title, x + 16, y + 42);
+        ctx.font = 'bold ' + ts + 'px ' + FONT_CN;
+        ctx.fillText(title, x + 48, y + 42);
+        tw = this._menuTextW(title, ts);
       }
       if (right) {
         ctx.textAlign = 'right';
@@ -5134,7 +5222,22 @@
       }
       ctx.fillStyle = 'rgba(255,207,110,0.28)';
       ctx.fillRect(x + 16, y + 52, w - 32, 1);
-      return { x: x, y: y, w: w, h: h, bodyTop: y + 66 };
+      return {
+        x: x, y: y, w: w, bodyTop: y + 66,
+        title: { x: x + 48, base: y + 42, size: ts, w: tw, h: ts + 4 },
+        anchor: { x: x + 16, y: y + 18, w: 24, h: 24 }
+      };
+    },
+
+    /* D-128：装饰精灵——缺素材或桩 ctx（无 drawImage）时**不画**，不留色块，
+     * 以免把「实物锚是否存在」的验证被兜底方块冒充。 */
+    _menuSprite: function (name, x, y, k) {
+      var ctx = this._ctx, S = Game.Core.Sprites;
+      var im = (S && typeof S.get === 'function') ? S.get(name) : null;
+      if (!im || !im.naturalWidth || typeof ctx.drawImage !== 'function') return false;
+      var kk = (k === 2) ? 2 : 1;
+      ctx.drawImage(im, x, y, im.naturalWidth * kk, im.naturalHeight * kk);
+      return true;
     },
 
     /* 子页四角暗角：让网格退到内容之后，和首屏「场景 + 暗栏」同一光照逻辑 */
@@ -5301,20 +5404,31 @@
       var FONT_MONO = 'Consolas, "Courier New", monospace';
       this._menuVignette(W, H);
 
+      var tier = this._menuTier(W, H);
+      var compact = tier.compact;
       var cardW = Math.min(880, W - 24);
       var cardH = H - 48;
       var cx0 = Math.round((W - cardW) / 2), cy0 = 24;
-      this._menuPageCard(cx0, cy0, cardW, cardH, 'CODEX / CONTROLS', '玩法说明', '01–08');
+      var k = this._menuEnterK(st);
+      this._menuMedium(cx0, cy0, cardW, cardH, { drop: -2 * (1 - k), alpha: 0.6 + 0.4 * k });
 
-      var bodyTop = cy0 + 66, hintY = cy0 + cardH - 14;
-      var innerX = cx0 + 18, textX = innerX + 34;
       var narrow = W < 420;
-      /* D-94：1280 档左文右图——右半区放五层纵剖面；窄屏保持单列滚动 */
-      var split = cardW >= 840;
+      var hd = this._menuHeader(cx0, cy0, cardW, 'CODEX / CONTROLS', '玩法说明', '01–08', false, narrow);
+      /* 紧凑高度档：页头 66→58（标题仍在 y+42，只把正文提上来 8px） */
+      var bodyTop = hd.bodyTop - (compact ? 8 : 0), hintY = cy0 + cardH - 14;
+      var innerX = cx0 + 18, textX = innerX + 34;
+      /* 右半区三种表达：宽档整条竖井 / 紧凑档五枚层徽 / 中窄档不出图（保持单列滚动） */
+      var split = cardW >= 840 && !compact;
+      var badges = cardW >= 840 && compact;
       var bodySize = narrow ? 12 : 13;
       var lineH = narrow ? 18 : (split ? 19 : 20);
       /* 分栏时文字列 ≤ 420（卡宽 47.7%，≪55%），给右侧纵剖面让出半区 */
-      var maxW = split ? 420 : cardW - 84;
+      var maxW = (split || badges) ? 420 : cardW - 84;
+
+      /* 介质里的实物：火把（标题左侧 24×24）、右上铁链、左下碎屑 */
+      this._menuSprite('t1_dc_torch', cx0 + 16, cy0 + 18, 1);
+      this._menuSprite('t1_dc_chain', cx0 + cardW - 40, cy0 + 108, 1);
+      this._menuSprite('t1_dc_rubble', cx0 + 8, cy0 + cardH - 32, 1);
 
       /* 扁平行：节标题 / 正文（按卡宽换行）/ 节间空行；helpScroll 仍是行索引。
        * 分栏时行高收紧（头 28 / 间 10），让 8 组在首屏全部可见、不出现滚动。 */
@@ -5328,7 +5442,7 @@
         for (var j = 0; j < ls.length; j++) {
           /* 与确认页同一套规则：语义片段整体换行，避免「H 重看引导」「上限 +5。」落成寡妇行 */
           var ws = this._menuWrapBalanced(ls[j], bodySize, maxW);
-          for (var k = 0; k < ws.length; k++) rows.push({ kind: 'body', h: lineH, text: ws[k] });
+          for (var kk = 0; kk < ws.length; kk++) rows.push({ kind: 'body', h: lineH, text: ws[kk] });
         }
       }
       var avail = hintY - 20 - bodyTop;
@@ -5380,6 +5494,7 @@
       }
 
       if (split) this._drawHelpSection(cx0, cardW, bodyTop, (hintY - 20) - bodyTop);
+      else if (badges) this._drawHelpBadges(cx0, cardW, bodyTop, (hintY - 20) - bodyTop);
 
       ctx.textAlign = 'center';
       ctx.fillStyle = '#7f8fa8';
@@ -5389,15 +5504,32 @@
       ctx.textAlign = 'left';
     },
 
-    /* D-94：玩法说明右半区的五层纵剖面。
-     * 只用既有 t1_*–t5_* 24×24 瓦片（岩壁 1×、地面 2×）与 72×72 龙（1×），不新增素材。
-     * 结构：一条向下的竖井——左右岩壁随深度换地层，每层底一块地面（ledge），
-     * 地面之间是井身的暗。左侧竖尺打 F1…F5 刻度，
-     * 读作一条向下的竖井，而不是五条并排的横带。 */
-    _drawHelpSection: function (cx0, cardW, top, avail) {
+    /* D-128：紧凑高度档（H<620）的竖井替身——五枚 24px 层徽 + 2px 竖线 + 72×72 龙 1×。
+     * 龙的素材原生就是 72×72；规格写的 48px 会构成 0.67× 非整数缩放（违反 M8），
+     * 因此保留原生 1×，整块高约 226px，仍落在 960×540 的约 392px 可用高内。 */
+    _drawHelpBadges: function (cx0, cardW, top, avail) {
       var ctx = this._ctx;
-      var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
       var FONT_MONO = 'Consolas, "Courier New", monospace';
+      var lineX = cx0 + cardW - 18 - 68;
+      var bx = lineX - 30, y0 = top + 6;
+      ctx.fillStyle = 'rgba(255,207,110,0.16)';
+      ctx.fillRect(lineX, y0 + 6, 2, 5 * 30 - 6);
+      for (var i = 0; i < 5; i++) {
+        var by = y0 + i * 30;
+        this._menuSprite(floorVariantName(0, 0, i + 1), bx, by, 1);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = (i === 4) ? '#ffb86b' : '#8a7a56';
+        ctx.font = '11px ' + FONT_MONO;
+        ctx.fillText('F' + (i + 1), lineX + 10, by + 17);
+      }
+      var dy = y0 + 5 * 30 + 4;
+      if (dy + 72 > top + avail) dy = Math.max(y0, top + avail - 72);
+      this._menuSprite('dragon_idle_anim_f0', lineX - 36, dy, 1);
+      ctx.textAlign = 'left';
+    },
+
+    /* D-128：竖井几何——绘制、缓存与验证页共用同一份坐标。 */
+    _helpShaftGeom: function (cx0, cardW, top, avail) {
       var px = cx0 + 490;
       var pw = cardW - 490 - 18;
       var py = top + 2;
@@ -5406,11 +5538,91 @@
       var floorH = 48, wallW = 24;
       var gutter = 30, contentW = 288;                 /* 6 × 48 = 12 × 24，两种瓦片同宽 */
       var ox = px + gutter + Math.round((pw - gutter - contentW) / 2);
+      return { px: px, pw: pw, py: py, bandHs: bandHs, floorH: floorH, wallW: wallW,
+        gutter: gutter, contentW: contentW, ox: ox, avail: avail };
+    },
 
-      /* 与文字的分隔：一条竖线，不做外框（避免“卡中卡”） */
-      ctx.fillStyle = 'rgba(255,207,110,0.12)';
-      ctx.fillRect(px - 14, py, 1, Math.min(avail, 480));
+    /* D-94/D-128：玩法说明右半区的五层纵剖面。
+     * 只用既有 24×24 瓦片（岩壁 1×、地面 2×），不新增素材。
+     * D-128：图形部分（岩壁/地面/暗缝/刻度）是纯静态的，烘焙进 shaftCache，每帧只 1 次 blit；
+     * F1…F5 与 BOSS 文字仍每帧直绘——验证页关闭文字层时，缓存里不含任何文字像素。 */
+    _drawHelpSection: function (cx0, cardW, top, avail) {
+      var ctx = this._ctx;
+      var g = this._helpShaftGeom(cx0, cardW, top, avail);
+      var S = Game.Core.Sprites;
+      var ready = !!(S && typeof S.isReady === 'function' && S.isReady());
+      var k = (this.dpr || 1) * (this.scale || 1);
+      var W = this.cssW || 1024, H = this.cssH || 640;
+      var key = [cx0, cardW, top, avail, k, ready ? 1 : 0].join('|');
+      var canBlit = !!(ctx && typeof ctx.save === 'function' && typeof ctx.restore === 'function' &&
+        typeof ctx.setTransform === 'function' && typeof ctx.drawImage === 'function');
+      var baked = false;
+      if (ready && canBlit && shaftCache.cv && shaftCache.key === key) {
+        baked = true;
+      } else if (ready && canBlit && typeof document.createElement === 'function') {
+        var ow = Math.max(1, Math.round(W * k)), oh = Math.max(1, Math.round(H * k));
+        if (!shaftCache.cv) {
+          shaftCache.cv = document.createElement('canvas');
+          shaftCache.ctx = shaftCache.cv.getContext('2d');
+        }
+        if (shaftCache.ctx) {
+          if (shaftCache.cv.width !== ow || shaftCache.cv.height !== oh) {
+            shaftCache.cv.width = ow; shaftCache.cv.height = oh;
+          }
+          var oc = shaftCache.ctx;
+          oc.setTransform(1, 0, 0, 1, 0, 0);
+          oc.clearRect(0, 0, ow, oh);
+          oc.setTransform(k, 0, 0, k, 0, 0);
+          try { if ('imageSmoothingEnabled' in oc) oc.imageSmoothingEnabled = false; } catch (e) { /* 降级 */ }
+          this._paintShaft(oc, g);
+          shaftCache.key = key;
+          baked = true;
+        }
+      }
+      if (baked) {
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(shaftCache.cv, 0, 0);
+        ctx.restore();
+      } else {
+        this._paintShaft(ctx, g);
+      }
 
+      /* 文字层（每帧直绘）：F 编号 / BOSS 标注 / 底部一行说明 */
+      var FONT_CN = '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif';
+      var FONT_MONO = 'Consolas, "Courier New", monospace';
+      var by = g.py;
+      for (var i = 0; i < 5; i++) {
+        var fl = i + 1, bandH = g.bandHs[i];
+        var fy = by + bandH - g.floorH;
+        if (fl === 5) {
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#8a7a56';
+          ctx.font = '9px ' + FONT_MONO;
+          ctx.fillText('BOSS', g.ox + g.contentW - g.wallW - 12, fy - 34);
+          ctx.fillStyle = '#ffb86b';
+          ctx.font = 'bold 13px ' + FONT_CN;
+          ctx.fillText('地牢巨龙', g.ox + g.contentW - g.wallW - 12, fy - 14);
+          ctx.textAlign = 'left';
+        }
+        ctx.textAlign = 'right';
+        ctx.fillStyle = (fl === 5) ? '#ffb86b' : '#8a7a56';
+        ctx.font = '11px ' + FONT_MONO;
+        ctx.fillText('F' + fl, g.px + 20, fy + 11);
+        by += bandH;
+      }
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7f8798';
+      ctx.font = '9px ' + FONT_MONO;
+      /* 文案只写画面真能支撑的事实：五层地貌各不相同（亮度并非单调递减） */
+      ctx.fillText('F1 → F5 · 五层地貌各不相同',
+        g.px + g.gutter + Math.round((g.pw - g.gutter) / 2),
+        Math.min(g.py + 480 + 12, g.py + g.avail));
+      ctx.textAlign = 'left';
+    },
+
+    /* 竖井图形本体（无文字）：可安全烘焙，逐像素与直绘一致。 */
+    _paintShaft: function (ctx, g) {
       var spr = function (name, dx, dy, dw, dh, fallback) {
         var im = (Game.Core.Sprites && typeof Game.Core.Sprites.get === 'function')
           ? Game.Core.Sprites.get(name) : null;
@@ -5422,77 +5634,49 @@
         ctx.fillRect(dx, dy, dw, dh);
       };
 
-      var tint = ['#3b2c22', '#39402c', '#2c3138', '#3a2430', '#241a1c'];
-      var by = py;
-      for (var i = 0; i < 5; i++) {
-        var bandH = bandHs[i], fl = i + 1;
-        var wallName = (fl === 1) ? 'wall_mid' : 't' + fl + '_wall_mid';
+      /* 与文字的分隔：一条竖线，不做外框（避免“卡中卡”） */
+      ctx.fillStyle = 'rgba(255,207,110,0.12)';
+      ctx.fillRect(g.px - 14, g.py, 1, Math.min(g.avail, 480));
 
-        /* 井身：先整幅铺该层岩壁作为“远墙”，压暗后只把左右两列提亮成近墙，
-         * 中段留出暗的井筒——这样层与层之间不是一块死黑，也读得出前后关系 */
-        for (var br = 0; br < Math.ceil(bandH / 24); br++) {
+      var tint = ['#3b2c22', '#39402c', '#2c3138', '#3a2430', '#241a1c'];
+      var by = g.py;
+      for (var i = 0; i < 5; i++) {
+        var bandH = g.bandHs[i], fl = i + 1;
+        var wallName = (fl === 1) ? 'wall_mid' : 't' + fl + '_wall_mid';
+        var rows = Math.ceil(bandH / 24);
+
+        /* 井身：先整幅铺该层岩壁作为“远墙”，压暗后只把左右两列提亮成近墙 */
+        for (var br = 0; br < rows; br++) {
           for (var bc = 0; bc < 12; bc++) {
-            spr(wallName, ox + bc * 24, by + br * 24, 24, 24, tint[i]);
+            spr(wallName, g.ox + bc * 24, by + br * 24, 24, 24, tint[i]);
           }
         }
         ctx.fillStyle = 'rgba(0,0,0,0.62)';
-        ctx.fillRect(ox, by, contentW, bandH);
-
-        /* 近墙：左右两列，保持原亮度 */
-        for (var wr = 0; wr < Math.ceil(bandH / 24); wr++) {
-          spr(wallName, ox, by + wr * 24, wallW, 24, tint[i]);
-          spr(wallName, ox + contentW - wallW, by + wr * 24, wallW, 24, tint[i]);
+        ctx.fillRect(g.ox, by, g.contentW, bandH);
+        for (var wr = 0; wr < rows; wr++) {
+          spr(wallName, g.ox, by + wr * 24, g.wallW, 24, tint[i]);
+          spr(wallName, g.ox + g.contentW - g.wallW, by + wr * 24, g.wallW, 24, tint[i]);
         }
 
         /* 本层地面（ledge）：该层地砖 2×，6 列，贴在层底 */
-        var fy = by + bandH - floorH;
+        var fy = by + bandH - g.floorH;
         for (var fc = 0; fc < 6; fc++) {
-          spr(floorVariantName(fc, i, fl), ox + fc * 48, fy, 48, floorH, tint[i]);
+          spr(floorVariantName(fc, i, fl), g.ox + fc * 48, fy, 48, g.floorH, tint[i]);
         }
-        /* 轻微的深度压暗（5%/层）：只作前后层次，不承担“越往下越暗”的说法 */
         if (i > 0) {
           ctx.fillStyle = 'rgba(0,0,0,' + (0.03 * i).toFixed(2) + ')';
-          ctx.fillRect(ox, by, contentW, bandH);
+          ctx.fillRect(g.ox, by, g.contentW, bandH);
         }
-        /* 地面边缘的暗缝，明确“这是一层可站的平面” */
         ctx.fillStyle = 'rgba(0,0,0,0.55)';
-        ctx.fillRect(ox, fy, contentW, 1);
+        ctx.fillRect(g.ox, fy, g.contentW, 1);
 
-        /* F5 终点：不画精灵。dragon_idle_anim_f0 在 144 下仍是“粉翼飞虫”的剪影
-         * （翅膀占主体，头/尾在紫色地面上读不出），放大只会让它压到 F4 的地面。
-         * 说明页宁可写字，不放认不出的贴纸。 */
-        if (fl === 5) {
-          ctx.textAlign = 'right';
-          ctx.fillStyle = '#8a7a56';
-          ctx.font = '9px ' + FONT_MONO;
-          ctx.fillText('BOSS', ox + contentW - wallW - 12, fy - 34);
-          ctx.fillStyle = '#ffb86b';
-          ctx.font = 'bold 13px ' + FONT_CN;
-          ctx.fillText('地牢巨龙', ox + contentW - wallW - 12, fy - 14);
-          ctx.textAlign = 'left';
-        }
-
-        /* 左竖尺：刻度对齐本层地面 + F 编号 */
+        /* 左竖尺刻度（F 编号由文字层画） */
         ctx.fillStyle = 'rgba(255,207,110,0.30)';
-        ctx.fillRect(px + 24, fy + 6, 6, 1);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = (fl === 5) ? '#ffb86b' : '#8a7a56';
-        ctx.font = '11px ' + FONT_MONO;
-        ctx.fillText('F' + fl, px + 20, fy + 11);
+        ctx.fillRect(g.px + 24, fy + 6, 6, 1);
         by += bandH;
       }
-
-      /* 竖尺主轴 */
       ctx.fillStyle = 'rgba(255,207,110,0.16)';
-      ctx.fillRect(px + 28, py + 8, 1, 472);
-
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#7f8798';
-      ctx.font = '9px ' + FONT_MONO;
-      /* 文案只写画面真能支撑的事实：五层地貌各不相同（亮度并非单调递减） */
-      ctx.fillText('F1 → F5 · 五层地貌各不相同', px + gutter + Math.round((pw - gutter) / 2),
-        Math.min(py + 480 + 12, py + avail));
-      ctx.textAlign = 'left';
+      ctx.fillRect(g.px + 28, g.py + 8, 1, 472);
     },
 
     _drawMenuSettings: function (st, W, H) {
@@ -5501,14 +5685,27 @@
       this._menuVignette(W, H);
 
       var rows = st.settings || [];
-      var rowH = 54;
+      var tier = this._menuTier(W, H);
+      var narrow = tier.tier === 'narrow';
+      /* §4：mid 54 / narrow 50 / compact 46（只减行距，字号阶梯不动） */
+      var rowH = tier.compact ? 46 : (narrow ? 50 : 54);
       var cardW = Math.min(560, W - 24);
       var cardH = 66 + rows.length * rowH + 20;
       var x = Math.round((W - cardW) / 2);
-      var y = Math.max(20, Math.round((H - cardH) / 2) - 8);
-      this._menuPageCard(x, y, cardW, cardH, 'SYSTEM', '设置');
+      var y = Math.max(8, Math.round((H - cardH) / 2) - 8);
+      var k = this._menuEnterK(st);
+      this._menuMedium(x, y, cardW, cardH, { drop: -2 * (1 - k), alpha: 0.6 + 0.4 * k });
+      var hd = this._menuHeader(x, y, cardW, 'SYSTEM', '设置', null, false, narrow);
+      /* 竖向石缝：一条 2px 深缝 + 1px 左侧受光，从页头贯穿到页脚（§17 正交砌缝语言） */
+      ctx.fillStyle = '#05060a';
+      ctx.fillRect(x + 10, y + 60, 2, cardH - 72);
+      ctx.fillStyle = 'rgba(178,158,220,0.08)';
+      ctx.fillRect(x + 12, y + 60, 1, cardH - 72);
+      this._menuSprite('t1_dc_torch', hd.anchor.x, hd.anchor.y, 1);
+      this._menuSprite('t1_dc_rubble', x + 10, y + cardH - 32, 1);
 
-      this._drawSettingsRows(rows, st.settingsSel, W, y + 66, rowH, 'menusettings');
+      this._drawSettingsRows(rows, st.settingsSel, W, y + 66, rowH, 'menusettings',
+        { style: 'menu', x: x, w: cardW });
 
       /* 提示放在卡外：卡内再嵌一条提示带，就成了“卡中卡” */
       ctx.textAlign = 'center';
@@ -5525,24 +5722,39 @@
     _drawMenuConfirm: function (st, W, H) {
       var ctx = this._ctx;
       this._menuVignette(W, H);
+      var tier = this._menuTier(W, H);
+      var narrow = tier.tier === 'narrow';
       var d = st.confirm || {}, lines = d.lines || [];
       var cardW = Math.min(460, W - 40);
       var textW = cardW - 48, lineH = 22;
+      var btnH = tier.compact ? 32 : 36;
       var nLines = 0;
       for (var i = 0; i < lines.length; i++) nLines += this._menuWrapBalanced(lines[i], 13, textW).length;
-      var cardH = 76 + nLines * lineH + 24 + 40 + 34;
+      var cardH = 76 + nLines * lineH + 24 + btnH + 34;
       var x = Math.round((W - cardW) / 2);
-      var y = Math.max(16, Math.round((H - cardH) / 2) - 6);
-      this._menuPageCard(x, y, cardW, cardH, 'CONFIRM / DANGER', d.title || '确认', null, true);
+      var y = Math.max(8, Math.round((H - cardH) / 2) - 6);
+      var k = this._menuEnterK(st);
+      this._menuMedium(x, y, cardW, cardH, { drop: -2 * (1 - k), alpha: 0.6 + 0.4 * k });
+      this._menuHeader(x, y, cardW, 'CONFIRM / DANGER', d.title || '确认', null, true, narrow);
+      /* 封蜡条：3px 危险色，两端各开一个 6×5 的缺口，读成封条而不是进度条 */
+      ctx.fillStyle = '#ff9b6b';
+      ctx.fillRect(x + 1, y + 1, cardW - 2, 3);
+      ctx.fillStyle = '#0a0b12';
+      ctx.fillRect(x + 1, y + 1, 6, 5);
+      ctx.fillRect(x + cardW - 7, y + 1, 6, 5);
+      /* 骨饰：skull 原生 24×24，1× 即满足「≥24×24 实物锚」 */
+      this._menuSprite('skull', x + 16, y + 18, 1);
       this._drawConfirmPanel(st.confirm, st.confirmSel, W, H, {
         noTitle: true,
         linesY: y + 76,
         textW: textW,
         lineH: lineH,
         bw: Math.min(170, Math.floor((cardW - 88) / 2)),
+        btnH: btnH,
         gapY: 24,
         hintY: y + cardH - 14,
-        hotPrefix: 'menuconfirm'
+        hotPrefix: 'menuconfirm',
+        style: 'menu'
       });
       ctx.textAlign = 'left';
     },
@@ -5645,7 +5857,8 @@
       var FONT_MONO = 'Consolas, "Courier New", monospace';
       this._menuVignette(W, H);
 
-      var narrow = W < 420;
+      var tier = this._menuTier(W, H);
+      var narrow = W < 420, compact = tier.compact;
       var keyW = narrow ? 74 : 104;
       var keyGap = 14, padX = 20;
 
@@ -5664,7 +5877,9 @@
       }
       var NAME = '地牢：我独自升级', SUFFIX = '· 像素地牢 Roguelike';
       natural = Math.max(natural, this._menuTextW(NAME + ' ' + SUFFIX, 20) + 68);
-      natural = Math.max(natural, this._menuTextW('零构建 · 零外部依赖 · 双击 index.html 即可游玩', 11) + 60);
+      if (!compact) {
+        natural = Math.max(natural, this._menuTextW('零构建 · 零外部依赖 · 双击 index.html 即可游玩', 11) + 60);
+      }
       natural = Math.max(natural, this._menuTextW('目标：在第 5 层击败地牢巨龙', 12));
       natural = Math.max(natural, this._menuTextW('存档自动保存在本机浏览器中，可在「设置」里删除', 12));
       var cardW = Math.min(W - 24, Math.max(340, Math.min(560, natural + padX * 2)));
@@ -5678,18 +5893,24 @@
         tableH += Math.max(1, ws.length) * 20 + 6;
       }
       var goalLines = this._menuWrap('目标：在第 5 层击败地牢巨龙', 12, cardW - padX * 2);
-      var saveLines = this._menuWrap('存档自动保存在本机浏览器中，可在「设置」里删除', 12, cardW - padX * 2);
-      var tagLines = this._menuWrap('零构建 · 零外部依赖 · 双击 index.html 即可游玩', 11,
+      /* §4：紧凑高度档隐藏「零构建…」标语与存档说明两行；键帽表 5 行与门徽不动 */
+      var saveLines = compact ? [] : this._menuWrap('存档自动保存在本机浏览器中，可在「设置」里删除', 12, cardW - padX * 2);
+      var tagLines = compact ? [] : this._menuWrap('零构建 · 零外部依赖 · 双击 index.html 即可游玩', 11,
         cardW - padX * 2 - 60);
       var infoH = (goalLines.length + saveLines.length) * 18;
       /* 窄屏放不下「作品名 · 像素地牢 Roguelike」整串（20px 一行约 396px），
        * 后缀另起一行；宽屏仍是一行整串。 */
       var headExtra = narrow ? 18 : 0;
-      var cardH = 66 + 72 + headExtra + (tagLines.length - 1) * 14 + 18 + tableH + 14 + infoH + 30;
+      var tagN = tagLines.length;
+      var tagPart = tagN ? (tagN - 1) * 14 + 18 : 0;
+      /* 底部 42：墙脚 24 + 提示基线上移到墙脚上方 6px */
+      var cardH = 66 + 72 + headExtra + tagPart + tableH + 14 + infoH + 42;
 
       var x = Math.round((W - cardW) / 2);
-      var y = Math.max(16, Math.round((H - cardH) / 2) - 8);
-      this._menuPageCard(x, y, cardW, cardH, 'ABOUT / COLOPHON', '关于', null);
+      var y = Math.max(8, Math.round((H - cardH) / 2) - 8);
+      var k = this._menuEnterK({ page: 'about' });
+      this._menuMedium(x, y, cardW, cardH, { drop: -2 * (1 - k), alpha: 0.6 + 0.4 * k });
+      this._menuHeader(x, y, cardW, 'ABOUT / COLOPHON', '关于', null, false, narrow);
 
       /* 门徽：不再用 24×24 贴图（放到 48 只剩一块褐色，读不出双扇门），
        * 改为与首屏同一套几何的纯绘制：门框 → 门洞 → 双扇 → 横档压暗 → 2px 门缝 → 门槛暖光。
@@ -5728,7 +5949,7 @@
         ctx.fillText(tagLines[tg], x + padX + 60, emblemY + 40 + headExtra + tg * 14);
       }
 
-      var divY = emblemY + 58 + headExtra + (tagLines.length - 1) * 14;
+      var divY = emblemY + 58 + headExtra + (tagN ? (tagN - 1) * 14 : 0);
       ctx.fillStyle = 'rgba(255,207,110,0.28)';
       ctx.fillRect(x + padX, divY, cardW - padX * 2, 1);
 
@@ -5762,10 +5983,18 @@
       ctx.fillStyle = '#7f879c';
       for (var s = 0; s < saveLines.length; s++) ctx.fillText(saveLines[s], x + padX, infoY + s * 18);
 
+      /* 墙脚：铭牌砌进墙里的唯一证据——只铺卡片最底 24px，两枚 24×24 墙砖 */
+      var wallY = y + cardH - 24;
+      this._menuSprite('wall_mid', x + padX, wallY, 1);
+      this._menuSprite('wall_mid', x + padX + 24, wallY, 1);
+      this._menuSprite('t1_dc_rubble', x + padX + 52, wallY, 1);
+      ctx.fillStyle = '#2b2440';
+      ctx.fillRect(x + 1, wallY - 1, cardW - 2, 1);
+
       ctx.textAlign = 'center';
       ctx.fillStyle = '#7f8fa8';
       ctx.font = '11px ' + FONT_MONO;
-      ctx.fillText('Esc 返回主菜单', x + cardW / 2, y + cardH - 14);
+      ctx.fillText('Esc 返回主菜单', x + cardW / 2, y + cardH - 30);
       ctx.textAlign = 'left';
     }
   };
