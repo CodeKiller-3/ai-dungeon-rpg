@@ -169,9 +169,12 @@
       rec = [];
       var mDrawOk = true;
       try { R.drawMap(grid, { x: 1, y: 1, floor: 1 }); } catch (e) { mDrawOk = false; }
-      sub.t4_monsterMap = mDrawOk && hasPrefix('tiny_slug_anim_f') &&
-        hasPrefix('imp_idle_anim_f') && hasPrefix('imp_run_anim_f') &&
-        hasPrefix('dragon_idle_anim_f');
+      /* D-105：蝙蝠/史莱姆接上独立帧后，地图层请求的是自己的 idle/run 组；
+       * 负例——若回退到借帧（史莱姆→tiny_slug、蝙蝠→imp），上面两条前缀与下面的“不得出现”必炸。 */
+      sub.t4_monsterMap = mDrawOk && hasPrefix('slime_idle_anim_f') &&
+        hasPrefix('bat_idle_anim_f') && hasPrefix('bat_run_anim_f') &&
+        hasPrefix('dragon_idle_anim_f') &&
+        !hasPrefix('tiny_slug_anim_f') && !hasPrefix('imp_idle_anim_f') && !hasPrefix('imp_run_anim_f');
       ok = ok && sub.t4_monsterMap;
 
       /* t5_battle：玩家侧 knight_m 帧、Boss 侧 dragon 专属帧；攻击态切换 knight_m_hit */

@@ -1,0 +1,258 @@
+{
+  "bat-320x568-horizontal": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "horizontal",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-320x568-vertical": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-390x844-horizontal": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "horizontal",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-390x844-vertical": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-960x540-horizontal": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "horizontal",
+    "resolved": "horizontal",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-960x540-vertical": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-1280x800-horizontal": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "horizontal",
+    "resolved": "horizontal",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "bat-1280x800-vertical": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-320x568-horizontal": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "horizontal",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-320x568-vertical": {
+    "viewport": [
+      320,
+      568
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-390x844-horizontal": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "horizontal",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-390x844-vertical": {
+    "viewport": [
+      390,
+      844
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-960x540-horizontal": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "horizontal",
+    "resolved": "horizontal",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-960x540-vertical": {
+    "viewport": [
+      960,
+      540
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-1280x800-horizontal": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "horizontal",
+    "resolved": "horizontal",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  },
+  "slime-1280x800-vertical": {
+    "viewport": [
+      1280,
+      800
+    ],
+    "ask": "vertical",
+    "resolved": "vertical",
+    "monster": [
+      48,
+      48
+    ],
+    "player": [
+      48,
+      84
+    ]
+  }
+}
