@@ -298,35 +298,35 @@
    *      不消耗任何随机数、不改变经验/金币/掉落/商店价格。 */
   var ELITES = {
     elite_goblin: {
-      id: 'elite_goblin', name: '精英哥布林', elite: true,
+      id: 'elite_goblin', name: '精英哥布林', elite: true, sprite: 'goblin',
       hp: 50, atk: 11, def: 4,
       exp: 0, gold: [0, 0], drops: [],
       color: '#7ac143',
       habit: { kind: 'guard', sight: 3, label: '精英' }
     },
     elite_orc: {
-      id: 'elite_orc', name: '精英兽人战士', elite: true,
+      id: 'elite_orc', name: '精英兽人战士', elite: true, sprite: 'orc_warrior',
       hp: 66, atk: 18, def: 6,
       exp: 0, gold: [0, 0], drops: [],
       color: '#c98a4b',
       habit: { kind: 'guard', sight: 3, label: '精英' }
     },
     elite_ogre: {
-      id: 'elite_ogre', name: '精英食人魔', elite: true,
+      id: 'elite_ogre', name: '精英食人魔', elite: true, sprite: 'ogre',
       hp: 100, atk: 22, def: 7,
       exp: 0, gold: [0, 0], drops: [],
       color: '#a0522d',
       habit: { kind: 'guard', sight: 3, label: '精英' }
     },
     elite_zombie: {
-      id: 'elite_zombie', name: '精英大僵尸', elite: true,
+      id: 'elite_zombie', name: '精英大僵尸', elite: true, sprite: 'big_zombie',
       hp: 134, atk: 27, def: 9,
       exp: 0, gold: [0, 0], drops: [],
       color: '#8f9b6e',
       habit: { kind: 'guard', sight: 3, label: '精英' }
     },
     elite_angel: {
-      id: 'elite_angel', name: '精英天使', elite: true,
+      id: 'elite_angel', name: '精英天使', elite: true, sprite: 'angel',
       hp: 164, atk: 29, def: 6,
       exp: 0, gold: [0, 0], drops: [],
       color: '#cfe6ff',
