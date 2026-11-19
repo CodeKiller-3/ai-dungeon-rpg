@@ -508,6 +508,148 @@
       tier3: layers3, tier2: layers2
     });
 
+    /* ── 15. D-126 龙威三档还原 §19.4.2 原文 ─────────────────── */
+    /* 15a. tier3：40 Hz sub 必须是脉冲（每拍起落），不是持续 drone。
+     * 判据直接读 FakeAudioContext 记录的 gain 参数调用，恒定值/只升不落都必须 FAIL。 */
+    function pulseEnvelopeOk(calls, sp, beatSec) {
+      if (!calls || !calls.length || !sp || !sp.peak) return false;
+      var vals = calls.filter(function (c) { return typeof c.value === 'number'; })
+        .map(function (c) { return c.value; });
+      if (!vals.length) return false;
+      var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+      var rises = calls.filter(function (c) { return c.kind === 'linear' && c.value >= sp.peak * 0.9; }).length;
+      var falls = calls.filter(function (c) { return c.kind === 'exp' && c.value <= 0.001; }).length;
+      var zeros = calls.filter(function (c) { return c.kind === 'set' && c.value === 0; }).length;
+      var onSec = (sp.attackMs + sp.decayMs) / 1000;
+      return max >= sp.peak * 0.9 && min <= sp.peak * 0.02 &&
+        rises >= 2 && falls >= 2 && zeros >= 2 && onSec <= beatSec * 0.5;
+    }
+    function pulseSpacingOk(pulses, beatSec) {
+      if (!pulses || pulses.length < 8) return false;
+      for (var i = 1; i < pulses.length; i++) {
+        if (Math.abs((pulses[i].at - pulses[i - 1].at) - beatSec) > 0.002) return false;
+      }
+      return true;
+    }
+    M.setDreadTier(3);
+    var pulsed = M._testCrossCycle();
+    var spd = pulsed.boss && pulsed.boss.subPulse;
+    var pulseSpacing = pulseSpacingOk(spd && spd.pulses, 0.6);
+    var pulseEnv = pulseEnvelopeOk(spd && spd.gainCalls, spd, 0.6);
+    var constantDrone = [{ kind: 'set', value: 0.012 }, { kind: 'set', value: 0.012 }];
+    var heldPeak = [{ kind: 'set', value: 0 }, { kind: 'linear', value: 0.03 }];
+    var negConstant = spd ? pulseEnvelopeOk(constantDrone, spd, 0.6) : null;
+    var negHeld = spd ? pulseEnvelopeOk(heldPeak, spd, 0.6) : null;
+    rec('tier3_sub_is_pulsed', !!spd && pulseSpacing && pulseEnv && negConstant === false &&
+      negHeld === false, {
+      rule: '40 Hz sub 每拍一个短包络（attack+decay 后回 0），不是恒定增益；负例：恒定 0.012 / 只有上升无回落 必须 FAIL',
+      spec: spd ? { hz: spd.hz, peak: spd.peak, attackMs: spd.attackMs, decayMs: spd.decayMs,
+        onMs: spd.attackMs + spd.decayMs, beatMs: 600 } : null,
+      pulseCount: spd ? spd.pulses.length : 0,
+      spacingOk: pulseSpacing,
+      envelopeOk: pulseEnv,
+      firstAt: spd && spd.pulses.length ? spd.pulses[0].at : null,
+      lastAt: spd && spd.pulses.length ? spd.pulses[spd.pulses.length - 1].at : null,
+      gainCalls: spd && spd.gainCalls,
+      negativeConstant: negConstant,
+      negativeHeldPeak: negHeld
+    });
+
+    /* 15b. tier1：原文"低频 tom 重音，落在每小节第 1 拍"。
+     * 断言重音落在 barBeat 0/4/8…，是 90→55 Hz 下滑的短 tom（on ≤ 半小节），
+     * 负例：落在第 2 拍 / 铺满整小节的持续音 必须 FAIL。 */
+    function accentOk(events, beatSec, cs) {
+      if (!events || events.length < 4) return false;
+      var barSec = 4 * beatSec;
+      var prev = null;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.barBeat % 4 !== 0) return false;
+        if (!(e.fromHz > e.toHz)) return false;
+        if (!(e.onMs > 0) || e.onMs / 1000 > barSec * 0.5) return false;
+        if (cs != null && Math.abs((e.at - cs) / beatSec - e.barBeat) > 0.02) return false;
+        if (prev != null && Math.abs((e.at - prev) - barSec) > 0.002) return false;
+        prev = e.at;
+      }
+      return true;
+    }
+    M.setDreadTier(1);
+    var accentRun = M._testCrossCycle();
+    var acc = accentRun.boss && accentRun.boss.accent;
+    var accEvents = acc ? acc.events : [];
+    var accCs = accentRun.position ? accentRun.position.cycleStart : null;
+    var accentNow = accentOk(accEvents, 0.625, accCs);
+    var badPhase = [
+      { barBeat: 1, fromHz: 90, toHz: 55, onMs: 305, at: 0.625 },
+      { barBeat: 2, fromHz: 90, toHz: 55, onMs: 305, at: 1.25 },
+      { barBeat: 3, fromHz: 90, toHz: 55, onMs: 305, at: 1.875 },
+      { barBeat: 4, fromHz: 90, toHz: 55, onMs: 305, at: 2.5 }
+    ];
+    var badDrone = accEvents.map(function (e) {
+      var copy = {};
+      for (var k in e) if (Object.prototype.hasOwnProperty.call(e, k)) copy[k] = e[k];
+      copy.onMs = 2400;
+      return copy;
+    });
+    rec('tier1_accent_matches_spec', !!acc && accentNow &&
+      accentOk(badPhase, 0.625, null) === false && accentOk(badDrone, 0.625, null) === false, {
+      rule: '§19.4.2 原文"低频 tom 重音，落在每小节第 1 拍"：重音必须在 barBeat 0/4/8…，短促下滑 tom；负例：第 2 拍 / 持续整小节 必须 FAIL',
+      spec: acc ? { fromHz: acc.fromHz, toHz: acc.toHz, peak: acc.peak,
+        attackMs: acc.attackMs, decayMs: acc.decayMs, barBeats: '0,4,8…60' } : null,
+      count: accEvents.length,
+      barBeats: accEvents.map(function (e) { return e.barBeat; }),
+      onMs: accEvents.length ? accEvents[0].onMs : null,
+      negativePhase: accentOk(badPhase, 0.625, null),
+      negativeSustained: accentOk(badDrone, 0.625, null)
+    });
+
+    /* 15c. 暂停跨过换档边界后恢复：seek() 重排时先应用 tempo，再排第一拍。
+     * 负例：旧 BPM（96）或把周期起点重置到恢复时刻（从头重播）必须 FAIL。 */
+    function seekOk(info, firstNote) {
+      if (!info || !firstNote) return false;
+      if (info.toBpm !== 100 || info.beatSec !== 0.6 || info.prevBeatSec !== 0.625) return false;
+      if (firstNote.at < info.at - 0.001) return false;
+      if (Math.abs(firstNote.at - info.firstNoteAt) > 0.08) return false;
+      if (info.cycleStart > info.at + 0.001) return false;
+      var grid = (firstNote.at - info.cycleStart) / info.beatSec;
+      return Math.abs(grid - Math.round(grid)) <= 0.02;
+    }
+    M.setDreadTier(3);
+    var preSeek = M._dbg();
+    var prevNotes = preSeek.noteLog.slice(0);
+    var seeked = M._testResumeSeek(1150);
+    var si = seeked.seekInfo;
+    await wait(180);
+    var afterSeek = M._dbg();
+    var resumeNotes = afterSeek.noteLog.filter(function (n) {
+      return n.track === 'boss' && prevNotes.indexOf(n) < 0 &&
+        n.at >= (si ? si.at : Infinity) - 0.03;
+    });
+    var firstResumeNote = resumeNotes[0] || null;
+    var oldInfo = si ? {
+      at: si.at, toBpm: 96, beatSec: 0.625, prevBeatSec: 0.625,
+      cycleStart: si.cycleStart, firstNoteAt: si.firstNoteAt
+    } : null;
+    var restartInfo = si ? {
+      at: si.at, toBpm: 100, beatSec: 0.6, prevBeatSec: 0.625,
+      cycleStart: si.at + 0.05, firstNoteAt: si.at + 0.05
+    } : null;
+    var seekNow = seekOk(si, firstResumeNote);
+    rec('tempo_applied_on_seek', !!si && seekNow && si.reason === 'seek' &&
+      si.fromBpm === 96 && si.toBpm === 100 && seeked.boss && seeked.boss.bpm === 100 &&
+      Math.abs(seeked.boss.beatSec - 0.6) < 1e-6 && seeked.boss.tempoTier === 3 &&
+      afterSeek.nextNoteTime >= si.at - 0.01 &&
+      seekOk(oldInfo, firstResumeNote) === false && seekOk(restartInfo, firstResumeNote) === false, {
+      rule: '跨边界恢复：seek 内先应用 pending tempo（96→100），第一拍按 0.6 s 网格；负例：96 BPM 或从头重播必须 FAIL',
+      beforeSeek: preSeek.boss,
+      seekInfo: si,
+      afterSeek: afterSeek.boss,
+      firstResumeNote: firstResumeNote,
+      nextNoteTime: afterSeek.nextNoteTime,
+      negativeOldTempo: seekOk(oldInfo, firstResumeNote),
+      negativeRestart: seekOk(restartInfo, firstResumeNote)
+    });
+
     finish();
   }
 

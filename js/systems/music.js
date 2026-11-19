@@ -253,14 +253,47 @@
   function seek(tr, t) {
     var evs = tr.events;
     if (!evs.length) return;
+    /* D-126：暂停跨过换档边界后恢复。先把丢失的整循环补上（用暂停前的旧
+     * cycleDur 对齐），落在当前循环起点；恢复那一刻若 pending 与已应用档位
+     * 不一致，再应用 tempo，最后才按新 beatSec 找第一个音符。
+     * cycleStart 只按整循环推进，不回到曲目开头。 */
+    var prevBeatSec = tr.beatSec;
+    var seekApplied = null;
     if (tr.cycleStart < t) {
       var k = Math.floor((t - tr.cycleStart) / tr.cycleDur);
       if (k > 0) tr.cycleStart += k * tr.cycleDur;
+    }
+    if (tr.id === 'boss') {
+      var wantTempo = (tr.pendingTier >= 3) ? 3 : 0;
+      if (tr.tempoTier !== wantTempo || tr.appliedTier !== tr.pendingTier) {
+        var fromBpm = tr.bpm;
+        applyPendingTempo(tr);
+        seekApplied = { fromBpm: fromBpm, toBpm: tr.bpm };
+        tempoLog.push({
+          at: r3(t), track: tr.id, reason: 'seek',
+          fromBpm: fromBpm, toBpm: tr.bpm,
+          prevBeatSec: r3(prevBeatSec), newBeatSec: r3(tr.beatSec),
+          boundaryAt: r3(tr.cycleStart)
+        });
+        if (tempoLog.length > 20) tempoLog.shift();
+      }
     }
     var pos = (t - tr.cycleStart) / tr.beatSec;
     var idx = 0;
     while (idx < evs.length && evs[idx].beat < pos) idx++;
     tr.idx = idx;
+    if (seekApplied) {
+      /* 网格变了：旧脉冲/重音按旧 BPM 排过，取消后从恢复点重排 */
+      rearmLayers(tr, t);
+      var firstAt = idx >= evs.length
+        ? tr.cycleStart + tr.cycleDur + evs[0].beat * tr.beatSec
+        : tr.cycleStart + evs[idx].beat * tr.beatSec;
+      tr.seekInfo = {
+        at: r3(t), reason: 'seek', fromBpm: seekApplied.fromBpm, toBpm: seekApplied.toBpm,
+        prevBeatSec: r3(prevBeatSec), beatSec: r3(tr.beatSec),
+        cycleStart: r3(tr.cycleStart), idx: idx, firstNoteAt: r3(firstAt)
+      };
+    }
     nextNoteTime = Math.max(nextNoteTime, t + 0.02);
   }
 
@@ -297,6 +330,7 @@
           tempoLog.push({
             at: r3(c.currentTime),
             track: tr.id,
+            reason: 'boundary',
             fromBpm: changed.fromBpm,
             toBpm: changed.toBpm,
             prevBeatSec: r3(prevBeatSec),
@@ -306,6 +340,8 @@
           });
           if (tempoLog.length > 20) tempoLog.shift();
         }
+        /* D-126：层网格（40 Hz 脉冲 / 每小节第 1 拍 tom）跟随新 BPM 重排 */
+        rescheduleLayers(tr, tr.cycleStart);
       }
       var ev = evs[tr.idx];
       var t = tr.cycleStart + ev.beat * tr.beatSec;
@@ -407,7 +443,12 @@
       tr.nodes.push(osc);
       tr.drones.push({ osc: osc, gain: dg, base: d[1] });
     });
-    if (defId === 'boss') applyLayers(tr, dreadTier); /* 层可以立刻叠；BPM 仍等边界 */
+    if (defId === 'boss') {
+      applyLayers(tr, dreadTier); /* 层可以立刻叠；BPM 仍等边界 */
+      /* 起播时若已是 tier3，脉冲从本循环第 0 拍开始排，不补旧拍。
+       * 重音由 applyLayers 内部按小节网格排，这里不重复。 */
+      if (tr.layers.subPulse) scheduleSubPulses(tr, tr.cycleStart);
+    }
     nextNoteTime = Math.max(c.currentTime + 0.02, tr.cycleStart);
     seek(tr, tr.cycleStart);
     active.push(tr);
@@ -701,10 +742,131 @@
     return { fromBpm: from, toBpm: want };
   }
 
+  /* ---------- 层网格：40 Hz 脉冲 / 每小节第 1 拍 tom ---------- */
+
+  /* D-126 §19.4.2：40 Hz sub 是"脉冲"，不是持续 drone。
+   * 包络：0 →(attack 6 ms) peak 0.030 →(exp decay 160 ms) 0.0001 → 0，
+   * on 时长 166 ms，仅占 100 BPM 一拍（600 ms）的 27.7%，其余 434 ms 静音。
+   * 这样每拍有明确的起落，不会听成"drone 抖一下"。 */
+  var SUB_SPEC = { hz: 40, peak: 0.030, attackMs: 6, decayMs: 160 };
+
+  /* §19.4.2 原文："低频 tom 重音，落在每小节第 1 拍"。
+   * 落地：90 → 55 Hz 下滑的正弦 tom，attack 5 ms / decay 300 ms，
+   * 每 4 拍（一小节）第 1 拍击打一次；drone +35% 只作底，不顶替重音。 */
+  var TOM_SPEC = { fromHz: 90, toHz: 55, attackMs: 5, decayMs: 300, peak: 0.045 };
+
+  function schedulePulse(tr, L, t, beat) {
+    try {
+      var g = L.gain.gain;
+      var on = (SUB_SPEC.attackMs + SUB_SPEC.decayMs) / 1000;
+      g.setValueAtTime(0, t);
+      g.linearRampToValueAtTime(SUB_SPEC.peak, t + SUB_SPEC.attackMs / 1000);
+      g.exponentialRampToValueAtTime(0.0001, t + on);
+      g.setValueAtTime(0, t + on + 0.002);
+      L.pulses.push({
+        track: tr.id, beat: beat, at: r3(t), periodMs: Math.round(tr.beatSec * 1000),
+        peak: SUB_SPEC.peak, attackMs: SUB_SPEC.attackMs, decayMs: SUB_SPEC.decayMs,
+        onMs: SUB_SPEC.attackMs + SUB_SPEC.decayMs
+      });
+      if (L.pulses.length > 100) L.pulses.shift();
+    } catch (e) {}
+  }
+
+  /* 按当前 BPM 把整循环的脉冲一次排好（64 拍）；fromT 之前的不补 */
+  function scheduleSubPulses(tr, fromT) {
+    var L = tr.layers && tr.layers.subPulse;
+    var c = ctx();
+    if (!L || !c) return;
+    for (var i = 0; i < CYCLE_BEATS; i++) {
+      var t = tr.cycleStart + i * tr.beatSec;
+      if (t < fromT - 1e-6) continue;
+      schedulePulse(tr, L, t, i);
+    }
+    L.armedAt = r3(tr.cycleStart);
+  }
+
+  function scheduleTom(tr, L, t, barBeat) {
+    var c = ctx();
+    if (!c) return;
+    try {
+      var o = c.createOscillator();
+      var g = c.createGain();
+      var on = (TOM_SPEC.attackMs + TOM_SPEC.decayMs) / 1000;
+      o.type = 'sine';
+      o.frequency.setValueAtTime(TOM_SPEC.fromHz, t);
+      o.frequency.exponentialRampToValueAtTime(TOM_SPEC.toHz, t + on);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(TOM_SPEC.peak, t + TOM_SPEC.attackMs / 1000);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + on);
+      g.gain.setValueAtTime(0, t + on + 0.002);
+      o.connect(g); g.connect(tr.gain);
+      o.start(t); o.stop(t + on + 0.03);
+      tr.nodes.push(o);
+      L.nodes.push({ osc: o, stopAt: t + on + 0.03 });
+      L.events.push({
+        track: tr.id, at: r3(t), barBeat: barBeat, bar: barBeat / 4,
+        fromHz: TOM_SPEC.fromHz, toHz: TOM_SPEC.toHz, peak: TOM_SPEC.peak,
+        attackMs: TOM_SPEC.attackMs, decayMs: TOM_SPEC.decayMs, onMs: TOM_SPEC.attackMs + TOM_SPEC.decayMs
+      });
+      if (L.events.length > 48) L.events.shift();
+    } catch (e) {}
+  }
+
+  /* 每小节第 1 拍：beat 0 / 4 / 8 … 60，按当前 beatSec 对齐 cycleStart */
+  function scheduleAccents(tr, fromT) {
+    var L = tr.layers && tr.layers.lowAccent;
+    var c = ctx();
+    if (!L || !c) return;
+    for (var b = 0; b < CYCLE_BEATS; b += 4) {
+      var t = tr.cycleStart + b * tr.beatSec;
+      if (t < fromT - 1e-6) continue;
+      scheduleTom(tr, L, t, b);
+    }
+  }
+
+  function stopPendingAccents(L, fromT) {
+    if (!L || !L.nodes) return;
+    L.nodes.forEach(function (n) {
+      try { if (n.stopAt > fromT + 1e-6) n.osc.stop(fromT); } catch (e) {}
+    });
+    L.nodes = [];
+  }
+
+  /* 边界/恢复重排：脉冲取消旧自动化后按新 BPM 重排，tom 停掉未响的再重排 */
+  function rescheduleLayers(tr, fromT) {
+    if (tr.layers.subPulse) {
+      var c = ctx();
+      try {
+        tr.layers.subPulse.gain.gain.cancelScheduledValues(fromT);
+        tr.layers.subPulse.gain.gain.setValueAtTime(0, fromT);
+      } catch (e) {}
+      tr.layers.subPulse.pulses = [];
+      scheduleSubPulses(tr, fromT);
+    }
+    if (tr.layers.lowAccent) {
+      stopPendingAccents(tr.layers.lowAccent, fromT);
+      tr.layers.lowAccent.events = [];
+      scheduleAccents(tr, fromT);
+    }
+  }
+
+  function rearmLayers(tr, t) {
+    rescheduleLayers(tr, t);
+  }
+
   function removeLayer(tr, name) {
     var L = tr.layers && tr.layers[name];
     if (!L) return;
-    try { if (L.osc && L.osc.stop) L.osc.stop(); } catch (e) {}
+    var c = ctx();
+    var now = c ? c.currentTime : 0;
+    if (name === 'subPulse') {
+      try {
+        L.gain.gain.cancelScheduledValues(now);
+        L.gain.gain.setValueAtTime(0, now);
+      } catch (e) {}
+    }
+    if (name === 'lowAccent') stopPendingAccents(L, now);
+    try { if (L.osc && L.osc.stop) L.osc.stop(now); } catch (e) {}
     try { if (L.osc && L.osc.disconnect) L.osc.disconnect(); } catch (e) {}
     try { if (L.gain && L.gain.disconnect) L.gain.disconnect(); } catch (e) {}
     delete tr.layers[name];
@@ -714,7 +876,7 @@
     if (!tr || tr.id !== 'boss') return;
     var c = ctx();
     if (!c) return;
-    /* tier1：低频层 +35% */
+    /* tier1：原文"低频 tom 重音，落在每小节第 1 拍"；drone +35% 只作底 */
     if (tier >= 1) {
       if (!tr.layers.lowBoost) {
         tr.drones.forEach(function (d) {
@@ -722,11 +884,20 @@
         });
         tr.layers.lowBoost = { boost: 1.35 };
       }
-    } else if (tr.layers.lowBoost) {
+      if (!tr.layers.lowAccent) {
+        tr.layers.lowAccent = {
+          fromHz: TOM_SPEC.fromHz, toHz: TOM_SPEC.toHz, peak: TOM_SPEC.peak,
+          attackMs: TOM_SPEC.attackMs, decayMs: TOM_SPEC.decayMs,
+          events: [], nodes: []
+        };
+        scheduleAccents(tr, c.currentTime);
+      }
+    } else if (tr.layers.lowBoost || tr.layers.lowAccent) {
       tr.drones.forEach(function (d) {
         try { d.gain.gain.linearRampToValueAtTime(d.base, c.currentTime + 0.4); } catch (e) {}
       });
       delete tr.layers.lowBoost;
+      removeLayer(tr, 'lowAccent');
     }
     /* tier2：五度 −18 cent 失谐层 */
     if (tier >= 2) {
@@ -747,19 +918,20 @@
     } else {
       removeLayer(tr, 'detuneFifth');
     }
-    /* tier3：40 Hz sub 脉冲（层，不换曲） */
+    /* tier3：40 Hz sub 脉冲（层，不换曲）。此处只建静音载波；
+     * 真正的脉冲从下一个循环边界起按 pendingTier 路径排（与 BPM 同步切换）。 */
     if (tier >= 3) {
       if (!tr.layers.subPulse) {
         try {
           var o3 = c.createOscillator();
           var g3 = c.createGain();
           o3.type = 'sine';
-          o3.frequency.setValueAtTime(40, c.currentTime);
-          g3.gain.setValueAtTime(0.012, c.currentTime);
+          o3.frequency.setValueAtTime(SUB_SPEC.hz, c.currentTime);
+          g3.gain.setValueAtTime(0, c.currentTime);
           o3.connect(g3); g3.connect(tr.gain);
           o3.start(c.currentTime);
           tr.nodes.push(o3);
-          tr.layers.subPulse = { osc: o3, gain: g3 };
+          tr.layers.subPulse = { osc: o3, gain: g3, pulses: [], armedAt: null };
         } catch (e) {}
       }
     } else {
@@ -804,9 +976,23 @@
       scheduler();
       return Game.Systems.Music._dbg();
     },
+    /* D-126 验证钩子：模拟"暂停 >60s 跨过换档边界后恢复"——
+     * 轨道位置落在过去两个整循环 + remainMs，再走真实的 onResume→seek 路径。 */
+    _testResumeSeek: function (remainMs) {
+      var tr = currentLoop();
+      var c = ctx();
+      if (!tr || !c || tr.id !== 'boss') return null;
+      var remain = Math.max(0.2, (remainMs == null ? 1150 : remainMs) / 1000);
+      tr.cycleStart = c.currentTime - tr.cycleDur * 2 - remain;
+      tr.idx = 0;
+      Game.Systems.Music.onResume();
+      return Game.Systems.Music._dbg();
+    },
     _dbg: function () {
       var c = ctx();
       var cur = currentLoop();
+      var sp = cur && cur.layers && cur.layers.subPulse;
+      var ac = cur && cur.layers && cur.layers.lowAccent;
       return {
         spec: SPEC,
         tracks: Object.keys(TRACKS),
@@ -823,8 +1009,21 @@
           pendingTier: cur.pendingTier,
           appliedTier: cur.appliedTier,
           tempoTier: cur.tempoTier,
-          layers: Object.keys(cur.layers || {})
+          layers: Object.keys(cur.layers || {}),
+          subPulse: sp ? {
+            hz: SUB_SPEC.hz, peak: SUB_SPEC.peak,
+            attackMs: SUB_SPEC.attackMs, decayMs: SUB_SPEC.decayMs,
+            armedAt: sp.armedAt,
+            pulses: sp.pulses.slice(-12),
+            gainCalls: (sp.gain.gain && sp.gain.gain.log) ? sp.gain.gain.log.slice(-20) : []
+          } : null,
+          accent: ac ? {
+            fromHz: ac.fromHz, toHz: ac.toHz, peak: ac.peak,
+            attackMs: ac.attackMs, decayMs: ac.decayMs,
+            events: ac.events.slice(-20)
+          } : null
         } : null,
+        seekInfo: cur ? (cur.seekInfo || null) : null,
         nextNoteTime: r3(nextNoteTime),
         now: c ? r3(c.currentTime) : null,
         timerOn: !!timer,
