@@ -36,7 +36,6 @@
 <script src="js/data/reactions.js"></script>
 <script src="js/data/config.js"></script>
 <script src="js/vendor/astar.js"></script>
-<script src="js/vendor/howler.min.js"></script>
 <!-- S3-1：rot.js 在 systems 之前加载（BSD-3，FOV 视野迷雾） -->
 <script src="js/vendor/rot.min.js"></script>
 <script src="js/systems/map.js"></script>
@@ -77,6 +76,8 @@
 <script src="js/systems/ai.js"></script>
 <script src="js/systems/npc.js"></script>
 <script src="js/systems/audio.js"></script>
+<!-- D-124：五层 BGM 与曲目状态机（总线由 audio.js 提供；必须在 audio.js 之后） -->
+<script src="js/systems/music.js"></script>
 <script src="js/systems/learner.js"></script>
 <script src="js/core/main.js"></script>
 </body>

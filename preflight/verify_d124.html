@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>verify_d124</title>
+</head>
+<body>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="800" height="480" style="position:fixed;left:-9999px"></canvas>
+<!-- D-124 验证页：五层 BGM + 双总线 + ducking + 解锁 + 暂停
+     判据全部来自代码/总线对象/调度日志，不依赖"听起来对"。
+     用确定性 FakeAudioContext 代替真实音频输出，记录每次 setValue/ramp/curve 的调用。 -->
+<script>
+/* ---------- 确定性 FakeAudioContext（只为拿到可断言的时间/增益记录） ---------- */
+(function () {
+  function Param(v, owner, name) {
+    this.value = v;
+    this.owner = owner || null;
+    this.name = name || '';
+    this.log = [];
+    this.curve = null;
+  }
+  Param.prototype._log = function (kind, v, t) {
+    this.log.push({ kind: kind, value: v, at: Math.round(t * 1000) / 1000, owner: this.owner, name: this.name });
+  };
+  Param.prototype.setValueAtTime = function (v, t) { this.value = v; this._log('set', v, t); return this; };
+  Param.prototype.linearRampToValueAtTime = function (v, t) { this.value = v; this._log('linear', v, t); return this; };
+  Param.prototype.exponentialRampToValueAtTime = function (v, t) { this.value = v; this._log('exp', v, t); return this; };
+  Param.prototype.cancelScheduledValues = function (t) { this._log('cancel', null, t); return this; };
+  Param.prototype.setValueCurveAtTime = function (curve, t, d) {
+    this.curve = Array.prototype.slice.call(curve);
+    this.value = curve[curve.length - 1];
+    this._log('curve', { first: curve[0], mid: curve[Math.floor(curve.length / 2)], last: curve[curve.length - 1], dur: d }, t);
+    return this;
+  };
+
+  function node(kind, owner) {
+    return {
+      kind: kind, owner: owner || null, dest: null, connects: [],
+      connect: function (d) { this.dest = d; this.connects.push(d); return d; },
+      disconnect: function () { this.dest = null; }
+    };
+  }
+
+  function FakeCtx(tag) {
+    var self = this;
+    this.tag = tag;
+    this.state = 'suspended';
+    this.sampleRate = 8000;
+    this.destination = node('destination');
+    this._t0 = Date.now();
+    this.resumeCount = 0;
+    this.suspendCount = 0;
+    this.closed = false;
+    Object.defineProperty(this, 'currentTime', {
+      get: function () { return Math.max(0, (Date.now() - self._t0) / 1000); }
+    });
+    (window.__FAKE_CTX__ = window.__FAKE_CTX__ || []).push(this);
+  }
+  FakeCtx.prototype.resume = function () { this.state = 'running'; this.resumeCount++; return Promise.resolve(); };
+  FakeCtx.prototype.suspend = function () { this.state = 'suspended'; this.suspendCount++; return Promise.resolve(); };
+  FakeCtx.prototype.close = function () { this.state = 'closed'; this.closed = true; return Promise.resolve(); };
+  FakeCtx.prototype.createGain = function () {
+    var n = node('gain');
+    n.gain = new Param(1, this.tag, 'gain');
+    return n;
+  };
+  FakeCtx.prototype.createBiquadFilter = function () {
+    var n = node('biquad');
+    n.type = 'lowpass';
+    n.frequency = new Param(20000, this.tag, 'frequency');
+    n.Q = new Param(1, this.tag, 'Q');
+    return n;
+  };
+  FakeCtx.prototype.createOscillator = function () {
+    var n = node('oscillator');
+    n.type = 'sine';
+    n.frequency = new Param(440, this.tag, 'frequency');
+    n.detune = new Param(0, this.tag, 'detune');
+    n.start = function (t) { n.startedAt = t; };
+    n.stop = function (t) { n.stoppedAt = t; };
+    return n;
+  };
+  FakeCtx.prototype.createBuffer = function (ch, len, sr) {
+    var data = new Float32Array(len);
+    return {
+      length: len, sampleRate: sr, numberOfChannels: ch,
+      getChannelData: function () { return data; }
+    };
+  };
+  FakeCtx.prototype.createBufferSource = function () {
+    var n = node('bufferSource');
+    n.buffer = null;
+    n.start = function (t) { n.startedAt = t; };
+    n.stop = function (t) { n.stoppedAt = t; };
+    return n;
+  };
+
+  var seq = 0;
+  window.AudioContext = function () { return new FakeCtx('fake' + (++seq)); };
+  window.webkitAudioContext = undefined;
+})();
+</script>
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/music.js"></script>
+<script>
+(function () {
+  var out = { sub: {}, ok: true, err: null };
+  function rec(name, ok, d) {
+    out.sub[name] = { ok: !!ok, d: d };
+    if (!ok) out.ok = false;
+  }
+  function readText(rel) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('GET', new URL(rel, location.href).href, false);
+      x.send(null);
+      return x.responseText || '';
+    } catch (e) { return ''; }
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function lastTrans(M) {
+    var d = M._dbg();
+    return d.transitions.length ? d.transitions[d.transitions.length - 1] : null;
+  }
+  function pcDistance(a, b) {
+    var semis = Math.round(12 * Math.log(b / a) / Math.log(2));
+    var d = ((semis % 12) + 12) % 12;
+    return Math.min(d, 12 - d);
+  }
+
+  async function run() {
+    var A = Game.Systems.Audio, M = Game.Systems.Music;
+    /* 让 Player 存在（floor 由本页控制） */
+    Game.Data.Player = Game.Data.Player || { floor: 1 };
+    A.setVolume(0.7);
+    A.setMuted(false);
+    A.setMusicEnabled(true);
+    A.init();
+
+    var audioSrc = readText('../js/systems/audio.js');
+    var musicSrc = readText('../js/systems/music.js');
+    var indexSrc = readText('../index.html');
+
+    /* ── 1. 双总线结构 ───────────────────────────────────────── */
+    var b = A._buses();
+    var busOk = !!(b.master && b.sfxBus && b.musicBus && b.duckGain && b.musicLP) &&
+      b.sfxBus.dest === b.master && b.musicBus.dest === b.duckGain &&
+      b.duckGain.dest === b.musicLP && b.musicLP.dest === b.master &&
+      Math.abs(b.sfxBus.gain.value - 1) < 1e-9 &&
+      Math.abs(b.musicBus.gain.value - 0.5) < 1e-9 &&
+      Math.abs(b.duckGain.gain.value - 1) < 1e-9;
+    rec('bus_topology', busOk, {
+      rule: 'master ← sfxBus(1.0) / musicBus(0.5) → duckGain(1.0) → musicLP(open) → master',
+      sfx: b.sfxBus && b.sfxBus.gain.value,
+      music: b.musicBus && b.musicBus.gain.value,
+      duck: b.duckGain && b.duckGain.gain.value,
+      links: [b.sfxBus && b.sfxBus.dest === b.master, b.musicBus && b.musicBus.dest === b.duckGain,
+        b.duckGain && b.duckGain.dest === b.musicLP, b.musicLP && b.musicLP.dest === b.master]
+    });
+
+    /* 11 个音效仍走 sfxBus：源码里 tone() 的终点必须是 sfxBus */
+    var tonePart = audioSrc.slice(audioSrc.indexOf('function tone('), audioSrc.indexOf('var SFX ='));
+    var sfxNames = A._dbg().sfxNames;
+    rec('sfx_on_sfx_bus', sfxNames.length === 11 && tonePart.indexOf('g.connect(sfxBus)') >= 0 &&
+      tonePart.indexOf('g.connect(master)') < 0, {
+      rule: 'tone() 唯一出口是 sfxBus；11 个音效名单完整；没有任何音效直连 master',
+      names: sfxNames, toneConnectsSfx: tonePart.indexOf('g.connect(sfxBus)') >= 0,
+      toneConnectsMaster: tonePart.indexOf('g.connect(master)') >= 0
+    });
+
+    /* ── 2. 五层曲目键 / 七维指纹 ─────────────────────────────── */
+    A._resetForTest();
+    A.init();
+    Game.Data.Player = { floor: 1 };
+    var keys = [];
+    for (var f = 1; f <= 5; f++) {
+      A.bgmPlay('f' + f);
+      keys.push(A.getMusicTrack());
+    }
+    rec('five_track_keys', keys.join(',') === 'f1,f2,f3,f4,f5', {
+      rule: 'cur 曲目键必须是 f{floor}，不能是 explore；五层五个不同键',
+      keys: keys
+    });
+
+    var fps = [M.fingerprint('f1'), M.fingerprint('f2'), M.fingerprint('f3'), M.fingerprint('f4'), M.fingerprint('f5')];
+    var dims = ['root', 'mode', 'bpm', 'motif4', 'timbre', 'drone', 'rest'];
+    var pairs = [];
+    var fpOk = true;
+    for (var i = 0; i < fps.length; i++) {
+      for (var j = i + 1; j < fps.length; j++) {
+        var diff = 0;
+        for (var k = 0; k < dims.length; k++) {
+          if (dims[k] === 'root') {
+            if (pcDistance(fps[i].root, fps[j].root) >= 2) diff++;
+          } else if (fps[i][dims[k]] !== fps[j][dims[k]]) diff++;
+        }
+        pairs.push({ a: fps[i].id, b: fps[j].id, diff: diff });
+        if (diff < 5) fpOk = false;
+      }
+    }
+    var roots = { f1: 55.00, f2: 73.42, f3: 49.00, f4: 65.41, f5: 43.65 };
+    var rootOk = fps.every(function (x) { return Math.abs(x.root - roots[x.id]) / roots[x.id] <= 0.005; });
+    var motifOk = true;
+    for (var i2 = 0; i2 < fps.length; i2++) {
+      for (var j2 = i2 + 1; j2 < fps.length; j2++) {
+        if (fps[i2].motif4 === fps[j2].motif4) motifOk = false;
+      }
+    }
+    rec('five_fingerprints', fpOk && rootOk && motifOk, {
+      rule: '任意两层 ≥5 维不同；五个调中心与 §19.3 表一致（≤0.5%）；前 4 音序列两两不等',
+      fingerprints: fps, pairs: pairs, rootOk: rootOk, motifOk: motifOk
+    });
+
+    /* 循环时长 ≥ 24 s（16 小节） */
+    var durations = {};
+    var durOk = true;
+    ['f1', 'f2', 'f3', 'f4', 'f5'].forEach(function (id) {
+      var d = 64 * 60 / M.TRACKS[id].bpm;
+      durations[id] = Math.round(d * 10) / 10;
+      if (d < 24) durOk = false;
+    });
+    rec('loop_length', durOk && M.SPEC.equalPower === true, {
+      rule: '每层 16 小节循环 ≥24 s；equal-power 曲线',
+      durations: durations
+    });
+
+    /* ── 3. 转场参数（§19.4.1） ───────────────────────────────── */
+    var fl = M.SPEC.floor, bt = M.SPEC.battle;
+    rec('transition_spec', fl.fadeOutMs === 900 && fl.silenceMs === 150 && fl.fadeInMs === 1200 &&
+      bt.fadeOutMs === 700 && bt.fadeInMs === 500 && bt.crossMs === 300 &&
+      M.SPEC.death.silenceMs === 2000 && M.SPEC.death.stingMs === 1400, {
+      rule: '换层 900/150/1200；战斗 700/500 交叉 300；死亡 1.4 s sting + 2.0 s 静默',
+      floor: fl, battle: bt, death: M.SPEC.death
+    });
+    var ci = M._curveIn(5), co = M._curveOut(5);
+    rec('equal_power_curves', Math.abs(ci[0]) < 1e-6 && Math.abs(ci[2] - Math.SQRT1_2) < 1e-6 &&
+      Math.abs(ci[4] - 1) < 1e-6 && Math.abs(co[0] - 1) < 1e-6 &&
+      Math.abs(co[2] - Math.SQRT1_2) < 1e-6 && Math.abs(co[4]) < 1e-6, {
+      rule: '淡入 sin、淡出 cos；中点半功率 0.707（线性交叉会掉 3 dB）',
+      curveIn: ci, curveOut: co
+    });
+
+    /* ── 4. 手势前：只记 pendingTrack，不起调度器 ─────────────── */
+    A._resetForTest();
+    A.init();
+    Game.Data.Player = { floor: 1 };
+    A.bgmPlay('explore');
+    var pre = A._dbg();
+    var preNotes = pre.music ? pre.music.noteLog.length : 0;
+    rec('pending_before_gesture', pre.pendingTrack === 'f1' && pre.ctxState === 'suspended' &&
+      (!pre.music || pre.music.timerOn === false) && preNotes === 0, {
+      rule: '解锁前只记 pendingTrack；suspended 状态下调度器必须没启动、无音符日志',
+      pending: pre.pendingTrack, state: pre.ctxState,
+      timerOn: pre.music && pre.music.timerOn, notes: preNotes
+    });
+    Game.Data.Player.floor = 2;
+    A.bgmPlay('explore');
+    rec('pending_updates_by_floor', A.getMusicTrack() === 'f2' && A._dbg().pendingTrack === 'f2', {
+      rule: '手势前换层：pendingTrack 必须跟着 floor 变成 f2（不能停在 f1）',
+      track: A.getMusicTrack(), pending: A._dbg().pendingTrack
+    });
+
+    /* ── 5. pointerdown 解锁 ──────────────────────────────────── */
+    window.dispatchEvent(new Event('pointerdown'));
+    await wait(320);
+    var p1 = A._dbg();
+    rec('unlock_pointerdown', p1.ctxState === 'running' && p1.pendingTrack === null &&
+      p1.music && p1.music.timerOn === true && p1.music.current === 'f2' &&
+      p1.music.noteLog.length > 0, {
+      rule: 'pointerdown 解锁 → resume → 起 f2 → 25 ms 调度器出音符',
+      state: p1.ctxState, pending: p1.pendingTrack, current: p1.music && p1.music.current,
+      timerOn: p1.music && p1.music.timerOn, notes: p1.music && p1.music.noteLog.length
+    });
+    var firstNote = p1.music && p1.music.noteLog[0];
+    rec('note_log_has_time', !!firstNote && typeof firstNote.at === 'number' && firstNote.at >= 0 &&
+      typeof firstNote.freq === 'number' && firstNote.freq >= 220 && firstNote.freq <= 880, {
+      rule: '调度日志必须有时间/频率，旋律落在 220–880 Hz',
+      firstNote: firstNote
+    });
+
+    /* ── 6. 换层：900 / 150 / 1200 + 新曲起播 ─────────────────── */
+    Game.Data.Player.floor = 3;
+    A.bgmPlay('explore');
+    var tr = lastTrans(M);
+    rec('floor_transition_log', !!tr && tr.kind === 'floor' && tr.from === 'f2' && tr.to === 'f3' &&
+      tr.fadeOutMs === 900 && tr.silenceMs === 150 && tr.fadeInMs === 1200 && tr.equalPower === true, {
+      rule: '换层转场必须记录 f2→f3、900/150/1200、equal-power',
+      transition: tr
+    });
+    await wait(1150);
+    var afterFloor = A._dbg();
+    rec('floor_new_track_started', afterFloor.music.current === 'f3' &&
+      afterFloor.music.noteLog.some(function (n) { return n.track === 'f3'; }), {
+      rule: '150 ms 静默后新曲 f3 必须起播（不是还停在 f2）',
+      current: afterFloor.music.current,
+      f3notes: afterFloor.music.noteLog.filter(function (n) { return n.track === 'f3'; }).length
+    });
+
+    /* ── 7. 暂停 / 恢复：duck + LP，曲目不重置 ────────────────── */
+    var beforePause = A._dbg().music;
+    A.setFocusMode('pause', true);
+    var paused = A._dbg();
+    var pausedPos = paused.music ? paused.music.position : null;
+    rec('pause_duck', paused.duck.targetDb === -9 && paused.duck.modes.pause === true &&
+      paused.buses.lowpass === 800 && paused.music.current === 'f3', {
+      rule: '暂停只压 musicBus：−9 dB + LP 800 Hz；曲目 id 不变',
+      targetDb: paused.duck.targetDb, lowpass: paused.buses.lowpass, current: paused.music.current
+    });
+    A.setFocusMode('pause', false);
+    var resumed = A._dbg();
+    rec('resume_no_restart', resumed.duck.targetDb === 0 && resumed.music.current === 'f3' &&
+      resumed.music.position && beforePause && beforePause.position &&
+      resumed.music.position.cycleStart >= beforePause.position.cycleStart, {
+      rule: '恢复后撤销 duck、曲目仍是 f3，cycleStart 不归零（不从头重播）',
+      targetDb: resumed.duck.targetDb, current: resumed.music.current,
+      before: beforePause && beforePause.position, after: resumed.music.position
+    });
+
+    /* ── 8. ducking：只压 musicBus、取最深、不叠乘 ─────────────── */
+    var masterBefore = A._dbg().buses.master;
+    A.play('hit');
+    var d1 = A._dbg();
+    rec('duck_hit_p0', d1.duck.targetDb === -6 && d1.buses.sfx === 1 &&
+      Math.abs(d1.buses.master - masterBefore) < 1e-9, {
+      rule: 'hit = P0 −6 dB；sfxBus 恒 1.0；master 不被 ducking 改',
+      targetDb: d1.duck.targetDb, sfx: d1.buses.sfx, master: d1.buses.master
+    });
+    A.play('attack');
+    var d2 = A._dbg();
+    rec('duck_non_stacking', d2.duck.targetDb === -6 && d2.duck.sources.length >= 2 &&
+      d2.duck.multiplicative === false, {
+      rule: 'hit(−6) 与 attack(−3) 同时发生仍是 −6，不是 −9；不做乘法叠加',
+      targetDb: d2.duck.targetDb, sources: d2.duck.sources,
+      multiplicative: d2.duck.multiplicative, log: d2.duck.log.slice(-2)
+    });
+    A.setFocusMode('pause', true);
+    var d3 = A._dbg();
+    rec('duck_deepest_wins', d3.duck.targetDb === -9 && d3.duck.modes.pause === true, {
+      rule: '暂停(−9)+hit(−6) 取最深 −9，不是 −15',
+      targetDb: d3.duck.targetDb, sources: d3.duck.sources
+    });
+    A.setFocusMode('pause', false);
+
+    /* ── 9. 音乐开关只切 musicBus ─────────────────────────────── */
+    var mBefore = A._dbg();
+    A.setMusicEnabled(false);
+    var mOff = A._dbg();
+    var muteOffOk = Math.abs(mOff.buses.music) < 1e-9 &&
+      Math.abs(mOff.buses.sfx - 1) < 1e-9 &&
+      Math.abs(mOff.buses.master - mBefore.buses.master) < 1e-9 &&
+      mOff.musicEnabled === false && mOff.music.current === 'f3';
+    A.setMusicEnabled(true);
+    var mOn = A._dbg();
+    rec('music_switch_only_bus', muteOffOk && Math.abs(mOn.buses.music - 0.5) < 1e-9 &&
+      mOn.musicEnabled === true, {
+      rule: '音乐开关只改 musicBus(0↔0.5)；sfxBus/master/当前曲目全不变',
+      before: mBefore.buses, off: mOff.buses, on: mOn.buses,
+      trackOff: mOff.music.current, trackOn: mOn.music.current
+    });
+
+    /* ── 10. Math.random / fetch / 音频文件 ───────────────────── */
+    var rnd = (audioSrc.match(/Math\.random\s*\(/g) || []).length +
+      (musicSrc.match(/Math\.random\s*\(/g) || []).length;
+    var net = (audioSrc + musicSrc).match(/fetch\s*\(|XMLHttpRequest|decodeAudioData|\.mp3|\.ogg|\.wav/g) || [];
+    rec('zero_random_zero_network', rnd === 0 && net.length === 0 && musicSrc.indexOf('1664525') >= 0, {
+      rule: '音频代码零 Math.random（噪声用固定种子 LCG）；零 fetch/XHR/decodeAudioData/音频文件',
+      random: rnd, network: net, lcg: musicSrc.indexOf('1664525') >= 0
+    });
+
+    /* ── 11. keydown 第二条解锁路径 ───────────────────────────── */
+    A._resetForTest();
+    A.init();
+    Game.Data.Player = { floor: 4 };
+    A.bgmPlay('explore');
+    var preK = A._dbg();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowUp', bubbles: true }));
+    await wait(320);
+    var pk = A._dbg();
+    rec('unlock_keydown', preK.pendingTrack === 'f4' && pk.ctxState === 'running' &&
+      pk.music && pk.music.current === 'f4' && pk.music.noteLog.length > 0, {
+      rule: 'keydown 也能解锁；解锁后起 f4；两条路径都只解锁一次',
+      pendingBefore: preK.pendingTrack, state: pk.ctxState,
+      current: pk.music && pk.music.current, notes: pk.music && pk.music.noteLog.length
+    });
+    var unlockSrc = audioSrc.slice(audioSrc.indexOf('function addUnlockListeners'),
+      audioSrc.indexOf('/* ---------- 音量持久化'));
+    rec('unlock_three_events_removed', unlockSrc.indexOf("'keydown'") >= 0 &&
+      unlockSrc.indexOf("'pointerdown'") >= 0 && unlockSrc.indexOf("'touchstart'") >= 0 &&
+      (unlockSrc.match(/removeEventListener/g) || []).length >= 3, {
+      rule: 'init 同时挂 keydown/pointerdown/touchstart；解锁后三条监听全部移除',
+      listeners: ['keydown', 'pointerdown', 'touchstart'].map(function (k) {
+        return unlockSrc.indexOf(k) >= 0;
+      }),
+      removes: (unlockSrc.match(/removeEventListener/g) || []).length
+    });
+
+    /* ── 12. 恢复时 nextNoteTime 钳到当前时间，不追补 ─────────── */
+    var c = A._ctx();
+    var resumeAt = c.currentTime;
+    await c.suspend();
+    await wait(120);
+    await c.resume();
+    M.onResume();
+    resumeAt = c.currentTime;
+    var noteTotalBefore = M._dbg().noteTotal;
+    await wait(180);
+    var md = M._dbg();
+    var added = md.noteTotal - noteTotalBefore;
+    var fresh = added > 0 ? md.noteLog.slice(-Math.min(added, md.noteLog.length)) : [];
+    var stale = fresh.filter(function (n) { return n.at < resumeAt - 0.03; });
+    rec('next_note_clamped', md.nextNoteTime >= resumeAt - 0.01 && stale.length === 0, {
+      rule: 'resume 后 nextNoteTime ≥ currentTime；新排的音符没有 at < 恢复时刻（不追补过期音符）',
+      now: md.now, nextNoteTime: md.nextNoteTime, resumeAt: Math.round(resumeAt * 1000) / 1000,
+      fresh: fresh, stale: stale
+    });
+
+    /* ── 13. howler 引线已移除 ─────────────────────────────────── */
+    rec('howler_removed', indexSrc.indexOf('js/vendor/howler.min.js') < 0 &&
+      audioSrc.indexOf('new Howl') < 0 && musicSrc.indexOf('new Howl') < 0, {
+      rule: 'index.html 不再引入 howler.min.js；audio/music 零 Howl 调用',
+      indexHasHowler: indexSrc.indexOf('js/vendor/howler.min.js') >= 0
+    });
+
+    finish();
+  }
+
+  function finish() {
+    var pass = out.ok;
+    var txt = (pass ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+    document.title = txt;
+    document.getElementById('result').textContent = txt;
+    var t = document.createElement('div');
+    t.textContent = txt;
+    document.body.appendChild(t);
+  }
+
+  run().catch(function (e) {
+    out.err = String(e && (e.stack || e.message) || e);
+    out.ok = false;
+    finish();
+  });
+})();
+</script>
+</body>
+</html>

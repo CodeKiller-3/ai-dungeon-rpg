@@ -487,9 +487,10 @@
       /* ══ F：页数基线 ═══════════════════════════════════════ */
       var pb = null;
       try { pb = JSON.parse(readText('selfcheck/page-baseline.json')); } catch (e) { pb = null; }
-      rec('F1_pageBaseline', !!pb && pb.count === 128 && pb.pages.indexOf('verify_d101') >= 0 &&
-        pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0, {
-        rule: 'page-baseline.json count=128 且登记 verify_d101 / verify_d102 / verify_d104 / verify_d108',
+      rec('F1_pageBaseline', !!pb && pb.count === 129 && pb.pages.indexOf('verify_d101') >= 0 &&
+        pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0 &&
+        pb.pages.indexOf('verify_d124') >= 0, {
+        rule: 'page-baseline.json count=129 且登记 verify_d101 / verify_d102 / verify_d104 / verify_d108 / verify_d124',
         count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d101') >= 0
       });
     } catch (e) {

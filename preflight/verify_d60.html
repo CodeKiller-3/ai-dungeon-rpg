@@ -311,7 +311,7 @@
       note: '同一条扫描函数同时喂真实文件与合成文本；三种历史名与三种违规场景都必须被抓到'
     });
 
-    /* ── E：全量回归 128/128 + GUARD（…；D-102 125→126；D-104 126→127；D-108 127→128，新增 verify_d108） ── */
+    /* ── E：全量回归 129/129 + GUARD（…；D-104 126→127；D-108 127→128；D-124 128→129，新增 verify_d124） ── */
     var rr = readJson('selfcheck/regression-result.json');
     var st = readJson('selfcheck/d22-selftest.json');
     var sum = rr && rr.summary ? rr.summary : {};
@@ -319,18 +319,18 @@
     var badRows = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page !== 'verify_d60'; }) : [];
     var selfBad = rr && rr.rows ? rr.rows.filter(function (x) { return x.verdict !== 'PASS' && x.page === 'verify_d60'; }) : [];
     var caseA = st && st.cases ? st.cases.filter(function (c) { return c.id === 'A_normal'; })[0] : null;
-    var selftestOk = !!(st && st.allAsExpected === true && st.baselineCount === 128 &&
-      caseA && String(caseA.line || '').indexOf('GUARD=OK expected=128 actual=128') >= 0);
-    rec('E_regression_125', sum.total === 128 && sum.none === 0 && sum.mixed === 0 &&
+    var selftestOk = !!(st && st.allAsExpected === true && st.baselineCount === 129 &&
+      caseA && String(caseA.line || '').indexOf('GUARD=OK expected=129 actual=129') >= 0);
+    rec('E_regression_125', sum.total === 129 && sum.none === 0 && sum.mixed === 0 &&
       badRows.length === 0 && (sum.fail === 0 || (sum.fail === 1 && selfBad.length === 1)) &&
-      guard.ok === true && guard.expected === 128 && guard.actual === 128 && selftestOk, {
+      guard.ok === true && guard.expected === 129 && guard.actual === 129 && selftestOk, {
       summary: sum,
       selfBad: selfBad.length,
-      passExcludingSelf: 127 - badRows.length - selfBad.length,
+      passExcludingSelf: 128 - badRows.length - selfBad.length,
       guard: { ok: guard.ok, expected: guard.expected, actual: guard.actual, missing: guard.missing, extra: guard.extra },
       badRows: badRows.slice(0, 10),
       selftest: { allAsExpected: st ? st.allAsExpected : null, baselineCount: st ? st.baselineCount : null, line: caseA ? caseA.line : null },
-      note: '元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 128/128 为准'
+      note: '元页面：读上一轮结果，所以纳入基线的第一轮会红，第二轮起稳定；最终以连续两轮 129/129 为准'
     });
 
     var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);

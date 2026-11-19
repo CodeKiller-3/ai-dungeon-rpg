@@ -64,7 +64,7 @@
   var SETTINGS_KEY = 'aiDungeon_settings_v1';
   var ZOOM_LEVELS = ['auto', '1', '1.25', '1.5'];
   var ZOOM_LABEL = { auto: '自动（自适应）', '1': '100%', '1.25': '125%', '1.5': '150%' };
-  var settings = { muted: false, zoom: 'auto', adaptive: true, guide: true };
+  var settings = { muted: false, music: true, zoom: 'auto', adaptive: true, guide: true };
 
   function loadSettings() {
     try {
@@ -73,6 +73,8 @@
       var d = JSON.parse(raw);
       /* D-78：d.fx 不再读取——旧档的 off/low 不会让特效消失 */
       if (d) settings.muted = !!d.muted;
+      /* D-124：音乐开关默认开；旧设置没有 music 字段 → true（不新增存储键） */
+      if (d) settings.music = (d.music === undefined) ? true : !!d.music;
       if (d && ZOOM_LEVELS.indexOf(d.zoom) >= 0) settings.zoom = d.zoom;
       if (d) settings.adaptive = (d.adaptive === undefined) ? true : !!d.adaptive;
       /* D-55：旧设置没有 guide 字段 → 默认开（与 D-54 的默认表现一致） */
@@ -87,6 +89,8 @@
     if (Game.Fx && typeof Game.Fx.setLevel === 'function') Game.Fx.setLevel('high');
     var A = Game.Systems && Game.Systems.Audio;
     if (A && settings.muted && typeof A.setMuted === 'function') A.setMuted(true);
+    /* D-124：「音乐」开关只切 musicBus，默认开 */
+    if (A && typeof A.setMusicEnabled === 'function') A.setMusicEnabled(settings.music);
     var R = Game.Core && Game.Core.Render;
     if (R && typeof R.setScaleMode === 'function') R.setScaleMode(settings.zoom);
     var D = Game.Systems && Game.Systems.Adaptive;
@@ -736,6 +740,10 @@
       /* D-51：暂停状态与战斗时间轴偏移一并复位（验证页会重复 init） */
       pause.active = false; pause.page = 'root'; pause.sel = 0; pause.settingsSel = 0;
       pause.confirmSel = 0; pause.stoppedAt = 0; pause.wasPaused = false;
+      if (Game.Systems && Game.Systems.Audio && typeof Game.Systems.Audio.setFocusMode === 'function') {
+        Game.Systems.Audio.setFocusMode('pause', false);
+        Game.Systems.Audio.setFocusMode('learner', false);
+      }
       if (Game.Systems.Battle && typeof Game.Systems.Battle._resetClock === 'function') {
         Game.Systems.Battle._resetClock();
       }
@@ -1008,6 +1016,9 @@
       }
       /* 切回探索场景（弹窗悬停其上，_updateExplore 因弹窗打开而暂停） */
       this.switchScene('explore');
+      /* D-124：死亡曲是 jingle（绕过 duckGain）；150 ms 切 → 1.4 s 下行 → 2.0 s 静音 → pad */
+      var A = Game.Systems && Game.Systems.Audio;
+      if (A && typeof A.bgmPlay === 'function') A.bgmPlay('death');
     },
 
     /* D-52：死亡结算「回主菜单」（存档已在 _finalizeDeath 清掉；只离开当前局） */
@@ -1042,6 +1053,9 @@
       /* D-51：新局不继承暂停态与残留战斗（从菜单/结算页重开时清干净） */
       pause.active = false; pause.page = 'root'; pause.sel = 0;
       pause.settingsSel = 0; pause.confirmSel = 0; pause.wasPaused = false;
+      if (Game.Systems && Game.Systems.Audio && typeof Game.Systems.Audio.setFocusMode === 'function') {
+        Game.Systems.Audio.setFocusMode('pause', false);
+      }
       if (Game.Systems && Game.Systems.Battle && typeof Game.Systems.Battle.abort === 'function') {
         Game.Systems.Battle.abort();
       }
@@ -1101,7 +1115,7 @@
     shouldShowMenu: shouldShowMenu,
 
     /* 当前设置快照（只读副本；D-78 起不含 fx——特效硬性常开） */
-    getSettings: function () { return { muted: settings.muted, zoom: settings.zoom, adaptive: settings.adaptive, guide: settings.guide }; },
+    getSettings: function () { return { muted: settings.muted, music: settings.music, zoom: settings.zoom, adaptive: settings.adaptive, guide: settings.guide }; },
 
     /* 设置项列表：D-78 删掉「打击感」行，只剩既有开关（音效 / 画面缩放） */
     _settingsSpec: function () {
@@ -1114,6 +1128,8 @@
     /* D-49：设置页渲染行 = 三项既有开关 + 自适应难度（单独行，不并入 D-48 的 _settingsSpec） */
     _settingsRows: function () {
       var rows = this._settingsSpec();
+      /* D-124：「音乐」开关新增一行（不加第二条音量滑块），紧跟「音效」 */
+      rows.splice(1, 0, { id: 'music', label: '音乐', value: settings.music ? '开' : '关' });
       rows.push({ id: 'adaptive', label: '自适应难度', value: settings.adaptive ? '开' : '关' });
       /* D-51：清除存档是"动作行"而不是开关，由 Enter 触发二次确认 */
       var hasSave = !!(Game.Systems && Game.Systems.Save && typeof Game.Systems.Save.has === 'function' && Game.Systems.Save.has());
@@ -1132,6 +1148,11 @@
         settings.muted = !!value;
         var A = Game.Systems && Game.Systems.Audio;
         if (A && typeof A.setMuted === 'function') A.setMuted(settings.muted);
+      } else if (id === 'music') {
+        /* D-124：只切 musicBus；与 muted 互不影响 */
+        settings.music = !!value;
+        var AM = Game.Systems && Game.Systems.Audio;
+        if (AM && typeof AM.setMusicEnabled === 'function') AM.setMusicEnabled(settings.music);
       } else if (id === 'zoom') {
         if (ZOOM_LEVELS.indexOf(value) < 0) return false;
         settings.zoom = value;
@@ -1157,6 +1178,7 @@
       var d = (dir < 0) ? -1 : 1;
       if (id === 'fx') return false;   /* D-78：设置页已无此项 */
       if (id === 'muted') return this.setSetting('muted', !settings.muted);
+      if (id === 'music') return this.setSetting('music', !settings.music);
       if (id === 'zoom') {
         var z = ZOOM_LEVELS.indexOf(settings.zoom);
         return this.setSetting('zoom', ZOOM_LEVELS[(z + d + ZOOM_LEVELS.length) % ZOOM_LEVELS.length]);
@@ -1445,6 +1467,9 @@
       pause.confirmSel = 0;
       pause.stoppedAt = (typeof ts === 'number' && isFinite(ts)) ? ts : this._lastFrame;
       pause.wasPaused = false;
+      /* D-124：暂停只压 musicBus（−9 dB + LP 800 Hz），不换曲、不重置进度 */
+      var A = Game.Systems && Game.Systems.Audio;
+      if (A && typeof A.setFocusMode === 'function') A.setFocusMode('pause', true);
       /* 清掉按住的移动/动作键：恢复后不会因为"暂停时一直按着方向键"而突然走一步 */
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       return true;
@@ -1458,6 +1483,9 @@
       pause.page = 'root';
       pause.confirmSel = 0;
       pause.wasPaused = true;
+      /* D-124：撤销暂停 ducking；曲目继续，不从头重播 */
+      var A = Game.Systems && Game.Systems.Audio;
+      if (A && typeof A.setFocusMode === 'function') A.setFocusMode('pause', false);
       if (Game.Core.Input && typeof Game.Core.Input.clear === 'function') Game.Core.Input.clear();
       return true;
     },
@@ -1610,6 +1638,8 @@
       pause.sel = 0;
       pause.confirmSel = 0;
       pause.wasPaused = false;
+      var AP = Game.Systems && Game.Systems.Audio;
+      if (AP && typeof AP.setFocusMode === 'function') AP.setFocusMode('pause', false);
       encounter = null;
       var B = Game.Systems && Game.Systems.Battle;
       if (B && typeof B.abort === 'function') B.abort();
@@ -1804,14 +1834,16 @@
     switchScene: function (name) {
       this._scene = name;
       Game.Core.EventBus.emit('game:sceneChanged', { scene: name });
-      /* M9-4：场景切换时自动切换 BGM（弹窗/子场景不切，且同场景不重启避免断音） */
+      /* D-124：场景切换只在这些状态边沿请求曲目；去重/换层/交叉淡化由 audio+music 内部处理。
+       * explore 会解析成 f{player.floor}，所以换层即使同为 explore 也会换曲。
+       * 其他场景（inventory/shop/quests/npc/learner）保持当前 BGM 不变。 */
       var A = Game.Systems && Game.Systems.Audio;
-      if (A) {
-        var cur = A.getBgmScene();
-        if (name === 'explore' && cur !== 'explore') A.bgmPlay('explore');
-        else if (name === 'battle' && cur !== 'battle') A.bgmPlay('battle');
-        else if (name === 'victory' && cur !== 'victory') A.bgmPlay('victory');
-        /* 其他场景（inventory/shop/quests/npc/learner）保持当前 BGM 不变 */
+      if (A && typeof A.bgmPlay === 'function') {
+        if (name === 'explore' || name === 'battle' || name === 'victory' || name === 'menu') {
+          A.bgmPlay(name);
+        }
+        /* 离开学习者页时解除 −12 dB + LP 1.2 kHz */
+        if (name !== 'learner' && typeof A.setFocusMode === 'function') A.setFocusMode('learner', false);
       }
     },
 
@@ -1841,7 +1873,15 @@
         Game.Core.EventBus.emit('ui:notice', { msg: '附近没有人' });
         return;
       }
-      if (k['KeyL']) { delete k['KeyL']; Game.Systems.Learner.init(Game.Systems.Map.getGrid()); this._scene = 'learner'; return; }
+      if (k['KeyL']) {
+        delete k['KeyL'];
+        Game.Systems.Learner.init(Game.Systems.Map.getGrid());
+        this._scene = 'learner';
+        /* D-124：学习者页 −12 dB + LP 1.2 kHz，离开时由 switchScene('explore') 解除 */
+        var AL = Game.Systems && Game.Systems.Audio;
+        if (AL && typeof AL.setFocusMode === 'function') AL.setFocusMode('learner', true);
+        return;
+      }
       /* D-98：F = 侦测 / 拆除陷阱（T 已被 NPC 对话占用，改用 F，设置页「操作说明」已写明）。
        * 先判拆除：站在已显现陷阱的相邻格（4 向）→ 直接拆掉，不耗道具、不加掉落。
        * 否则侦测：消耗 1 个回合（走一次状态结算与步数），把视野内陷阱置 seen=true。

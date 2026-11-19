@@ -254,9 +254,9 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
       while (st.page !== 'root' && guard++ < 10) { press('Escape'); st = M.getMenuState(); }
       menuSel(3); press('Enter');
       if (M.getMenuState().page !== 'settings') return false;
-      /* D-78 时点声明：设置页删掉「打击感」行后，「清除存档」由第 5 行上移到第 4 行
-       * （索引 3）。这是行号随版式变化，不是放宽：确认页/删除结果仍逐项断言。 */
-      settingsSel(3); press('Enter');
+      /* 时点声明：D-78 删「打击感」后「清除存档」索引 3；D-124 插入「音乐」行后
+       * 索引 4。这是行号随版式变化，不是放宽：确认页/删除结果仍逐项断言。 */
+      settingsSel(4); press('Enter');
       return M.getMenuState().page === 'confirmClear';
     }
     S.save();
@@ -282,7 +282,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var eOk = eHad && ePrompt && eAfterFirst === true && eCancelPage === 'settings' && eAfterCancel === true &&
       eAgain && eDefaultSel === 0 && eEnterCancelPage === 'settings' && eAfterEnterCancel === true &&
       eThird && eAfterSecond === false && eCont.enabled === false && eCont.note === '暂无存档' &&
-      (M.getMenuState().settingsSel === 3);
+      (M.getMenuState().settingsSel === 4);
     /* 损坏档也能清 */
     try { localStorage.setItem(KEY, '{broken json'); } catch (e2) { }
     var eCorruptHas = S.has();

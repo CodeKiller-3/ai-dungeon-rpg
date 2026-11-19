@@ -78,8 +78,8 @@
 ## 数值口径
 
 - **地牢层数固定 5 层**。唯一权威来源是 `js/data/maps.js` 中 `MAPS.floors` 的数值；任何文档、任务卡、文案提到层数都以此为准（早期外部任务书里的旧层数口径已作废）。
-- 物品 48 件、素材 355 张、验证页 128 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
-- 验证页数不在这里维护第二个副本：以 `page-baseline.json` 的 `count` 为准（当前 128），历史文档里的旧页数是时点值。
+- 物品 48 件、素材 355 张、验证页 129 个，分别以 `js/data/items.js` 的 `ITEMS` 条目数、`assets/sprites/*.png` 实际数量、`preflight/selfcheck/page-baseline.json` 的 `count` 为准。
+- 验证页数不在这里维护第二个副本：以 `page-baseline.json` 的 `count` 为准（当前 129），历史文档里的旧页数是时点值。<!-- D-122 时点：验证页 128 个；D-124 起现值为 129。 -->
 - 版本库当前 **232 个 commit**（D-123 本 commit 之后；D-95–D-122 已全部入库并推送 `origin/main`）。
 - **真人验收**：未做真人验收；40%–55% 是按救援口径与 F5 缺口推算的估计值，不是实测。
 
@@ -119,7 +119,7 @@ ai-dungeon-rpg/
 ├── js/systems/           # 地图生成 / FOV / 战斗 / 背包 / 商店 / 任务 / 图鉴 / 存档 / AI / NPC / 音频 / 强化学习 / 弹窗
 ├── js/vendor/            # 开源库：javascript-astar（MIT）、howler.js（MIT）、rot.js（BSD-3）
 ├── assets/sprites/       # 355 张像素素材（kni-dungeon MIT / 0x72 CC0，来源见同目录 LICENSE.md）
-├── preflight/            # 128 个 headless 验证页（M1 至今；以 selfcheck/page-baseline.json 的 count 为准）
+├── preflight/            # 129 个 headless 验证页（M1 至今；以 selfcheck/page-baseline.json 的 count 为准）
 ├── preflight/selfcheck/  # run-all.ps1（批跑+页数兜底）/ selfcheck.js / 素材审计 / 线上核验快照
 ├── preflight/artifacts/  # 证据截图：preflight/artifacts/d95/ 为 D-95 对外图 11 张（10 张常规 + F5 横置）；d74/ 10 张、d73/ 9 张、d61/ 8 张为历史；shots_resize/ 12 张响应式；D-35 8× 对照
 ├── docs/                 # 答辩讲稿、演示脚本、功能点检表、运行说明

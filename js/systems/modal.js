@@ -47,6 +47,7 @@
   /* M9-4：设置面板状态 */
   var volTrack = null;   /* 音量滑块轨道矩形 {x,y,w,h} */
   var muteRect = null;   /* 静音开关矩形 {x,y,w,h} */
+  var musicRect = null;  /* D-124：音乐开关矩形（只切 musicBus，不新增滑块） */
   var volDragging = false;
   var onMouseDown = null, onMouseMove = null, onMouseUp = null;
   /* M9-5：死亡结算状态 */
@@ -882,6 +883,12 @@
       stairConfirm = (k === 'stairconfirm' && stats)
         ? { floor: (stats.floor | 0) || 1, onConfirm: stats.onConfirm || null }
         : null;
+      /* D-124：子页只把 musicBus 压 −6 dB（120 ms attack / 300 ms release），绝不换曲。
+       * 死亡结算走 death jingle，不吃子页 duck。 */
+      if (k !== 'gameover' && Game.Systems && Game.Systems.Audio &&
+          typeof Game.Systems.Audio.setFocusMode === 'function') {
+        Game.Systems.Audio.setFocusMode('subpage', true);
+      }
       this._refresh();
       this._bind();
     },
@@ -894,12 +901,17 @@
       volDragging = false;
       volTrack = null;
       muteRect = null;
+      musicRect = null;
       gameStats = null;
       gameRestartRect = null;
       gameMenuRect = null;
       gameoverSel = 0;
       stairConfirm = null;
       if (kind === 'npcquest') npcId = null;
+      /* D-124：关闭子页解除 −6 dB；若暂停仍开着，pause 档继续生效（取最深一档） */
+      if (Game.Systems && Game.Systems.Audio && typeof Game.Systems.Audio.setFocusMode === 'function') {
+        Game.Systems.Audio.setFocusMode('subpage', false);
+      }
       this._unbind();
       /* 关闭时清掉 Input 残留按键，避免移动键粘滞导致关闭瞬间移动 */
       if (Game.Core && Game.Core.Input && typeof Game.Core.Input.clear === 'function') {
@@ -1187,6 +1199,16 @@
       if (!a) return;
       a.setMuted(!a.isMuted());
     },
+    _toggleMusic: function () {
+      /* D-124：设置里的 music 是唯一真值；没有 Main 时退化为直接切 musicBus */
+      var M = Game.Core && Game.Core.Main;
+      if (M && typeof M.getSettings === 'function' && typeof M.setSetting === 'function') {
+        M.setSetting('music', !M.getSettings().music);
+        return;
+      }
+      var a = this._getAudio();
+      if (a && typeof a.setMusicEnabled === 'function') a.setMusicEnabled(!a.isMusicEnabled());
+    },
     _setVolumeFromX: function (mx) {
       if (!volTrack) return;
       var a = this._getAudio();
@@ -1320,6 +1342,11 @@
         if (muteRect && x >= muteRect.x && x <= muteRect.x + muteRect.w &&
             y >= muteRect.y && y <= muteRect.y + muteRect.h) {
           this._toggleMute();
+          return;
+        }
+        if (musicRect && x >= musicRect.x && x <= musicRect.x + musicRect.w &&
+            y >= musicRect.y && y <= musicRect.y + musicRect.h) {
+          this._toggleMusic();
         }
         return;
       }
@@ -1422,6 +1449,10 @@
       var a = this._getAudio();
       var vol = a ? a.getVolume() : 0.7;
       var muted = a ? a.isMuted() : false;
+      var Main = Game.Core && Game.Core.Main;
+      var musicOn = (Main && typeof Main.getSettings === 'function')
+        ? !!Main.getSettings().music
+        : (a && typeof a.isMusicEnabled === 'function' ? !!a.isMusicEnabled() : true);
 
       var left = px + 20;
       var contentW = w - 40;
@@ -1471,6 +1502,26 @@
 
       y += muteRect.h + 24;
 
+      /* ---- D-124：音乐开关（只切 musicBus；不新增第二条滑块） ---- */
+      musicRect = { x: left, y: y, w: 18, h: 18 };
+      if (Game.Core.Render && Game.Core.Render._hotAdd) {
+        Game.Core.Render._hotAdd('modal:music', musicRect.x - 4, musicRect.y - 4, musicRect.w + 8, musicRect.h + 8);
+      }
+      c.fillStyle = '#1a1a2e';
+      c.fillRect(musicRect.x, musicRect.y, musicRect.w, musicRect.h);
+      c.strokeStyle = '#cfcfcf';
+      c.lineWidth = 1;
+      c.strokeRect(musicRect.x + 0.5, musicRect.y + 0.5, musicRect.w - 1, musicRect.h - 1);
+      if (musicOn) {
+        c.fillStyle = '#7fd1ff';
+        c.fillRect(musicRect.x + 3, musicRect.y + 3, musicRect.w - 6, musicRect.h - 6);
+      }
+      c.fillStyle = musicOn ? '#cfcfcf' : '#8a8aa0';
+      c.font = '14px monospace';
+      c.fillText('音乐（' + (musicOn ? '开' : '关') + '）', musicRect.x + musicRect.w + 10, y + 14);
+
+      y += musicRect.h + 24;
+
       /* ---- 操作说明 ---- */
       c.fillStyle = '#9bbbf4';
       c.font = 'bold 13px monospace';
@@ -1494,7 +1545,7 @@
       /* 底部提示（窄屏缩字号，避免 320 宽溢出） */
       c.fillStyle = '#9bbbf4';
       c.font = (cssSize().w < 420 ? '11px monospace' : '12px monospace');
-      c.fillText('← → 调音量 · 空格切换静音 · Esc/点遮罩关闭', px + 14, py + h - 12);
+      c.fillText('← → 调音量 · 空格静音 · 点击「音乐」开关 · Esc/点遮罩关闭', px + 14, py + h - 12);
     },
 
     /* M9-5：死亡结算面板 → D-52：死因 / 死在第几层 / 差什么 / 救援名额 / 双按钮 */
@@ -1601,7 +1652,7 @@
       var w = panelWidth(cw, railOn);
       var listW = listWidth(cw, railOn);
       /* M9-4/M9-5：设置面板与死亡结算使用固定内容高度（非列表） */
-      var h = (kind === 'settings') ? HEADER_H + 280 + FOOTER_H
+      var h = (kind === 'settings') ? HEADER_H + 310 + FOOTER_H
         : (kind === 'gameover') ? Math.min(ch - 24, HEADER_H + 300 + FOOTER_H)
         /* D-27：空列表也保留 1 行高度，避免"空态提示"与底部操作提示叠在同一条线上
          * （新档背包为空是首屏常态，页头又加了装备摘要，必须让空态有独立一行） */

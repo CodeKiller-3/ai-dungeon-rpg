@@ -247,7 +247,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     putRaw(craft());
     M.switchScene('menu');
     setSel(3); press('Enter');
-    setSettingsSel(3); press('Enter');
+    setSettingsSel(4); press('Enter'); /* D-124：music 行插入后 clearSave=4 */
     var fPage = M.getMenuState().page;
     var fDefault = M.getMenuState().confirmSel;
     var fBefore = raw();
@@ -256,7 +256,7 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var fAfter = raw();
     var fDiff = diffFields(JSON.parse(fBefore), JSON.parse(fAfter), '', []);
     /* 再进一次，显式移到「删除存档」 */
-    setSettingsSel(3); press('Enter'); press('ArrowRight'); press('Enter');
+    setSettingsSel(4); press('Enter'); /* D-124：music 行插入后 clearSave=4 */ press('ArrowRight'); press('Enter');
     var fGone = raw() === null;
     var fOk = fPage === 'confirmClear' && fDefault === 0 && fAfterPage === 'settings' &&
       fAfter === fBefore && fDiff.length === 0 && fGone;
@@ -282,13 +282,13 @@ window.__AI_DUNGEON_NO_AUTOSTART__ = true;
     var gBackRoot = M.getPauseState().page === 'root' && M.isPaused();
     /* 设置页删除存档 */
     setPauseSel(1); press('Enter', 'pause');
-    setPauseSettingsSel(3); press('Enter', 'pause');
+    setPauseSettingsSel(4); press('Enter', 'pause'); /* D-124：music 行插入后 clearSave=4 */
     var gClearPage = M.getPauseState().page;
     var gClearDefault = M.getPauseState().confirmSel;
     press('Enter', 'pause');
     var gAfterClearCancel = raw();
     var gBackSettings = M.getPauseState().page === 'settings';
-    setPauseSettingsSel(3); press('Enter', 'pause'); press('ArrowRight', 'pause'); press('Enter', 'pause');
+    setPauseSettingsSel(4); press('Enter', 'pause'); /* D-124：music 行插入后 clearSave=4 */ press('ArrowRight', 'pause'); press('Enter', 'pause');
     var gGone = raw() === null;
     var gOk = gEnter && gAbandonPage === 'confirmAbandon' && gAbandonDefault === 0 &&
       gAbandonDraw === null && gAfterAbandon === gBefore && gBackRoot &&
