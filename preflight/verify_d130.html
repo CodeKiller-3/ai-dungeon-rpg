@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-130 状态收口（B1 + B2 + W6）</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-130 · B1 探索帧 / B2 死亡后状态 / W6 特效随机流隔离</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script src="lib/d17_bot.js"></script>
+<script>
+/* D-130 判据：
+ *   b1_no_extra_step_after_encounter  正例：AI 贴脸触发战斗后本帧不再移动；负例：回放旧顺序必须移动。
+ *   b2_no_battle_after_gameover       正例：陷阱致死/救援后不启动战斗；负例：回放旧顺序必须启动。
+ *   w6_fx_rng_isolated                正例：特效开/关，同一局战斗结果全等；负例：旧式消耗随机必须不等。
+ *   w6_math_random_zero               正例：四类粒子爆发 Math.random = 0；负例：旧式爆发必须 > 0。
+ * 探针按 docs/全局优化-清单-2026-11-20.md §B1/§B2/§W6 的位置与证据复现。 */
+(function () {
+  'use strict';
+  var out = { protocol: 'D-130', sub: {}, ok: false };
+  var START = Date.now();
+  var M, Map, P, B, Modal, Ph;
+  function rec(name, ok, detail) {
+    out.sub[name] = { ok: !!ok, detail: detail };
+  }
+  function walk(g, x, y) {
+    return !!(g[y] && g[y][x] !== undefined && g[y][x] !== 0);
+  }
+  function cleanSpot(g) {
+    for (var y = 1; y < g.length - 1; y++) {
+      for (var x = 1; x < g[0].length - 1; x++) {
+        if (!walk(g, x, y) || !walk(g, x + 1, y) || !walk(g, x, y + 1)) continue;
+        if (Map.getDecor(x, y) || Map.getDecor(x + 1, y) || Map.getDecor(x, y + 1)) continue;
+        if (Map.getTrap(x, y) || Map.getTrap(x + 1, y) || Map.getTrap(x, y + 1)) continue;
+        if (Map.tileAt(x, y) !== 1 || Map.tileAt(x + 1, y) !== 1 || Map.tileAt(x, y + 1) !== 1) continue;
+        return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+  function clearActors() {
+    (Map.getEnemies() || []).slice().forEach(function (e) { Map.removeEnemyAt(e.x, e.y); });
+    Game.Systems.AI.setPatrols([]);
+  }
+  function putEnemy(x, y, id) {
+    Map.getEnemies().push({ x: x, y: y, monsterId: id, frame: 0, rest: 0, state: 'idle', homeX: x, homeY: y });
+  }
+  function resetExplore() {
+    if (B && B.isActive()) B.abort();
+    if (Modal && Modal.isOpen()) Modal.close();
+    M.switchScene('explore');
+    Game.Core.Input.clear();
+    clearActors();
+  }
+
+  try {
+    M = Game.Core.Main; Map = Game.Systems.Map; P = Game.Data.Player;
+    B = Game.Systems.Battle; Modal = Game.Modal; Ph = Game.Particles;
+    M.init();
+    M.closeGuide();
+    M.switchScene('explore');
+    Modal.close();
+    Game.Core.Input.clear();
+
+    /* ── B1：AI 贴脸触发战斗后，本帧是否还多走一格 ── */
+    function b1(ts, oldOrder) {
+      resetExplore();
+      var sp = cleanSpot(Map.getGrid());
+      if (!sp) throw new Error('B1 no clean spot');
+      P.x = sp.x; P.y = sp.y; P.hp = 100; P.maxHp = 100;
+      putEnemy(sp.x + 1, sp.y, 'bat');
+      var before = P.x + ',' + P.y;
+      if (oldOrder) {
+        /* 旧顺序：AI.tick 同步开战，但调用方不重新检查场景，继续移动 */
+        Game.Systems.AI.tick(P);
+        var nx = P.x, ny = P.y + 1;
+        if (Map.isWalkable(nx, ny)) { P.x = nx; P.y = ny; }
+      } else {
+        Game.Core.Input.getState().ArrowDown = true;
+        M._updateExplore(ts);
+        Game.Core.Input.getState().ArrowDown = false;
+      }
+      return {
+        before: before, after: P.x + ',' + P.y,
+        moved: (P.x + ',' + P.y) !== before,
+        scene: M._scene, battle: !!(B && B.isActive())
+      };
+    }
+    var b1New = b1(1e9, false);
+    var b1Old = b1(2e9, true);
+    rec('b1_no_extra_step_after_encounter',
+      b1New.moved === false && b1New.scene === 'battle' && b1New.battle === true &&
+      b1Old.moved === true && b1Old.battle === true, {
+        rule: 'AI 贴脸 → 场景已切 battle，本帧不得再移动；回放旧顺序必须移动（负例可失败）',
+        positive: b1New, negative: b1Old
+      });
+
+    /* ── B2：陷阱致死 + 同格怪，是否在 gameover 后仍启动战斗 ── */
+    function b2(ts, adaptiveOn, oldOrder) {
+      resetExplore();
+      Game.Systems.Adaptive.setEnabled(adaptiveOn);
+      var sp = cleanSpot(Map.getGrid());
+      if (!sp) throw new Error('B2 no clean spot');
+      P.x = sp.x; P.y = sp.y; P.hp = 1; P.maxHp = 100;
+      putEnemy(sp.x, sp.y + 1, 'slime');
+      var orig = Map.triggerTrap;
+      var calls = { n: 0, at: null };
+      Map.triggerTrap = function (x, y) {
+        calls.n++; calls.at = x + ',' + y;
+        P.hp = 0;
+        Game.Core.EventBus.emit('battle:end', {
+          result: 'lose', source: 'trap', monsterId: null, monsterName: null,
+          roundNo: null, trapId: 'probe', trapName: '探针陷阱'
+        });
+        return { id: 'probe', dmg: 1 };
+      };
+      var before = P.x + ',' + P.y;
+      if (oldOrder) {
+        /* 旧顺序：先移动，再 triggerTrap，然后不检查 hp/弹窗，直接判同格怪并开战 */
+        var nx = P.x, ny = P.y + 1;
+        if (Map.isWalkable(nx, ny)) { P.x = nx; P.y = ny; }
+        Map.triggerTrap(nx, ny);
+        var e = Map.enemyAt(nx, ny);
+        if (e) { B.start(e.monsterId); M.switchScene('battle'); }
+      } else {
+        Game.Core.Input.getState().ArrowDown = true;
+        M._updateExplore(ts);
+        Game.Core.Input.getState().ArrowDown = false;
+      }
+      var r = {
+        hp: P.hp, scene: M._scene,
+        modal: !!(Modal && Modal.isOpen()),
+        battle: !!(B && B.isActive()),
+        before: before, after: P.x + ',' + P.y,
+        trapCalls: calls.n, trapAt: calls.at,
+        saveHas: !!(Game.Systems.Save && Game.Systems.Save.has && Game.Systems.Save.has())
+      };
+      Map.triggerTrap = orig;
+      return r;
+    }
+    var b2Rescue = b2(3e9, true, false);
+    var b2Death = b2(4e9, false, false);
+    var b2Old = b2(5e9, false, true);
+    rec('b2_no_battle_after_gameover',
+      b2Death.hp <= 0 && b2Death.modal === true && b2Death.battle === false && b2Death.scene === 'explore' &&
+      b2Rescue.battle === false && b2Rescue.scene === 'explore' &&
+      b2Old.modal === true && b2Old.battle === true, {
+        rule: '陷阱致死：清档 + gameover 后不得再有活战斗；救援后也不得按旧格开战；回放旧顺序必须开战（负例可失败）',
+        death: b2Death, rescue: b2Rescue, negative: b2Old
+      });
+
+    /* ── W6：粒子随机流隔离 ── */
+    function seedStream(seed) {
+      var s = seed >>> 0;
+      return function () { s = (1664525 * s + 1013904223) >>> 0; return s / 4294967296; };
+    }
+    function rndCount(kind) {
+      var n = 0, o = Math.random;
+      Math.random = function () { n++; return o(); };
+      try { Ph.enabled = true; Ph.spawn(kind, 200, 200, {}); }
+      finally { Math.random = o; }
+      return n;
+    }
+    var counts = {
+      impact: rndCount('impact'), spark: rndCount('spark'),
+      puff: rndCount('puff'), shard: rndCount('shard'), soul: rndCount('soul')
+    };
+    /* 旧式爆发：一次 spark 消耗 36 次，用于负例 */
+    function oldBurst() {
+      for (var i = 0; i < 36; i++) Math.random();
+    }
+    var origRnd = Math.random;
+    Math.random = seedStream(12345);
+    var a = Math.random();
+    Math.random = seedStream(12345);
+    Ph.enabled = true; Ph.spawn('spark', 10, 10, {});
+    var b = Math.random();
+    Math.random = seedStream(12345);
+    oldBurst();
+    var c = Math.random();
+    Math.random = origRnd;
+    var unitOk = (a === b) && (a !== c);
+
+    /* 一整局开/关特效对照：只比战斗相关字段，不比时间 */
+    function digest(r) {
+      var bs = (r.d44 && r.d44.battles) || [];
+      var dealt = 0, taken = 0, wins = 0;
+      for (var i = 0; i < bs.length; i++) {
+        dealt += bs[i].dealt || 0; taken += bs[i].taken || 0;
+        if (bs[i].result === 'win') wins++;
+      }
+      return JSON.stringify({
+        seed: r.seed, outcome: r.outcome, floor: r.floor, deathFloor: r.deathFloor,
+        hp: r.hp, gold: r.gold, level: r.level, kills: r.kills,
+        steps: r.steps, actions: r.actions, battleTurns: r.battleTurns,
+        equip: r.equip, battles: bs.length, wins: wins, dealt: dealt, taken: taken
+      });
+    }
+    function oneRun(fxOn, oldStyle) {
+      Ph.enabled = fxOn;
+      var origSpawn = Ph.spawn;
+      if (oldStyle) {
+        Ph.spawn = function (kind, x, y, opts) {
+          if (!Ph.enabled) return;
+          oldBurst();
+          return origSpawn.call(Ph, kind, x, y, opts);
+        };
+      }
+      var d;
+      try {
+        var r = Game.Bot.run(1001, { maxActions: 300, adaptive: false, b1: { reserve: 4 }, d42: true, d44log: true });
+        d = digest(r);
+      } finally {
+        Ph.spawn = origSpawn;
+        Ph.enabled = fxOn;
+      }
+      return d;
+    }
+    var runOff = oneRun(false, false);
+    var runOn = oneRun(true, false);
+    var runOld = oneRun(true, true);
+    rec('w6_fx_rng_isolated', unitOk && runOn === runOff && runOld !== runOff, {
+      rule: '特效开/关同一局战斗结果全等；旧式特效消耗 Math.random 时必须不等（负例可失败）',
+      unit: { battleRollAfterNewSpawnSame: a === b, battleRollAfterOldBurstDiffers: a !== c },
+      sameRunOnOff: runOn === runOff,
+      oldStyleDiffers: runOld !== runOff,
+      digestOn: runOn, digestOff: runOff
+    });
+    rec('w6_math_random_zero',
+      counts.impact === 0 && counts.spark === 0 && counts.puff === 0 && counts.shard === 0 && counts.soul === 0 &&
+      oldBurstCount() === 36, {
+        rule: '粒子爆发 Math.random = 0；旧式 spark 必须消耗 36 次（负例可失败）',
+        counts: counts, oldSpark: oldBurstCount()
+      });
+    function oldBurstCount() {
+      var n = 0, o = Math.random;
+      Math.random = function () { n++; return o(); };
+      try { oldBurst(); } finally { Math.random = o; }
+      return n;
+    }
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+})();
+</script>
+</body>
+</html>

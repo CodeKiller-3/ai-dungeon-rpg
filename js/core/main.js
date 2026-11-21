@@ -274,6 +274,10 @@
   var runStats = { known: true, floorReached: 1, kills: 0, maxLevel: 1, turns: 0, potions: 0 };
   var endingRecord = null; /* 通关结局记录（随存档保存；死亡/新局清空） */
   var lastDeath = null;    /* 最近一次 battle:end(lose) 的遥测副本 */
+  /* D-130 B2：每次 battle:end(lose) 同步处理完（含自适应救援）就 +1。
+   * 陷阱致死可能在 triggerTrap 内部走完救援/清档/弹窗；调用方据此判断
+   * "这一格已经结算过死亡"，不得再继续遭遇并启动战斗。 */
+  var loseSeq = 0;
   var endingSel = 0;       /* 结局页按钮选中：0=再来一局 / 1=回主菜单 */
 
   function resetRunStats(known) {
@@ -659,6 +663,9 @@
         return;
       }
     } else if (evt.result === 'lose') {
+      /* D-130 B2：先记账，再走救援/死亡分支——救援也会把玩家传送回出生点，
+       * 调用方不能再按旧格继续遭遇。 */
+      loseSeq++;
       /* D-52：死亡遥测只读副本（结局/死因页只认这一份，不现场猜） */
       lastDeath = evt;
       /* D-49：先让自适应系统决定是否兜底救援（复活 + 补给），能救就不走死亡结算。
@@ -1941,6 +1948,9 @@
         lastAiAt = tNow;
         this._stats.aiTicks++; /* D-51：AI tick 计数（暂停期间不执行，验证页据此断言真停） */
         Game.Systems.AI.tick(player);
+        /* D-130 B1：AI 贴脸时 onAiEncounter 会在 tick 内同步 start + switchScene('battle')。
+         * 场景已经切走，本帧不得再走移动/陷阱/宝箱/遭遇——否则会出现"已开战还多走一格"。 */
+        if (this._scene !== 'explore') return;
       }
       if (d.dx !== 0 || d.dy !== 0) {
         var nx = player.x + d.dx;
@@ -1999,7 +2009,12 @@
           } else {
             /* S-04：先判陷阱（踩中即结算、该格永久显现），再判遭遇——同格有怪时先吃陷阱伤害 */
             if (Game.Systems.Map && typeof Game.Systems.Map.triggerTrap === 'function') {
+              var lose0 = loseSeq;
               Game.Systems.Map.triggerTrap(nx, ny);
+              /* D-130 B2：陷阱致死会在 triggerTrap 内同步发出 battle:end lose：
+               * 自适应救援会传送回出生点、不救援会清档并打开 gameover。
+               * 两种都算"这一格已经结算过死亡"，不得再判遭遇并启动战斗。 */
+              if (loseSeq !== lose0 || player.hp <= 0) { refreshFov(); return; }
             }
             /* D-69：层内精英与普通怪同一条"踩到即战斗"通道，只是遭遇类型记 elite
              * （胜利后移除并发放确定性奖励，逃跑照旧后退一格、精英留在原地）。 */

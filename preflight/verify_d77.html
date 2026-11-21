@@ -563,11 +563,12 @@
 
     /* ═══ E) 页数基线 ═════════════════════════════════════════ */
     var pb2 = readJson('selfcheck/page-baseline.json');
-    rec('E1_page_baseline', !!pb2 && pb2.count === 130 && pb2.pages.indexOf('verify_d98') >= 0 &&
+    rec('E1_page_baseline', !!pb2 && pb2.count === 131 && pb2.pages.indexOf('verify_d98') >= 0 &&
       pb2.pages.indexOf('verify_d100') >= 0 && pb2.pages.indexOf('verify_d101') >= 0 &&
       pb2.pages.indexOf('verify_d104') >= 0 && pb2.pages.indexOf('verify_d108') >= 0 &&
-      pb2.pages.indexOf('verify_d124') >= 0 && pb2.pages.indexOf('verify_d128') >= 0,
-      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-128 新增 verify_d128 后应为 130）');
+      pb2.pages.indexOf('verify_d124') >= 0 && pb2.pages.indexOf('verify_d128') >= 0 &&
+      pb2.pages.indexOf('verify_d130') >= 0,
+      'page-baseline.count = ' + (pb2 ? pb2.count : 'null') + '（D-130 新增 verify_d130 后应为 131）');
     out.ms = Date.now() - START;
   } catch (e) {
     out.err = String(e && (e.stack || e.message) || e);

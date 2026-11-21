@@ -487,10 +487,11 @@
       /* ══ F：页数基线 ═══════════════════════════════════════ */
       var pb = null;
       try { pb = JSON.parse(readText('selfcheck/page-baseline.json')); } catch (e) { pb = null; }
-      rec('F1_pageBaseline', !!pb && pb.count === 130 && pb.pages.indexOf('verify_d101') >= 0 &&
+      rec('F1_pageBaseline', !!pb && pb.count === 131 && pb.pages.indexOf('verify_d101') >= 0 &&
         pb.pages.indexOf('verify_d104') >= 0 && pb.pages.indexOf('verify_d108') >= 0 &&
-        pb.pages.indexOf('verify_d124') >= 0 && pb.pages.indexOf('verify_d128') >= 0, {
-        rule: 'page-baseline.json count=130 且登记 verify_d101 / verify_d102 / verify_d104 / verify_d108 / verify_d124 / verify_d128',
+        pb.pages.indexOf('verify_d124') >= 0 && pb.pages.indexOf('verify_d128') >= 0 &&
+        pb.pages.indexOf('verify_d130') >= 0, {
+        rule: 'page-baseline.json count=131 且登记 verify_d101 / verify_d102 / verify_d104 / verify_d108 / verify_d124 / verify_d128 / verify_d130',
         count: pb && pb.count, listed: !!pb && pb.pages.indexOf('verify_d101') >= 0
       });
     } catch (e) {

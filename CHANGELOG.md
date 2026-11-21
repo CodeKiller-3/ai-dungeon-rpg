@@ -4,6 +4,12 @@
 
 > 每条条目末尾带一个不可见的锚点注释（形如 `锚点: 相对路径#符号名`），由 `preflight/verify_d31.html` 扫描校验"提到的功能在代码里真实存在"，防止把没做的功能写进来。
 
+## [1.0.0] - 2026-11-21 · D-130 状态收口三件（B1 + B2 + W6）
+
+> 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。D-130 起验证页 **130→131**（新增 `verify_d130`），全量 **131/131**，`GUARD=OK expected=131 actual=131`。
+
+- 状态收口三件（D-130）：**B1** `_updateExplore` 在 `AI.tick` 后检查 `this._scene`，AI 贴脸触发战斗的同一帧不再多走一格（不再执行移动/陷阱/宝箱/遭遇）；**B2** 新增 `loseSeq` 计数器，任何 `battle:end(lose)`（含自适应救援、救援后已被传送回出生点）同步 +1，探索帧在陷阱结算后 `loseSeq` 变化或 `hp<=0` 即本帧返回，不再启动战斗；**W6** `js/systems/particles.js` 的 `rnd` 改用固定种子 LCG（`1664525` / `1013904223`，与 `music.js` 同系数），特效不再消耗共享的 `Math.random` 流，战斗结果不随特效实现变化。新增 `preflight/verify_d130.html` 四条判据（均带真实可 FAIL 的负例）：`b1_no_extra_step_after_encounter`、`b2_no_battle_after_gameover`、`w6_fx_rng_isolated`、`w6_math_random_zero`（粒子路径 `Math.random` 计数 **0**）。重钉基线 `d130-*`：B1 3/50、S1 1/50、G2 34/50、M1 50/50，与 `d127` 逐局比对 **199/200** 局有差异、1 局（b1/1036）逐字段不变，差异全部归因到 B1 与 W6（B2 在 200 局未触发，由构造用例覆盖），见 `preflight/selfcheck/d130-attribution.csv`。<!-- 锚点: js/core/main.js#loseSeq -->
+
 ## [1.0.0] - 2026-11-20 · D-126–D-129 音频收口、bot 守卫与主菜单四子页
 
 > 版本号不变（`index.html` 的 `<meta name="game-version">` 仍是 `1.0.0`）。本节按卡补 D-126–D-129 四条账；D-128 起验证页 **129→130**，全量 **130/130**，四策略 200 局与 D-126 逐局等价（`TOTAL_DIFF=0`）。

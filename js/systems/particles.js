@@ -37,7 +37,16 @@
     soul:  { life: 800, size: 5, color: '#9bbbf4', speed: 35, count: 3, gravity: -40 }
   };
 
-  function rnd(a, b) { return a + Math.random() * (b - a); }
+  /* D-130 W6：特效随机流与战斗随机流隔离。
+   * 旧实现用 Math.random，一次命中 36 次、一次击杀 66 次，粒子数量/颜色任何调整
+   * 都会改变后续伤害与掉落抽签。这里改用固定种子 LCG（与 music.js 同系数
+   * 1664525 / 1013904223），特效只消耗自己的流，战斗结果不再随特效实现变化。 */
+  var fxSeed = 0x9e3779b9;
+  function fxRand() {
+    fxSeed = (1664525 * fxSeed + 1013904223) >>> 0;
+    return fxSeed / 4294967296;
+  }
+  function rnd(a, b) { return a + fxRand() * (b - a); }
 
   /* 创建单颗粒子。opts.angle/spread 给出"有方向的喷溅"，缺省仍是全向。
    * 第三拨 D-88：impact 走"零随机数"分支——角度/速度/寿命只由序号推导，
