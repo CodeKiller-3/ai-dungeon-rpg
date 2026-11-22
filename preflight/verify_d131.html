@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>D-131 损坏档清理 + 紧凑档菜单不压字</title>
+<style>
+  body { background:#111; color:#ddd; font:13px/1.5 Consolas,monospace; margin:12px; }
+  h1 { font-size:15px; color:#7fd1ff; margin:0 0 8px; }
+  pre { white-space:pre-wrap; word-break:break-all; }
+  canvas { position:fixed; left:-9999px; top:0; }
+</style>
+</head>
+<body>
+<h1>D-131 · A1 损坏存档读不出即清键 / A2 行内详情按行高门槛</h1>
+<pre id="result">RUNNING</pre>
+<canvas id="game" width="1024" height="640"></canvas>
+<script>window.__AI_DUNGEON_NO_AUTOSTART__ = true;</script>
+
+<script src="../js/core/eventBus.js"></script>
+<script src="../js/core/sprites.js"></script>
+<script src="../js/core/input.js"></script>
+<script src="../js/core/render.js"></script>
+<script src="../js/data/maps.js"></script>
+<script src="../js/data/monsters.js"></script>
+<script src="../js/data/items.js"></script>
+<script src="../js/data/quests.js"></script>
+<script src="../js/data/npcs.js"></script>
+<script src="../js/data/skills.js"></script>
+<script src="../js/data/dialogue.js"></script>
+<script src="../js/data/reactions.js"></script>
+<script src="../js/data/config.js"></script>
+<script src="../js/vendor/astar.js"></script>
+<script src="../js/vendor/howler.min.js"></script>
+<script src="../js/vendor/rot.min.js"></script>
+<script src="../js/systems/map.js"></script>
+<script src="../js/systems/fov.js"></script>
+<script src="../js/systems/hud.js"></script>
+<script src="../js/systems/modal.js"></script>
+<script src="../js/systems/feedback.js"></script>
+<script src="../js/systems/notice.js"></script>
+<script src="../js/systems/lighting.js"></script>
+<script src="../js/systems/motion.js"></script>
+<script src="../js/systems/particles.js"></script>
+<script src="../js/systems/fx.js"></script>
+<script src="../js/systems/quest.js"></script>
+<script src="../js/systems/skills.js"></script>
+<script src="../js/systems/bestiary.js"></script>
+<script src="../js/systems/battle.js"></script>
+<script src="../js/systems/inventory.js"></script>
+<script src="../js/systems/shop.js"></script>
+<script src="../js/systems/save.js"></script>
+<script src="../js/systems/adaptive.js"></script>
+<script src="../js/systems/leaderboard.js"></script>
+<script src="../js/systems/ai.js"></script>
+<script src="../js/systems/npc.js"></script>
+<script src="../js/systems/audio.js"></script>
+<script src="../js/systems/learner.js"></script>
+<script src="../js/core/main.js"></script>
+<script>
+/* D-131 判据：
+ *   a1_corrupt_save_cleared   正例：坏 JSON → load() 返回 null 且 KEY 被移除、has()=false（继续游戏不再亮）；
+ *                             负例：按旧实现（catch 直接 return null）解析，KEY 必须仍在、has()=true。
+ *   a2_menu_detail_gated      正例：1366×768(911×512, rowH=34) 与 1920×1080(960×540, rowH=34) 不画行内详情；
+ *                             1024×640(rowH=42) 仍画；负例：门槛缺失时 34 档也被判为"该画"。
+ */
+(function () {
+  'use strict';
+  var out = { protocol: 'D-131', sub: {}, ok: false };
+  var START = Date.now();
+  function rec(k, ok, d) { out.sub[k] = { ok: !!ok, d: d }; }
+
+  try {
+    var S = Game.Systems.Save;
+    var BROKEN = '{broken json:::';
+
+    /* --- A1 正例：坏的档读不出来就清键 --- */
+    localStorage.setItem(S.KEY, BROKEN);
+    var before = localStorage.getItem(S.KEY);
+    var ret = null, thrown = null;
+    try { ret = S.load(); } catch (e) { thrown = String(e); }
+    var after = localStorage.getItem(S.KEY);
+    var hasAfter = S.has();
+
+    /* --- A1 负例：旧实现不清键，同样的坏档会一直留着、has() 恒 true --- */
+    localStorage.setItem(S.KEY, BROKEN);
+    var legacyReturn = null;
+    try { JSON.parse(localStorage.getItem(S.KEY)); } catch (e2) { legacyReturn = null; }
+    var legacyKey = localStorage.getItem(S.KEY) !== null;
+    var legacyHas = S.has();
+    localStorage.removeItem(S.KEY);
+
+    rec('a1_corrupt_save_cleared',
+      before !== null && ret === null && after === null && hasAfter === false &&
+      legacyKey === true && legacyHas === true,
+      {
+        rule: '坏 JSON 读档 → 返回 null 且清键（has()=false）；负例：旧实现不清键时 has() 仍为 true',
+        corrupt: BROKEN, returnValue: ret, threw: thrown,
+        keyBefore: before !== null, keyAfter: after !== null, hasAfter: hasAfter,
+        negativeOldStyle: { keyStays: legacyKey, hasStays: legacyHas, returnValue: legacyReturn }
+      });
+
+    /* --- A2 正例：行高 < 40 的紧凑档一律不画行内详情 --- */
+    var R = Game.Core.Render;
+    var cases = [
+      { name: '1366x768', w: 911, h: 512, detail: false },
+      { name: '1920x1080', w: 960, h: 540, detail: false },
+      { name: '1280x800', w: 1024, h: 640, detail: true }
+    ];
+    var rows = [], allOk = true, negMustFail = false;
+    cases.forEach(function (c) {
+      var lay = R._menuLayout(c.w, c.h, true, 2, 3);
+      var m = lay.menu || {};
+      var drawnNow = !!m.detail && m.rowH >= 40;      /* 当前实现的门槛 */
+      var drawnOld = !!m.detail;                      /* 旧实现：只看 detail>0 */
+      rows.push({ view: c.name, css: c.w + '×' + c.h, tier: lay.tier, rowH: m.rowH,
+                  detailBand: m.detail, drawnNow: drawnNow, drawnOld: drawnOld });
+      if (drawnNow !== c.detail) allOk = false;
+      if (drawnOld !== drawnNow) negMustFail = true;   /* 负例必须能抓到差别，否则该断言无效 */
+    });
+    rec('a2_menu_detail_gated', allOk && negMustFail, {
+      rule: 'rowH<40 的紧凑档不画行内详情（避免与标题基线只差 10px 压字）；≥40 仍画；负例：去掉门槛后 34 档被误判为该画',
+      rows: rows, threshold: 40
+    });
+
+    out.ok = Object.keys(out.sub).every(function (k) { return out.sub[k].ok; });
+  } catch (e) {
+    out.err = String((e && e.stack) || e);
+    out.ok = false;
+  }
+  out.ms = Date.now() - START;
+  var text = (out.ok ? 'PASS ' : 'FAIL ') + JSON.stringify(out);
+  document.title = text;
+  document.getElementById('result').textContent = text;
+})();
+</script>
+</body>
+</html>

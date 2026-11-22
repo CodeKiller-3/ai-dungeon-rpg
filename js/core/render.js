@@ -5075,7 +5075,9 @@
       for (var i = 0; i < items.length; i++) {
         var it = items[i], y = m.y + i * m.rowH;
         var on = (i === st.sel);
-        var hasD = !!it.detail && m.detail > 0;
+        var hasD = !!it.detail && m.detail > 0 && m.rowH >= 40;
+        /* D-131：紧凑高度档（rowH 34）里，行内详情与标题基线只差 10px，会压在标题上；
+         * 该档一律不画详情，真实楼层/等级由下方进度标签承担。 */
         var boxH = m.rowH - 4;
         this._hotAdd('menu:row:' + it.id, m.x, y, m.w, boxH);
         /* D-100：hover 只画当前这一行（选中行已有更强的焦点框） */

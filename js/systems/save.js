@@ -191,6 +191,9 @@
         }
         return data;
       } catch (e) {
+        /* D-131：损坏档（JSON 解析失败 / 结构非法）读不出来就清键，不清会留下"有存档"的假象：
+         * 首屏「继续游戏」亮着，点下去 load() 返回 null，界面无反应——属"点了没反应"类缺陷。 */
+        try { localStorage.removeItem(KEY); } catch (e2) { /* ignore */ }
         return null;
       }
     },
